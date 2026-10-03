@@ -3,15 +3,23 @@ import { resolverSesion, limpiarSesion } from "./lib/auth-server";
 
 const PREFIJO_POR_ROL = {
   1: "/operador",
-  2: "/encargado"
+  2: "/encargado",
+  3: "/gerente",
+  4: "/contador",
+  5: "/supervisor",
+  6: "/repartidor"
 };
 
 const RUTA_POR_ROL = {
   1: "/operador/inicio",
-  2: "/encargado/inicio"
+  2: "/encargado/inicio",
+  3: "/gerente/inicio",
+  4: "/contador/inicio",
+  5: "/supervisor/inicio",
+  6: "/repartidor/inicio"
 };
 
-const RUTAS_PROTEGIDAS = ["/operador", "/encargado", "/scan", "/admin"];
+const RUTAS_PROTEGIDAS = ["/operador", "/encargado", "/gerente", "/contador", "/supervisor", "/repartidor", "/scan", "/admin"];
 const RUTAS_SIN_PREFIJO_ROL = ["/scan", "/admin"];
 const RUTAS_SOLO_ADMIN = ["/admin"];
 const RUTAS_PUBLICAS_AUTH = ["/"];
@@ -56,7 +64,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     pathname.startsWith(prefijo)
   );
 
-  if (!omitePrefijoRol) {
+  if (!omitePrefijoRol && !sesion.IsAdmin) {
     const prefijoPermitido = PREFIJO_POR_ROL[sesion.IdRol];
     if (!prefijoPermitido || !pathname.startsWith(prefijoPermitido)) {
       return context.redirect(RUTA_POR_ROL[sesion.IdRol] || "/");

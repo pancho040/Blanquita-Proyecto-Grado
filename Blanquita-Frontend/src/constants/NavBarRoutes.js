@@ -8,8 +8,45 @@ import {
   Container,
   CircleUserRound,
   ClipboardList,
+  Users,
+  MapPin,
+  Truck,
+  Tag,
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
+
+export const RutasSupervisor = [
+  {
+    titulo: "Inicio",
+    icono: Home,
+    ruta: "inicio",
+  },
+  {
+    titulo: "Clientes",
+    icono: Users,
+    ruta: "clientes",
+  },
+  {
+    titulo: "Zonas y Rutas",
+    icono: MapPin,
+    ruta: "rutas",
+  },
+  {
+    titulo: "Asignación Diaria",
+    icono: Truck,
+    ruta: "asignaciones",
+  },
+  {
+    titulo: "Precios de Venta",
+    icono: Tag,
+    ruta: "precios",
+  },
+  {
+    titulo: "Perfil",
+    icono: CircleUserRound,
+    ruta: "perfil",
+  },
+];
 export const RutasNavBar = [
   {
     titulo: "Inicio",

@@ -1,11 +1,19 @@
 export const PREFIJO_POR_ROL = {
   1: "operador",
   2: "encargado",
+  3: "gerente",
+  4: "contador",
+  5: "supervisor",
+  6: "repartidor",
 };
 
 export const Roles = {
   Operador: 1,
   Encargado: 2,
+  GerenteGeneral: 3,
+  Contador: 4,
+  Supervisor: 5,
+  AgenteReparto: 6,
 };
 
 

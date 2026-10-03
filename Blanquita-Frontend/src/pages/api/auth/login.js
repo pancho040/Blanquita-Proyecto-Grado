@@ -6,7 +6,11 @@ import { SesionUsuario } from "../../../models/Usuario/Auth";
 
 const RUTA_POR_ROL = {
   1: "/operador/inicio",
-  2: "/encargado/inicio"
+  2: "/encargado/inicio",
+  3: "/gerente/inicio",
+  4: "/contador/inicio",
+  5: "/supervisor/inicio",
+  6: "/repartidor/inicio"
 };
 
 function obtenerIpReal(request, clientAddress) {

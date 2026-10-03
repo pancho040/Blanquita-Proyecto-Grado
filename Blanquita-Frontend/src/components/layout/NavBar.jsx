@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RutasNavBar, RutasReportes } from "@/constants/NavBarRoutes";
+import { RutasNavBar, RutasReportes, RutasSupervisor } from "@/constants/NavBarRoutes";
 import { Icon, Menu, ChevronDown, LogOut } from "lucide-react";
 import { cerrarSesion } from "@/lib/logout-client";
 import {
@@ -133,6 +133,8 @@ export default function NavBar({ idRol, seccion }) {
   const basePath = enReportes ? `${prefijo}/reportes` : prefijo;
   const rutas = enReportes
     ? RutasReportes
+    : idRol === Roles.Supervisor
+    ? RutasSupervisor
     : RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
   const [menuAbierto, setMenuAbierto] = useState(false);
 

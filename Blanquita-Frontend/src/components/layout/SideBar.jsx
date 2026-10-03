@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon, ChevronDown, ChevronLeft, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RutasNavBar, RutasReportes } from "@/constants/NavBarRoutes";
+import { RutasNavBar, RutasReportes, RutasSupervisor } from "@/constants/NavBarRoutes";
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
 import { cerrarSesion } from "@/lib/logout-client";
 import {
@@ -120,6 +120,8 @@ export default function SideBar({ idRol, seccion }) {
   const basePath = enReportes ? `${prefijo}/reportes` : prefijo;
   const rutas = enReportes
     ? RutasReportes
+    : idRol === Roles.Supervisor
+    ? RutasSupervisor
     : RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
 
   // Arranca abierto para coincidir con el HTML del servidor (evita desajuste de

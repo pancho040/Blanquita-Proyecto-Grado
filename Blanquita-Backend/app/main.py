@@ -30,6 +30,10 @@ from app.Routes.Proveedor.Proveedor import ProveedorRouter
 
 from app.Routes.Qr.InventarioProducto import qrRouter
 
+from app.Routes.Logistica.ClienteRouter import ClienteRouter
+from app.Routes.Logistica.RutaRouter import RutaRouter
+from app.Routes.Logistica.PrecioRouter import PrecioRouter
+
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
@@ -109,3 +113,8 @@ app.include_router(ProveedorRouter)
 
 #ROUTERS GENERADORES DE QR
 app.include_router(qrRouter)
+
+#ROUTERS LOGISTICA
+app.include_router(ClienteRouter)
+app.include_router(RutaRouter)
+app.include_router(PrecioRouter)

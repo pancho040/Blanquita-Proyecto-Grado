@@ -47,6 +47,8 @@ def get_current_user(credenciales: HTTPAuthorizationCredentials = Depends(seguri
 
 def require_role(roles_permitidos: list[int]):
     def verificar_rol(usuario_actual: dict = Depends(get_current_user)) -> dict:
+        if usuario_actual.get("IsAdmin"):
+            return usuario_actual
         if usuario_actual["IdRol"] not in roles_permitidos:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
