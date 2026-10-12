@@ -17,11 +17,17 @@ from app.Models.InventarioFinal.Reporte import (
     ReporteInventarioProductoTerminadoResponse,
     InventarioLineaResponse,
     InventarioPresentacionResponse,
+    ReporteSalidasProductoTerminadoRequest,
+    ReporteSalidasProductoTerminadoResponse,
+    SalidaLineaResponse,
+    SalidaPresentacionResponse,
+    MovimientoSalidaProductoTerminadoResponse,
 )
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Repository.InventarioFinal.Reporte import ReporteProductoTerminadoRepository
 from app.utils.dates import ZONA_BOLIVIA
 
+ID_TIPO_MOVIMIENTO_SALIDA = 2
 ID_PRODUCTO_MERMA = 6
 # Mega Rollo, Económico y Merma se cuentan en unidades; el resto de líneas en jabas.
 IDS_PRODUCTO_EN_UNIDADES = {4, 5, ID_PRODUCTO_MERMA}
@@ -258,3 +264,108 @@ class ReporteProductoTerminadoService:
             )
             for fila in filas
         ]
+
+    def ResumenSalidas(
+        self, data: ReporteSalidasProductoTerminadoRequest
+    ) -> ReporteSalidasProductoTerminadoResponse:
+        self._ValidarPeriodo(data.FechaInicio, data.FechaFin)
+        lineas_solicitadas, todas_las_lineas = self._LineasSolicitadas(data.IdsProducto)
+
+        movimientos = [
+            MovimientoSalidaProductoTerminadoResponse(
+                **fila,
+                NombrePresentacion=_nombre_presentacion(
+                    fila["NombreProducto"], fila["CantidadRollosUnidades"]
+                ),
+                Unidad=_unidad_linea(fila["IdProducto"]),
+            )
+            for fila in self.repository.MovimientosSalida(
+                {
+                    "p_IdTipoMovimientoInventario": ID_TIPO_MOVIMIENTO_SALIDA,
+                    "p_FechaInicio": data.FechaInicio,
+                    "p_FechaFin": data.FechaFin,
+                    "p_IdsProducto": data.IdsProducto or None,
+                }
+            )
+        ]
+
+        presentaciones: dict[int, dict] = {}
+        for m in movimientos:
+            acumulado = presentaciones.setdefault(
+                m.IdPresentacion,
+                {
+                    "IdProducto": m.IdProducto,
+                    "NombreProducto": m.NombreProducto,
+                    "Unidad": m.Unidad,
+                    "IdPresentacion": m.IdPresentacion,
+                    "CodigoPresentacion": m.CodigoPresentacion,
+                    "NombrePresentacion": m.NombrePresentacion,
+                    "CantidadSalida": 0,
+                    "NumeroSalidas": 0,
+                },
+            )
+            acumulado["CantidadSalida"] += m.Cantidad
+            acumulado["NumeroSalidas"] += 1
+
+        stock = self.repository.StockPresentaciones(list(presentaciones))
+        orden_lineas = {p["IdProducto"]: i for i, p in enumerate(lineas_solicitadas)}
+
+        filas_presentacion = sorted(
+            (
+                SalidaPresentacionResponse(**acumulado, CantidadActual=stock.get(id_presentacion, 0))
+                for id_presentacion, acumulado in presentaciones.items()
+            ),
+            key=lambda p: (orden_lineas.get(p.IdProducto, len(orden_lineas)), p.CodigoPresentacion),
+        )
+
+        lineas = []
+        for producto in lineas_solicitadas:
+            propias = [p for p in filas_presentacion if p.IdProducto == producto["IdProducto"]]
+            if not propias:
+                continue
+            lineas.append(
+                SalidaLineaResponse(
+                    IdProducto=producto["IdProducto"],
+                    NombreProducto=producto["NombreProducto"],
+                    Unidad=_unidad_linea(producto["IdProducto"]),
+                    CantidadSalida=sum(p.CantidadSalida for p in propias),
+                    NumeroSalidas=sum(p.NumeroSalidas for p in propias),
+                )
+            )
+
+        return ReporteSalidasProductoTerminadoResponse(
+            PeriodoInicio=data.FechaInicio,
+            PeriodoFin=data.FechaFin,
+            TodasLasLineas=todas_las_lineas,
+            NombresLineas=[p["NombreProducto"] for p in lineas_solicitadas],
+            NumeroSalidas=len(movimientos),
+            Lineas=lineas,
+            Presentaciones=filas_presentacion,
+            Movimientos=movimientos,
+        )
+
+    def ReporteSalidas(
+        self, data: ReporteSalidasProductoTerminadoRequest
+    ) -> ReporteSalidasProductoTerminadoResponse:
+        resumen = self.ResumenSalidas(data)
+
+        if not resumen.Movimientos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No se registraron salidas de producto terminado en el período y las líneas seleccionadas",
+            )
+
+        return resumen
+
+    def _ValidarPeriodo(self, fecha_inicio: date, fecha_fin: date) -> None:
+        if fecha_inicio > fecha_fin:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="La fecha de inicio no puede ser posterior a la fecha de fin",
+            )
+
+        if (fecha_fin - fecha_inicio).days + 1 > DIAS_MAXIMOS_REPORTE_PRODUCCION:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"El rango de fechas no puede superar los {DIAS_MAXIMOS_REPORTE_PRODUCCION} días",
+            )

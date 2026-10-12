@@ -1,5 +1,15 @@
+from sqlalchemy import Integer, select
 from sqlalchemy.orm import Session
+
+from app.Repository.Consultas import filtro_rango
 from app.Repository.DbCaller import DbCaller
+from app.Schemas.Producto import (
+    InventarioProductoTerminado,
+    MovimientoProductoTerminado,
+    PresentacionProducto,
+    Producto,
+)
+from app.Schemas.Usuario import Rol, Usuario
 
 
 class ReporteProductoTerminadoRepository:
@@ -33,3 +43,52 @@ class ReporteProductoTerminadoRepository:
             )
         """
         return self.caller.LlamarFuncion(sql, params)
+
+    def MovimientosSalida(self, params: dict) -> list[dict]:
+        mpt = MovimientoProductoTerminado
+
+        consulta = (
+            select(
+                mpt.IdMovimientoProductoTerminado,
+                mpt.FechaMovimiento,
+                Producto.IdProducto,
+                Producto.NombreProducto,
+                PresentacionProducto.IdPresentacion,
+                PresentacionProducto.CodigoPresentacion,
+                PresentacionProducto.CantidadRollosUnidades,
+                mpt.CantidadIngresoInventario.cast(Integer).label("Cantidad"),
+                mpt.Observacion,
+                Usuario.Ci,
+                Usuario.PrimerNombre,
+                Usuario.ApellidoPaterno,
+                Rol.NombreRol,
+            )
+            .join(PresentacionProducto, mpt.IdPresentacion == PresentacionProducto.IdPresentacion)
+            .join(Producto, PresentacionProducto.IdProducto == Producto.IdProducto)
+            .join(Usuario, mpt.IdUsuario == Usuario.IdUsuario)
+            .join(Rol, Usuario.IdRol == Rol.IdRol)
+            .where(
+                mpt.IdTipoMovimientoInventario == params["p_IdTipoMovimientoInventario"],
+                *filtro_rango(
+                    mpt.FechaMovimiento, params.get("p_FechaInicio"), params.get("p_FechaFin")
+                ),
+            )
+            .order_by(mpt.FechaMovimiento.desc(), mpt.IdMovimientoProductoTerminado.desc())
+        )
+
+        if params.get("p_IdsProducto"):
+            consulta = consulta.where(Producto.IdProducto.in_(params["p_IdsProducto"]))
+
+        return self.caller.Consultar(consulta)
+
+    def StockPresentaciones(self, ids_presentacion: list[int]) -> dict[int, int]:
+        if not ids_presentacion:
+            return {}
+
+        filas = self.caller.Consultar(
+            select(
+                InventarioProductoTerminado.IdPresentacion,
+                InventarioProductoTerminado.CantidadActual.cast(Integer).label("CantidadActual"),
+            ).where(InventarioProductoTerminado.IdPresentacion.in_(ids_presentacion))
+        )
+        return {fila["IdPresentacion"]: fila["CantidadActual"] for fila in filas}

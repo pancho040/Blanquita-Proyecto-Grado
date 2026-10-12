@@ -99,3 +99,57 @@ class ReporteInventarioProductoTerminadoResponse(BaseModel):
     FechaGeneracion: datetime
     TodasLasLineas: bool
     Lineas: list[InventarioLineaResponse]
+
+
+class ReporteSalidasProductoTerminadoRequest(BaseModel):
+    FechaInicio: date
+    FechaFin: date
+    IdsProducto: Optional[list[int]] = None
+
+
+class SalidaLineaResponse(BaseModel):
+    IdProducto: int
+    NombreProducto: str
+    Unidad: str
+    CantidadSalida: int
+    NumeroSalidas: int
+
+
+class SalidaPresentacionResponse(BaseModel):
+    IdProducto: int
+    NombreProducto: str
+    Unidad: str
+    IdPresentacion: int
+    CodigoPresentacion: str
+    NombrePresentacion: str
+    CantidadSalida: int
+    NumeroSalidas: int
+    CantidadActual: int
+
+
+class MovimientoSalidaProductoTerminadoResponse(BaseModel):
+    IdMovimientoProductoTerminado: int
+    FechaMovimiento: datetime
+    IdProducto: int
+    NombreProducto: str
+    IdPresentacion: int
+    CodigoPresentacion: str
+    NombrePresentacion: str
+    Unidad: str
+    Cantidad: int
+    Observacion: Optional[str]
+    Ci: str
+    PrimerNombre: str
+    ApellidoPaterno: str
+    NombreRol: str
+
+
+class ReporteSalidasProductoTerminadoResponse(BaseModel):
+    PeriodoInicio: date
+    PeriodoFin: date
+    TodasLasLineas: bool
+    NombresLineas: list[str]
+    NumeroSalidas: int
+    Lineas: list[SalidaLineaResponse]
+    Presentaciones: list[SalidaPresentacionResponse]
+    Movimientos: list[MovimientoSalidaProductoTerminadoResponse]
