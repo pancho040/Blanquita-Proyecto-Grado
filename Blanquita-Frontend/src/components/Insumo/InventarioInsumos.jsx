@@ -25,13 +25,16 @@ import {
 } from "@/components/Inventario/comunes";
 import { ControlCantidad, ResumenStock } from "@/components/InventarioProductos/comunes";
 import Header from "@/components/layout/Header";
+import { BotonDescarga } from "@/components/layout/BotonDescarga";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { descargarReporteInventarioInsumo } from "@/services/Insumo/Reporte";
 import { ObservacionMovimientosInsumo } from "@/constants/OperadorConfig";
 import {
   CANTIDAD_MAXIMA_INSUMO,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
-import { aEntero, limpiarObservacion } from "@/utils/validators";
+import { EsEncargado, aEntero, limpiarObservacion } from "@/utils/validators";
 
 const MOVIMIENTOS = {
   ingreso: {
@@ -313,7 +316,8 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
   );
 }
 
-export default function InventarioInsumos() {
+export default function InventarioInsumos({ usuario }) {
+  const esEncargado = EsEncargado(usuario?.IdRol);
   const catalogo = useCatalogo(verCatalogoInsumo);
   const [sel, setSel] = useState(null);
 
@@ -333,8 +337,18 @@ export default function InventarioInsumos() {
   };
 
   return (
+    <TooltipProvider>
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <Header titulo="Almacén · Insumos" subtitulo="Inventario de Insumos" />
+      <Header titulo="Almacén · Insumos" subtitulo="Inventario de Insumos">
+        {esEncargado && (
+          <BotonDescarga
+            texto="Descargar inventario"
+            ayuda="PDF con el stock actual de todos los insumos"
+            exito="Informe de inventario descargado"
+            descargar={() => descargarReporteInventarioInsumo(null)}
+          />
+        )}
+      </Header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
         <EncabezadoCatalogo titulo="Catálogo de insumos">
@@ -391,5 +405,6 @@ export default function InventarioInsumos() {
         )}
       </main>
     </div>
+    </TooltipProvider>
   );
 }

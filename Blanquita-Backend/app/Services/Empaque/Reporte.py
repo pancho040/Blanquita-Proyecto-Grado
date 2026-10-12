@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -6,16 +7,20 @@ from sqlalchemy.orm import Session
 from app.Constants.Cantidades import DIAS_MAXIMOS_REPORTE_PRODUCCION
 from app.Models.Empaque.Reporte import (
     ClaseEmpaque,
+    InventarioTipoEmpaqueResponse,
     ItemLoteEmpaqueResponse,
     LoteEmpaqueReporteResponse,
     MovimientoEmpaqueReporteResponse,
     ReporteEmpaqueRequest,
+    ReporteInventarioEmpaqueResponse,
     ReporteLotesEmpaqueResponse,
     ReporteMovimientosEmpaqueResponse,
     ResumenLotesTipoEmpaqueResponse,
     ResumenTipoEmpaqueResponse,
+    UnidadEmpaqueInventarioResponse,
 )
 from app.Repository.Empaque.Reporte import ReporteEmpaqueRepository
+from app.utils.dates import ZONA_BOLIVIA
 
 ID_TIPO_MOVIMIENTO_INGRESO = 1
 ID_TIPO_MOVIMIENTO_SALIDA = 2
@@ -35,6 +40,28 @@ NOMBRES_MOVIMIENTO_CONTEO = {
 class ReporteEmpaqueService:
     def __init__(self, db: Session):
         self.repository = ReporteEmpaqueRepository(db)
+
+    def ReporteInventario(self, clase: ClaseEmpaque) -> ReporteInventarioEmpaqueResponse:
+        tipos = self.repository.Inventario(clase)
+
+        if not tipos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No hay tipos de {CLASES[clase]['nombre'].lower()} registrados",
+            )
+
+        unidades = (
+            self.repository.UnidadesBobinaEnAlmacen() if clase == ClaseEmpaque.bobina else []
+        )
+
+        return ReporteInventarioEmpaqueResponse(
+            Clase=clase,
+            NombreClase=CLASES[clase]["nombre"],
+            Unidad=CLASES[clase]["unidad"],
+            FechaGeneracion=datetime.now(ZONA_BOLIVIA),
+            Tipos=[InventarioTipoEmpaqueResponse(**fila) for fila in tipos],
+            Unidades=[UnidadEmpaqueInventarioResponse(**fila) for fila in unidades],
+        )
 
     def ResumenMovimientos(self, data: ReporteEmpaqueRequest) -> ReporteMovimientosEmpaqueResponse:
         todos_los_tipos = self._ValidarFiltros(data)

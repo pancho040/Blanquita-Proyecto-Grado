@@ -103,3 +103,31 @@ class ReporteLotesEmpaqueResponse(BaseModel):
     TodosLosTipos: bool
     Resumen: list[ResumenLotesTipoEmpaqueResponse]
     Lotes: list[LoteEmpaqueReporteResponse]
+
+
+class InventarioTipoEmpaqueResponse(BaseModel):
+    IdTipo: int
+    NombreTipo: str
+    DescripcionTipo: Optional[str] = None
+    CantidadActual: int
+    PesoKg: Optional[Decimal] = None
+    FechaUltimoMovimiento: Optional[datetime] = None
+
+
+class UnidadEmpaqueInventarioResponse(BaseModel):
+    IdEmpaque: int
+    CodigoEmpaque: str
+    NombreTipo: str
+    PesoKg: Optional[Decimal] = None
+    IdLoteEmpaque: int
+    FechaRecepcion: date
+    NombreProveedor: str
+
+
+class ReporteInventarioEmpaqueResponse(BaseModel):
+    Clase: ClaseEmpaque
+    NombreClase: str
+    Unidad: str
+    FechaGeneracion: datetime
+    Tipos: list[InventarioTipoEmpaqueResponse]
+    Unidades: list[UnidadEmpaqueInventarioResponse] = []

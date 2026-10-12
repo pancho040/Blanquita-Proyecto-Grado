@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from app.Models.Empaque.Reporte import (
     ClaseEmpaque,
+    ReporteInventarioEmpaqueResponse,
     ReporteLotesEmpaqueResponse,
     ReporteMovimientosEmpaqueResponse,
 )
@@ -28,6 +29,72 @@ def _texto_toneladas(toneladas) -> str:
         return "Sin dato"
     formateado = f"{float(toneladas):,.2f}"
     return formateado.replace(",", "X").replace(".", ",").replace("X", ".") + " t"
+
+
+def _estado_stock(cantidad: int) -> str:
+    return "Sin stock" if cantidad == 0 else "Disponible"
+
+
+def construir_reporte_inventario_empaque(
+    data: ReporteInventarioEmpaqueResponse,
+    generado_por: str | None = None,
+) -> bytes:
+    es_bobina = data.Clase == ClaseEmpaque.bobina
+
+    reporte = Reporte(
+        titulo=f"Informe de inventario - {data.NombreClase}",
+        subtitulo="Stock actual en almacén",
+        filtros={"Tipos": "Todos"},
+        generado_en=data.FechaGeneracion,
+        generado_por=generado_por,
+    )
+
+    columnas = [("Tipo", "NombreTipo")]
+    total = ["TOTAL"]
+    if not es_bobina:
+        columnas.append(("Descripción", "DescripcionTipo"))
+        total.append("")
+    columnas.append((f"{data.Unidad.capitalize()} en almacén", "CantidadActual"))
+    total.append(sum(t.CantidadActual for t in data.Tipos))
+    if es_bobina:
+        columnas.append(("Peso (kg)", "PesoKg"))
+        total.append(sum(t.PesoKg or 0 for t in data.Tipos))
+    columnas += [
+        ("Estado", lambda t: _estado_stock(t.CantidadActual)),
+        ("Último movimiento", "FechaUltimoMovimiento"),
+    ]
+    total += ["", ""]
+
+    reporte.titulo_seccion(f"Tipos ({len(data.Tipos)})")
+    reporte.tabla(columnas=columnas, filas=data.Tipos, fila_total=total)
+
+    if es_bobina:
+        reporte.titulo_seccion(f"Bobinas en almacén ({len(data.Unidades)})")
+        if data.Unidades:
+            reporte.tabla(
+                columnas=[
+                    ("Código", "CodigoEmpaque"),
+                    ("Tipo", "NombreTipo"),
+                    ("Peso (kg)", "PesoKg"),
+                    (
+                        "Lote",
+                        lambda u: reporte.celda_multilinea(
+                            [f"#{u.IdLoteEmpaque}", u.NombreProveedor]
+                        ),
+                    ),
+                    ("Recepción", "FechaRecepcion"),
+                ],
+                filas=data.Unidades,
+            )
+        else:
+            reporte.parrafo("No hay bobinas de empaque en almacén.")
+
+    return reporte.a_pdf()
+
+
+def nombre_archivo_inventario_empaque(clase: ClaseEmpaque) -> str:
+    ahora = datetime.now(ZONA_BOLIVIA)
+    return f"informe-inventario-empaque-{clase.value}-{ahora:%Y%m%d-%H%M}.pdf"
 
 
 def construir_reporte_movimientos_empaque(

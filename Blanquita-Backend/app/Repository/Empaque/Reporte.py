@@ -30,6 +30,7 @@ TABLAS_CONTEO = {
         "tipo": TipoEmpaqueBolsa,
         "id_tipo": TipoEmpaqueBolsa.IdTipoEmpaqueBolsa,
         "nombre_tipo": TipoEmpaqueBolsa.NombreEmpaqueBolsa,
+        "descripcion_tipo": TipoEmpaqueBolsa.DescripcionEmpaqueBolsa,
         "inventario": InventarioEmpaqueBolsa,
         "id_tipo_inventario": InventarioEmpaqueBolsa.IdTipoEmpaqueBolsa,
     },
@@ -40,6 +41,7 @@ TABLAS_CONTEO = {
         "tipo": TipoBolsaJava,
         "id_tipo": TipoBolsaJava.IdTipoBolsaJava,
         "nombre_tipo": TipoBolsaJava.NombreBolsaJava,
+        "descripcion_tipo": TipoBolsaJava.DescripcionBolsaJava,
         "inventario": InventarioBolsaJava,
         "id_tipo_inventario": InventarioBolsaJava.IdTipoBolsaJava,
     },
@@ -97,6 +99,84 @@ class ReporteEmpaqueRepository:
 
         if ids_tipo:
             consulta = consulta.where(id_tipo.in_(ids_tipo))
+
+        return self.caller.Consultar(consulta)
+
+    def Inventario(self, clase: ClaseEmpaque) -> list[dict]:
+        if clase == ClaseEmpaque.bobina:
+            return self._InventarioBobina()
+
+        tablas = TABLAS_CONTEO[clase]
+        movimiento = tablas["movimiento"]
+
+        ultimo_movimiento = (
+            select(func.max(movimiento.FechaMovimiento))
+            .where(tablas["id_tipo_movimiento"] == tablas["id_tipo"])
+            .correlate(tablas["tipo"])
+            .scalar_subquery()
+            .label("FechaUltimoMovimiento")
+        )
+
+        consulta = (
+            select(
+                tablas["id_tipo"].label("IdTipo"),
+                tablas["nombre_tipo"].label("NombreTipo"),
+                tablas["descripcion_tipo"].label("DescripcionTipo"),
+                func.coalesce(tablas["inventario"].CantidadActual, 0)
+                .cast(Integer)
+                .label("CantidadActual"),
+                ultimo_movimiento,
+            )
+            .outerjoin(tablas["inventario"], tablas["id_tipo_inventario"] == tablas["id_tipo"])
+            .order_by(tablas["nombre_tipo"])
+        )
+
+        return self.caller.Consultar(consulta)
+
+    def UnidadesBobinaEnAlmacen(self) -> list[dict]:
+        consulta = (
+            select(
+                Empaque.IdEmpaque,
+                Empaque.CodigoEmpaque,
+                TipoEmpaque.NombreTipoEmpaque.label("NombreTipo"),
+                Empaque.PesoKg,
+                LoteEmpaque.IdLoteEmpaque,
+                LoteEmpaque.FechaRecepcion,
+                Proveedor.NombreProveedor,
+            )
+            .join(TipoEmpaque, Empaque.IdTipoEmpaque == TipoEmpaque.IdTipoEmpaque)
+            .join(LoteEmpaque, Empaque.IdLoteEmpaque == LoteEmpaque.IdLoteEmpaque)
+            .join(Proveedor, LoteEmpaque.IdProveedor == Proveedor.IdProveedor)
+            .where(Empaque.IdEstadoMateriaPrima == ID_ESTADO_EN_ALMACEN)
+            .order_by(TipoEmpaque.NombreTipoEmpaque, Empaque.CodigoEmpaque)
+        )
+
+        return self.caller.Consultar(consulta)
+
+    def _InventarioBobina(self) -> list[dict]:
+        en_almacen = Empaque.IdEstadoMateriaPrima == ID_ESTADO_EN_ALMACEN
+
+        ultimo_movimiento = (
+            select(func.max(MovimientoEmpaque.FechaMovimiento))
+            .join(Empaque, MovimientoEmpaque.IdEmpaque == Empaque.IdEmpaque)
+            .where(Empaque.IdTipoEmpaque == TipoEmpaque.IdTipoEmpaque)
+            .correlate(TipoEmpaque)
+            .scalar_subquery()
+            .label("FechaUltimoMovimiento")
+        )
+
+        consulta = (
+            select(
+                TipoEmpaque.IdTipoEmpaque.label("IdTipo"),
+                TipoEmpaque.NombreTipoEmpaque.label("NombreTipo"),
+                func.count(Empaque.IdEmpaque).filter(en_almacen).label("CantidadActual"),
+                func.coalesce(func.sum(Empaque.PesoKg).filter(en_almacen), 0).label("PesoKg"),
+                ultimo_movimiento,
+            )
+            .outerjoin(Empaque, Empaque.IdTipoEmpaque == TipoEmpaque.IdTipoEmpaque)
+            .group_by(TipoEmpaque.IdTipoEmpaque, TipoEmpaque.NombreTipoEmpaque)
+            .order_by(TipoEmpaque.NombreTipoEmpaque)
+        )
 
         return self.caller.Consultar(consulta)
 

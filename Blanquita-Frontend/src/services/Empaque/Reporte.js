@@ -9,6 +9,10 @@ import { descargarDesdeUrl } from "@/utils/downloadFile";
 
 const BASE_URL = "/api/empaque/reportes";
 
+export async function descargarReporteInventarioEmpaque(clase) {
+  await descargarDesdeUrl(`${BASE_URL}/${clase}/inventario`, `inventario-empaque-${clase}.pdf`);
+}
+
 export async function verResumenMovimientosEmpaque(clase, filtros) {
   const data = await pedirJson(
     conQueryParams(`${BASE_URL}/${clase}/movimientos/resumen`, ReporteEmpaqueRequest(filtros))

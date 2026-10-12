@@ -24,6 +24,9 @@ import {
 } from "@/components/Inventario/comunes";
 import { ControlCantidad, ResumenStock } from "@/components/InventarioProductos/comunes";
 import Header from "@/components/layout/Header";
+import { BotonDescarga } from "@/components/layout/BotonDescarga";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { descargarReporteInventarioEmpaque } from "@/services/Empaque/Reporte";
 import {
   CANTIDAD_MAXIMA_EMPAQUE_BOLSA,
   MOTIVO_CORRECCION_MIN,
@@ -256,7 +259,9 @@ export default function InventarioBolsas({ tipo, usuario }) {
     );
   };
 
-  const accion = EsEncargado(usuario.IdRol)
+  const esEncargado = EsEncargado(usuario.IdRol);
+
+  const accion = esEncargado
     ? {
         texto: "Registrar ingreso",
         icono: PackagePlus,
@@ -265,8 +270,18 @@ export default function InventarioBolsas({ tipo, usuario }) {
     : null;
 
   return (
+    <TooltipProvider>
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <Header titulo="Almacén · Empaque" subtitulo={config.subtitulo} accion={accion} />
+      <Header titulo="Almacén · Empaque" subtitulo={config.subtitulo} accion={accion}>
+        {esEncargado && (
+          <BotonDescarga
+            texto="Descargar inventario"
+            ayuda={`PDF con el stock actual de todos los ${config.plural}`}
+            exito="Informe de inventario descargado"
+            descargar={() => descargarReporteInventarioEmpaque(tipo)}
+          />
+        )}
+      </Header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
         <EncabezadoCatalogo titulo={config.catalogo}>
@@ -325,5 +340,6 @@ export default function InventarioBolsas({ tipo, usuario }) {
         )}
       </main>
     </div>
+    </TooltipProvider>
   );
 }
