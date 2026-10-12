@@ -5,7 +5,7 @@ import {
 } from "../../models/Empaque/Reporte";
 import { pedirJson } from "@/utils/api";
 import { conQueryParams } from "@/utils/params";
-import { descargarReportePDF } from "@/utils/downloadFile";
+import { descargarDesdeUrl } from "@/utils/downloadFile";
 
 const BASE_URL = "/api/empaque/reportes";
 
@@ -18,7 +18,7 @@ export async function verResumenMovimientosEmpaque(clase, filtros) {
 }
 
 export async function descargarReporteMovimientosEmpaque(clase, filtros) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/${clase}/movimientos`, ReporteEmpaqueRequest(filtros)),
     `movimientos-empaque-${clase}-${filtros.FechaInicio}-${filtros.FechaFin}.pdf`
   );
@@ -33,7 +33,7 @@ export async function verResumenLotesEmpaque(clase, filtros) {
 }
 
 export async function descargarReporteLotesEmpaque(clase, filtros) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/${clase}/lotes`, ReporteEmpaqueRequest(filtros)),
     `lotes-empaque-${clase}-${filtros.FechaInicio}-${filtros.FechaFin}.pdf`
   );

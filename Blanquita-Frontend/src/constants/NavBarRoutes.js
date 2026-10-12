@@ -174,6 +174,7 @@ export const RutasReportes = [
     subrutas: [
       { titulo: "Inventario", icono: Boxes, ruta: "inventario" },
       { titulo: "Producción", icono: Factory, ruta: "produccion" },
+      { titulo: "Salidas", icono: Truck, ruta: "salidas" },
     ],
   },
   {

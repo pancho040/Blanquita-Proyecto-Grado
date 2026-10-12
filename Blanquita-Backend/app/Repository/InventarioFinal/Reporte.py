@@ -44,10 +44,10 @@ class ReporteProductoTerminadoRepository:
         """
         return self.caller.LlamarFuncion(sql, params)
 
-    def MovimientosSalida(self, params: dict) -> list[dict]:
+    def _ConsultaSalidas(self, id_tipo_movimiento: int):
         mpt = MovimientoProductoTerminado
 
-        consulta = (
+        return (
             select(
                 mpt.IdMovimientoProductoTerminado,
                 mpt.FechaMovimiento,
@@ -67,13 +67,20 @@ class ReporteProductoTerminadoRepository:
             .join(Producto, PresentacionProducto.IdProducto == Producto.IdProducto)
             .join(Usuario, mpt.IdUsuario == Usuario.IdUsuario)
             .join(Rol, Usuario.IdRol == Rol.IdRol)
+            .where(mpt.IdTipoMovimientoInventario == id_tipo_movimiento)
+        )
+
+    def MovimientosSalida(self, params: dict) -> list[dict]:
+        mpt = MovimientoProductoTerminado
+
+        consulta = (
+            self._ConsultaSalidas(params["p_IdTipoMovimientoInventario"])
             .where(
-                mpt.IdTipoMovimientoInventario == params["p_IdTipoMovimientoInventario"],
                 *filtro_rango(
                     mpt.FechaMovimiento, params.get("p_FechaInicio"), params.get("p_FechaFin")
-                ),
+                )
             )
-            .order_by(mpt.FechaMovimiento.desc(), mpt.IdMovimientoProductoTerminado.desc())
+            .order_by(mpt.FechaMovimiento.desc(), mpt.IdMovimientoProductoTerminado.asc())
         )
 
         if params.get("p_IdsProducto"):
@@ -92,3 +99,28 @@ class ReporteProductoTerminadoRepository:
             ).where(InventarioProductoTerminado.IdPresentacion.in_(ids_presentacion))
         )
         return {fila["IdPresentacion"]: fila["CantidadActual"] for fila in filas}
+
+    def DespachoSalida(self, params: dict) -> list[dict]:
+        mpt = MovimientoProductoTerminado
+        id_tipo = params["p_IdTipoMovimientoInventario"]
+
+        referencia = (
+            select(mpt.FechaMovimiento, mpt.IdUsuario)
+            .where(
+                mpt.IdMovimientoProductoTerminado == params["p_IdMovimiento"],
+                mpt.IdTipoMovimientoInventario == id_tipo,
+            )
+            .subquery()
+        )
+
+        consulta = (
+            self._ConsultaSalidas(id_tipo)
+            .join(
+                referencia,
+                (mpt.FechaMovimiento == referencia.c.FechaMovimiento)
+                & (mpt.IdUsuario == referencia.c.IdUsuario),
+            )
+            .order_by(mpt.IdMovimientoProductoTerminado.asc())
+        )
+
+        return self.caller.Consultar(consulta)

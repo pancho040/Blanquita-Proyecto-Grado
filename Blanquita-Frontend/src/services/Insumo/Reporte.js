@@ -6,7 +6,7 @@ import {
 } from "../../models/Insumo/Reporte";
 import { pedirJson } from "@/utils/api";
 import { construirQueryParams, conQueryParams } from "@/utils/params";
-import { descargarReportePDF } from "@/utils/downloadFile";
+import { descargarDesdeUrl } from "@/utils/downloadFile";
 
 const BASE_URL = "/api/insumo/reportes";
 
@@ -19,7 +19,7 @@ export async function verResumenInventarioInsumo(filtros) {
 }
 
 export async function descargarReporteInventarioInsumo(idsTipoInsumo) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/inventario`, { IdsTipoInsumo: idsTipoInsumo }),
     "reporte-inventario-insumos.pdf"
   );
@@ -34,7 +34,7 @@ export async function verResumenMovimientosInsumo(filtros) {
 }
 
 export async function descargarReporteMovimientosInsumo(fechaInicio, fechaFin, idsTipoInsumo) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/movimientos`, {
       FechaInicio: fechaInicio,
       FechaFin: fechaFin,

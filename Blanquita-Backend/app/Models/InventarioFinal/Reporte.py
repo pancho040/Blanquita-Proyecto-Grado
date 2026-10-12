@@ -153,3 +153,20 @@ class ReporteSalidasProductoTerminadoResponse(BaseModel):
     Lineas: list[SalidaLineaResponse]
     Presentaciones: list[SalidaPresentacionResponse]
     Movimientos: list[MovimientoSalidaProductoTerminadoResponse]
+
+
+class DespachoSalidaResponse(BaseModel):
+    IdDespacho: int
+    FechaMovimiento: datetime
+    Observacion: Optional[str]
+    Ci: str
+    PrimerNombre: str
+    ApellidoPaterno: str
+    NombreRol: str
+    NumeroPresentaciones: int
+    CantidadTotal: int
+    Items: list[MovimientoSalidaProductoTerminadoResponse]
+
+
+class ReporteSalidasConDespachosResponse(ReporteSalidasProductoTerminadoResponse):
+    Despachos: list[DespachoSalidaResponse]

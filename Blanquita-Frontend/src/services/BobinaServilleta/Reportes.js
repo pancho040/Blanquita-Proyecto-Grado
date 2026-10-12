@@ -8,19 +8,19 @@ import {
 } from "../../models/BobinaServilleta/Reportes";
 import { pedirJson } from "@/utils/api";
 import { construirQueryParams, conQueryParams } from "@/utils/params";
-import { descargarReportePDF } from "@/utils/downloadFile";
+import { descargarDesdeUrl } from "@/utils/downloadFile";
 
 const BASE_URL = "/api/bobinaservilleta/reporte";
 
 export async function descargarReporteInventarioCompletoServilleta() {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/inventario/completo`,
     "reporte-inventario-servilleta.pdf"
   );
 }
 
 export async function descargarReporteInventarioBobinaServilleta(idsTipoBobinaServilleta) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/bobina/inventario`, { tipos: idsTipoBobinaServilleta }),
     "reporte-inventario-bobina-servilleta.pdf"
   );
@@ -36,14 +36,14 @@ export async function verBobinasServilletaReporte(filtros) {
 }
 
 export async function descargarReporteDetalleBobinaServilleta(idBobinaServilleta) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/bobina/detalle/${idBobinaServilleta}`,
     `reporte-detalle-bobina-servilleta-${idBobinaServilleta}.pdf`
   );
 }
 
 export async function descargarReporteMovimientosUnidadServilleta(idUnidadBobinaServilleta) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/unidad/movimientos/${idUnidadBobinaServilleta}`,
     `reporte-movimientos-unidad-servilleta-${idUnidadBobinaServilleta}.pdf`
   );
@@ -59,7 +59,7 @@ export async function verLotesBobinaServilleta(filtros) {
 }
 
 export async function descargarReporteLoteServilletaDetalle(idLoteBobinaServilleta) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/lote/detalle/${idLoteBobinaServilleta}`,
     `reporte-lote-servilleta-${idLoteBobinaServilleta}.pdf`
   );
@@ -71,7 +71,7 @@ export async function descargarReporteLotesServilletaPorPeriodo(fechaInicio, fec
     FechaFin: fechaFin
   });
 
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/lote/periodo?${params.toString()}`,
     `ingresos-lotes-servilleta-periodo-${fechaInicio}-${fechaFin}.pdf`
   );
@@ -89,14 +89,14 @@ export async function verProduccionesServilleta(filtros) {
 export async function descargarReporteDetalleProduccionServilleta(idProduccion, verPausas) {
   const params = construirQueryParams({ VerPausas: verPausas ?? false });
 
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/produccion/detalle/${idProduccion}?${params.toString()}`,
     `reporte-produccion-servilleta-${idProduccion}.pdf`
   );
 }
 
 export async function descargarReporteProduccionServilletaCancelada(idProduccion) {
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/produccion/cancelada/${idProduccion}`,
     `reporte-produccion-servilleta-cancelada-${idProduccion}.pdf`
   );
@@ -113,7 +113,7 @@ export async function descargarReporteProduccionServilletaPorPeriodo(
     VerCancelaciones: verCancelaciones ?? false
   });
 
-  await descargarReportePDF(
+  await descargarDesdeUrl(
     `${BASE_URL}/produccion/periodo?${params.toString()}`,
     `reporte-produccion-servilleta-periodo-${fechaInicio}-${fechaFin}.pdf`
   );

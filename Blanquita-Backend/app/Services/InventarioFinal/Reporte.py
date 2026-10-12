@@ -22,6 +22,8 @@ from app.Models.InventarioFinal.Reporte import (
     SalidaLineaResponse,
     SalidaPresentacionResponse,
     MovimientoSalidaProductoTerminadoResponse,
+    DespachoSalidaResponse,
+    ReporteSalidasConDespachosResponse,
 )
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Repository.InventarioFinal.Reporte import ReporteProductoTerminadoRepository
@@ -267,18 +269,12 @@ class ReporteProductoTerminadoService:
 
     def ResumenSalidas(
         self, data: ReporteSalidasProductoTerminadoRequest
-    ) -> ReporteSalidasProductoTerminadoResponse:
+    ) -> ReporteSalidasConDespachosResponse:
         self._ValidarPeriodo(data.FechaInicio, data.FechaFin)
         lineas_solicitadas, todas_las_lineas = self._LineasSolicitadas(data.IdsProducto)
 
         movimientos = [
-            MovimientoSalidaProductoTerminadoResponse(
-                **fila,
-                NombrePresentacion=_nombre_presentacion(
-                    fila["NombreProducto"], fila["CantidadRollosUnidades"]
-                ),
-                Unidad=_unidad_linea(fila["IdProducto"]),
-            )
+            self._MovimientoSalida(fila)
             for fila in self.repository.MovimientosSalida(
                 {
                     "p_IdTipoMovimientoInventario": ID_TIPO_MOVIMIENTO_SALIDA,
@@ -329,24 +325,33 @@ class ReporteProductoTerminadoService:
                     NombreProducto=producto["NombreProducto"],
                     Unidad=_unidad_linea(producto["IdProducto"]),
                     CantidadSalida=sum(p.CantidadSalida for p in propias),
-                    NumeroSalidas=sum(p.NumeroSalidas for p in propias),
+                    NumeroSalidas=len(
+                        {
+                            (m.FechaMovimiento, m.Ci)
+                            for m in movimientos
+                            if m.IdProducto == producto["IdProducto"]
+                        }
+                    ),
                 )
             )
 
-        return ReporteSalidasProductoTerminadoResponse(
+        despachos = self._AgruparDespachos(movimientos)
+
+        return ReporteSalidasConDespachosResponse(
             PeriodoInicio=data.FechaInicio,
             PeriodoFin=data.FechaFin,
             TodasLasLineas=todas_las_lineas,
             NombresLineas=[p["NombreProducto"] for p in lineas_solicitadas],
-            NumeroSalidas=len(movimientos),
+            NumeroSalidas=len(despachos),
             Lineas=lineas,
             Presentaciones=filas_presentacion,
             Movimientos=movimientos,
+            Despachos=despachos,
         )
 
     def ReporteSalidas(
         self, data: ReporteSalidasProductoTerminadoRequest
-    ) -> ReporteSalidasProductoTerminadoResponse:
+    ) -> ReporteSalidasConDespachosResponse:
         resumen = self.ResumenSalidas(data)
 
         if not resumen.Movimientos:
@@ -369,3 +374,56 @@ class ReporteProductoTerminadoService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"El rango de fechas no puede superar los {DIAS_MAXIMOS_REPORTE_PRODUCCION} días",
             )
+
+    def ReporteDespacho(self, id_movimiento: int) -> DespachoSalidaResponse:
+        filas = self.repository.DespachoSalida(
+            {
+                "p_IdMovimiento": id_movimiento,
+                "p_IdTipoMovimientoInventario": ID_TIPO_MOVIMIENTO_SALIDA,
+            }
+        )
+
+        if not filas:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe una salida de producto terminado con el movimiento {id_movimiento}",
+            )
+
+        return self._AgruparDespachos([self._MovimientoSalida(fila) for fila in filas])[0]
+
+    def _MovimientoSalida(self, fila: dict) -> MovimientoSalidaProductoTerminadoResponse:
+        return MovimientoSalidaProductoTerminadoResponse(
+            **fila,
+            NombrePresentacion=_nombre_presentacion(
+                fila["NombreProducto"], fila["CantidadRollosUnidades"]
+            ),
+            Unidad=_unidad_linea(fila["IdProducto"]),
+        )
+
+    def _AgruparDespachos(
+        self, movimientos: list[MovimientoSalidaProductoTerminadoResponse]
+    ) -> list[DespachoSalidaResponse]:
+        grupos: dict[tuple, list[MovimientoSalidaProductoTerminadoResponse]] = {}
+        for m in movimientos:
+            grupos.setdefault((m.FechaMovimiento, m.Ci), []).append(m)
+
+        despachos = []
+        for items in grupos.values():
+            items = sorted(items, key=lambda m: m.IdMovimientoProductoTerminado)
+            primero = items[0]
+            despachos.append(
+                DespachoSalidaResponse(
+                    IdDespacho=primero.IdMovimientoProductoTerminado,
+                    FechaMovimiento=primero.FechaMovimiento,
+                    Observacion=primero.Observacion,
+                    Ci=primero.Ci,
+                    PrimerNombre=primero.PrimerNombre,
+                    ApellidoPaterno=primero.ApellidoPaterno,
+                    NombreRol=primero.NombreRol,
+                    NumeroPresentaciones=len(items),
+                    CantidadTotal=sum(m.Cantidad for m in items),
+                    Items=items,
+                )
+            )
+
+        return sorted(despachos, key=lambda d: (d.FechaMovimiento, d.IdDespacho), reverse=True)

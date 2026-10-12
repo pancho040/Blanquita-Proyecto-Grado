@@ -5,6 +5,7 @@ import {
   ClipboardPlus,
   ClipboardMinus,
   Truck,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,11 @@ export default function MovimientosProductoTerminado({ usuario }) {
         titulo="Movimientos producto terminado"
         subtitulo={SUBTITULO_POR_VISTA[vista]}
         volver={`/${esEncargado ? "encargado" : "operador"}/producto/inventario`}
+        accion={
+          esEncargado
+            ? { texto: "Ver salidas", icono: History, href: "/encargado/producto/salidas" }
+            : null
+        }
       />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 sm:px-6">

@@ -5,7 +5,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from app.Models.InventarioFinal.Reporte import ReporteSalidasProductoTerminadoResponse
+from app.Models.InventarioFinal.Reporte import (
+    DespachoSalidaResponse,
+    ReporteSalidasConDespachosResponse,
+)
+from app.Reportes.ProductoTerminado import numero_salida_por_movimiento
 from app.utils.dates import ZONA_BOLIVIA
 
 COLOR_PRIMARIO = "1F4E79"
@@ -63,7 +67,7 @@ def _ajustar_anchos(hoja, anchos: list[int]) -> None:
 
 
 def construir_excel_salidas_producto_terminado(
-    data: ReporteSalidasProductoTerminadoResponse,
+    data: ReporteSalidasConDespachosResponse,
     generado_por: str | None = None,
 ) -> bytes:
     libro = Workbook()
@@ -115,7 +119,9 @@ def construir_excel_salidas_producto_terminado(
     _ajustar_anchos(resumen, [16, 24, 14, 16, 12, 14])
 
     detalle = libro.create_sheet("Detalle")
+    numero_salida = numero_salida_por_movimiento(data)
     columnas_detalle = [
+        ("N° salida", lambda m: numero_salida[m.IdMovimientoProductoTerminado], None),
         ("Fecha", lambda m: _hora_local(m.FechaMovimiento), FORMATO_FECHA_HORA),
         ("Línea", lambda m: m.NombreProducto, None),
         ("Código", lambda m: m.CodigoPresentacion, None),
@@ -130,7 +136,50 @@ def construir_excel_salidas_producto_terminado(
     ultima_fila = _escribir_tabla(detalle, 1, columnas_detalle, data.Movimientos)
     detalle.freeze_panes = "A2"
     detalle.auto_filter.ref = f"A1:{get_column_letter(len(columnas_detalle))}{ultima_fila}"
-    _ajustar_anchos(detalle, [17, 14, 12, 18, 11, 11, 40, 22, 12, 30])
+    _ajustar_anchos(detalle, [11, 17, 14, 12, 18, 11, 11, 40, 22, 12, 30])
+
+    buffer = io.BytesIO()
+    libro.save(buffer)
+    return buffer.getvalue()
+
+
+def construir_excel_despacho_salida(
+    data: DespachoSalidaResponse,
+    generado_por: str | None = None,
+) -> bytes:
+    libro = Workbook()
+    hoja = libro.active
+    hoja.title = f"Salida {data.IdDespacho}"
+
+    hoja["A1"] = f"Salida de producto terminado N° {data.IdDespacho}"
+    hoja["A1"].font = FUENTE_TITULO
+    datos = [
+        ("Fecha", _hora_local(data.FechaMovimiento), FORMATO_FECHA_HORA),
+        ("Registrado por", f"{data.PrimerNombre} {data.ApellidoPaterno} - CI {data.Ci} - {data.NombreRol}", None),
+        ("Observación", data.Observacion or "", None),
+        ("Generado", datetime.now(ZONA_BOLIVIA).replace(tzinfo=None), FORMATO_FECHA_HORA),
+        ("Generado por", generado_por or "", None),
+    ]
+    for fila, (etiqueta, valor, formato) in enumerate(datos, start=2):
+        hoja.cell(row=fila, column=1, value=etiqueta).font = Font(bold=True)
+        celda = hoja.cell(row=fila, column=2, value=valor)
+        if formato:
+            celda.number_format = formato
+
+    _escribir_tabla(
+        hoja,
+        len(datos) + 3,
+        [
+            ("Código", lambda m: m.CodigoPresentacion, None),
+            ("Producto", lambda m: m.NombrePresentacion, None),
+            ("Línea", lambda m: m.NombreProducto, None),
+            ("Unidad", lambda m: m.Unidad.capitalize(), None),
+            ("Cantidad", lambda m: m.Cantidad, FORMATO_ENTERO),
+        ],
+        data.Items,
+        total=["TOTAL", "", "", "", data.CantidadTotal],
+    )
+    _ajustar_anchos(hoja, [16, 40, 16, 12, 12])
 
     buffer = io.BytesIO()
     libro.save(buffer)
