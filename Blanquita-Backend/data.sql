@@ -36,10 +36,12 @@ INSERT INTO "EstadoMateriaPrima" ("TipoEstado") VALUES
 ('Terminada');
 
 INSERT INTO "TipoEmpaque" ("NombreTipoEmpaque") VALUES
-('Eco Pack'),
-('Luxury'),
-('Servilletas'),
-('Toalla');
+('Luxury 24'),
+('Luxury 12'),
+('Luxury 6'),
+('EcoPack 12'),
+('EcoPack 6'),
+('EcoPack 4');
 
 INSERT INTO "TipoMovimientoMateriaPrima" ("NombreMovimiento", "AplicaA", "DescripcionTipoMovimientoMateriaPrima") VALUES
 ('Ingreso a almacén', 'Todos', 'Registro de ingreso inicial de materia prima al almacén'),
@@ -108,33 +110,30 @@ INSERT INTO "TipoMovimientoOperadorLogs" ("NombreMovimiento", "DescripcionTipoMo
 
 
 
--- Datos de empaques de prueba, pronto serán cambiados
 INSERT INTO "TipoEmpaqueBolsa" ("NombreEmpaqueBolsa", "DescripcionEmpaqueBolsa") VALUES
-('Económico', 'Plancha, papel higiénico económico'),
-('Megarollo', 'Plancha, papel higiénico Megarollo'),
-('Merma Plancha', 'Producto de segunda categoría, línea plancha'),
-('Merma Servilletas', 'Producto de segunda categoría, línea servilleta'),
+('MegaRollo', 'Plancha, papel higiénico MegaRollo'),
+('Económico', 'Plancha, papel higiénico Económico'),
 ('Servilleta 50', 'Bolsa, servilleta de bandeo 50 unidades'),
 ('Servilleta 200', 'Bolsa, servilleta 200 unidades'),
 ('Servilleta 500', 'Bolsa, servilleta 500 unidades');
-
-
 
 INSERT INTO "InventarioEmpaqueBolsa" ("IdTipoEmpaqueBolsa", "CantidadActual")
 SELECT "IdTipoEmpaqueBolsa", 0
 FROM "TipoEmpaqueBolsa";
 
 INSERT INTO "TipoBolsaJava" ("NombreBolsaJava", "DescripcionBolsaJava") VALUES
-('Jaba Luxury 6', 'Bolsa de jaba para LUX-J06'),
-('Jaba Luxury 12', 'Bolsa de jaba para LUX-J12'),
-('Jaba Luxury 24', 'Bolsa de jaba para LUX-J24'),
-('Jaba EcoPack 4', 'Bolsa de jaba para ECO-J04'),
-('Jaba EcoPack 6', 'Bolsa de jaba para ECO-J06'),
-('Jaba EcoPack 12', 'Bolsa de jaba para ECO-J12'),
-('Jaba Servilleta 50', 'Bolsa de jaba para SRV-J50'),
-('Jaba Servilleta 200', 'Bolsa de jaba para SRV-J200'),
-('Jaba Servilleta 500', 'Bolsa de jaba para SRV-J500'),
-('Jaba Toalla', 'Bolsa de jaba para TOA-J06');
+('Luxury 24', 'Ancho plegado 49 cm, fuelle 12 cm por lado, ancho total 73 cm, largo 77 cm, 40 g'),
+('Luxury 6', 'Ancho plegado 49 cm, fuelle 12 cm por lado, ancho total 73 cm, largo 77 cm, 40 g'),
+('Luxury 12', 'Ancho plegado 44 cm, fuelle 10 cm por lado, ancho total 64 cm, largo 91 cm, 40 g'),
+('Servilleta 50', 'Ancho plegado 44 cm, fuelle 10 cm por lado, ancho total 64 cm, largo 91 cm, 40 g'),
+('Mega 20', 'Ancho plegado 38 cm, fuelle 5 cm por lado, ancho total 48 cm, largo 64 cm, 40 g'),
+('Plancha servilletas', 'Ancho plegado 38 cm, fuelle 5 cm por lado, ancho total 48 cm, largo 64 cm, 40 g'),
+('EcoPack 4', 'Ancho plegado 42 cm, fuelle 10 cm por lado, ancho total 62 cm, largo 61 cm, 40 g'),
+('Servilleta 200', 'Ancho plegado 42 cm, fuelle 10 cm por lado, ancho total 62 cm, largo 61 cm, 40 g'),
+('Servilleta 500', 'Ancho plegado 49 cm, fuelle 11 cm por lado, ancho total 71 cm, largo 63 cm, 40 g'),
+('EcoPack 6', 'Ancho plegado 45 cm, fuelle 11 cm por lado, ancho total 67 cm, largo 75 cm, 40 g'),
+('Papel Toalla', 'Ancho plegado 45 cm, fuelle 11 cm por lado, ancho total 67 cm, largo 75 cm, 40 g'),
+('EcoPack 12', 'Ancho plegado 41 cm, fuelle 9 cm por lado, ancho total 59 cm, largo 82 cm, 40 g');
 
 INSERT INTO "InventarioBolsaJava" ("IdTipoBolsaJava", "CantidadActual")
 SELECT "IdTipoBolsaJava", 0
