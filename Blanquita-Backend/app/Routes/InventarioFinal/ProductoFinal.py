@@ -42,7 +42,7 @@ def InsertarIngresoProductoTerminado(
 
 @ProductoFinalRouter.post(
     "/salida",
-    response_model=list[SalidaProductoTerminadoResponse],
+    response_model=SalidaProductoTerminadoResponse,
     status_code=201
 )
 def InsertarSalidaInventario(

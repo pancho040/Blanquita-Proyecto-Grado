@@ -2,7 +2,7 @@ import {
   IngresoProductoTerminadoRequest,
   IngresoProductoTerminadoResponseList,
   SalidaProductoTerminadoRequest,
-  SalidaProductoTerminadoResponseList,
+  SalidaProductoTerminadoResponse,
   CorreccionProductoTerminadoRequest,
   CorreccionProductoTerminadoResponse,
   VerInventarioProductoTerminadoResponseList,
@@ -23,15 +23,18 @@ export async function insertarIngresoProductoTerminado(presentaciones) {
   return IngresoProductoTerminadoResponseList(data);
 }
 
-export async function insertarSalidaProductoTerminado(presentaciones) {
-  const payload = SalidaProductoTerminadoRequest({ Presentaciones: presentaciones });
+export async function insertarSalidaProductoTerminado(presentaciones, observacion) {
+  const payload = SalidaProductoTerminadoRequest({
+    Observacion: observacion,
+    Presentaciones: presentaciones
+  });
 
   const data = await pedirJson("/api/productofinal/salida", {
     method: "POST",
     body: payload
   });
 
-  return SalidaProductoTerminadoResponseList(data);
+  return SalidaProductoTerminadoResponse(data);
 }
 
 export async function ajustePositivoInventarioProductoTerminado(idPresentacion, cantidad, observacion) {

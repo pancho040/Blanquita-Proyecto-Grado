@@ -1,27 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import {
-  Plus,
-  Minus,
-  X,
-  Search,
-  Loader2,
-  ShoppingCart,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  SlidersHorizontal,
-  Boxes,
-  Layers,
-  AlertTriangle,
-  Trash2,
-} from "lucide-react";
-import { toast } from "sonner";
+import { X, Search, Boxes, Layers, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableHeader,
@@ -30,22 +12,9 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  verInventarioProductoTerminado,
-  insertarIngresoProductoTerminado,
-  insertarSalidaProductoTerminado,
-} from "../../services/Inventario/Inventario";
+import { verInventarioProductoTerminado } from "../../services/Inventario/Inventario";
 import { descargarReporteInventarioProducto } from "@/services/Inventario/Reportes";
-import { limpiarObservacion } from "@/utils/validators";
 import { Roles } from "@/constants/Values";
 import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
@@ -76,88 +45,6 @@ function TarjetaResumen({ icono: Icono, valor, etiqueta, tono }) {
   );
 }
 
-function FilaEnCarrito({ linea, presentacion, onCantidad, onQuitar }) {
-  const esIngreso = linea.Tipo === "ingreso";
-  const maximo = esIngreso ? null : Number(presentacion.CantidadActual || 0);
-
-  const ajustar = (delta) => {
-    let siguiente = Number(linea.Cantidad || 0) + delta;
-    if (siguiente < 1) siguiente = 1;
-    if (maximo !== null && siguiente > maximo) siguiente = maximo;
-    onCantidad(linea.IdPresentacion, siguiente);
-  };
-
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3.5">
-      <div className="flex items-start justify-between gap-2.5">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn(
-                "border-0 text-[11px] font-extrabold uppercase",
-                esIngreso
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-c4/10 text-c3",
-              )}
-            >
-              {esIngreso ? "Ingreso" : "Salida"}
-            </Badge>
-            <span className="font-mono text-sm font-extrabold text-slate-900">
-              {presentacion.CodigoPresentacion}
-            </span>
-          </div>
-          <div className="text-[12.5px] text-slate-500">
-            {presentacion.NombreProducto} · stock {presentacion.CantidadActual}
-          </div>
-        </div>
-        <button
-          onClick={() => onQuitar(linea.IdPresentacion)}
-          className="text-slate-400 transition-colors hover:text-red-600"
-        >
-          <Trash2 size={16} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="text-[12px] font-bold uppercase tracking-wide text-slate-400">
-          Cantidad
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => ajustar(-1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-slate-200 text-slate-600 hover:border-slate-300"
-          >
-            <Minus size={14} strokeWidth={3} />
-          </button>
-          <Input
-            type="number"
-            min={1}
-            value={linea.Cantidad}
-            onChange={(e) => {
-              const valor = Number(e.target.value);
-              if (Number.isNaN(valor)) return;
-              if (maximo !== null && valor > maximo) {
-                onCantidad(linea.IdPresentacion, maximo);
-                return;
-              }
-              onCantidad(linea.IdPresentacion, valor < 1 ? 1 : valor);
-            }}
-            className="h-8 w-16 text-center font-bold tabular-nums"
-          />
-          <button
-            onClick={() => ajustar(1)}
-            disabled={maximo !== null && Number(linea.Cantidad) >= maximo}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-slate-200 text-slate-600 hover:border-slate-300 disabled:opacity-40"
-          >
-            <Plus size={14} strokeWidth={3} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function InventarioProductoTerminado({ usuario }) {
   const esEncargado = usuario?.IdRol === Roles.Encargado;
   const [inventario, setInventario] = useState([]);
@@ -167,11 +54,6 @@ export default function InventarioProductoTerminado({ usuario }) {
   const [busqueda, setBusqueda] = useState("");
   const [productoFiltro, setProductoFiltro] = useState("todos");
   const [estadoFiltro, setEstadoFiltro] = useState("todos");
-
-  const [carrito, setCarrito] = useState([]);
-  const [carritoAbierto, setCarritoAbierto] = useState(false);
-  const [observacionGlobal, setObservacionGlobal] = useState("");
-  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     cargarInventario();
@@ -220,91 +102,6 @@ export default function InventarioProductoTerminado({ usuario }) {
   const totalAgotadas = inventario.filter(
     (p) => Number(p.CantidadActual || 0) === 0,
   ).length;
-
-  const buscarPresentacion = (idPresentacion) =>
-    inventario.find((p) => p.IdPresentacion === idPresentacion);
-
-  const lineasIngreso = carrito.filter((l) => l.Tipo === "ingreso");
-  const lineasSalida = carrito.filter((l) => l.Tipo === "salida");
-
-  const agregarLinea = (presentacion, tipo) => {
-    setCarrito((prev) => {
-      const existente = prev.find(
-        (l) => l.IdPresentacion === presentacion.IdPresentacion,
-      );
-      if (existente) {
-        if (existente.Tipo === tipo) {
-          toast.info(`${presentacion.CodigoPresentacion} ya está en la lista`);
-          return prev;
-        }
-        return prev.map((l) =>
-          l.IdPresentacion === presentacion.IdPresentacion
-            ? { ...l, Tipo: tipo, Cantidad: 1 }
-            : l,
-        );
-      }
-      return [
-        ...prev,
-        { IdPresentacion: presentacion.IdPresentacion, Tipo: tipo, Cantidad: 1 },
-      ];
-    });
-    setCarritoAbierto(true);
-  };
-
-  const cambiarCantidadLinea = (idPresentacion, cantidad) => {
-    setCarrito((prev) =>
-      prev.map((l) =>
-        l.IdPresentacion === idPresentacion ? { ...l, Cantidad: cantidad } : l,
-      ),
-    );
-  };
-
-  const quitarLinea = (idPresentacion) => {
-    setCarrito((prev) => prev.filter((l) => l.IdPresentacion !== idPresentacion));
-  };
-
-  const vaciarCarrito = () => {
-    setCarrito([]);
-    setObservacionGlobal("");
-  };
-
-  const confirmarMovimientos = async () => {
-    if (carrito.length === 0) return;
-
-    const observacion = observacionGlobal.trim() ? observacionGlobal.trim() : null;
-    const payloadIngreso = lineasIngreso.map((l) => ({
-      IdPresentacion: l.IdPresentacion,
-      Cantidad: Number(l.Cantidad),
-      Observacion: observacion,
-    }));
-    const payloadSalida = lineasSalida.map((l) => ({
-      IdPresentacion: l.IdPresentacion,
-      Cantidad: Number(l.Cantidad),
-      Observacion: observacion,
-    }));
-
-    setEnviando(true);
-    try {
-      if (payloadIngreso.length > 0) {
-        await insertarIngresoProductoTerminado(payloadIngreso);
-      }
-      if (payloadSalida.length > 0) {
-        await insertarSalidaProductoTerminado(payloadSalida);
-      }
-      const resumen = [];
-      if (payloadIngreso.length > 0) resumen.push(`${payloadIngreso.length} ingreso(s)`);
-      if (payloadSalida.length > 0) resumen.push(`${payloadSalida.length} salida(s)`);
-      toast.success(`Registrado: ${resumen.join(" y ")}`);
-      vaciarCarrito();
-      setCarritoAbierto(false);
-      cargarInventario();
-    } catch (e) {
-      toast.error(e.message);
-      cargarInventario();
-    } finally {
-      setEnviando(false);
-    }
-  };
 
   return (
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
@@ -459,17 +256,8 @@ export default function InventarioProductoTerminado({ usuario }) {
                   <TableBody>
                     {filtradas.map((p) => {
                       const estado = estadoStock(p.CantidadActual);
-                      const enCarrito = carrito.some(
-                        (l) => l.IdPresentacion === p.IdPresentacion,
-                      );
                       return (
-                        <TableRow
-                          key={p.IdPresentacion}
-                          className={cn(
-                            "hover:bg-slate-50",
-                            enCarrito && "bg-c4/5 hover:bg-c4/5",
-                          )}
-                        >
+                        <TableRow key={p.IdPresentacion} className="hover:bg-slate-50">
                           <TableCell className="pl-5 font-mono font-bold text-c3">
                             {p.CodigoPresentacion}
                           </TableCell>
@@ -506,18 +294,10 @@ export default function InventarioProductoTerminado({ usuario }) {
               <div className="flex flex-col gap-2.5 p-3.5 md:hidden">
                 {filtradas.map((p) => {
                   const estado = estadoStock(p.CantidadActual);
-                  const enCarrito = carrito.some(
-                    (l) => l.IdPresentacion === p.IdPresentacion,
-                  );
                   return (
                     <div
                       key={p.IdPresentacion}
-                      className={cn(
-                        "flex flex-col gap-3 rounded-2xl border-2 p-3.5",
-                        enCarrito
-                          ? "border-c4/30 bg-c4/8"
-                          : "border-slate-200 bg-white",
-                      )}
+                      className="flex flex-col gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3.5"
                     >
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex flex-col gap-1">
@@ -554,113 +334,6 @@ export default function InventarioProductoTerminado({ usuario }) {
           )}
         </div>
       </main>
-
-      <Sheet open={carritoAbierto} onOpenChange={setCarritoAbierto}>
-        <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle className="text-lg font-extrabold">
-              Movimientos pendientes
-            </SheetTitle>
-            <SheetDescription>
-              {lineasIngreso.length} ingreso(s) · {lineasSalida.length} salida(s)
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            {carrito.length === 0 && (
-              <div className="py-16 text-center text-sm text-slate-400">
-                No hay movimientos cargados.
-              </div>
-            )}
-
-            {lineasIngreso.length > 0 && (
-              <div className="mb-4 flex flex-col gap-2.5">
-                <div className="text-[12px] font-bold uppercase tracking-wide text-emerald-700">
-                  Ingresos
-                </div>
-                {lineasIngreso.map((l) => {
-                  const presentacion = buscarPresentacion(l.IdPresentacion);
-                  if (!presentacion) return null;
-                  return (
-                    <FilaEnCarrito
-                      key={l.IdPresentacion}
-                      linea={l}
-                      presentacion={presentacion}
-                      onCantidad={cambiarCantidadLinea}
-                      onQuitar={quitarLinea}
-                    />
-                  );
-                })}
-              </div>
-            )}
-
-            {lineasSalida.length > 0 && (
-              <div className="flex flex-col gap-2.5">
-                <div className="text-[12px] font-bold uppercase tracking-wide text-c3">
-                  Salidas
-                </div>
-                {lineasSalida.map((l) => {
-                  const presentacion = buscarPresentacion(l.IdPresentacion);
-                  if (!presentacion) return null;
-                  return (
-                    <FilaEnCarrito
-                      key={l.IdPresentacion}
-                      linea={l}
-                      presentacion={presentacion}
-                      onCantidad={cambiarCantidadLinea}
-                      onQuitar={quitarLinea}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {carrito.length > 0 && (
-            <>
-              <Separator />
-              <div className="flex flex-col gap-3 px-4 py-4">
-                <div className="flex flex-col gap-1.5">
-                  <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">
-                    Observación general
-                  </div>
-                  <Textarea
-                    value={observacionGlobal}
-                    onChange={(e) => setObservacionGlobal(limpiarObservacion(e.target.value))}
-                    placeholder="Se aplica a todas las líneas (opcional)"
-                    className="min-h-16 resize-none"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          <SheetFooter className="flex-row gap-2 border-t border-slate-100 px-4 py-4">
-            <Button
-              variant="ghost"
-              onClick={vaciarCarrito}
-              disabled={carrito.length === 0 || enviando}
-              className="h-11 font-bold text-slate-500 hover:text-slate-900"
-            >
-              Vaciar
-            </Button>
-            <Button
-              onClick={confirmarMovimientos}
-              disabled={carrito.length === 0 || enviando}
-              className="h-11 flex-1 gap-2 bg-slate-900 font-extrabold text-white hover:bg-slate-800"
-            >
-              {enviando ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                "Confirmar"
-              )}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

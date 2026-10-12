@@ -4,6 +4,7 @@ import {
   PackageMinus,
   ClipboardPlus,
   ClipboardMinus,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,14 @@ import { Roles } from "@/constants/Values";
 import Header from "@/components/layout/Header";
 import IngresoProductoTerminado from "./IngresoProductos";
 import CorreccionProductoTerminado from "./CorreccionProductos";
+import SalidaProductoTerminado from "./SalidaProductos";
 
 const SUBTITULO_POR_VISTA = {
   ingreso: "Registrar ingreso",
   correccion: "Registrar corrección",
   ajustePositivo: "Registrar ajuste positivo",
   ajusteNegativo: "Registrar ajuste negativo",
+  salida: "Registrar salida",
 };
 
 export default function MovimientosProductoTerminado({ usuario }) {
@@ -74,7 +77,7 @@ export default function MovimientosProductoTerminado({ usuario }) {
             className={cn(
               "grid w-full",
               esEncargado
-                ? "grid-cols-2 gap-y-[3px] group-data-horizontal/tabs:h-auto md:grid-cols-4"
+                ? "grid-cols-2 gap-y-[3px] group-data-horizontal/tabs:h-auto sm:grid-cols-3 md:grid-cols-5"
                 : "grid-cols-2 sm:w-80",
             )}
           >
@@ -95,6 +98,10 @@ export default function MovimientosProductoTerminado({ usuario }) {
                 <TabsTrigger value="ajusteNegativo" className={claseTab}>
                   <ClipboardMinus size={15} strokeWidth={2.75} />
                   Ajuste negativo
+                </TabsTrigger>
+                <TabsTrigger value="salida" className={claseTab}>
+                  <Truck size={15} strokeWidth={2.75} />
+                  Salida
                 </TabsTrigger>
               </>
             )}
@@ -146,6 +153,12 @@ export default function MovimientosProductoTerminado({ usuario }) {
                 <div hidden={vista !== "ajusteNegativo"}>
                   <CorreccionProductoTerminado
                     tipo="ajusteNegativo"
+                    inventario={inventario}
+                    onStockActualizado={actualizarStock}
+                  />
+                </div>
+                <div hidden={vista !== "salida"}>
+                  <SalidaProductoTerminado
                     inventario={inventario}
                     onStockActualizado={actualizarStock}
                   />
