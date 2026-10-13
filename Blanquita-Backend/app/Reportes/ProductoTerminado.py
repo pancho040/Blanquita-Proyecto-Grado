@@ -301,14 +301,11 @@ def construir_reporte_despacho_salida(
     reporte = Reporte(
         titulo=f"Salida de producto terminado N° {data.IdDespacho}",
         subtitulo=f"Registrada el {fecha:%d/%m/%Y} a las {fecha:%H:%M}",
-        filtros={
-            "Registrado por": f"{data.PrimerNombre} {data.ApellidoPaterno} - CI {data.Ci} - {data.NombreRol}",
-            "Observación": data.Observacion or "-",
-        },
         generado_en=datetime.now(ZONA_BOLIVIA),
         generado_por=generado_por,
     )
 
+    reporte.parrafo(f"Observación: {data.Observacion or '-'}")
     reporte.titulo_seccion(f"Presentaciones ({data.NumeroPresentaciones})")
     reporte.tabla(
         columnas=[
@@ -317,9 +314,15 @@ def construir_reporte_despacho_salida(
             ("Línea", "NombreProducto"),
             ("Unidad", lambda m: m.Unidad.capitalize()),
             ("Cantidad", "Cantidad"),
+            (
+                "Registrado por",
+                lambda m: reporte.celda_multilinea(
+                    [f"{data.PrimerNombre} {data.ApellidoPaterno},", data.Ci, data.NombreRol]
+                ),
+            ),
         ],
         filas=data.Items,
-        fila_total=["TOTAL", "", "", "", data.CantidadTotal],
+        fila_total=["TOTAL", "", "", "", data.CantidadTotal, ""],
     )
 
     return reporte.a_pdf()
