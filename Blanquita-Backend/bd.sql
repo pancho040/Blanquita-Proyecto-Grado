@@ -470,3 +470,18 @@ CREATE TABLE "HistorialAdmin" (
   "FechaMovimiento" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX "idx_historialadmin_fecha" ON "HistorialAdmin"("FechaMovimiento" DESC);
+
+CREATE TABLE "RegistroIngreso" (
+  "IdRegistroIngreso" SERIAL PRIMARY KEY,
+  "IdUsuario" INTEGER REFERENCES "Usuario"("IdUsuario") ON DELETE RESTRICT,
+  "Registro" TEXT NOT NULL,
+  "CiIntentado" TEXT,
+  "Detalle" TEXT,
+  "DireccionIp" TEXT,
+  "UserAgent" TEXT,
+  "FechaRegistro" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT "chk_registroingreso_registro" CHECK ("Registro" IN ('Ingreso', 'Salida', 'Intento fallido')),
+  CONSTRAINT "chk_registroingreso_identificacion" CHECK ("IdUsuario" IS NOT NULL OR "CiIntentado" IS NOT NULL)
+);
+CREATE INDEX "idx_registroingreso_usuario_fecha" ON "RegistroIngreso"("IdUsuario", "FechaRegistro" DESC);
+CREATE INDEX "idx_registroingreso_fecha" ON "RegistroIngreso"("FechaRegistro" DESC);

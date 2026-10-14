@@ -219,6 +219,7 @@ export function BotonInforme({
   ayuda,
   disponible = true,
   ayudaNoDisponible = AYUDA_SIN_RANGO,
+  texto = "Descargar informe",
 }) {
   const { descargando, iniciar } = useDescarga(descargar, exito);
 
@@ -237,7 +238,7 @@ export function BotonInforme({
               ) : (
                 <Download size={15} strokeWidth={2.5} />
               )}
-              Descargar informe
+              {texto}
             </Button>
           </span>
         }

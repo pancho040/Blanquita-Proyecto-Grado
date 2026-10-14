@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { obtenerAccessTokenValido, limpiarSesion } from "../../../lib/auth-server";
+import { obtenerAccessTokenValido, limpiarSesion, obtenerIpReal, obtenerUserAgent } from "../../../lib/auth-server";
 import { logoutTodos } from "../../../services/Usuario/Auth";
 
 const HEADERS = {
@@ -8,7 +8,8 @@ const HEADERS = {
   "Cache-Control": "no-store"
 };
 
-export async function POST({ cookies }) {
+export async function POST(contexto) {
+  const { cookies } = contexto;
   const accessToken = await obtenerAccessTokenValido(cookies);
 
   if (!accessToken) {
@@ -20,7 +21,7 @@ export async function POST({ cookies }) {
   }
 
   try {
-    const resultado = await logoutTodos(accessToken);
+    const resultado = await logoutTodos(accessToken, obtenerIpReal(contexto), obtenerUserAgent(contexto));
     limpiarSesion(cookies);
     return new Response(
       JSON.stringify(resultado),

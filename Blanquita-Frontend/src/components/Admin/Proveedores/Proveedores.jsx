@@ -32,8 +32,8 @@ const COLUMNAS = [
     clase: "font-semibold text-slate-900",
     valor: (p) => p.NombreProveedor,
   },
-  { titulo: "Celular", clase: "tabular-nums", valor: (p) => p.CelularProveedor ?? "—" },
-  { titulo: "Correo", valor: (p) => p.CorreoProveedor ?? "—" },
+  { titulo: "Celular", clase: "tabular-nums", valor: (p) => p.CelularProveedor ?? "-" },
+  { titulo: "Correo", valor: (p) => p.CorreoProveedor ?? "-" },
   {
     titulo: "Estado",
     valor: (p) => <BadgeEstado estado={p.NombreEstadoProveedor} estilos={ESTADOS_PROVEEDOR} />,
@@ -152,7 +152,7 @@ export default function Proveedores() {
                 estilos={ESTADOS_PROVEEDOR}
               >
                 <PieTarjeta accion={acciones(p)}>
-                  <Dato etiqueta="Celular">{p.CelularProveedor ?? "—"}</Dato>
+                  <Dato etiqueta="Celular">{p.CelularProveedor ?? "-"}</Dato>
                 </PieTarjeta>
               </TarjetaReporte>
             )}

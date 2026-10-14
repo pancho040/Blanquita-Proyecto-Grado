@@ -16,6 +16,7 @@ import {
   Package,
   Cuboid,
   PackagePlus,
+  DoorClosedLocked
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 import { Roles } from "@/constants/Values";
@@ -239,6 +240,12 @@ export const RutasAdmin = [
     icono: Package,
     ruta: "insumos",
     descripcion: "Registrar insumos y editar su descripción",
+  },
+  {
+    titulo: "Accesos sistema",
+    icono: DoorClosedLocked,
+    ruta: "accesos",
+    descripcion: "Ver todos los ingresos e intentos de ingreso al sistema",
   },
   {
     titulo: "Volver a la Planta",

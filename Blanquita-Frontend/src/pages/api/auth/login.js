@@ -1,22 +1,12 @@
 export const prerender = false;
 
-import { verificarAccessToken, guardarSesion, limpiarSesion } from "../../../lib/auth-server";
+import { verificarAccessToken, guardarSesion, limpiarSesion, obtenerIpReal, obtenerUserAgent } from "../../../lib/auth-server";
 import { login } from "../../../services/Usuario/Auth";
 import { SesionUsuario } from "../../../models/Usuario/Auth";
 import { RUTA_POR_ROL } from "../../../constants/Values";
 
-function obtenerIpReal(request, clientAddress) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) return forwardedFor.split(",")[0].trim();
-
-  try {
-    return clientAddress ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function POST({ request, cookies, clientAddress }) {
+export async function POST(contexto) {
+  const { request, cookies } = contexto;
   let Ci, Clave;
 
   try {
@@ -35,8 +25,8 @@ export async function POST({ request, cookies, clientAddress }) {
     );
   }
 
-  const ip = obtenerIpReal(request, clientAddress);
-  const userAgent = request.headers.get("user-agent");
+  const ip = obtenerIpReal(contexto);
+  const userAgent = obtenerUserAgent(contexto);
 
   let resultado;
   try {

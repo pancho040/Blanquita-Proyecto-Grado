@@ -44,7 +44,7 @@ const COLUMNAS = [
     valor: (u) => u.NombreCompleto,
   },
   { titulo: "Rol", valor: (u) => u.NombreRol },
-  { titulo: "Celular", clase: "tabular-nums", valor: (u) => u.Celular ?? "—" },
+  { titulo: "Celular", clase: "tabular-nums", valor: (u) => u.Celular ?? "-" },
   { titulo: "Registro", clase: "tabular-nums", valor: (u) => fechaRegistro(u.FechaRegistro) },
   {
     titulo: "Estado",
@@ -190,7 +190,7 @@ export default function Usuarios({ usuario: sesion }) {
                 estilos={ESTADOS_USUARIO}
               >
                 <PieTarjeta accion={acciones(u)}>
-                  <Dato etiqueta="Celular">{u.Celular ?? "—"}</Dato>
+                  <Dato etiqueta="Celular">{u.Celular ?? "-"}</Dato>
                   <Dato etiqueta="Registro">{fechaRegistro(u.FechaRegistro)}</Dato>
                 </PieTarjeta>
               </TarjetaReporte>

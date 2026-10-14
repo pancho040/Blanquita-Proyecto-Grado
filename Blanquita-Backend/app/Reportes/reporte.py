@@ -11,6 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
@@ -41,6 +42,13 @@ class Reporte:
     MARGEN = 2 * cm
     ALTO_ENCABEZADO = 2.6 * cm
     ALTO_LOGO = 1.5 * cm
+    FUENTE_DERECHA = 9
+    INTERLINEA_DERECHA = 0.42 * cm
+    Y_PRIMER_FILTRO = 1.0 * cm
+    Y_MINIMO_GENERADO_POR = 1.9 * cm
+    SEPARACION_GENERADO_POR = 0.5 * cm
+    ESPACIO_BAJO_ENCABEZADO = 0.7 * cm
+    PROPORCION_ANCHO_FILTROS = 0.55
 
     COLOR_PRIMARIO = colors.HexColor("#1f4e79")
     COLOR_FILA_ALTERNA = colors.HexColor("#f2f6fb")
@@ -91,6 +99,35 @@ class Reporte:
         )
 
         self._contenido: list = []
+        self._lineas_filtros = self._partir_filtros()
+        self._y_generado_por = max(
+            self.Y_MINIMO_GENERADO_POR,
+            self.Y_PRIMER_FILTRO
+            + (len(self._lineas_filtros) - 1) * self.INTERLINEA_DERECHA
+            + self.SEPARACION_GENERADO_POR,
+        )
+        self._alto_encabezado = max(
+            self.ALTO_ENCABEZADO, self._y_generado_por + self.ESPACIO_BAJO_ENCABEZADO
+        )
+
+    def _partir_filtros(self) -> list[str]:
+        ancho_maximo = (
+            self.tamanio_hoja[0] - 2 * self.MARGEN
+        ) * self.PROPORCION_ANCHO_FILTROS
+        separador = "   |   "
+        lineas: list[str] = []
+        actual = ""
+        for clave, valor in self.filtros.items():
+            item = f"{clave}: {valor}"
+            candidata = f"{actual}{separador}{item}" if actual else item
+            if actual and stringWidth(candidata, "Helvetica", self.FUENTE_DERECHA) > ancho_maximo:
+                lineas.append(actual)
+                actual = item
+            else:
+                actual = candidata
+        if actual:
+            lineas.append(actual)
+        return lineas
     def titulo_seccion(self, texto: str) -> "Reporte":
         self._contenido.append(Paragraph(escape(texto), self._estilo_seccion))
         return self
@@ -156,7 +193,7 @@ class Reporte:
             pagesize=self.tamanio_hoja,
             leftMargin=self.MARGEN,
             rightMargin=self.MARGEN,
-            topMargin=self.MARGEN + self.ALTO_ENCABEZADO,
+            topMargin=self.MARGEN + self._alto_encabezado,
             bottomMargin=self.MARGEN,
             title=self.titulo,
             author=self.EMPRESA,
@@ -208,15 +245,8 @@ class Reporte:
             x_texto = self.MARGEN + ancho_dibujo + 0.35 * cm
 
         texto_generado = f"Generado: {date_formatter(self.generado_en)}"
-        texto_filtros = (
-            "   |   ".join(f"{k}: {v}" for k, v in self.filtros.items())
-            if self.filtros
-            else ""
-        )
-
-        ancho_columna_derecha = max(
-            lienzo.stringWidth(texto_generado, "Helvetica", 9),
-            lienzo.stringWidth(texto_filtros, "Helvetica", 9) if texto_filtros else 0,
+        ancho_columna_derecha = lienzo.stringWidth(
+            texto_generado, "Helvetica", self.FUENTE_DERECHA
         )
         ancho_disponible_titulo = (
             ancho - self.MARGEN - ancho_columna_derecha - 0.5 * cm
@@ -240,16 +270,22 @@ class Reporte:
         if self.subtitulo:
             lienzo.drawString(x_texto, tope - 1.45 * cm, self.subtitulo)
 
-        lienzo.setFont("Helvetica", 9)
+        lienzo.setFont("Helvetica", self.FUENTE_DERECHA)
         lienzo.drawRightString(ancho - self.MARGEN, tope - 0.4 * cm, texto_generado)
-        if texto_filtros:
-            lienzo.drawRightString(ancho - self.MARGEN, tope - 1.0 * cm, texto_filtros)
+        for indice, linea in enumerate(self._lineas_filtros):
+            lienzo.drawRightString(
+                ancho - self.MARGEN,
+                tope - self.Y_PRIMER_FILTRO - indice * self.INTERLINEA_DERECHA,
+                linea,
+            )
         if self.generado_por:
             lienzo.drawRightString(
-                ancho - self.MARGEN, tope - 1.9 * cm, f"Generado por: {self.generado_por}"
+                ancho - self.MARGEN,
+                tope - self._y_generado_por,
+                f"Generado por: {self.generado_por}",
             )
 
-        linea_y = alto - self.MARGEN - self.ALTO_ENCABEZADO + 0.35 * cm
+        linea_y = alto - self.MARGEN - self._alto_encabezado + 0.35 * cm
         lienzo.setStrokeColor(self.COLOR_BORDE)
         lienzo.line(self.MARGEN, linea_y, ancho - self.MARGEN, linea_y)
 

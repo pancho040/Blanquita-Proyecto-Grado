@@ -47,6 +47,21 @@ export function guardarSesion(cookies, { AccessToken, RefreshToken }) {
   }
 }
 
+export function obtenerIpReal(contexto) {
+  const forwardedFor = contexto.request.headers.get("x-forwarded-for");
+  if (forwardedFor) return forwardedFor.split(",")[0].trim();
+
+  try {
+    return contexto.clientAddress ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function obtenerUserAgent(contexto) {
+  return contexto.request.headers.get("user-agent");
+}
+
 export function limpiarSesion(cookies) {
   cookies.delete("token", { path: "/" });
   cookies.delete("refresh_token", { path: "/" });

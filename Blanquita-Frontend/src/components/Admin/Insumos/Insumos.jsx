@@ -28,7 +28,7 @@ const COLUMNAS = [
     clase: "font-semibold text-slate-900",
     valor: (i) => i.NombreInsumo,
   },
-  { titulo: "Descripción", clase: "text-slate-600", valor: (i) => i.DescripcionInsumo ?? "—" },
+  { titulo: "Descripción", clase: "text-slate-600", valor: (i) => i.DescripcionInsumo ?? "-" },
   { titulo: "Stock", ...DERECHA, valor: stock },
 ];
 
