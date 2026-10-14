@@ -248,6 +248,12 @@ export const RutasAdmin = [
     descripcion: "Ver todos los ingresos e intentos de ingreso al sistema",
   },
   {
+    titulo: "Acciones Administrador",
+    icono: UserShield,
+    ruta: "acciones",
+    descripcion: "Ver las acciones realizadas por los administradores",
+  },
+  {
     titulo: "Volver a la Planta",
     icono: Factory,
     ruta: "",

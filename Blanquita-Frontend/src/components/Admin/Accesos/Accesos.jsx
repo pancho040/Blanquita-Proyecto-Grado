@@ -280,7 +280,7 @@ export default function Accesos() {
                       ? undefined
                       : ciCompleto
                         ? "Ese CI no tiene accesos en el período y el registro elegidos"
-                        : `Escribí un CI de al menos ${LONGITUD_MINIMA_CI} dígitos`
+                        : `Escribe un CI de al menos ${LONGITUD_MINIMA_CI} dígitos`
                   }
                   exito="Reporte de accesos del usuario descargado"
                   descargar={() => descargarReporteUsuarioRegistroIngreso(parametros)}
