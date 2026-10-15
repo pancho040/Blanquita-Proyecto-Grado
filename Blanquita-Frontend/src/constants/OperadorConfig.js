@@ -208,6 +208,12 @@ export const MotivosAjustePositivoProductoTerminado = [
   "Producto encontrado en otra ubicación",
 ];
 
+export const MotivosSalidaProductoTerminado = [
+  "Despacho a repartidor",
+  "Despacho por tráiler",
+  "Venta directa en planta",
+];
+
 export const MotivosAjusteNegativoProductoTerminado = [
   "Conteo físico menor al registrado",
   "Producto dañado en almacén",

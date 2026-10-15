@@ -19,7 +19,7 @@ export function descargarArchivo(blob, nombreArchivo) {
   window.URL.revokeObjectURL(url);
 }
 
-export async function descargarReportePDF(url, nombrePorDefecto) {
+export async function descargarDesdeUrl(url, nombrePorDefecto) {
   const response = await pedir(url);
   const blob = await response.blob();
 

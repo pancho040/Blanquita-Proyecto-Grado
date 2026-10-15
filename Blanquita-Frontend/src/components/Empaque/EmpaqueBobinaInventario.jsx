@@ -31,6 +31,9 @@ import {
   BarraSeleccion,
 } from "@/components/Inventario/comunes";
 import Header from "@/components/layout/Header";
+import { BotonDescarga } from "@/components/layout/BotonDescarga";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { descargarReporteInventarioEmpaque } from "@/services/Empaque/Reporte";
 import { Roles } from "@/constants/Values";
 
 function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
@@ -152,13 +155,16 @@ export default function EmpaqueBobinaInventario({ usuario }) {
     );
   };
 
+  const esEncargado = usuario?.IdRol === Roles.Encargado;
+
   return (
+    <TooltipProvider>
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
       <Header
         titulo="Almacén · Materia Prima"
         subtitulo="Inventario de Empaques"
         accion={
-          usuario?.IdRol === Roles.Encargado
+          esEncargado
             ? {
                 texto: "Registrar ingreso",
                 icono: Plus,
@@ -166,7 +172,16 @@ export default function EmpaqueBobinaInventario({ usuario }) {
               }
             : null
         }
-      />
+      >
+        {esEncargado && (
+          <BotonDescarga
+            texto="Descargar inventario"
+            ayuda="PDF con el stock actual por tipo y las bobinas de empaque en almacén"
+            exito="Informe de inventario descargado"
+            descargar={() => descargarReporteInventarioEmpaque("bobina")}
+          />
+        )}
+      </Header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
         <EncabezadoCatalogo titulo="Catálogo por tipo de empaque">
@@ -257,5 +272,6 @@ export default function EmpaqueBobinaInventario({ usuario }) {
         )}
       </main>
     </div>
+    </TooltipProvider>
   );
 }

@@ -33,7 +33,7 @@ BobinaPapelRouter = APIRouter(
 )
 def CargarLoteBobinaPapel(
     data: IngresoModelo,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
     service: BobinaPapelService = Depends(bobina_papel_service),
 ):
     return service.InsertarBobinasPapel(data, usuario_actual["IdUsuario"])

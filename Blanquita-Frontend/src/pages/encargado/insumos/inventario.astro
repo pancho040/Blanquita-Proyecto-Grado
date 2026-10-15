@@ -14,6 +14,6 @@ import BottomBar from '@/components/layout/Qr/BottomBar';
 	<div class="hidden md:block">
 		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} />
 	</div>
-	<InventarioInsumos client:load />
+	<InventarioInsumos client:load usuario={usuario}/>
 	<BottomBar idRol={usuario.IdRol} subRuta={""} idOpcionSelect={4} client:load/>
 </Layout>

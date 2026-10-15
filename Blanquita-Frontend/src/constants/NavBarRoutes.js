@@ -16,6 +16,7 @@ import {
   Package,
   Cuboid,
   PackagePlus,
+  DoorClosedLocked
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 import { Roles } from "@/constants/Values";
@@ -174,6 +175,7 @@ export const RutasReportes = [
     subrutas: [
       { titulo: "Inventario", icono: Boxes, ruta: "inventario" },
       { titulo: "Producción", icono: Factory, ruta: "produccion" },
+      { titulo: "Salidas", icono: Truck, ruta: "salidas" },
     ],
   },
   {
@@ -238,6 +240,18 @@ export const RutasAdmin = [
     icono: Package,
     ruta: "insumos",
     descripcion: "Registrar insumos y editar su descripción",
+  },
+  {
+    titulo: "Accesos sistema",
+    icono: DoorClosedLocked,
+    ruta: "accesos",
+    descripcion: "Ver todos los ingresos e intentos de ingreso al sistema",
+  },
+  {
+    titulo: "Acciones Administrador",
+    icono: UserShield,
+    ruta: "acciones",
+    descripcion: "Ver las acciones realizadas por los administradores",
   },
   {
     titulo: "Volver a la Planta",

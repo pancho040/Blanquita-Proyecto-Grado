@@ -3,6 +3,8 @@ from datetime import date, datetime
 from app.Models.InventarioFinal.Reporte import (
     ReporteProduccionDiariaProductoTerminadoResponse,
     ReporteInventarioProductoTerminadoResponse,
+    ReporteSalidasConDespachosResponse,
+    DespachoSalidaResponse,
 )
 from app.Reportes.reporte import Reporte
 from app.utils.dates import ZONA_BOLIVIA
@@ -203,3 +205,129 @@ def construir_reporte_inventario_producto_terminado(
 def nombre_archivo_inventario_producto_terminado() -> str:
     ahora = datetime.now(ZONA_BOLIVIA)
     return f"informe-inventario-producto-terminado-{ahora:%Y%m%d-%H%M}.pdf"
+
+
+def numero_salida_por_movimiento(data: ReporteSalidasConDespachosResponse) -> dict[int, int]:
+    return {
+        item.IdMovimientoProductoTerminado: despacho.IdDespacho
+        for despacho in data.Despachos
+        for item in despacho.Items
+    }
+
+
+def _texto_lineas_salidas(data: ReporteSalidasConDespachosResponse) -> str:
+    if data.TodasLasLineas:
+        return "Todas"
+    if len(data.NombresLineas) <= 3:
+        return ", ".join(data.NombresLineas)
+    return f"{len(data.NombresLineas)} seleccionadas"
+
+
+def construir_reporte_salidas_producto_terminado(
+    data: ReporteSalidasConDespachosResponse,
+    generado_por: str | None = None,
+) -> bytes:
+    reporte = Reporte(
+        titulo="Salidas de producto terminado",
+        subtitulo=_texto_periodo(data.PeriodoInicio, data.PeriodoFin),
+        filtros={"Líneas": _texto_lineas_salidas(data)},
+        generado_en=datetime.now(ZONA_BOLIVIA),
+        generado_por=generado_por,
+    )
+
+    reporte.titulo_seccion("Resumen por línea")
+    reporte.tabla(
+        columnas=[
+            ("Línea", "NombreProducto"),
+            ("Unidad", lambda linea: linea.Unidad.capitalize()),
+            ("Cantidad salida", "CantidadSalida"),
+            ("N° salidas", "NumeroSalidas"),
+        ],
+        filas=data.Lineas,
+    )
+
+    reporte.titulo_seccion("Resumen por presentación")
+    reporte.tabla(
+        columnas=[
+            ("Código", "CodigoPresentacion"),
+            ("Producto", "NombrePresentacion"),
+            ("Unidad", lambda p: p.Unidad.capitalize()),
+            ("Cantidad salida", "CantidadSalida"),
+            ("N° salidas", "NumeroSalidas"),
+            ("Stock actual", "CantidadActual"),
+        ],
+        filas=data.Presentaciones,
+    )
+
+    numero_salida = numero_salida_por_movimiento(data)
+
+    reporte.titulo_seccion(f"Detalle de salidas ({len(data.Despachos)})")
+    reporte.tabla(
+        columnas=[
+            ("Salida", lambda m: f"N° {numero_salida[m.IdMovimientoProductoTerminado]}"),
+            ("Fecha", "FechaMovimiento"),
+            ("Código", "CodigoPresentacion"),
+            ("Producto", "NombrePresentacion"),
+            ("Cantidad", "Cantidad"),
+            (
+                "Usuario",
+                lambda m: reporte.celda_multilinea(
+                    [f"{m.PrimerNombre} {m.ApellidoPaterno},", m.Ci, m.NombreRol]
+                ),
+            ),
+            ("Observación", "Observacion"),
+        ],
+        filas=data.Movimientos,
+    )
+
+    return reporte.a_pdf()
+
+
+def nombre_archivo_salidas_producto_terminado(
+    fecha_inicio: date, fecha_fin: date, extension: str = "pdf"
+) -> str:
+    ahora = datetime.now(ZONA_BOLIVIA)
+    return (
+        f"salidas-producto-terminado-{fecha_inicio:%Y%m%d}-{fecha_fin:%Y%m%d}"
+        f"-{ahora:%Y%m%d-%H%M}.{extension}"
+    )
+
+
+def construir_reporte_despacho_salida(
+    data: DespachoSalidaResponse,
+    generado_por: str | None = None,
+) -> bytes:
+    fecha = data.FechaMovimiento.astimezone(ZONA_BOLIVIA)
+    reporte = Reporte(
+        titulo=f"Salida de producto terminado N° {data.IdDespacho}",
+        subtitulo=f"Registrada el {fecha:%d/%m/%Y} a las {fecha:%H:%M}",
+        generado_en=datetime.now(ZONA_BOLIVIA),
+        generado_por=generado_por,
+    )
+
+    reporte.parrafo(f"Observación: {data.Observacion or '-'}")
+    reporte.titulo_seccion(f"Presentaciones ({data.NumeroPresentaciones})")
+    reporte.tabla(
+        columnas=[
+            ("Código", "CodigoPresentacion"),
+            ("Producto", "NombrePresentacion"),
+            ("Línea", "NombreProducto"),
+            ("Unidad", lambda m: m.Unidad.capitalize()),
+            ("Cantidad", "Cantidad"),
+            (
+                "Registrado por",
+                lambda m: reporte.celda_multilinea(
+                    [f"{data.PrimerNombre} {data.ApellidoPaterno},", data.Ci, data.NombreRol]
+                ),
+            ),
+        ],
+        filas=data.Items,
+        fila_total=["TOTAL", "", "", "", data.CantidadTotal, ""],
+    )
+
+    return reporte.a_pdf()
+
+
+def nombre_archivo_despacho_salida(id_despacho: int, extension: str = "pdf") -> str:
+    ahora = datetime.now(ZONA_BOLIVIA)
+    return f"salida-producto-terminado-{id_despacho}-{ahora:%Y%m%d-%H%M}.{extension}"

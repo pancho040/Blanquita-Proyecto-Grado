@@ -72,3 +72,71 @@ export const ResumenInventarioResponse = (data) => ({
   TodasLasLineas: data.TodasLasLineas,
   Lineas: (data.Lineas ?? []).map(InventarioLineaResponse)
 });
+
+export const ResumenSalidasRequest = (filtros = {}) => ({
+  FechaInicio: filtros.FechaInicio ?? null,
+  FechaFin: filtros.FechaFin ?? null,
+  IdsProducto: filtros.IdsProducto ?? null
+});
+
+export const SalidaLineaResponse = (data) => ({
+  IdProducto: data.IdProducto,
+  NombreProducto: data.NombreProducto,
+  Unidad: data.Unidad,
+  CantidadSalida: data.CantidadSalida,
+  NumeroSalidas: data.NumeroSalidas
+});
+
+export const SalidaPresentacionResponse = (data) => ({
+  IdProducto: data.IdProducto,
+  NombreProducto: data.NombreProducto,
+  Unidad: data.Unidad,
+  IdPresentacion: data.IdPresentacion,
+  CodigoPresentacion: data.CodigoPresentacion,
+  NombrePresentacion: data.NombrePresentacion,
+  CantidadSalida: data.CantidadSalida,
+  NumeroSalidas: data.NumeroSalidas,
+  CantidadActual: data.CantidadActual
+});
+
+export const MovimientoSalidaResponse = (data) => ({
+  IdMovimientoProductoTerminado: data.IdMovimientoProductoTerminado,
+  FechaMovimiento: data.FechaMovimiento,
+  IdProducto: data.IdProducto,
+  NombreProducto: data.NombreProducto,
+  IdPresentacion: data.IdPresentacion,
+  CodigoPresentacion: data.CodigoPresentacion,
+  NombrePresentacion: data.NombrePresentacion,
+  Unidad: data.Unidad,
+  Cantidad: data.Cantidad,
+  Observacion: data.Observacion ?? null,
+  Ci: data.Ci,
+  PrimerNombre: data.PrimerNombre,
+  ApellidoPaterno: data.ApellidoPaterno,
+  NombreRol: data.NombreRol
+});
+
+export const DespachoSalidaResponse = (data) => ({
+  IdDespacho: data.IdDespacho,
+  FechaMovimiento: data.FechaMovimiento,
+  Observacion: data.Observacion ?? null,
+  Ci: data.Ci,
+  PrimerNombre: data.PrimerNombre,
+  ApellidoPaterno: data.ApellidoPaterno,
+  NombreRol: data.NombreRol,
+  NumeroPresentaciones: data.NumeroPresentaciones,
+  CantidadTotal: data.CantidadTotal,
+  Items: (data.Items ?? []).map(MovimientoSalidaResponse)
+});
+
+export const ResumenSalidasResponse = (data) => ({
+  PeriodoInicio: data.PeriodoInicio,
+  PeriodoFin: data.PeriodoFin,
+  TodasLasLineas: data.TodasLasLineas,
+  NombresLineas: data.NombresLineas ?? [],
+  NumeroSalidas: data.NumeroSalidas,
+  Lineas: (data.Lineas ?? []).map(SalidaLineaResponse),
+  Presentaciones: (data.Presentaciones ?? []).map(SalidaPresentacionResponse),
+  Movimientos: (data.Movimientos ?? []).map(MovimientoSalidaResponse),
+  Despachos: (data.Despachos ?? []).map(DespachoSalidaResponse)
+});

@@ -13,8 +13,10 @@ from app.Models.Empaque.Reporte import (
     ReporteMovimientosEmpaqueResponse,
 )
 from app.Reportes.Empaque import (
+    construir_reporte_inventario_empaque,
     construir_reporte_lotes_empaque,
     construir_reporte_movimientos_empaque,
+    nombre_archivo_inventario_empaque,
     nombre_archivo_lotes_empaque,
     nombre_archivo_movimientos_empaque,
 )
@@ -32,6 +34,30 @@ EmpaqueReporteRouter = APIRouter(
 
 DESCRIPCION_TIPOS = "IDs de tipo de empaque de la clase indicada. Vacío = todos los tipos."
 DESCRIPCION_MOVIMIENTO = "IdTipoMovimiento a incluir (1 ingreso, 2 salida/traslado). Vacío = todos."
+
+
+@EmpaqueReporteRouter.get(
+    "/{clase}/inventario",
+    status_code=200,
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+)
+def ReporteInventarioEmpaque(
+    clase: ClaseEmpaque,
+    generado_por: str | None = Depends(get_generado_por),
+    service: ReporteEmpaqueService = Depends(reporte_empaque_service),
+):
+    data = service.ReporteInventario(clase)
+    pdf = construir_reporte_inventario_empaque(data, generado_por)
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nombre_archivo_inventario_empaque(clase)}"'
+        },
+    )
 
 
 @EmpaqueReporteRouter.get(

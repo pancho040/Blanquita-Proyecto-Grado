@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.Routes.Usuario.UsuarioRouter import UsuarioRouter
 from app.Routes.Usuario.AuthRouter import AuthRouter
+from app.Routes.Usuario.RegistroIngresoRouter import RegistroIngresoRouter
+from app.Routes.Usuario.HistorialAdminRouter import HistorialAdminRouter
 
 from app.Routes.BobinaPapel.BobinaPapelRouter import BobinaPapelRouter
 from app.Routes.BobinaPapel.InventarioRouter import InventarioBobinaPapelRouter
@@ -78,6 +80,8 @@ def Servidor():
 #ROUTERS USUARIO
 app.include_router(UsuarioRouter)
 app.include_router(AuthRouter)
+app.include_router(RegistroIngresoRouter)
+app.include_router(HistorialAdminRouter)
 
 
 

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import get_current_user
+from app.Auth.Jwt import verificar_token
 from app.Services.Usuario.Auth import AuthService
 from app.Models.Usuario.Auth import (
     LoginRequest,
@@ -35,6 +36,15 @@ def _ObtenerAccessToken(request: Request) -> str | None:
     if len(partes) != 2 or partes[0].lower() != "bearer":
         return None
     return partes[1]
+
+
+def _ObtenerIdUsuarioDelToken(access_token: str) -> int | None:
+    try:
+        payload = verificar_token(access_token)
+    except HTTPException:
+        return None
+    id_usuario = payload.get("app_metadata", {}).get("IdUsuario")
+    return int(id_usuario) if id_usuario is not None else None
 
 
 @AuthRouter.post("/login", response_model=LoginResponse)
@@ -85,7 +95,12 @@ def logout(
         return LogoutResponse(Revocado=False)
 
     service = AuthService(db)
-    revocado = service.Logout(access_token)
+    revocado = service.Logout(
+        access_token,
+        id_usuario=_ObtenerIdUsuarioDelToken(access_token),
+        ip=_ObtenerIp(request),
+        user_agent=_ObtenerUserAgent(request),
+    )
 
     return LogoutResponse(Revocado=revocado)
 
@@ -102,6 +117,11 @@ def logout_todos(
         return LogoutResponse(Revocado=False)
 
     service = AuthService(db)
-    revocado = service.LogoutTodasLasSesiones(access_token)
+    revocado = service.LogoutTodasLasSesiones(
+        access_token,
+        id_usuario=usuario_actual["IdUsuario"],
+        ip=_ObtenerIp(request),
+        user_agent=_ObtenerUserAgent(request),
+    )
 
     return LogoutResponse(Revocado=revocado)

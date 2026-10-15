@@ -29,27 +29,25 @@ export const IngresoProductoTerminadoResponse = ({
 export const IngresoProductoTerminadoResponseList = (jsonList) =>
   (jsonList ?? []).map((item) => IngresoProductoTerminadoResponse(item));
 
-export const SalidaProductoTerminadoItem = ({
+export const SalidaProductoTerminadoItem = ({ IdPresentacion, Cantidad }) => ({
   IdPresentacion,
   Cantidad,
-  Observacion = null,
-}) => ({
-  IdPresentacion,
-  Cantidad,
-  Observacion,
 });
 
-export const SalidaProductoTerminadoRequest = ({ Presentaciones = [] }) => ({
+export const SalidaProductoTerminadoRequest = ({ Observacion, Presentaciones = [] }) => ({
+  Observacion,
   Presentaciones: Presentaciones.map((item) => SalidaProductoTerminadoItem(item)),
 });
 
-export const SalidaProductoTerminadoResponse = ({
+export const SalidaProductoTerminadoItemResponse = ({
+  IdMovimientoProductoTerminado,
   IdPresentacion,
   CodigoPresentacion,
   NombreProducto,
   CantidadSalida,
   CantidadActual,
 }) => ({
+  IdMovimientoProductoTerminado,
   IdPresentacion,
   CodigoPresentacion,
   NombreProducto,
@@ -57,8 +55,17 @@ export const SalidaProductoTerminadoResponse = ({
   CantidadActual,
 });
 
-export const SalidaProductoTerminadoResponseList = (jsonList) =>
-  (jsonList ?? []).map((item) => SalidaProductoTerminadoResponse(item));
+export const SalidaProductoTerminadoResponse = ({
+  FechaMovimiento,
+  Observacion,
+  CantidadTotal,
+  Presentaciones,
+}) => ({
+  FechaMovimiento,
+  Observacion,
+  CantidadTotal,
+  Presentaciones: (Presentaciones ?? []).map((item) => SalidaProductoTerminadoItemResponse(item)),
+});
 
 export const CorreccionProductoTerminadoRequest = ({
   IdPresentacion,

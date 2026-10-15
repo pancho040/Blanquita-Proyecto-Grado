@@ -1,4 +1,4 @@
-import { descargarReportePDF, imprimirPDF } from "@/utils/downloadFile";
+import { descargarDesdeUrl, imprimirPDF } from "@/utils/downloadFile";
 
 const BASE_URL = "/api/qr";
 
@@ -7,5 +7,5 @@ export async function imprimirCartelQr(ruta) {
 }
 
 export async function descargarCartelQr(ruta) {
-  await descargarReportePDF(`${BASE_URL}/${ruta}`, "cartel-qr.pdf");
+  await descargarDesdeUrl(`${BASE_URL}/${ruta}`, "cartel-qr.pdf");
 }

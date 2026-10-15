@@ -1,4 +1,4 @@
-import { Icon, ShelvingUnit, SquareStack } from "lucide-react";
+import { Icon, ShelvingUnit, SquareStack, Database, Container, Package } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 import { PaginaReporte } from "@/components/Reportes/PaginaReporte";
 import { TarjetaQr } from "./TarjetaQr";
@@ -44,8 +44,61 @@ const SECCIONES = [
     carteles: [
       {
         titulo: "Inventario",
-        descripcion: "Abre los movimientos de producto terminado",
+        descripcion: "Abre el inventario de producto terminado",
         ruta: "producto/inventario",
+      },
+      {
+        titulo: "Movimientos",
+        descripcion: "Abre los movimientos de producto terminado",
+        ruta: "producto/movimientos",
+      },
+    ],
+  },
+  {
+    titulo: "Rodela",
+    Icono: Database,
+    carteles: [
+      {
+        titulo: "Inventario",
+        descripcion: "Abre el inventario de rodelas",
+        ruta: "rodela/inventario",
+      },
+      {
+        titulo: "Producción",
+        descripcion: "Abre las rodelas en producción",
+        ruta: "rodela/produccion",
+      },
+    ],
+  },
+  {
+    titulo: "Empaque",
+    Icono: Container,
+    carteles: [
+      {
+        titulo: "Bobina",
+        descripcion: "Abre el inventario de empaque en bobina",
+        ruta: "empaque/bobina-inventario",
+      },
+      {
+        titulo: "Bolsa",
+        descripcion: "Abre el inventario de empaque en bolsa",
+        ruta: "empaque/bolsa-inventario",
+      },
+      {
+        titulo: "Bolsa de jaba",
+        descripcion: "Abre el inventario de bolsas de jaba",
+        ruta: "empaque/jaba-inventario",
+      },
+    ],
+  },
+  {
+    titulo: "Insumos",
+    Icono: Package,
+    carteles: [
+      {
+        titulo: "Inventario",
+        descripcion: "Abre el inventario de insumos",
+        ruta: "insumos/inventario",
       },
     ],
   },

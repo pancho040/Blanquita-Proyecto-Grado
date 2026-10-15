@@ -25,8 +25,6 @@ class ReporteBobinaPapelRepository:
     def __init__(self, db: Session):
         self.caller = DbCaller(db)
 
-    # ---------------------------------------------------------------- inventario
-
     def ReporteInventario(self, params: dict) -> list[dict]:
         sql = """
             SELECT * FROM "ReporteInventarioBobinaPapel"(
@@ -34,8 +32,6 @@ class ReporteBobinaPapelRepository:
             )
         """
         return self.caller.LlamarFuncion(sql, params)
-
-    # ---------------------------------------------------------------- producción
 
     def VerProduccionesBobinaTubo(self, params: dict) -> list[dict]:
         pb = ProduccionBobinaTubo

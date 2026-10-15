@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class IngresoProductoTerminadoItem(BaseModel):
@@ -21,21 +23,29 @@ class IngresoProductoTerminadoResponse(BaseModel):
 
 
 class SalidaProductoTerminadoItem(BaseModel):
-    IdPresentacion: int
+    IdPresentacion: int = Field(..., gt=0)
     Cantidad: int
-    Observacion: str | None = None
 
 
 class SalidaProductoTerminadoRequest(BaseModel):
+    Observacion: str
     Presentaciones: list[SalidaProductoTerminadoItem]
 
 
-class SalidaProductoTerminadoResponse(BaseModel):
+class SalidaProductoTerminadoItemResponse(BaseModel):
+    IdMovimientoProductoTerminado: int
     IdPresentacion: int
     CodigoPresentacion: str
     NombreProducto: str
     CantidadSalida: int
     CantidadActual: int
+
+
+class SalidaProductoTerminadoResponse(BaseModel):
+    FechaMovimiento: datetime
+    Observacion: str
+    CantidadTotal: int
+    Presentaciones: list[SalidaProductoTerminadoItemResponse]
 
 
 

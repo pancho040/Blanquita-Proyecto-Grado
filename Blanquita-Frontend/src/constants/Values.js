@@ -51,6 +51,7 @@ export const MOTIVO_CORRECCION_MIN = 5;
 export const MOTIVO_CORRECCION_MAX = 150;
 
 export const AjusteMax=500
+export const CANTIDAD_MAXIMA_SALIDA_PRODUCTO_TERMINADO = 5000;
 
 export const RolesUsuario = [
   { IdRol: 1, NombreRol: "Operador" },

@@ -11,10 +11,15 @@ const BACKEND_URL = (
   import.meta.env.PROD ? import.meta.env.BACKEND_URL_DEPLOY : import.meta.env.BACKEND_URL
 ).replace(/\/+$/, "");
 
-export async function login(ci, clave, ip, userAgent) {
+function cabecerasCliente(ip, userAgent) {
   const headers = {};
   if (ip) headers["X-Forwarded-For"] = ip;
   if (userAgent) headers["X-Client-User-Agent"] = userAgent;
+  return headers;
+}
+
+export async function login(ci, clave, ip, userAgent) {
+  const headers = cabecerasCliente(ip, userAgent);
 
   const data = await pedirJson(`${BACKEND_URL}/auth/login`, {
     method: "POST",
@@ -34,19 +39,22 @@ export async function refresh(refreshTokenCrudo) {
   return RefreshResponse(data);
 }
 
-export async function logout(accessToken) {
+export async function logout(accessToken, ip, userAgent) {
+  const headers = cabecerasCliente(ip, userAgent);
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
   const data = await pedirJson(`${BACKEND_URL}/auth/logout`, {
     method: "POST",
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+    headers
   });
 
   return LogoutResponse(data);
 }
 
-export async function logoutTodos(accessToken) {
+export async function logoutTodos(accessToken, ip, userAgent) {
   const data = await pedirJson(`${BACKEND_URL}/auth/logout-todos`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` }
+    headers: { ...cabecerasCliente(ip, userAgent), Authorization: `Bearer ${accessToken}` }
   });
 
   return LogoutResponse(data);
