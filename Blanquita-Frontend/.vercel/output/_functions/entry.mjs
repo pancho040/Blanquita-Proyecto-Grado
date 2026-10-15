@@ -1,6 +1,6 @@
 import { Z as AstroError, i as CacheNotEnabled, w as LocalsNotAnObject } from "./chunks/errors-data_PIFh9K3R.mjs";
-import { $ as getRenderOptions, B as createManifestMemo, C as getResolvedLogger, D as validateAndDecodePathname, E as getEnvironment, G as clientAddressSymbol, H as getSetCookiesFromResponse, J as getUsedFeatures, K as ALL_FETCH_FEATURES, O as getPattern, S as getLogger, T as AstroIntegrationLogger, U as ASTRO_ERROR_HEADER, V as getDefaultStatusCode, W as REROUTABLE_STATUS_CODES, X as createCrossOriginForbiddenResponse, Y as markFeatureUsed, Z as isForbiddenCrossOriginRequest, _ as handlePages, a as handleMiddleware, at as hasFileExtension, b as getI18n, d as provideSession, et as setRenderOptions, f as getRouteTable, ft as removeTrailingForwardSlash, g as routeComparator, h as updateRouteTable, ht as matchPattern, i as computePathnameFromDomain, it as collapseDuplicateTrailingSlashes, l as renderErrorFromState, lt as prependForwardSlash, m as matchRoute, n as serializeActionResult, nt as manifest, o as DisabledAstroCache, ot as isInternalPath, p as matchAllRoutes, pt as stripRequestBase, q as FetchFeatures, r as FetchState, rt as appendForwardSlash, s as NoopAstroCache, t as getActionContext, tt as getAmbientManifest, u as renderErrorPage, ut as removeLeadingForwardSlash, v as prepareResponse, x as getRouteGenerator, y as finalizeI18n, z as createAsyncManifestMemo } from "./chunks/server_DPybzryC.mjs";
-import "./chunks/remoteProbe_CE_zf2CE.mjs";
+import { $ as getRenderOptions, B as createManifestMemo, C as getResolvedLogger, D as validateAndDecodePathname, E as getEnvironment, G as clientAddressSymbol, H as getSetCookiesFromResponse, J as getUsedFeatures, K as ALL_FETCH_FEATURES, O as getPattern, S as getLogger, T as AstroIntegrationLogger, U as ASTRO_ERROR_HEADER, V as getDefaultStatusCode, W as REROUTABLE_STATUS_CODES, X as createCrossOriginForbiddenResponse, Y as markFeatureUsed, Z as isForbiddenCrossOriginRequest, _ as handlePages, a as handleMiddleware, at as hasFileExtension, b as getI18n, d as provideSession, et as setRenderOptions, f as getRouteTable, ft as removeTrailingForwardSlash, g as routeComparator, h as updateRouteTable, ht as matchPattern, i as computePathnameFromDomain, it as collapseDuplicateTrailingSlashes, l as renderErrorFromState, lt as prependForwardSlash, m as matchRoute, n as serializeActionResult, nt as manifest, o as DisabledAstroCache, ot as isInternalPath, p as matchAllRoutes, pt as stripRequestBase, q as FetchFeatures, r as FetchState, rt as appendForwardSlash, s as NoopAstroCache, t as getActionContext, tt as getAmbientManifest, u as renderErrorPage, ut as removeLeadingForwardSlash, v as prepareResponse, x as getRouteGenerator, y as finalizeI18n, z as createAsyncManifestMemo } from "./chunks/server_DUgAORLa.mjs";
+import "./chunks/remoteProbe_BL-1im9R.mjs";
 import nodePath from "node:path";
 import "@vercel/routing-utils";
 import { escape } from "html-escaper";
@@ -14,7 +14,7 @@ var ASTRO_LOCALS_HEADER = "x-astro-locals";
 var ASTRO_MIDDLEWARE_SECRET_HEADER = "x-astro-middleware-secret";
 //#endregion
 //#region \0virtual:astro-vercel:config
-var middlewareSecret = "c44fc481-d0d9-4d33-aded-6e90ef18eb7c";
+var middlewareSecret = "036d201f-b6c5-4655-902e-517770556472";
 //#endregion
 //#region node_modules/astro/dist/actions/handler.js
 function handleAction(apiContext, state) {
@@ -827,7 +827,7 @@ var entrypoint_default = { async fetch(request) {
 	if (hasValidMiddlewareSecret) {
 		overrideTrusted = true;
 		realPath = request.headers.get(ASTRO_PATH_HEADER);
-	} else if (url.searchParams.get("x_astro_path_token") === "c44fc481-d0d9-4d33-aded-6e90ef18eb7c") {
+	} else if (url.searchParams.get("x_astro_path_token") === "036d201f-b6c5-4655-902e-517770556472") {
 		overrideTrusted = true;
 		realPath = url.searchParams.get(ASTRO_PATH_PARAM);
 	}
