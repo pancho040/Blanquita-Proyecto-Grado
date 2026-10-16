@@ -37,7 +37,7 @@ export function CardActiva({ p, onInsertar, onPausar, onFinalizar, onCambiarLine
       acciones={[
         { tipo: "insertar", onClick: onInsertar },
         { tipo: "pausar", onClick: onPausar },
-        { tipo: "finalizar", onClick: onFinalizar },
+        ...(onFinalizar ? [{ tipo: "finalizar", onClick: onFinalizar }] : []),
         ...(onCambiarLinea ? [{ tipo: "cambiarLinea", onClick: onCambiarLinea }] : []),
       ]}
     >
@@ -62,7 +62,7 @@ export function CardPausada({ p, procesando, onInsertar, onReanudar, onCancelar 
       acciones={[
         { tipo: "insertar", onClick: onInsertar },
         { tipo: "reanudar", onClick: onReanudar, disabled: procesando, procesando },
-        { tipo: "cancelar", onClick: onCancelar },
+        ...(onCancelar ? [{ tipo: "cancelar", onClick: onCancelar }] : []),
       ]}
     >
       <LogsRegistrados cantidad={p.CantidadLogsActual} />

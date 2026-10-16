@@ -91,7 +91,7 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                 encabezado={<EncabezadoSubBobina p={p} />}
                 acciones={[
                   { tipo: "pausar", onClick: () => pausa.abrir(p) },
-                  { tipo: "finalizar", onClick: () => finalizacion.abrir(p) },
+                  ...(esEncargado ? [{ tipo: "finalizar", onClick: () => finalizacion.abrir(p) }] : []),
                 ]}
               />
             )}
@@ -113,7 +113,9 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                   encabezado={<EncabezadoSubBobina p={p} />}
                   acciones={[
                     { tipo: "reanudar", onClick: () => reanudar(p), disabled: procesando, procesando },
-                    { tipo: "cancelar", onClick: () => cancelacion.abrir(p), disabled: procesando },
+                    ...(esEncargado
+                      ? [{ tipo: "cancelar", onClick: () => cancelacion.abrir(p), disabled: procesando }]
+                      : []),
                   ]}
                 />
               );

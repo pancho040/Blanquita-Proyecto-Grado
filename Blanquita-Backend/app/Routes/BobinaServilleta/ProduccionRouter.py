@@ -89,7 +89,7 @@ def ReanudadProduccionSubBobina(
 )
 def FinalizarProduccionServilelta(
     data: FinalizarProduccionServilletaRequest,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
     service: ProduccionBobinaServilletaService = Depends(produccion_bobina_servilleta_service)
 ):
     return service.FinalizarProduccionServilleta(data, usuario_actual["IdUsuario"])
@@ -101,7 +101,7 @@ def FinalizarProduccionServilelta(
 )
 def CancelarProduccionServilleta(
     data: CancelarProduccionServilletaRequest,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
     service: ProduccionBobinaServilletaService = Depends(produccion_bobina_servilleta_service)
 ):
     return service.CancelarProduccionServilleta(data, usuario_actual["IdUsuario"])

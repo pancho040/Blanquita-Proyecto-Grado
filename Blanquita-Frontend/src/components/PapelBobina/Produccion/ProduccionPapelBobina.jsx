@@ -388,7 +388,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
                 p={p}
                 onInsertar={() => abrirInsertar(p)}
                 onPausar={() => pausa.abrir(p)}
-                onFinalizar={() => finalizacion.abrir(p)}
+                onFinalizar={esEncargado ? () => finalizacion.abrir(p) : undefined}
                 onCambiarLinea={
                   esEncargado && p.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO
                     ? () => abrirCambioLinea(p)
@@ -413,7 +413,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
                 procesando={procesandoId === p.IdProduccionBobinaTubo}
                 onInsertar={() => abrirInsertar(p)}
                 onReanudar={() => reanudar(p)}
-                onCancelar={() => cancelacion.abrir(p)}
+                onCancelar={esEncargado ? () => cancelacion.abrir(p) : undefined}
               />
             )}
           />
