@@ -66,7 +66,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (!omitePrefijoRol && !sesion.IsAdmin) {
     const prefijoPermitido = PREFIJO_POR_ROL[sesion.IdRol];
-    if (!prefijoPermitido || !pathname.startsWith(prefijoPermitido)) {
+    const esGerenteEnContador = sesion.IdRol === 3 && pathname.startsWith("/contador");
+    if (!esGerenteEnContador && (!prefijoPermitido || !pathname.startsWith(prefijoPermitido))) {
       return context.redirect(RUTA_POR_ROL[sesion.IdRol] || "/");
     }
   }

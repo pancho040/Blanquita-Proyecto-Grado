@@ -500,6 +500,19 @@ CREATE TABLE public.AuditLog (
   CONSTRAINT AuditLog_IdUsuario_fkey FOREIGN KEY (IdUsuario) REFERENCES public.Usuario(IdUsuario) ON DELETE SET NULL
 );
 
+CREATE TABLE public.CuentaBancariaEmpresa (
+  IdCuentaBancaria integer NOT NULL DEFAULT nextval('"CuentaBancariaEmpresa_IdCuentaBancaria_seq"'::regclass),
+  NombreBanco text NOT NULL,
+  Sigla text NOT NULL UNIQUE,
+  NumeroCuenta text,
+  TipoCuenta text NOT NULL DEFAULT 'Cuenta Corriente',
+  Moneda text NOT NULL DEFAULT 'BOB',
+  SaldoActual numeric(14,2) NOT NULL DEFAULT 0,
+  Activa boolean NOT NULL DEFAULT true,
+  FechaCreacion timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT CuentaBancariaEmpresa_pkey PRIMARY KEY (IdCuentaBancaria)
+);
+
 CREATE TABLE public.Caja (
   IdCaja integer NOT NULL DEFAULT nextval('"Caja_IdCaja_seq"'::regclass),
   NombreCaja text NOT NULL,
@@ -528,6 +541,9 @@ CREATE TABLE public.AperturaCierreCaja (
   SaldoTeorico numeric(12,2),
   SaldoReal numeric(12,2),
   Diferencia numeric(12,2),
+  NumeroArqueo text,
+  HoraInicio time without time zone,
+  HoraTermino time without time zone,
   Observacion text,
   CONSTRAINT AperturaCierreCaja_pkey PRIMARY KEY (IdAperturaCierreCaja),
   CONSTRAINT AperturaCierreCaja_IdCaja_fkey FOREIGN KEY (IdCaja) REFERENCES public.Caja(IdCaja),
@@ -535,6 +551,17 @@ CREATE TABLE public.AperturaCierreCaja (
   CONSTRAINT AperturaCierreCaja_IdUsuarioCierre_fkey FOREIGN KEY (IdUsuarioCierre) REFERENCES public.Usuario(IdUsuario),
   CONSTRAINT AperturaCierreCaja_IdUsuarioAutorizaCierre_fkey FOREIGN KEY (IdUsuarioAutorizaCierre) REFERENCES public.Usuario(IdUsuario),
   CONSTRAINT AperturaCierreCaja_IdEstadoAperturaCaja_fkey FOREIGN KEY (IdEstadoAperturaCaja) REFERENCES public.EstadoAperturaCaja(IdEstadoAperturaCaja)
+);
+
+CREATE TABLE public.ArqueoCajaDetalle (
+  IdArqueoCajaDetalle bigint NOT NULL DEFAULT nextval('"ArqueoCajaDetalle_IdArqueoCajaDetalle_seq"'::regclass),
+  IdAperturaCierreCaja integer NOT NULL,
+  TipoEfectivo text NOT NULL CHECK (TipoEfectivo IN ('Billete', 'Moneda')),
+  Corte numeric(6,2) NOT NULL,
+  Cantidad integer NOT NULL DEFAULT 0 CHECK (Cantidad >= 0),
+  Subtotal numeric(12,2) GENERATED ALWAYS AS (Corte * Cantidad) STORED,
+  CONSTRAINT ArqueoCajaDetalle_pkey PRIMARY KEY (IdArqueoCajaDetalle),
+  CONSTRAINT ArqueoCajaDetalle_IdAperturaCierreCaja_fkey FOREIGN KEY (IdAperturaCierreCaja) REFERENCES public.AperturaCierreCaja(IdAperturaCierreCaja) ON DELETE CASCADE
 );
 
 CREATE TABLE public.CategoriaMovimientoCaja (
@@ -547,13 +574,17 @@ CREATE TABLE public.CategoriaMovimientoCaja (
 
 CREATE TABLE public.MovimientoCaja (
   IdMovimientoCaja bigint NOT NULL DEFAULT nextval('"MovimientoCaja_IdMovimientoCaja_seq"'::regclass),
-  IdAperturaCierreCaja integer NOT NULL,
+  IdAperturaCierreCaja integer,
   IdCategoriaMovimientoCaja integer NOT NULL,
-  IdUsuario integer NOT NULL,
+  IdUsuario integer,
   Monto numeric(12,2) NOT NULL CHECK (Monto > 0),
   MetodoPago text NOT NULL DEFAULT 'Efectivo',
   NumeroReferencia text,
   FechaMovimiento timestamp with time zone NOT NULL DEFAULT now(),
+  NotaCodigo text,
+  Solicitante text,
+  Respaldo text,
+  IdCuentaBancaria integer,
   Descripcion text,
   Anulado boolean NOT NULL DEFAULT false,
   IdMovimientoCajaAnulacion bigint,
@@ -561,7 +592,30 @@ CREATE TABLE public.MovimientoCaja (
   CONSTRAINT MovimientoCaja_IdAperturaCierreCaja_fkey FOREIGN KEY (IdAperturaCierreCaja) REFERENCES public.AperturaCierreCaja(IdAperturaCierreCaja),
   CONSTRAINT MovimientoCaja_IdCategoriaMovimientoCaja_fkey FOREIGN KEY (IdCategoriaMovimientoCaja) REFERENCES public.CategoriaMovimientoCaja(IdCategoriaMovimientoCaja),
   CONSTRAINT MovimientoCaja_IdUsuario_fkey FOREIGN KEY (IdUsuario) REFERENCES public.Usuario(IdUsuario),
+  CONSTRAINT MovimientoCaja_IdCuentaBancaria_fkey FOREIGN KEY (IdCuentaBancaria) REFERENCES public.CuentaBancariaEmpresa(IdCuentaBancaria) ON DELETE SET NULL,
   CONSTRAINT MovimientoCaja_IdMovimientoCajaAnulacion_fkey FOREIGN KEY (IdMovimientoCajaAnulacion) REFERENCES public.MovimientoCaja(IdMovimientoCaja)
+);
+
+CREATE TABLE public.SolicitudCajaChica (
+  IdSolicitudCajaChica integer NOT NULL DEFAULT nextval('"SolicitudCajaChica_IdSolicitudCajaChica_seq"'::regclass),
+  CodigoSolicitud text NOT NULL UNIQUE,
+  IdCaja integer NOT NULL DEFAULT 1,
+  FechaSolicitud date NOT NULL DEFAULT CURRENT_DATE,
+  NombreSolicitante text NOT NULL,
+  CargoSolicitante text,
+  MontoSolicitado numeric(12,2) NOT NULL CHECK (MontoSolicitado > 0),
+  DestinoJustificacion text NOT NULL,
+  NombreEntregadoPor text,
+  NombreAprobadoPor text DEFAULT 'GERENCIA GENERAL',
+  Estado text NOT NULL DEFAULT 'Aprobada' CHECK (Estado IN ('Pendiente', 'Aprobada', 'Rendida', 'Rechazada')),
+  IdCategoriaMovimientoCaja integer,
+  RespaldoDoc text,
+  IdMovimientoCaja bigint,
+  FechaRegistro timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT SolicitudCajaChica_pkey PRIMARY KEY (IdSolicitudCajaChica),
+  CONSTRAINT SolicitudCajaChica_IdCaja_fkey FOREIGN KEY (IdCaja) REFERENCES public.Caja(IdCaja),
+  CONSTRAINT SolicitudCajaChica_IdCategoriaMovimientoCaja_fkey FOREIGN KEY (IdCategoriaMovimientoCaja) REFERENCES public.CategoriaMovimientoCaja(IdCategoriaMovimientoCaja),
+  CONSTRAINT SolicitudCajaChica_IdMovimientoCaja_fkey FOREIGN KEY (IdMovimientoCaja) REFERENCES public.MovimientoCaja(IdMovimientoCaja) ON DELETE SET NULL
 );
 
 CREATE TABLE public.EstadoCliente (
@@ -575,10 +629,12 @@ CREATE TABLE public.Cliente (
   IdEstadoCliente integer NOT NULL DEFAULT 1,
   RazonSocial text NOT NULL,
   NombreComercial text,
-  NitCi text NOT NULL,
+  NitCi text,
   Telefono text,
   CorreoElectronico text,
   Direccion text,
+  CiudadDestino text DEFAULT 'Sucre',
+  LineaCredito text DEFAULT 'Al contado',
   Latitud numeric(10,7),
   Longitud numeric(10,7),
   LimiteCreditoBs numeric(12,2) DEFAULT 0,
@@ -766,6 +822,46 @@ CREATE TABLE public.SincronizacionMovil (
   CONSTRAINT SincronizacionMovil_IdUsuario_fkey FOREIGN KEY (IdUsuario) REFERENCES public.Usuario(IdUsuario)
 );
 
+CREATE TABLE public.NotaVenta (
+  IdNotaVenta bigint NOT NULL DEFAULT nextval('"NotaVenta_IdNotaVenta_seq"'::regclass),
+  NumeroNotaVenta text NOT NULL UNIQUE,
+  NumeroNotaEntrega text,
+  FechaVenta date NOT NULL DEFAULT CURRENT_DATE,
+  IdCliente integer,
+  ClienteNombreLibre text,
+  DestinoDepartamento text NOT NULL DEFAULT 'Sucre',
+  Chofer text,
+  PlacaCamion text,
+  CantidadCamiones numeric(10,4) DEFAULT 1,
+  TotalVentaBruto numeric(12,2) NOT NULL DEFAULT 0,
+  DescuentoBonificacion numeric(12,2) NOT NULL DEFAULT 0,
+  Promocion numeric(12,2) NOT NULL DEFAULT 0,
+  ImporteNeto numeric(12,2) NOT NULL DEFAULT 0,
+  SaldoAnterior numeric(12,2) NOT NULL DEFAULT 0,
+  TotalCancelado numeric(12,2) NOT NULL DEFAULT 0,
+  SaldoPendiente numeric(12,2) NOT NULL DEFAULT 0,
+  EstadoCobranza text NOT NULL DEFAULT 'Pendiente',
+  Observacion text,
+  FechaRegistro timestamp with time zone NOT NULL DEFAULT now(),
+  IdUsuarioRegistro integer,
+  CONSTRAINT NotaVenta_pkey PRIMARY KEY (IdNotaVenta),
+  CONSTRAINT NotaVenta_IdCliente_fkey FOREIGN KEY (IdCliente) REFERENCES public.Cliente(IdCliente),
+  CONSTRAINT NotaVenta_IdUsuarioRegistro_fkey FOREIGN KEY (IdUsuarioRegistro) REFERENCES public.Usuario(IdUsuario) ON DELETE SET NULL
+);
+
+CREATE TABLE public.DetalleNotaVenta (
+  IdDetalleNotaVenta bigint NOT NULL DEFAULT nextval('"DetalleNotaVenta_IdDetalleNotaVenta_seq"'::regclass),
+  IdNotaVenta bigint NOT NULL,
+  IdPresentacion integer,
+  NombreProducto text NOT NULL,
+  Cantidad numeric(10,2) NOT NULL CHECK (Cantidad > 0),
+  PrecioUnitario numeric(10,2) DEFAULT 0,
+  Subtotal numeric(12,2) DEFAULT 0,
+  CONSTRAINT DetalleNotaVenta_pkey PRIMARY KEY (IdDetalleNotaVenta),
+  CONSTRAINT DetalleNotaVenta_IdNotaVenta_fkey FOREIGN KEY (IdNotaVenta) REFERENCES public.NotaVenta(IdNotaVenta) ON DELETE CASCADE,
+  CONSTRAINT DetalleNotaVenta_IdPresentacion_fkey FOREIGN KEY (IdPresentacion) REFERENCES public.PresentacionProducto(IdPresentacion) ON DELETE SET NULL
+);
+
 CREATE TABLE public.EstadoCuentaCobrar (
   IdEstadoCuentaCobrar integer NOT NULL DEFAULT nextval('"EstadoCuentaCobrar_IdEstadoCuentaCobrar_seq"'::regclass),
   NombreEstado text NOT NULL UNIQUE,
@@ -776,17 +872,23 @@ CREATE TABLE public.CuentaCobrar (
   IdCuentaCobrar bigint NOT NULL DEFAULT nextval('"CuentaCobrar_IdCuentaCobrar_seq"'::regclass),
   IdCliente integer NOT NULL,
   IdPedido bigint,
+  IdNotaVenta bigint,
+  NumeroNotaVenta text,
+  NumeroNotaEntrega text,
+  FechaDespacho date DEFAULT CURRENT_DATE,
+  DiasMora integer DEFAULT 0,
   IdEstadoCuentaCobrar integer NOT NULL,
   MontoTotal numeric(12,2) NOT NULL CHECK (MontoTotal >= 0),
   SaldoPendiente numeric(12,2) NOT NULL CHECK (SaldoPendiente >= 0),
   FechaEmision date NOT NULL DEFAULT CURRENT_DATE,
-  FechaVencimiento date NOT NULL,
-  IdUsuarioRegistro integer NOT NULL,
+  FechaVencimiento date,
+  IdUsuarioRegistro integer,
   Observacion text,
   CONSTRAINT CuentaCobrar_pkey PRIMARY KEY (IdCuentaCobrar),
   CONSTRAINT chk_saldo_no_excede CHECK (SaldoPendiente <= MontoTotal),
   CONSTRAINT CuentaCobrar_IdCliente_fkey FOREIGN KEY (IdCliente) REFERENCES public.Cliente(IdCliente),
   CONSTRAINT CuentaCobrar_IdPedido_fkey FOREIGN KEY (IdPedido) REFERENCES public.Pedido(IdPedido) ON DELETE SET NULL,
+  CONSTRAINT CuentaCobrar_IdNotaVenta_fkey FOREIGN KEY (IdNotaVenta) REFERENCES public.NotaVenta(IdNotaVenta) ON DELETE SET NULL,
   CONSTRAINT CuentaCobrar_IdEstadoCuentaCobrar_fkey FOREIGN KEY (IdEstadoCuentaCobrar) REFERENCES public.EstadoCuentaCobrar(IdEstadoCuentaCobrar),
   CONSTRAINT CuentaCobrar_IdUsuarioRegistro_fkey FOREIGN KEY (IdUsuarioRegistro) REFERENCES public.Usuario(IdUsuario)
 );
@@ -805,18 +907,101 @@ CREATE TABLE public.PlanPago (
 CREATE TABLE public.AbonoCuentaCobrar (
   IdAbonoCuentaCobrar bigint NOT NULL DEFAULT nextval('"AbonoCuentaCobrar_IdAbonoCuentaCobrar_seq"'::regclass),
   IdCuentaCobrar bigint NOT NULL,
+  IdNotaVenta bigint,
+  IdCuentaBancaria integer,
   IdMovimientoCaja bigint,
   IdMetodoPago integer,
   MontoAbonado numeric(12,2) NOT NULL CHECK (MontoAbonado > 0),
   FechaAbono timestamp with time zone NOT NULL DEFAULT now(),
-  IdUsuario integer NOT NULL,
+  BancoSigla text,
+  Depositante text,
+  Moneda text DEFAULT 'BOB',
+  MontoDolares numeric(12,2) DEFAULT 0,
+  TipoCambio numeric(10,4) DEFAULT 1,
+  IdUsuario integer,
   NumeroReferencia text,
   Observacion text,
   CONSTRAINT AbonoCuentaCobrar_pkey PRIMARY KEY (IdAbonoCuentaCobrar),
   CONSTRAINT AbonoCuentaCobrar_IdCuentaCobrar_fkey FOREIGN KEY (IdCuentaCobrar) REFERENCES public.CuentaCobrar(IdCuentaCobrar),
+  CONSTRAINT AbonoCuentaCobrar_IdNotaVenta_fkey FOREIGN KEY (IdNotaVenta) REFERENCES public.NotaVenta(IdNotaVenta) ON DELETE SET NULL,
+  CONSTRAINT AbonoCuentaCobrar_IdCuentaBancaria_fkey FOREIGN KEY (IdCuentaBancaria) REFERENCES public.CuentaBancariaEmpresa(IdCuentaBancaria) ON DELETE SET NULL,
   CONSTRAINT AbonoCuentaCobrar_IdMovimientoCaja_fkey FOREIGN KEY (IdMovimientoCaja) REFERENCES public.MovimientoCaja(IdMovimientoCaja) ON DELETE SET NULL,
   CONSTRAINT AbonoCuentaCobrar_IdMetodoPago_fkey FOREIGN KEY (IdMetodoPago) REFERENCES public.MetodoPago(IdMetodoPago),
   CONSTRAINT AbonoCuentaCobrar_IdUsuario_fkey FOREIGN KEY (IdUsuario) REFERENCES public.Usuario(IdUsuario)
+);
+
+CREATE TABLE public.CuentaPagarProveedor (
+  IdCuentaPagar bigint NOT NULL DEFAULT nextval('"CuentaPagarProveedor_IdCuentaPagar_seq"'::regclass),
+  IdProveedor integer NOT NULL,
+  FechaRecepcion date NOT NULL DEFAULT CURRENT_DATE,
+  FechaEnvio date,
+  NumeroNota text,
+  NumeroFactura text,
+  ConceptoMaterial text NOT NULL,
+  PesoTotalKgr numeric(10,2) DEFAULT 0,
+  CantidadUnidades numeric(10,2) DEFAULT 0,
+  PrecioUnitario numeric(10,2) DEFAULT 0,
+  Descuento numeric(12,2) DEFAULT 0,
+  PrecioFacturado numeric(12,2) NOT NULL DEFAULT 0,
+  TotalPagado numeric(12,2) NOT NULL DEFAULT 0,
+  SaldoPendiente numeric(12,2) NOT NULL DEFAULT 0,
+  Estado text NOT NULL DEFAULT 'PENDIENTE' CHECK (Estado IN ('PENDIENTE', 'PARCIAL', 'PAGADO', 'COMPENSADO', 'ANULADO')),
+  FechaPago date,
+  BancoPago text,
+  Observacion text,
+  FechaRegistro timestamp with time zone NOT NULL DEFAULT now(),
+  IdUsuarioRegistro integer,
+  CONSTRAINT CuentaPagarProveedor_pkey PRIMARY KEY (IdCuentaPagar),
+  CONSTRAINT CuentaPagarProveedor_IdProveedor_fkey FOREIGN KEY (IdProveedor) REFERENCES public.Proveedor(IdProveedor),
+  CONSTRAINT CuentaPagarProveedor_IdUsuarioRegistro_fkey FOREIGN KEY (IdUsuarioRegistro) REFERENCES public.Usuario(IdUsuario) ON DELETE SET NULL
+);
+
+CREATE TABLE public.DetalleInsumoCuentaPagar (
+  IdDetalleInsumo bigint NOT NULL DEFAULT nextval('"DetalleInsumoCuentaPagar_IdDetalleInsumo_seq"'::regclass),
+  IdCuentaPagar bigint NOT NULL,
+  DescripcionInsumo text NOT NULL,
+  MedidaOFormato text,
+  Cantidad numeric(10,2) DEFAULT 0,
+  PesoKgr numeric(10,2) DEFAULT 0,
+  PrecioUnitario numeric(10,2) DEFAULT 0,
+  Subtotal numeric(12,2) DEFAULT 0,
+  CONSTRAINT DetalleInsumoCuentaPagar_pkey PRIMARY KEY (IdDetalleInsumo),
+  CONSTRAINT DetalleInsumoCuentaPagar_IdCuentaPagar_fkey FOREIGN KEY (IdCuentaPagar) REFERENCES public.CuentaPagarProveedor(IdCuentaPagar) ON DELETE CASCADE
+);
+
+CREATE TABLE public.PagoCuentaPagar (
+  IdPagoCuentaPagar bigint NOT NULL DEFAULT nextval('"PagoCuentaPagar_IdPagoCuentaPagar_seq"'::regclass),
+  IdCuentaPagar bigint NOT NULL,
+  IdCuentaBancaria integer,
+  IdMovimientoCaja bigint,
+  MontoPagado numeric(12,2) NOT NULL CHECK (MontoPagado > 0),
+  FechaPago date NOT NULL DEFAULT CURRENT_DATE,
+  BancoSigla text,
+  NumeroTransaccion text,
+  EsCompensacion boolean NOT NULL DEFAULT false,
+  DetalleCompensacion text,
+  Observacion text,
+  FechaRegistro timestamp with time zone NOT NULL DEFAULT now(),
+  IdUsuario integer,
+  CONSTRAINT PagoCuentaPagar_pkey PRIMARY KEY (IdPagoCuentaPagar),
+  CONSTRAINT PagoCuentaPagar_IdCuentaPagar_fkey FOREIGN KEY (IdCuentaPagar) REFERENCES public.CuentaPagarProveedor(IdCuentaPagar),
+  CONSTRAINT PagoCuentaPagar_IdCuentaBancaria_fkey FOREIGN KEY (IdCuentaBancaria) REFERENCES public.CuentaBancariaEmpresa(IdCuentaBancaria) ON DELETE SET NULL,
+  CONSTRAINT PagoCuentaPagar_IdMovimientoCaja_fkey FOREIGN KEY (IdMovimientoCaja) REFERENCES public.MovimientoCaja(IdMovimientoCaja) ON DELETE SET NULL,
+  CONSTRAINT PagoCuentaPagar_IdUsuario_fkey FOREIGN KEY (IdUsuario) REFERENCES public.Usuario(IdUsuario) ON DELETE SET NULL
+);
+
+CREATE TABLE public.DevolucionProveedor (
+  IdDevolucionProveedor integer NOT NULL DEFAULT nextval('"DevolucionProveedor_IdDevolucionProveedor_seq"'::regclass),
+  IdProveedor integer NOT NULL,
+  FechaDevolucion date NOT NULL DEFAULT CURRENT_DATE,
+  ProductoMaterial text NOT NULL,
+  Motivo text,
+  TotalPesoKgr numeric(10,2) DEFAULT 0,
+  TotalPaquetes integer DEFAULT 0,
+  Observacion text,
+  FechaRegistro timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT DevolucionProveedor_pkey PRIMARY KEY (IdDevolucionProveedor),
+  CONSTRAINT DevolucionProveedor_IdProveedor_fkey FOREIGN KEY (IdProveedor) REFERENCES public.Proveedor(IdProveedor)
 );
 
 CREATE TABLE public.RendicionRuta (

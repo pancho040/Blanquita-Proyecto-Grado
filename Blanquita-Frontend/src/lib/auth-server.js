@@ -27,7 +27,8 @@ export async function verificarAccessToken(token) {
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: ISSUER,
     audience: AUDIENCE,
-    algorithms: ALGORITMOS
+    algorithms: ALGORITMOS,
+    clockTolerance: 60
   });
 
   return payload;

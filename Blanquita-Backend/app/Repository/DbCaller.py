@@ -11,7 +11,7 @@ class DbCaller:
     def LlamarFuncion(self, consulta: str, parametros: dict | None = None, commit: bool = True) -> list[dict]:
         try:
             res = self.db.execute(text(consulta), parametros or {})
-            filas = [dict(fila) for fila in res.mappings().all()]
+            filas = [dict(fila) for fila in res.mappings().all()] if res.returns_rows else []
             if commit:
                 self.db.commit()
             return filas

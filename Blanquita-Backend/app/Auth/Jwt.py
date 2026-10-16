@@ -33,6 +33,7 @@ def verificar_token(token: str) -> dict:
             audience=AUDIENCE,
             issuer=ISSUER,
             options={"require": ["exp", "sub", "aud"]},
+            leeway=60,
         )
         return payload
     except jwt.ExpiredSignatureError:

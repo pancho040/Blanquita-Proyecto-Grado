@@ -34,6 +34,11 @@ from app.Routes.Logistica.ClienteRouter import ClienteRouter
 from app.Routes.Logistica.RutaRouter import RutaRouter
 from app.Routes.Logistica.PrecioRouter import PrecioRouter
 
+from app.Routes.Contabilidad.TesoreriaRouter import TesoreriaRouter
+from app.Routes.Contabilidad.CuentasCobrarRouter import CuentasCobrarRouter
+from app.Routes.Contabilidad.CuentasPagarRouter import CuentasPagarRouter
+from app.Routes.Contabilidad.ImportacionRouter import ImportacionRouter
+
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
@@ -118,3 +123,14 @@ app.include_router(qrRouter)
 app.include_router(ClienteRouter)
 app.include_router(RutaRouter)
 app.include_router(PrecioRouter)
+
+#ROUTERS CONTABILIDAD Y TESORERIA
+app.include_router(TesoreriaRouter)
+app.include_router(TesoreriaRouter, prefix="/contabilidad")
+app.include_router(CuentasCobrarRouter)
+app.include_router(CuentasCobrarRouter, prefix="/contabilidad")
+app.include_router(CuentasPagarRouter)
+app.include_router(CuentasPagarRouter, prefix="/contabilidad")
+app.include_router(ImportacionRouter)
+app.include_router(ImportacionRouter, prefix="/contabilidad")
+

@@ -12,8 +12,57 @@ import {
   MapPin,
   Truck,
   Tag,
+  Wallet,
+  Landmark,
+  Receipt,
+  HandCoins,
+  FileSpreadsheet,
+  Layers,
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
+
+export const RutasContador = [
+  {
+    titulo: "Inicio",
+    icono: Home,
+    ruta: "inicio",
+  },
+  {
+    titulo: "Flujo de Caja",
+    icono: Wallet,
+    ruta: "caja",
+  },
+  {
+    titulo: "Caja Chica (SC)",
+    icono: Receipt,
+    ruta: "caja-chica",
+  },
+  {
+    titulo: "Bancos",
+    icono: Landmark,
+    ruta: "bancos",
+  },
+  {
+    titulo: "Cuentas x Cobrar",
+    icono: HandCoins,
+    ruta: "cuentas-cobrar",
+  },
+  {
+    titulo: "Notas de Venta",
+    icono: Truck,
+    ruta: "notas-venta",
+  },
+  {
+    titulo: "Cuentas x Pagar",
+    icono: Layers,
+    ruta: "cuentas-pagar",
+  },
+  {
+    titulo: "Importación Excel",
+    icono: FileSpreadsheet,
+    ruta: "importacion",
+  },
+];
 
 export const RutasSupervisor = [
   {

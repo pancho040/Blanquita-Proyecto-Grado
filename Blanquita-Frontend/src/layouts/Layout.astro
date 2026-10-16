@@ -1,8 +1,9 @@
 ---
 import '../styles/globals.css';
+import { Toaster } from '@/components/ui/sonner';
 ---
 <!doctype html>
-<html lang="en">
+<html lang="es">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
@@ -13,10 +14,11 @@ import '../styles/globals.css';
 		<link rel="icon" type="image/png" sizes="48x48" href="/android-chrome-192x192.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Sistema Inventario y Produccion</title>
+		<title>Sistema de Gestión Integral - Papel Blanquita</title>
 	</head>
 	<body>
 		<slot />
+		<Toaster client:load richColors position="top-right" />
 	</body>
 </html>
 
