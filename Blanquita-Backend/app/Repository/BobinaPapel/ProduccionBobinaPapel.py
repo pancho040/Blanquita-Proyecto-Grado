@@ -40,6 +40,18 @@ class ProduccionBobinaPapelRepository:
         """
         return self.caller.LlamarUnRegistro(sql, params)
 
+    def ObtenerTipoBobinaProduccion(self, id_produccion: int) -> int | None:
+        consulta = (
+            select(BobinaPapel.IdTipoBobina)
+            .join(
+                ProduccionBobinaTubo,
+                ProduccionBobinaTubo.IdBobina_1 == BobinaPapel.IdBobinaPapel,
+            )
+            .where(ProduccionBobinaTubo.IdProduccionBobinaTubo == id_produccion)
+        )
+        filas = self.caller.Consultar(consulta)
+        return filas[0]["IdTipoBobina"] if filas else None
+
     def PausaProduccionBobinaTubo(self, params: dict) -> dict | None:
         sql = """
             SELECT * FROM "FnPausarProduccionBobinaTubo"(

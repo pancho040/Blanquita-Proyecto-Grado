@@ -28,8 +28,10 @@ from app.utils.validators import EsCantidadValida,ValidarTexto, REGLA_CARACTERES
 from app.Constants.Cantidades import (
     CANTIDAD_INGRESO_LOGS,
     LONGITUD_MAXIMA_DESCRIPCION,
-    LONGITUD_MINIMA_DESCRIPCION
+    LONGITUD_MINIMA_DESCRIPCION,
+    TIPO_BOBINA_HIGIENICO
 )
+
 
 
 class ProduccionBobinaPapelService:
@@ -116,6 +118,20 @@ class ProduccionBobinaPapelService:
     def CambiarLineaProduccion(
         self, data: CambiarLineaProduccionBobinaTuboRequest, id_usuario: int
     ) -> CambiarLineaProduccionBobinaTuboResponse:
+        id_tipo_bobina = self.repository.ObtenerTipoBobinaProduccion(
+            data.IdProduccionBobinaTubo
+        )
+        if id_tipo_bobina is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La producción de bobina tubo no existe",
+            )
+        if id_tipo_bobina != TIPO_BOBINA_HIGIENICO:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El cambio de línea solo está permitido en producciones de bobina Higiénico",
+            )
+
         params = {
             "p_IdProduccionBobinaTubo": data.IdProduccionBobinaTubo,
             "p_IdProducto": data.IdProducto,

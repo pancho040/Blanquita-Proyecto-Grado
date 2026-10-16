@@ -40,6 +40,7 @@ import { fmt } from "./constantes";
 import { TablaBobinas } from "./TablaBobinas";
 import { ListaMovilBobinas } from "./ListaMovilBobinas";
 import ModalEditarBobina from "./ModalEditarBobina";
+import DialogoIniciarProduccion from "./DialogoIniciarProduccion";
 import Header from "@/components/layout/Header";
 import {
   Roles,
@@ -83,6 +84,10 @@ export default function InventarioBobinasPapel({ usuario }) {
   const [idProducto, setIdProducto] = useState(null);
   const esHigienico = tipoSel?.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO;
   const faltaProducto = esHigienico && idProducto === null;
+  const [confirmarInicio, setConfirmarInicio] = useState(false);
+  const nombreProductoSel = esHigienico
+    ? productosHigienico.find((p) => p.IdProducto === idProducto)?.NombreProducto
+    : tipoSel?.NombreTipoBobina;
 
   useEffect(() => {
     setIdProducto(null);
@@ -119,6 +124,11 @@ export default function InventarioBobinasPapel({ usuario }) {
 
   const quitarChip = (codigo) => setMarcadas((prev) => prev.filter((c) => c !== codigo));
 
+  const abrirConfirmarInicio = () => {
+    if (!listas || esServilleta || faltaProducto) return;
+    setConfirmarInicio(true);
+  };
+
   const enviarProduccion = () => {
     if (!listas || esServilleta || faltaProducto) return;
 
@@ -136,6 +146,7 @@ export default function InventarioBobinasPapel({ usuario }) {
         ),
       (res) => `${marcadas.join(" + ")} → En producción · ${res.NombreProducto}`,
       () => {
+        setConfirmarInicio(false);
         detalle.setDatos((prev) => prev.filter((b) => !marcadas.includes(b.CodigoBobina)));
         setMarcadas([]);
         setIdProducto(null);
@@ -314,7 +325,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                 }
                 listo={listas && !faltaProducto}
                 enviando={envio.enProceso === "envio"}
-                onEnviar={enviarProduccion}
+                onEnviar={abrirConfirmarInicio}
                 textoAccion="Enviar a producción"
                 textoEnviando="Enviando..."
               />
@@ -360,6 +371,16 @@ export default function InventarioBobinasPapel({ usuario }) {
           </PanelFuera>
         )}
       </main>
+
+      <DialogoIniciarProduccion
+        abierto={confirmarInicio}
+        codigos={marcadas}
+        nombreTipo={tipoSel?.NombreTipoBobina}
+        nombreProducto={nombreProductoSel}
+        enviando={envio.enProceso === "envio"}
+        onCerrar={() => setConfirmarInicio(false)}
+        onConfirmar={enviarProduccion}
+      />
 
       {esLider && (
         <DialogReingreso
