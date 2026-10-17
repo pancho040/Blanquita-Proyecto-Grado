@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -51,6 +52,20 @@ from app.Repository.BobinaServilleta.Reporte import ReporteBobinaServilletaRepos
 from app.utils.dates import ZONA_BOLIVIA
 
 
+def _peso_bobina(bobina) -> Decimal:
+    return sum((u.PesoBrutoKg or Decimal(0)) for u in bobina.Unidades)
+
+
+def _gramaje_bobina(bobina) -> Decimal | None:
+    return _promedio([u.GramajeGr for u in bobina.Unidades if u.GramajeGr is not None], None)
+
+
+def _promedio(valores: list[Decimal], vacio=Decimal(0)) -> Decimal | None:
+    if not valores:
+        return vacio
+    return (sum(valores) / len(valores)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 class ReporteBobinaServilletaService:
     def __init__(self, db: Session):
         self.repository = ReporteBobinaServilletaRepository(db)
@@ -71,49 +86,32 @@ class ReporteBobinaServilletaService:
         if not filas:
             return None
 
-        primera = filas[0]
+        bobinas = [ReporteInventarioBobinaServilletaDetalleResponse(**fila) for fila in filas]
 
-        resumen: dict[int, ReporteInventarioResumenTipoServilletaResponse] = {}
-        bobinas: list[ReporteInventarioBobinaServilletaDetalleResponse] = []
+        por_tipo: dict[int, list[ReporteInventarioBobinaServilletaDetalleResponse]] = {}
+        for bobina in bobinas:
+            por_tipo.setdefault(bobina.IdTipoBobinaServilleta, []).append(bobina)
 
-        for fila in filas:
-            id_tipo = fila["IdTipoBobinaServilleta"]
-
-            if id_tipo not in resumen:
-                resumen[id_tipo] = ReporteInventarioResumenTipoServilletaResponse(
-                    IdTipoBobinaServilleta=id_tipo,
-                    NombreTipoBobinaServilleta=fila["NombreTipoBobinaServilleta"],
-                    CantidadBobinas=fila["CantidadBobinasTipo"],
-                    PesoBrutoTotalKg=fila["PesoBrutoTotalTipoKg"],
-                    GramajePromedio=fila["GramajePromedioTipo"],
-                    RecepcionMasAntigua=fila["RecepcionMasAntiguaTipo"],
-                    RecepcionMasReciente=fila["RecepcionMasRecienteTipo"],
-                )
-
-            bobinas.append(
-                ReporteInventarioBobinaServilletaDetalleResponse(
-                    IdTipoBobinaServilleta=id_tipo,
-                    NombreTipoBobinaServilleta=fila["NombreTipoBobinaServilleta"],
-                    IdBobinaServilleta=fila["IdBobinaServilleta"],
-                    CodigoLote=fila["CodigoLote"],
-                    FechaRecepcion=fila["FechaRecepcion"],
-                    NombreProveedor=fila["NombreProveedor"],
-                    CodigoUnidad1=fila["CodigoUnidad1"],
-                    DescripcionFormato1=fila["DescripcionFormato1"],
-                    PesoBrutoKg1=fila["PesoBrutoKg1"],
-                    GramajeGr1=fila["GramajeGr1"],
-                    CodigoUnidad2=fila["CodigoUnidad2"],
-                    DescripcionFormato2=fila["DescripcionFormato2"],
-                    PesoBrutoKg2=fila["PesoBrutoKg2"],
-                    GramajeGr2=fila["GramajeGr2"],
-                )
+        resumen = [
+            ReporteInventarioResumenTipoServilletaResponse(
+                IdTipoBobinaServilleta=id_tipo,
+                NombreTipoBobinaServilleta=bobinas_tipo[0].NombreTipoBobinaServilleta,
+                CantidadBobinas=len(bobinas_tipo),
+                PesoBrutoTotalKg=sum(_peso_bobina(b) for b in bobinas_tipo),
+                GramajePromedio=_promedio(
+                    [g for b in bobinas_tipo if (g := _gramaje_bobina(b)) is not None]
+                ),
+                RecepcionMasAntigua=min(b.FechaRecepcion for b in bobinas_tipo),
+                RecepcionMasReciente=max(b.FechaRecepcion for b in bobinas_tipo),
             )
+            for id_tipo, bobinas_tipo in por_tipo.items()
+        ]
 
         return ReporteInventarioBobinaServilletaResponse(
-            FechaGeneracion=primera["FechaGeneracion"],
-            TotalBobinas=primera["TotalBobinasInforme"],
-            PesoBrutoGeneralKg=primera["PesoBrutoGeneralKg"],
-            Resumen=list(resumen.values()),
+            FechaGeneracion=datetime.now(timezone.utc),
+            TotalBobinas=len(bobinas),
+            PesoBrutoGeneralKg=sum(_peso_bobina(b) for b in bobinas),
+            Resumen=resumen,
             Bobinas=bobinas,
         )
 
@@ -439,7 +437,7 @@ class ReporteBobinaServilletaService:
             IdLoteBobinaServilleta=id_lote_bobina_servilleta,
             FechaRecepcion=primera["FechaRecepcion"],
             NombreProveedor=primera["NombreProveedor"],
-            CantidadBobinas=primera["CantidadBobinas"],
+            CantidadBobinas=len(bobinas),
             Bobinas=bobinas,
         )
 

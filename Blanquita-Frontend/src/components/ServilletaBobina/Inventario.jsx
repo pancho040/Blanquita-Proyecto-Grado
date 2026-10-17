@@ -106,8 +106,7 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
             <TableHead className="pl-5">Bobina</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead>Proveedor</TableHead>
-            <TableHead>Unidad 1</TableHead>
-            <TableHead>Unidad 2</TableHead>
+            <TableHead>Unidades</TableHead>
             <TableHead className="pr-5 text-center">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -121,16 +120,18 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                 {dateFormatter(b.FechaRecepcion)}
               </TableCell>
               <TableCell className="text-slate-600">{b.NombreProveedor}</TableCell>
-              {[1, 2].map((n) => (
-                <TableCell key={n} className="text-slate-600">
-                  <span className="font-mono font-semibold text-slate-900">
-                    {b[`CodigoUnidad${n}`]}
-                  </span>
-                  <span className="block text-[11px] text-slate-400">
-                    {b[`DescripcionFormato${n}`]}
-                  </span>
-                </TableCell>
-              ))}
+              <TableCell className="text-slate-600">
+                <div className="flex flex-col gap-1">
+                  {b.Unidades.map((u) => (
+                    <span key={u.IdUnidadBobinaServilleta}>
+                      <span className="font-mono font-semibold text-slate-900">
+                        {u.CodigoBobina}
+                      </span>
+                      <span className="text-[11px] text-slate-400"> · {u.DescripcionFormato}</span>
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
               <TableCell className="pr-5">
                 <div className="flex items-center justify-center gap-2">
                   {onEditar && (
@@ -184,10 +185,10 @@ function ListaMovilBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }
           </div>
           <div className="text-[12.5px] text-slate-600">{b.NombreProveedor}</div>
           <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
-            {[1, 2].map((n) => (
-              <span key={n}>
-                <strong className="font-mono text-slate-900">{b[`CodigoUnidad${n}`]}</strong> ·{" "}
-                {b[`DescripcionFormato${n}`]}
+            {b.Unidades.map((u) => (
+              <span key={u.IdUnidadBobinaServilleta}>
+                <strong className="font-mono text-slate-900">{u.CodigoBobina}</strong> ·{" "}
+                {u.DescripcionFormato}
               </span>
             ))}
           </div>
@@ -348,8 +349,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
       ? coincide(
           detalle.busqueda,
           d.IdBobinaServilleta,
-          d.CodigoUnidad1,
-          d.CodigoUnidad2,
+          ...d.Unidades.map((u) => u.CodigoBobina),
           d.NombreProveedor,
         )
       : coincide(detalle.busqueda, d.IdSubBobinaServilleta, d.CodigoUnidadOrigen),
@@ -390,7 +390,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
       () => abrirBobinaServilleta(bobina.IdBobinaServilleta),
       (res) =>
         `Bobina #${bobina.IdBobinaServilleta} abierta · ${res.CantidadSubBobinasTotal} sub-bobinas ` +
-        `(${res.CantidadSubBobinas435} de 435 · ${res.CantidadSubBobinas220} de 220)`,
+        `(${res.SubBobinas.map((s) => `${s.Cantidad} de ${s.MedidaMm}`).join(" · ")})`,
       refrescar,
     );
 
@@ -420,18 +420,18 @@ export default function InventarioBobinaServilleta({ usuario }) {
     setCargandoEditar(true);
     try {
       const { Bobinas } = await verBobinasServilletaReporte({
-        CodigoBobina: bobina.CodigoUnidad1,
+        CodigoBobina: bobina.Unidades[0]?.CodigoBobina,
         IdEstadoMateriaPrima: ESTADO_ALMACEN_ID,
       });
       const fila = Bobinas.find((b) => b.IdBobinaServilleta === bobina.IdBobinaServilleta);
       if (!fila) throw new Error("No se encontraron los datos de la bobina. Actualiza el inventario.");
 
-      const unidades = [1, 2].map((n) => ({
-        IdUnidadBobinaServilleta: fila[`IdUnidad${n}`],
-        CodigoBobina: aTexto(fila[`CodigoUnidad${n}`]),
-        DescripcionFormato: fila[`DescripcionFormato${n}`],
-        PesoBrutoKg: aTexto(fila[`PesoBrutoKg${n}`]),
-        GramajeGr: aTexto(fila[`GramajeGr${n}`]),
+      const unidades = fila.Unidades.map((u) => ({
+        IdUnidadBobinaServilleta: u.IdUnidadBobinaServilleta,
+        CodigoBobina: aTexto(u.CodigoBobina),
+        DescripcionFormato: u.DescripcionFormato,
+        PesoBrutoKg: aTexto(u.PesoBrutoKg),
+        GramajeGr: aTexto(u.GramajeGr),
       }));
       setUnidadesOriginales(unidades);
       setFormUnidades(unidades);
@@ -448,17 +448,19 @@ export default function InventarioBobinaServilleta({ usuario }) {
     );
   };
 
-  const errorUnidad = (u, otra) => {
+  const codigosEditados = formUnidades.map((u) => u.CodigoBobina.trim().toLowerCase());
+
+  const errorUnidad = (u) => {
     const codigo = u.CodigoBobina.trim();
     if (!codigo) return "Falta el código";
-    if (otra && codigo.toLowerCase() === otra.CodigoBobina.trim().toLowerCase())
+    if (codigosEditados.filter((c) => c === codigo.toLowerCase()).length > 1)
       return "Código repetido";
     if (valorInvalido(u.PesoBrutoKg)) return "Peso bruto inválido";
     if (valorInvalido(u.GramajeGr)) return "Gramaje inválido";
     return null;
   };
 
-  const erroresUnidades = formUnidades.map((u, i) => errorUnidad(u, formUnidades[1 - i]));
+  const erroresUnidades = formUnidades.map(errorUnidad);
 
   const huboCambios = formUnidades.some((u, i) => {
     const o = unidadesOriginales[i];
@@ -476,7 +478,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
     motivoLimpio.length <= MOTIVO_CORRECCION_MAX;
 
   const puedeGuardar =
-    formUnidades.length === 2 &&
+    formUnidades.length > 0 &&
     erroresUnidades.every((e) => !e) &&
     huboCambios &&
     motivoValido;
@@ -782,7 +784,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
               </div>
             )}
 
-            {!cargandoEditar && formUnidades.length === 2 && (
+            {!cargandoEditar && formUnidades.length > 0 && (
               <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {formUnidades.map((u, i) => (

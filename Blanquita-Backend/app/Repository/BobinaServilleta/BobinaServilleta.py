@@ -4,10 +4,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.Constants.Estados import MOVIMIENTO_MATERIA_PRIMA_INGRESO
+from app.Repository.BobinaServilleta.Unidades import formatos_permitidos
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
-    FormatoSubBobina,
     LoteBobinaServilleta,
     MovimientoBobinaServilleta,
     TipoBobinaServilleta,
@@ -22,18 +22,29 @@ class BobinaServilletaRepository:
         self.caller = DbCaller(db)
 
     def ObtenerTipoBobinaServilleta(self) -> list[dict]:
-        consulta = select(
-            TipoBobinaServilleta.IdTipoBobinaServilleta,
-            TipoBobinaServilleta.NombreTipoBobinaServilleta,
-            TipoBobinaServilleta.Activo,
-        ).order_by(TipoBobinaServilleta.IdTipoBobinaServilleta)
-        return self.caller.Consultar(consulta)
+        tipos = self.caller.Consultar(
+            select(
+                TipoBobinaServilleta.IdTipoBobinaServilleta,
+                TipoBobinaServilleta.NombreTipoBobinaServilleta,
+                TipoBobinaServilleta.CantidadUnidades,
+                TipoBobinaServilleta.Activo,
+            ).order_by(TipoBobinaServilleta.IdTipoBobinaServilleta)
+        )
+        formatos = self.FormatosPermitidos([tipo["IdTipoBobinaServilleta"] for tipo in tipos])
+        return [
+            {**tipo, "Formatos": formatos.get(tipo["IdTipoBobinaServilleta"], [])}
+            for tipo in tipos
+        ]
+
+    def FormatosPermitidos(self, ids_tipo: list[int]) -> dict[int, list[dict]]:
+        return formatos_permitidos(self.caller, ids_tipo)
 
     def ObtenerTipo(self, id_tipo: int) -> dict | None:
         filas = self.caller.Consultar(
             select(
                 TipoBobinaServilleta.IdTipoBobinaServilleta,
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
+                TipoBobinaServilleta.CantidadUnidades,
                 TipoBobinaServilleta.Activo,
             ).where(TipoBobinaServilleta.IdTipoBobinaServilleta == id_tipo)
         )
@@ -48,14 +59,6 @@ class BobinaServilletaRepository:
             ).where(Proveedor.IdProveedor == id_proveedor)
         )
         return filas[0] if filas else None
-
-    def IdsFormatos(self, ids_formato: list[int]) -> set[int]:
-        filas = self.caller.Consultar(
-            select(FormatoSubBobina.IdFormatoSubBobina).where(
-                FormatoSubBobina.IdFormatoSubBobina.in_(ids_formato)
-            )
-        )
-        return {fila["IdFormatoSubBobina"] for fila in filas}
 
     def CodigosRegistrados(self, codigos: list[str]) -> list[str]:
         filas = self.caller.Consultar(

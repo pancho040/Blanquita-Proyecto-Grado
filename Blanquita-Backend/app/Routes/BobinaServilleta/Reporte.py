@@ -182,7 +182,7 @@ def subBobinaCatalogo(
     IdTipoBobinaServilleta: int | None = None,
     IdsTipoMedidaSubBobina: list[int] | None = Query(
         default=None,
-        description="IDs de TipoMedidaSubBobina (435/220) a incluir. Vacío = todos los formatos.",
+        description="IDs de TipoMedidaSubBobina a incluir. Vacío = todas las medidas.",
     ),
     IdEstadoMateriaPrima: int | None = None,
     Pagina: int = 1,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,11 @@ import {
 } from "../../services/BobinaServilleta/BobinaServilleta";
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
-import { Formatos } from "@/constants/BobinaServilleta";
 import { aCodigo } from "@/utils/handlers";
 import { numeroONulo } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
-import { soloActivos } from "@/utils/catalogo";
+import { composicionFormato, soloActivos } from "@/utils/catalogo";
+import { PILDORA_FILTRO } from "@/constants/Acentos";
 import {
   useFilasLote,
   useEnvioLote,
@@ -33,63 +33,110 @@ import {
   BarraGuardarLote,
 } from "@/components/IngresoLote/comunes";
 
-const FORMATO_UNIDAD_1 = Formatos[0];
-const FORMATO_UNIDAD_2 = Formatos[1];
-
-const filaVacia = () => ({
-  Codigo1: "",
-  PesoBruto1: "",
-  Gramaje1: "",
-  Codigo2: "",
-  PesoBruto2: "",
-  Gramaje2: "",
-});
+const COLORES_UNIDAD = ["border-c3 text-c3", "border-serv3 text-serv3"];
 
 const pesoInvalido = (v) => v !== "" && Number(v) <= 0;
 
-const unidadDe = (f, numero, formato) => ({
-  CodigoBobina: f[`Codigo${numero}`].trim(),
-  IdFormatoSubBobina: formato.IdFormatoSubBobina,
-  PesoBrutoKg: numeroONulo(f[`PesoBruto${numero}`]),
-  GramajeGr: numeroONulo(f[`Gramaje${numero}`]),
+const formatosActivos = (tipo) => (tipo?.Formatos ?? []).filter((f) => f.Activo);
+
+const unidadVacia = (formatos, posicion) => ({
+  Codigo: "",
+  PesoBruto: "",
+  Gramaje: "",
+  IdFormato: formatos.length ? formatos[posicion % formatos.length].IdFormatoSubBobina : null,
 });
 
-function BloqueUnidad({ numero, formato, claseBadge, fila, conError, onCampo, inputRef, onKeyDown }) {
-  const codigo = fila[`Codigo${numero}`];
+const filaVaciaDe = (tipo) => () => {
+  const formatos = formatosActivos(tipo);
+  return {
+    Unidades: Array.from({ length: tipo?.CantidadUnidades ?? 1 }, (_, i) =>
+      unidadVacia(formatos, i),
+    ),
+  };
+};
+
+const unidadDe = (unidad) => ({
+  CodigoBobina: unidad.Codigo.trim(),
+  IdFormatoSubBobina: unidad.IdFormato,
+  PesoBrutoKg: numeroONulo(unidad.PesoBruto),
+  GramajeGr: numeroONulo(unidad.Gramaje),
+});
+
+function SelectorFormato({ formatos, valor, onCambio }) {
+  const seleccionado = formatos.find((f) => f.IdFormatoSubBobina === valor);
+
+  if (formatos.length <= 1) {
+    return (
+      <span className="text-[12px] font-semibold text-slate-500">
+        Formato {seleccionado?.DescripcionFormato ?? "sin configurar"}
+        {seleccionado && ` · ${composicionFormato(seleccionado)}`}
+      </span>
+    );
+  }
 
   return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-2">
+        {formatos.map((formato) => (
+          <button
+            key={formato.IdFormatoSubBobina}
+            type="button"
+            aria-pressed={valor === formato.IdFormatoSubBobina}
+            onClick={() => onCambio(formato.IdFormatoSubBobina)}
+            className={PILDORA_FILTRO}
+          >
+            {formato.DescripcionFormato}
+          </button>
+        ))}
+      </div>
+      {seleccionado && (
+        <span className="text-[12px] font-semibold text-slate-500">
+          Genera {composicionFormato(seleccionado)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function BloqueUnidad({ numero, unidad, formatos, conError, onCampo, inputRef, onKeyDown }) {
+  return (
     <div className="flex flex-col gap-2 rounded-lg bg-white p-3 ring-1 ring-slate-200">
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className={cn("font-bold", claseBadge)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={cn("font-bold", COLORES_UNIDAD[(numero - 1) % COLORES_UNIDAD.length])}
+        >
           Unidad {numero}
         </Badge>
-        <span className="text-[12px] font-semibold text-slate-500">
-          Formato {formato.DescripcionFormato}
-        </span>
+        <SelectorFormato
+          formatos={formatos}
+          valor={unidad.IdFormato}
+          onCambio={(idFormato) => onCampo("IdFormato", idFormato)}
+        />
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[2fr_1fr_1fr]">
         <Input
           ref={inputRef}
-          value={codigo}
-          onChange={(e) => onCampo(`Codigo${numero}`, aCodigo(e.target.value))}
+          value={unidad.Codigo}
+          onChange={(e) => onCampo("Codigo", aCodigo(e.target.value))}
           onKeyDown={onKeyDown}
           placeholder={`Código de la unidad ${numero}`}
           className={cn(
             "h-10 font-mono",
-            conError && !codigo.trim() && "border-red-300 focus-visible:ring-red-300",
+            conError && !unidad.Codigo.trim() && "border-red-300 focus-visible:ring-red-300",
           )}
         />
         <Input
-          value={fila[`PesoBruto${numero}`]}
-          onChange={(e) => onCampo(`PesoBruto${numero}`, e.target.value)}
+          value={unidad.PesoBruto}
+          onChange={(e) => onCampo("PesoBruto", e.target.value)}
           placeholder="Bruto (kg)"
           type="number"
           step="0.01"
           className="h-10"
         />
         <Input
-          value={fila[`Gramaje${numero}`]}
-          onChange={(e) => onCampo(`Gramaje${numero}`, e.target.value)}
+          value={unidad.Gramaje}
+          onChange={(e) => onCampo("Gramaje", e.target.value)}
           placeholder="Gramaje (g)"
           type="number"
           step="0.01"
@@ -100,6 +147,16 @@ function BloqueUnidad({ numero, formato, claseBadge, fila, conError, onCampo, in
   );
 }
 
+const errorDeUnidad = (unidad, numero, repetidos) => {
+  const codigo = unidad.Codigo.trim();
+  if (!codigo) return `Falta el código de la unidad ${numero}`;
+  if (repetidos.has(codigo.toLowerCase())) return `Código de unidad ${numero} repetido`;
+  if (!unidad.IdFormato) return `Selecciona el formato de la unidad ${numero}`;
+  if (pesoInvalido(unidad.PesoBruto)) return `Peso bruto de unidad ${numero} inválido`;
+  if (pesoInvalido(unidad.Gramaje)) return `Gramaje de unidad ${numero} inválido`;
+  return null;
+};
+
 export default function IngresoBobinasServilleta({ usuario }) {
   const [idProveedor, setIdProveedor] = useState("");
   const [idTipoBobinaServilleta, setIdTipoBobinaServilleta] = useState(null);
@@ -109,36 +166,53 @@ export default function IngresoBobinasServilleta({ usuario }) {
     if (data.length) setIdTipoBobinaServilleta(data[0].IdTipoBobinaServilleta);
   });
 
+  const tipoActual = tipos.datos.find(
+    (t) => t.IdTipoBobinaServilleta === idTipoBobinaServilleta,
+  );
+  const formatos = formatosActivos(tipoActual);
+  const cantidadUnidades = tipoActual?.CantidadUnidades ?? 1;
+
   const envio = useEnvioLote();
   const { tocado } = envio;
   const { filas, actualizarFila, agregarFila, quitarFila, registrarRef, reiniciar } =
-    useFilasLote(filaVacia, () => envio.setResultado(null));
+    useFilasLote(filaVaciaDe(tipoActual), () => envio.setResultado(null));
 
-  const repetidos = codigosRepetidos(filas.flatMap((f) => [f.Codigo1, f.Codigo2]));
+  useEffect(() => {
+    if (tipoActual) reiniciar();
+  }, [idTipoBobinaServilleta, tipos.datos]);
+
+  const repetidos = codigosRepetidos(filas.flatMap((f) => f.Unidades.map((u) => u.Codigo)));
 
   const erroresFilas = erroresPorFila(filas, (f) => {
-    const c1 = f.Codigo1.trim();
-    const c2 = f.Codigo2.trim();
-    if (!c1) return "Falta el código de la unidad 1";
-    if (!c2) return "Falta el código de la unidad 2";
-    if (repetidos.has(c1.toLowerCase())) return "Código de unidad 1 repetido";
-    if (repetidos.has(c2.toLowerCase())) return "Código de unidad 2 repetido";
-    if (pesoInvalido(f.PesoBruto1)) return "Peso bruto de unidad 1 inválido";
-    if (pesoInvalido(f.PesoBruto2)) return "Peso bruto de unidad 2 inválido";
-    if (pesoInvalido(f.Gramaje1)) return "Gramaje de unidad 1 inválido";
-    if (pesoInvalido(f.Gramaje2)) return "Gramaje de unidad 2 inválido";
+    for (const [i, unidad] of f.Unidades.entries()) {
+      const error = errorDeUnidad(unidad, i + 1, repetidos);
+      if (error) return error;
+    }
     return null;
   });
   const hayErrores = Object.keys(erroresFilas).length > 0;
+  const sinFormatos = !!tipoActual && formatos.length === 0;
 
   const listo =
-    !!idProveedor && !!idTipoBobinaServilleta && filas.length > 0 && !hayErrores;
+    !!idProveedor &&
+    !!idTipoBobinaServilleta &&
+    !sinFormatos &&
+    filas.length > 0 &&
+    !hayErrores;
+
+  const cambiarUnidad = (fila, posicion, campo, valor) =>
+    actualizarFila(
+      fila.id,
+      "Unidades",
+      fila.Unidades.map((u, i) => (i === posicion ? { ...u, [campo]: valor } : u)),
+    );
 
   const guardarLote = () =>
     envio.guardar({
       validar: () => {
         if (!idProveedor) return "Selecciona el proveedor del lote.";
         if (!idTipoBobinaServilleta) return "Selecciona el tipo de bobina del lote.";
+        if (sinFormatos) return "El tipo de bobina no tiene formatos activos configurados.";
         if (hayErrores) return "Revisa las bobinas marcadas en rojo antes de guardar.";
         return null;
       },
@@ -146,9 +220,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
         cargarLoteBobinaServilleta(
           Number(idProveedor),
           Number(idTipoBobinaServilleta),
-          filas.map((f) => ({
-            Unidades: [unidadDe(f, 1, FORMATO_UNIDAD_1), unidadDe(f, 2, FORMATO_UNIDAD_2)],
-          })),
+          filas.map((f) => ({ Unidades: f.Unidades.map(unidadDe) })),
         ),
       alGuardar: (data) => {
         reiniciar();
@@ -157,10 +229,6 @@ export default function IngresoBobinasServilleta({ usuario }) {
         );
       },
     });
-
-  const tipoActual = tipos.datos.find(
-    (t) => t.IdTipoBobinaServilleta === idTipoBobinaServilleta,
-  );
 
   return (
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
@@ -208,11 +276,19 @@ export default function IngresoBobinasServilleta({ usuario }) {
           />
         </DatosLote>
 
+        {sinFormatos && (
+          <ErrorEnvio mensaje="Este tipo de bobina no tiene formatos activos. Pide al administrador que los configure." />
+        )}
+
         <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
           <EncabezadoFilas
             titulo="Bobinas del lote"
             tipo={tipoActual?.NombreTipoBobinaServilleta}
-            nota="Cada bobina lleva 2 unidades: unidad 1 arriba, unidad 2 abajo"
+            nota={
+              cantidadUnidades === 1
+                ? "Cada bobina lleva 1 unidad"
+                : `Cada bobina lleva ${cantidadUnidades} unidades, en orden de arriba hacia abajo`
+            }
             textoAgregar="Agregar bobina"
             onAgregar={agregarFila}
           />
@@ -220,7 +296,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
           <div className="flex flex-col gap-4 p-5">
             {filas.map((f, i) => {
               const err = tocado ? erroresFilas[f.id] : null;
-              const cambiarCampo = (campo, valor) => actualizarFila(f.id, campo, valor);
+              const ultimaUnidad = f.Unidades.length - 1;
               return (
                 <div
                   key={f.id}
@@ -235,27 +311,24 @@ export default function IngresoBobinasServilleta({ usuario }) {
                     deshabilitado={filas.length === 1}
                   />
 
-                  <BloqueUnidad
-                    numero={1}
-                    formato={FORMATO_UNIDAD_1}
-                    claseBadge="border-c3 text-c3"
-                    fila={f}
-                    conError={!!err}
-                    onCampo={cambiarCampo}
-                    inputRef={registrarRef(f.id)}
-                  />
-
-                  <BloqueUnidad
-                    numero={2}
-                    formato={FORMATO_UNIDAD_2}
-                    claseBadge="border-serv3 text-serv3"
-                    fila={f}
-                    conError={!!err}
-                    onCampo={cambiarCampo}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && i === filas.length - 1) agregarFila();
-                    }}
-                  />
+                  {f.Unidades.map((unidad, posicion) => (
+                    <BloqueUnidad
+                      key={posicion}
+                      numero={posicion + 1}
+                      unidad={unidad}
+                      formatos={formatos}
+                      conError={!!err}
+                      onCampo={(campo, valor) => cambiarUnidad(f, posicion, campo, valor)}
+                      inputRef={posicion === 0 ? registrarRef(f.id) : undefined}
+                      onKeyDown={
+                        posicion === ultimaUnidad
+                          ? (e) => {
+                              if (e.key === "Enter" && i === filas.length - 1) agregarFila();
+                            }
+                          : undefined
+                      }
+                    />
+                  ))}
 
                   {err && <ErrorFila mensaje={err} />}
                 </div>
@@ -271,7 +344,10 @@ export default function IngresoBobinasServilleta({ usuario }) {
             {filas.length} {filas.length === 1 ? "bobina" : "bobinas"}
           </span>
           <span className="text-slate-400">
-            <strong className="text-slate-200">{filas.length * 2}</strong> unidades
+            <strong className="text-slate-200">
+              {filas.reduce((total, f) => total + f.Unidades.length, 0)}
+            </strong>{" "}
+            unidades
           </span>
         </BarraGuardarLote>
       </main>

@@ -1,3 +1,4 @@
+import { UnidadServilletaResponse } from "./BobinaServilleta";
 import { numeroONulo } from "@/utils/validators";
 
 export const ReingresarSubBobinaInventarioRequest = (idSubBobina, observacion) => ({
@@ -25,14 +26,7 @@ export const DetalleInventarioBobinaServilletaResponse = (data) => ({
   IdBobinaServilleta: data.IdBobinaServilleta,
   FechaRecepcion: data.FechaRecepcion,
   NombreProveedor: data.NombreProveedor,
-  IdUnidad1: data.IdUnidad1,
-  CodigoUnidad1: data.CodigoUnidad1,
-  IdFormatoSubBobina1: data.IdFormatoSubBobina1,
-  DescripcionFormato1: data.DescripcionFormato1,
-  IdUnidad2: data.IdUnidad2,
-  CodigoUnidad2: data.CodigoUnidad2,
-  IdFormatoSubBobina2: data.IdFormatoSubBobina2,
-  DescripcionFormato2: data.DescripcionFormato2
+  Unidades: (data.Unidades ?? []).map(UnidadServilletaResponse)
 });
 
 export const ResumenInventarioSubBobinaServilletaResponse = (data) => ({

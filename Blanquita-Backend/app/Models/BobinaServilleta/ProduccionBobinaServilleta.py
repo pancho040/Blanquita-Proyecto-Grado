@@ -6,11 +6,16 @@ class AbrirBobinaServilletaRequest(BaseModel):
     Observacion: str | None = None
 
 
+class SubBobinasMedidaResponse(BaseModel):
+    IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    Cantidad: int
+
+
 class AbrirBobinaServilletaResponse(BaseModel):
     IdBobinaServilleta: int
     IdEstadoMateriaPrima: int
-    CantidadSubBobinas435: int
-    CantidadSubBobinas220: int
+    SubBobinas: list[SubBobinasMedidaResponse]
     CantidadSubBobinasTotal: int
 
 

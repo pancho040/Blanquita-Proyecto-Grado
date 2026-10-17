@@ -3,3 +3,6 @@ export const soloActivos = (cargar) => async () =>
 
 export const productosActivosDelTipo = (productos, idTipoBobina) =>
   productos.filter((p) => p.Activo && p.IdTipoBobina === idTipoBobina);
+
+export const composicionFormato = (formato) =>
+  (formato?.Detalle ?? []).map((d) => `${d.Cantidad} de ${d.MedidaMm}`).join(" · ");

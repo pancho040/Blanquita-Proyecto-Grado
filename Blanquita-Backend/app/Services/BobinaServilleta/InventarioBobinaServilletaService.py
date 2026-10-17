@@ -159,16 +159,18 @@ class InventarioBobinaServilletaService:
                 }
             )
 
-        if nuevos[0]["IdUnidadBobinaServilleta"] == nuevos[1]["IdUnidadBobinaServilleta"]:
+        ids_unidad = [nuevo["IdUnidadBobinaServilleta"] for nuevo in nuevos]
+        if len(set(ids_unidad)) != len(ids_unidad):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Las dos unidades deben ser distintas",
+                detail="Las unidades deben ser distintas",
             )
 
-        if nuevos[0]["CodigoBobina"].lower() == nuevos[1]["CodigoBobina"].lower():
+        codigos = [nuevo["CodigoBobina"].lower() for nuevo in nuevos]
+        if len(set(codigos)) != len(codigos):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Las dos unidades no pueden tener el mismo código",
+                detail="Las unidades no pueden tener códigos repetidos",
             )
 
         bobina = self.repository.ObtenerBobinaBloqueada(data.IdBobinaServilleta)
@@ -179,10 +181,12 @@ class InventarioBobinaServilletaService:
             )
 
         unidades = self.repository.ObtenerUnidadesBloqueadas(bobina.IdBobinaServilleta)
-        if any(nuevo["IdUnidadBobinaServilleta"] not in unidades for nuevo in nuevos):
+        if len(nuevos) != len(unidades) or any(
+            nuevo["IdUnidadBobinaServilleta"] not in unidades for nuevo in nuevos
+        ):
             self._Revertir(
                 status.HTTP_409_CONFLICT,
-                "Las unidades indicadas no pertenecen a la bobina servilleta",
+                "Debe enviar todas las unidades de la bobina servilleta y solo esas",
             )
 
         en_uso = self.repository.CodigosEnUso(

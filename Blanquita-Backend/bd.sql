@@ -85,20 +85,41 @@ CREATE TABLE "TipoBobinaServilleta" (
   "CrepadoPorcentaje" NUMERIC NOT NULL DEFAULT 14,
   "ResistenciaKgf" NUMERIC NOT NULL DEFAULT 1.35,
   "Descripcion" TEXT,
-  "Activo" BOOLEAN NOT NULL DEFAULT true
+  "CantidadUnidades" INTEGER NOT NULL DEFAULT 1,
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  CONSTRAINT "ck_tipobobinaservilleta_unidades" CHECK ("CantidadUnidades" > 0)
 );
 
 CREATE TABLE "FormatoSubBobina" (
   "IdFormatoSubBobina" SERIAL PRIMARY KEY,
   "DescripcionFormato" TEXT NOT NULL,
-  "CantidadBobina435" INTEGER NOT NULL DEFAULT 0,
-  "CantidadBobina220" INTEGER NOT NULL DEFAULT 0
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  CONSTRAINT "uq_formatosubbobina_descripcion" UNIQUE ("DescripcionFormato")
 );
 
 CREATE TABLE "TipoMedidaSubBobina" (
   "IdTipoMedidaSubBobina" SERIAL PRIMARY KEY,
   "MedidaMm" INTEGER NOT NULL,
-  "Descripcion" TEXT
+  "Descripcion" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  CONSTRAINT "uq_tipomedidasubbobina_medida" UNIQUE ("MedidaMm"),
+  CONSTRAINT "ck_tipomedidasubbobina_medida" CHECK ("MedidaMm" > 0)
+);
+
+CREATE TABLE "FormatoSubBobinaDetalle" (
+  "IdFormatoSubBobinaDetalle" SERIAL PRIMARY KEY,
+  "IdFormatoSubBobina" INTEGER NOT NULL REFERENCES "FormatoSubBobina"("IdFormatoSubBobina") ON DELETE RESTRICT,
+  "IdTipoMedidaSubBobina" INTEGER NOT NULL REFERENCES "TipoMedidaSubBobina"("IdTipoMedidaSubBobina") ON DELETE RESTRICT,
+  "Cantidad" INTEGER NOT NULL,
+  CONSTRAINT "uq_formatodetalle_formato_medida" UNIQUE ("IdFormatoSubBobina", "IdTipoMedidaSubBobina"),
+  CONSTRAINT "ck_formatodetalle_cantidad" CHECK ("Cantidad" > 0)
+);
+
+CREATE TABLE "TipoBobinaServilletaFormato" (
+  "IdTipoBobinaServilletaFormato" SERIAL PRIMARY KEY,
+  "IdTipoBobinaServilleta" INTEGER NOT NULL REFERENCES "TipoBobinaServilleta"("IdTipoBobinaServilleta") ON DELETE RESTRICT,
+  "IdFormatoSubBobina" INTEGER NOT NULL REFERENCES "FormatoSubBobina"("IdFormatoSubBobina") ON DELETE RESTRICT,
+  CONSTRAINT "uq_tipoformato_tipo_formato" UNIQUE ("IdTipoBobinaServilleta", "IdFormatoSubBobina")
 );
 
 CREATE TABLE "LoteBobinaServilleta" (

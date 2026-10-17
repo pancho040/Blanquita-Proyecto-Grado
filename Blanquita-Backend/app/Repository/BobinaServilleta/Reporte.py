@@ -1,7 +1,8 @@
-from sqlalchemy import Text, and_, case, cast, func, or_, select, true
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import Text, and_, case, cast, func, or_, select
+from sqlalchemy.orm import Session
 
 from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN
+from app.Repository.BobinaServilleta.Unidades import con_unidades
 from app.Repository.DbCaller import DbCaller
 from app.Repository.Consultas import filtro_rango, nombre_operador
 from app.Schemas.BobinaServilleta import (
@@ -27,129 +28,20 @@ from app.Schemas.Proveedor import Proveedor
 from app.Schemas.Usuario import Rol, Usuario
 
 
-def _unidad(posicion: int):
-    unidad = aliased(UnidadBobinaServilleta)
-    formato = aliased(FormatoSubBobina)
-    return (
-        select(
-            unidad.IdUnidadBobinaServilleta,
-            unidad.CodigoBobina,
-            unidad.PesoBrutoKg,
-            unidad.GramajeGr,
-            formato.DescripcionFormato,
-        )
-        .join(formato, formato.IdFormatoSubBobina == unidad.IdFormatoSubBobina)
-        .where(unidad.IdBobinaServilleta == BobinaServilleta.IdBobinaServilleta)
-        .order_by(unidad.IdUnidadBobinaServilleta)
-        .offset(posicion)
-        .limit(1)
-        .lateral()
-    )
-
-
-def _columnas_unidad(unidad, numero: int, con_id: bool = False) -> list:
-    columnas = [
-        unidad.c.CodigoBobina.label(f"CodigoUnidad{numero}"),
-        unidad.c.DescripcionFormato.label(f"DescripcionFormato{numero}"),
-        unidad.c.PesoBrutoKg.label(f"PesoBrutoKg{numero}"),
-        unidad.c.GramajeGr.label(f"GramajeGr{numero}"),
-    ]
-    if con_id:
-        columnas.insert(0, unidad.c.IdUnidadBobinaServilleta.label(f"IdUnidad{numero}"))
-    return columnas
-
-
 class ReporteBobinaServilletaRepository:
     def __init__(self, db: Session):
         self.caller = DbCaller(db)
 
-    def ReporteInventario(self, params: dict) -> list[dict]:
-        u1, u2 = _unidad(0), _unidad(1)
-        con_gramaje = case((u1.c.GramajeGr.is_not(None), 1), else_=0) + case(
-            (u2.c.GramajeGr.is_not(None), 1), else_=0
-        )
-        base = (
+    def _ConsultaBobinas(self):
+        return (
             select(
                 BobinaServilleta.IdBobinaServilleta,
                 BobinaServilleta.IdTipoBobinaServilleta,
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
-                cast(LoteBobinaServilleta.IdLoteBobinaServilleta, Text).label("CodigoLote"),
-                LoteBobinaServilleta.FechaRecepcion,
-                Proveedor.NombreProveedor,
-                *_columnas_unidad(u1, 1),
-                *_columnas_unidad(u2, 2),
-                (
-                    func.coalesce(u1.c.PesoBrutoKg, 0) + func.coalesce(u2.c.PesoBrutoKg, 0)
-                ).label("PesoBrutoBobinaKg"),
-                (
-                    (func.coalesce(u1.c.GramajeGr, 0) + func.coalesce(u2.c.GramajeGr, 0))
-                    / func.nullif(con_gramaje, 0)
-                ).label("GramajePromedioBobina"),
-            )
-            .join(
-                TipoBobinaServilleta,
-                TipoBobinaServilleta.IdTipoBobinaServilleta == BobinaServilleta.IdTipoBobinaServilleta,
-            )
-            .join(
-                LoteBobinaServilleta,
-                LoteBobinaServilleta.IdLoteBobinaServilleta == BobinaServilleta.IdLoteBobinaServilleta,
-            )
-            .join(Proveedor, Proveedor.IdProveedor == LoteBobinaServilleta.IdProveedor)
-            .outerjoin(u1, true())
-            .outerjoin(u2, true())
-            .where(BobinaServilleta.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN)
-        )
-        if params.get("p_IdsTipoBobinaServilleta"):
-            base = base.where(
-                BobinaServilleta.IdTipoBobinaServilleta.in_(params["p_IdsTipoBobinaServilleta"])
-            )
-        base = base.cte("base")
-
-        por_tipo = {"partition_by": base.c.IdTipoBobinaServilleta}
-        consulta = select(
-            func.now().label("FechaGeneracion"),
-            func.count().over().label("TotalBobinasInforme"),
-            func.coalesce(func.sum(base.c.PesoBrutoBobinaKg).over(), 0).label("PesoBrutoGeneralKg"),
-            base.c.IdTipoBobinaServilleta,
-            base.c.NombreTipoBobinaServilleta,
-            func.count().over(**por_tipo).label("CantidadBobinasTipo"),
-            func.coalesce(func.sum(base.c.PesoBrutoBobinaKg).over(**por_tipo), 0).label(
-                "PesoBrutoTotalTipoKg"
-            ),
-            func.coalesce(
-                func.round(func.avg(base.c.GramajePromedioBobina).over(**por_tipo), 2), 0
-            ).label("GramajePromedioTipo"),
-            func.min(base.c.FechaRecepcion).over(**por_tipo).label("RecepcionMasAntiguaTipo"),
-            func.max(base.c.FechaRecepcion).over(**por_tipo).label("RecepcionMasRecienteTipo"),
-            base.c.IdBobinaServilleta,
-            base.c.CodigoLote,
-            base.c.FechaRecepcion,
-            base.c.NombreProveedor,
-            base.c.CodigoUnidad1,
-            base.c.DescripcionFormato1,
-            base.c.PesoBrutoKg1,
-            base.c.GramajeGr1,
-            base.c.CodigoUnidad2,
-            base.c.DescripcionFormato2,
-            base.c.PesoBrutoKg2,
-            base.c.GramajeGr2,
-        ).order_by(
-            base.c.NombreTipoBobinaServilleta, base.c.FechaRecepcion, base.c.IdBobinaServilleta
-        )
-        return self.caller.Consultar(consulta)
-
-    def VerBobinasServilleta(self, params: dict) -> list[dict]:
-        u1, u2 = _unidad(0), _unidad(1)
-        consulta = (
-            select(
-                BobinaServilleta.IdBobinaServilleta,
                 EstadoMateriaPrima.TipoEstado,
-                TipoBobinaServilleta.NombreTipoBobinaServilleta,
                 cast(LoteBobinaServilleta.IdLoteBobinaServilleta, Text).label("CodigoLote"),
                 LoteBobinaServilleta.FechaRecepcion,
                 Proveedor.NombreProveedor,
-                *_columnas_unidad(u1, 1, con_id=True),
-                *_columnas_unidad(u2, 2, con_id=True),
             )
             .join(
                 EstadoMateriaPrima,
@@ -164,17 +56,37 @@ class ReporteBobinaServilletaRepository:
                 LoteBobinaServilleta.IdLoteBobinaServilleta == BobinaServilleta.IdLoteBobinaServilleta,
             )
             .join(Proveedor, Proveedor.IdProveedor == LoteBobinaServilleta.IdProveedor)
-            .outerjoin(u1, true())
-            .outerjoin(u2, true())
-            .order_by(LoteBobinaServilleta.FechaRecepcion.desc(), BobinaServilleta.IdBobinaServilleta)
+        )
+
+    def ReporteInventario(self, params: dict) -> list[dict]:
+        consulta = (
+            self._ConsultaBobinas()
+            .where(BobinaServilleta.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN)
+            .order_by(
+                TipoBobinaServilleta.NombreTipoBobinaServilleta,
+                LoteBobinaServilleta.FechaRecepcion,
+                BobinaServilleta.IdBobinaServilleta,
+            )
+        )
+        if params.get("p_IdsTipoBobinaServilleta"):
+            consulta = consulta.where(
+                BobinaServilleta.IdTipoBobinaServilleta.in_(params["p_IdsTipoBobinaServilleta"])
+            )
+        return con_unidades(self.caller, self.caller.Consultar(consulta))
+
+    def VerBobinasServilleta(self, params: dict) -> list[dict]:
+        consulta = self._ConsultaBobinas().order_by(
+            LoteBobinaServilleta.FechaRecepcion.desc(), BobinaServilleta.IdBobinaServilleta
         )
 
         if params.get("p_CodigoBobina") is not None:
             consulta = consulta.where(
-                or_(
-                    u1.c.CodigoBobina == params["p_CodigoBobina"],
-                    u2.c.CodigoBobina == params["p_CodigoBobina"],
+                select(UnidadBobinaServilleta.IdUnidadBobinaServilleta)
+                .where(
+                    UnidadBobinaServilleta.IdBobinaServilleta == BobinaServilleta.IdBobinaServilleta,
+                    UnidadBobinaServilleta.CodigoBobina == params["p_CodigoBobina"],
                 )
+                .exists()
             )
         if params.get("p_IdProveedor") is not None:
             consulta = consulta.where(LoteBobinaServilleta.IdProveedor == params["p_IdProveedor"])
@@ -191,7 +103,7 @@ class ReporteBobinaServilletaRepository:
                 BobinaServilleta.IdBobinaServilleta == params["p_IdBobinaServilleta"]
             )
 
-        return self.caller.Consultar(consulta)
+        return con_unidades(self.caller, self.caller.Consultar(consulta))
 
     def VerResumenSubBobinas(self) -> list[dict]:
         consulta = (
@@ -454,34 +366,14 @@ class ReporteBobinaServilletaRepository:
         return self.caller.Consultar(consulta)
 
     def ReporteLoteBobinaServilletaDetalle(self, params: dict) -> list[dict]:
-        u1, u2 = _unidad(0), _unidad(1)
         consulta = (
-            select(
-                BobinaServilleta.IdBobinaServilleta,
-                TipoBobinaServilleta.NombreTipoBobinaServilleta,
-                *_columnas_unidad(u1, 1),
-                *_columnas_unidad(u2, 2),
-                LoteBobinaServilleta.FechaRecepcion,
-                Proveedor.NombreProveedor,
-                func.count().over().label("CantidadBobinas"),
-            )
-            .join(
-                TipoBobinaServilleta,
-                TipoBobinaServilleta.IdTipoBobinaServilleta == BobinaServilleta.IdTipoBobinaServilleta,
-            )
-            .join(
-                LoteBobinaServilleta,
-                LoteBobinaServilleta.IdLoteBobinaServilleta == BobinaServilleta.IdLoteBobinaServilleta,
-            )
-            .join(Proveedor, Proveedor.IdProveedor == LoteBobinaServilleta.IdProveedor)
-            .outerjoin(u1, true())
-            .outerjoin(u2, true())
+            self._ConsultaBobinas()
             .where(BobinaServilleta.IdLoteBobinaServilleta == params["p_IdLoteBobinaServilleta"])
             .order_by(
                 TipoBobinaServilleta.NombreTipoBobinaServilleta, BobinaServilleta.IdBobinaServilleta
             )
         )
-        return self.caller.Consultar(consulta)
+        return con_unidades(self.caller, self.caller.Consultar(consulta))
 
     def VerProduccionesServilleta(self, params: dict) -> list[dict]:
         ps = ProduccionServilleta
@@ -498,6 +390,7 @@ class ReporteBobinaServilletaRepository:
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
                 UnidadBobinaServilleta.CodigoBobina,
                 TipoMedidaSubBobina.Descripcion.label("DescripcionMedida"),
+                FormatoSubBobina.DescripcionFormato,
                 SubBobinaServilleta.IdSubBobinaServilleta,
                 ps.FechaInicioProduccion,
                 ps.FechaFinProduccion,
@@ -516,6 +409,10 @@ class ReporteBobinaServilletaRepository:
                 == SubBobinaServilleta.IdUnidadBobinaServilleta,
             )
             .join(
+                FormatoSubBobina,
+                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
+            )
+            .join(
                 BobinaServilleta,
                 BobinaServilleta.IdBobinaServilleta == UnidadBobinaServilleta.IdBobinaServilleta,
             )
@@ -530,7 +427,7 @@ class ReporteBobinaServilletaRepository:
                     fecha_referencia, params.get("p_FechaInicio"), params.get("p_FechaFin")
                 )
             )
-            .order_by(fecha_referencia.desc())
+            .order_by(ps.FechaInicioProduccion.desc(), ps.IdProduccionServilleta.desc())
         )
 
         if params.get("p_IdTurno") is not None:
@@ -574,6 +471,7 @@ class ReporteBobinaServilletaRepository:
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
                 UnidadBobinaServilleta.CodigoBobina,
                 TipoMedidaSubBobina.Descripcion.label("DescripcionMedida"),
+                FormatoSubBobina.DescripcionFormato,
                 SubBobinaServilleta.IdSubBobinaServilleta,
                 UnidadBobinaServilleta.PesoBrutoKg,
                 UnidadBobinaServilleta.GramajeGr,
@@ -594,6 +492,10 @@ class ReporteBobinaServilletaRepository:
                 UnidadBobinaServilleta,
                 UnidadBobinaServilleta.IdUnidadBobinaServilleta
                 == SubBobinaServilleta.IdUnidadBobinaServilleta,
+            )
+            .join(
+                FormatoSubBobina,
+                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
             )
             .join(
                 BobinaServilleta,

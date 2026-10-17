@@ -8,7 +8,7 @@ from app.Repository.Consultas import turno_actual
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
-    FormatoSubBobina,
+    FormatoSubBobinaDetalle,
     SubBobinaServilleta,
     TipoMedidaSubBobina,
     UnidadBobinaServilleta,
@@ -70,26 +70,28 @@ class ProduccionBobinaServilletaRepository:
             "Error al obtener la pausa de la producción",
         )
 
-    def FormatosDeUnidades(self, id_bobina: int) -> list[dict]:
+    def SubBobinasPorUnidad(self, id_bobina: int) -> list[dict]:
         return self.caller.Consultar(
             select(
                 UnidadBobinaServilleta.IdUnidadBobinaServilleta,
-                FormatoSubBobina.CantidadBobina435,
-                FormatoSubBobina.CantidadBobina220,
+                TipoMedidaSubBobina.IdTipoMedidaSubBobina,
+                TipoMedidaSubBobina.MedidaMm,
+                FormatoSubBobinaDetalle.Cantidad,
             )
             .join(
-                FormatoSubBobina,
-                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
+                FormatoSubBobinaDetalle,
+                FormatoSubBobinaDetalle.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
+            )
+            .join(
+                TipoMedidaSubBobina,
+                TipoMedidaSubBobina.IdTipoMedidaSubBobina == FormatoSubBobinaDetalle.IdTipoMedidaSubBobina,
             )
             .where(UnidadBobinaServilleta.IdBobinaServilleta == id_bobina)
-            .order_by(UnidadBobinaServilleta.IdUnidadBobinaServilleta)
+            .order_by(
+                UnidadBobinaServilleta.IdUnidadBobinaServilleta,
+                TipoMedidaSubBobina.MedidaMm.desc(),
+            )
         )
-
-    def IdsTipoMedida(self) -> dict[int, int]:
-        filas = self.caller.Consultar(
-            select(TipoMedidaSubBobina.MedidaMm, TipoMedidaSubBobina.IdTipoMedidaSubBobina)
-        )
-        return {fila["MedidaMm"]: fila["IdTipoMedidaSubBobina"] for fila in filas}
 
     def TurnoActual(self) -> dict | None:
         return turno_actual(self.caller)

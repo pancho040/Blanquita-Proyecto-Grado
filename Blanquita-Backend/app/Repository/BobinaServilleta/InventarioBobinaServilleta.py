@@ -8,10 +8,10 @@ from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_FUERA_INVENTARIO,
     MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
 )
+from app.Repository.BobinaServilleta.Unidades import con_unidades, unidades_de_bobinas
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
-    FormatoSubBobina,
     LoteBobinaServilleta,
     MovimientoSubBobina,
     SubBobinaServilleta,
@@ -70,44 +70,10 @@ class InventarioBobinaServilletaRepository:
             )
             .order_by(BobinaServilleta.IdBobinaServilleta)
         )
-        if not bobinas:
-            return []
-
-        unidades = self.UnidadesDeBobinas([bobina["IdBobinaServilleta"] for bobina in bobinas])
-
-        filas = []
-        for bobina in bobinas:
-            fila = dict(bobina)
-            for posicion, unidad in enumerate(unidades.get(bobina["IdBobinaServilleta"], [])[:2], start=1):
-                fila[f"IdUnidad{posicion}"] = unidad["IdUnidadBobinaServilleta"]
-                fila[f"CodigoUnidad{posicion}"] = unidad["CodigoBobina"]
-                fila[f"IdFormatoSubBobina{posicion}"] = unidad["IdFormatoSubBobina"]
-                fila[f"DescripcionFormato{posicion}"] = unidad["DescripcionFormato"]
-            filas.append(fila)
-        return filas
+        return con_unidades(self.caller, bobinas)
 
     def UnidadesDeBobinas(self, ids_bobina: list[int]) -> dict[int, list[dict]]:
-        filas = self.caller.Consultar(
-            select(
-                UnidadBobinaServilleta.IdUnidadBobinaServilleta,
-                UnidadBobinaServilleta.IdBobinaServilleta,
-                UnidadBobinaServilleta.CodigoBobina,
-                UnidadBobinaServilleta.IdFormatoSubBobina,
-                UnidadBobinaServilleta.PesoBrutoKg,
-                UnidadBobinaServilleta.GramajeGr,
-                FormatoSubBobina.DescripcionFormato,
-            )
-            .join(
-                FormatoSubBobina,
-                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
-            )
-            .where(UnidadBobinaServilleta.IdBobinaServilleta.in_(ids_bobina))
-            .order_by(UnidadBobinaServilleta.IdUnidadBobinaServilleta)
-        )
-        unidades: dict[int, list[dict]] = {}
-        for fila in filas:
-            unidades.setdefault(fila["IdBobinaServilleta"], []).append(fila)
-        return unidades
+        return unidades_de_bobinas(self.caller, ids_bobina)
 
     def VerResumenInventarioSubBobinaServilleta(self) -> list[dict]:
         consulta = (

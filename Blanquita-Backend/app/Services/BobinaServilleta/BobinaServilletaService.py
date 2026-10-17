@@ -18,8 +18,6 @@ from app.Schemas.BobinaServilleta import (
 )
 from app.utils.dates import ZONA_BOLIVIA
 
-UNIDADES_POR_BOBINA_SERVILLETA = 2
-
 
 class BobinaServilletaService:
     def __init__(self, db: Session):
@@ -33,13 +31,6 @@ class BobinaServilletaService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Debe proporcionar al menos una bobina servilleta",
             )
-
-        for bobina in data.Bobinas:
-            if len(bobina.Unidades) != UNIDADES_POR_BOBINA_SERVILLETA:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f"Cada bobina servilleta debe tener exactamente {UNIDADES_POR_BOBINA_SERVILLETA} unidades",
-                )
 
         unidades = [unidad for bobina in data.Bobinas for unidad in bobina.Unidades]
         codigos = [unidad.CodigoBobina.strip() for unidad in unidades]
@@ -82,12 +73,37 @@ class BobinaServilletaService:
                 detail=f"El tipo de bobina servilleta {tipo['NombreTipoBobinaServilleta']} está inactivo, no se puede registrar el lote",
             )
 
-        ids_formato = sorted({unidad.IdFormatoSubBobina for unidad in unidades})
-        faltantes = set(ids_formato) - self.repository.IdsFormatos(ids_formato)
-        if faltantes:
+        cantidad_unidades = tipo["CantidadUnidades"]
+        if any(len(bobina.Unidades) != cantidad_unidades for bobina in data.Bobinas):
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Los formatos de sub-bobina {', '.join(map(str, sorted(faltantes)))} no existen",
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Cada bobina {tipo['NombreTipoBobinaServilleta']} debe tener exactamente {cantidad_unidades} {'unidad' if cantidad_unidades == 1 else 'unidades'}",
+            )
+
+        formatos = {
+            formato["IdFormatoSubBobina"]: formato
+            for formato in self.repository.FormatosPermitidos([tipo["IdTipoBobinaServilleta"]]).get(
+                tipo["IdTipoBobinaServilleta"], []
+            )
+        }
+        ids_formato = sorted({unidad.IdFormatoSubBobina for unidad in unidades})
+
+        no_permitidos = [str(id_formato) for id_formato in ids_formato if id_formato not in formatos]
+        if no_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Los formatos {', '.join(no_permitidos)} no están permitidos para el tipo {tipo['NombreTipoBobinaServilleta']}",
+            )
+
+        inactivos = [
+            formatos[id_formato]["DescripcionFormato"]
+            for id_formato in ids_formato
+            if not formatos[id_formato]["Activo"]
+        ]
+        if inactivos:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Los formatos {', '.join(inactivos)} están inactivos, no se puede registrar el lote",
             )
 
         registrados = self.repository.CodigosRegistrados(codigos)

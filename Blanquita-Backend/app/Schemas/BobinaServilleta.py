@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Numeric, Text, func, true
+from sqlalchemy import Date, DateTime, Numeric, Text, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -16,6 +16,7 @@ class TipoBobinaServilleta(Base):
     CrepadoPorcentaje: Mapped[Decimal] = mapped_column(Numeric)
     ResistenciaKgf: Mapped[Decimal] = mapped_column(Numeric)
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    CantidadUnidades: Mapped[int] = mapped_column(server_default=text("1"))
     Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
@@ -24,8 +25,7 @@ class FormatoSubBobina(Base):
 
     IdFormatoSubBobina: Mapped[int] = mapped_column(primary_key=True)
     DescripcionFormato: Mapped[str] = mapped_column(Text)
-    CantidadBobina435: Mapped[int]
-    CantidadBobina220: Mapped[int]
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class TipoMedidaSubBobina(Base):
@@ -34,6 +34,24 @@ class TipoMedidaSubBobina(Base):
     IdTipoMedidaSubBobina: Mapped[int] = mapped_column(primary_key=True)
     MedidaMm: Mapped[int]
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
+
+
+class FormatoSubBobinaDetalle(Base):
+    __tablename__ = "FormatoSubBobinaDetalle"
+
+    IdFormatoSubBobinaDetalle: Mapped[int] = mapped_column(primary_key=True)
+    IdFormatoSubBobina: Mapped[int]
+    IdTipoMedidaSubBobina: Mapped[int]
+    Cantidad: Mapped[int]
+
+
+class TipoBobinaServilletaFormato(Base):
+    __tablename__ = "TipoBobinaServilletaFormato"
+
+    IdTipoBobinaServilletaFormato: Mapped[int] = mapped_column(primary_key=True)
+    IdTipoBobinaServilleta: Mapped[int]
+    IdFormatoSubBobina: Mapped[int]
 
 
 class LoteBobinaServilleta(Base):

@@ -22,6 +22,7 @@ from app.Constants.Estados import (
 from app.Models.BobinaServilleta.ProduccionBobinaServilleta import (
     AbrirBobinaServilletaRequest,
     AbrirBobinaServilletaResponse,
+    SubBobinasMedidaResponse,
     CancelarProduccionServilletaRequest,
     CancelarProduccionServilletaResponse,
     FinalizarProduccionServilletaRequest,
@@ -51,10 +52,6 @@ from app.Schemas.Produccion import (
 )
 from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
-MEDIDA_SUB_BOBINA_435 = 435
-MEDIDA_SUB_BOBINA_220 = 220
-
-
 def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -79,27 +76,22 @@ class ProduccionBobinaServilletaService:
                 f"La bobina servilleta {data.IdBobinaServilleta} no está En almacén, no puede abrirse",
             )
 
-        medidas = self.repository.IdsTipoMedida()
-        if MEDIDA_SUB_BOBINA_435 not in medidas or MEDIDA_SUB_BOBINA_220 not in medidas:
+        composicion = self.repository.SubBobinasPorUnidad(bobina.IdBobinaServilleta)
+        if not composicion:
             self._Revertir(
                 status.HTTP_409_CONFLICT,
-                "No se encontraron los tipos de medida de sub-bobina (435/220)",
+                "Los formatos de la bobina servilleta no tienen sub-bobinas configuradas",
             )
 
-        sub_bobinas = []
-        for unidad in self.repository.FormatosDeUnidades(bobina.IdBobinaServilleta):
-            for medida, cantidad in (
-                (MEDIDA_SUB_BOBINA_435, unidad["CantidadBobina435"] or 0),
-                (MEDIDA_SUB_BOBINA_220, unidad["CantidadBobina220"] or 0),
-            ):
-                sub_bobinas.extend(
-                    SubBobinaServilleta(
-                        IdUnidadBobinaServilleta=unidad["IdUnidadBobinaServilleta"],
-                        IdTipoMedidaSubBobina=medidas[medida],
-                        IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
-                    )
-                    for _ in range(cantidad)
-                )
+        sub_bobinas = [
+            SubBobinaServilleta(
+                IdUnidadBobinaServilleta=fila["IdUnidadBobinaServilleta"],
+                IdTipoMedidaSubBobina=fila["IdTipoMedidaSubBobina"],
+                IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+            )
+            for fila in composicion
+            for _ in range(fila["Cantidad"])
+        ]
 
         self.repository.Agregar(*sub_bobinas)
 
@@ -129,14 +121,22 @@ class ProduccionBobinaServilletaService:
             mensaje_error="No se pudo abrir la bobina servilleta",
         )
 
-        cantidad_435 = sum(
-            1 for sub in sub_bobinas if sub.IdTipoMedidaSubBobina == medidas[MEDIDA_SUB_BOBINA_435]
-        )
+        por_medida: dict[int, dict] = {}
+        for fila in composicion:
+            medida = por_medida.setdefault(
+                fila["IdTipoMedidaSubBobina"],
+                {
+                    "IdTipoMedidaSubBobina": fila["IdTipoMedidaSubBobina"],
+                    "MedidaMm": fila["MedidaMm"],
+                    "Cantidad": 0,
+                },
+            )
+            medida["Cantidad"] += fila["Cantidad"]
+
         return AbrirBobinaServilletaResponse(
             IdBobinaServilleta=bobina.IdBobinaServilleta,
             IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_ABIERTA,
-            CantidadSubBobinas435=cantidad_435,
-            CantidadSubBobinas220=len(sub_bobinas) - cantidad_435,
+            SubBobinas=[SubBobinasMedidaResponse(**medida) for medida in por_medida.values()],
             CantidadSubBobinasTotal=len(sub_bobinas),
         )
 

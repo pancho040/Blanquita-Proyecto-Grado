@@ -114,7 +114,7 @@ class ReporteBobinaPapelRepository:
                     fecha_referencia, params.get("p_FechaInicio"), params.get("p_FechaFin")
                 )
             )
-            .order_by(fecha_referencia.desc())
+            .order_by(pb.FechaInicioProduccion.desc(), pb.IdProduccionBobinaTubo.desc())
         )
 
         if params.get("p_IdsEstadoProduccion"):

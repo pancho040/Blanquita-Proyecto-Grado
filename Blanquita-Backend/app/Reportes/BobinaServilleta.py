@@ -78,24 +78,24 @@ def _escribir_inventario_bobina_servilleta(
                 (
                     "Código",
                     lambda b: reporte.celda_multilinea(
-                        [b.CodigoUnidad1, b.CodigoUnidad2]
+                        [u.CodigoBobina for u in b.Unidades]
                     ),
                 ),
                 (
                     "Formato",
                     lambda b: reporte.celda_multilinea(
-                        [b.DescripcionFormato1, b.DescripcionFormato2]
+                        [u.DescripcionFormato for u in b.Unidades]
                     ),
                 ),
                 (
                     "P. bruto (kg)",
                     lambda b: reporte.celda_multilinea(
-                        [b.PesoBrutoKg1, b.PesoBrutoKg2]
+                        [u.PesoBrutoKg for u in b.Unidades]
                     ),
                 ),
                 (
                     "Gramaje",
-                    lambda b: reporte.celda_multilinea([b.GramajeGr1, b.GramajeGr2]),
+                    lambda b: reporte.celda_multilinea([u.GramajeGr for u in b.Unidades]),
                 ),
             ],
             filas=bobinas_tipo,
@@ -349,21 +349,21 @@ def _columnas_bobinas_lote(reporte: Reporte) -> list:
         ("Tipo", "NombreTipoBobinaServilleta"),
         (
             "Código",
-            lambda b: reporte.celda_multilinea([b.CodigoUnidad1, b.CodigoUnidad2]),
+            lambda b: reporte.celda_multilinea([u.CodigoBobina for u in b.Unidades]),
         ),
         (
             "Formato",
             lambda b: reporte.celda_multilinea(
-                [b.DescripcionFormato1, b.DescripcionFormato2]
+                [u.DescripcionFormato for u in b.Unidades]
             ),
         ),
         (
             "P. bruto (kg)",
-            lambda b: reporte.celda_multilinea([b.PesoBrutoKg1, b.PesoBrutoKg2]),
+            lambda b: reporte.celda_multilinea([u.PesoBrutoKg for u in b.Unidades]),
         ),
         (
             "Gramaje",
-            lambda b: reporte.celda_multilinea([b.GramajeGr1, b.GramajeGr2]),
+            lambda b: reporte.celda_multilinea([u.GramajeGr for u in b.Unidades]),
         ),
     ]
 
@@ -461,7 +461,8 @@ def _datos_generales_produccion_servilleta(data) -> list[dict]:
 def _subbobina_utilizada_servilleta(data) -> list[dict]:
     return [
         {"campo": "Código de unidad", "valor": data.CodigoBobina},
-        {"campo": "Formato", "valor": data.DescripcionMedida},
+        {"campo": "Formato de la unidad", "valor": data.DescripcionFormato},
+        {"campo": "Medida", "valor": data.DescripcionMedida},
         {"campo": "Sub-bobina", "valor": data.IdSubBobinaServilleta},
         {"campo": "Peso bruto (kg)", "valor": data.PesoBrutoKg},
         {"campo": "Gramaje", "valor": data.GramajeGr},
@@ -614,7 +615,8 @@ def construir_reporte_produccion_servilleta_por_periodo(
                 ),
                 ("Tipo", "NombreTipoBobinaServilleta"),
                 ("Código", "CodigoBobina"),
-                ("Formato", "DescripcionMedida"),
+                ("Formato", "DescripcionFormato"),
+                ("Medida", "DescripcionMedida"),
                 ("Inicio", "FechaInicioProduccion"),
                 ("Fin", "FechaFinProduccion"),
                 ("Estado", "NombreEstadoProduccion"),

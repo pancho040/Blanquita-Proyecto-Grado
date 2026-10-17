@@ -21,8 +21,8 @@ INSERT INTO "TipoBobina" ("NombreTipoBobina", "DiametroMm", "Formato", "TaraKg")
 ('Toalla', 1210, 2760, 38),
 ('Económico', 1210, 2760, 38);
 
-INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf") VALUES
-('G-18 CR-14%', 1210, 14, 1.35);
+INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf", "CantidadUnidades") VALUES
+('G-18 CR-14%', 1210, 14, 1.35, 2);
 
 
 
@@ -160,9 +160,21 @@ INSERT INTO "TipoMedidaSubBobina" ("MedidaMm", "Descripcion") VALUES
 (435, 'Sub-bobina 435mm'),
 (220, 'Sub-bobina 220mm');
 
-INSERT INTO "FormatoSubBobina" ("DescripcionFormato", "CantidadBobina435", "CantidadBobina220") VALUES
-('435x3', 3, 0),
-('435x2+220x1', 2, 1);
+INSERT INTO "FormatoSubBobina" ("DescripcionFormato") VALUES
+('435x3'),
+('435x2+220x1');
+
+INSERT INTO "FormatoSubBobinaDetalle" ("IdFormatoSubBobina", "IdTipoMedidaSubBobina", "Cantidad") VALUES
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x3'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 435), 3),
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x2+220x1'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 435), 2),
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x2+220x1'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 220), 1);
+
+INSERT INTO "TipoBobinaServilletaFormato" ("IdTipoBobinaServilleta", "IdFormatoSubBobina")
+SELECT t."IdTipoBobinaServilleta", f."IdFormatoSubBobina"
+FROM "TipoBobinaServilleta" AS t
+CROSS JOIN "FormatoSubBobina" AS f
+WHERE t."NombreTipoBobinaServilleta" = 'G-18 CR-14%'
+  AND f."DescripcionFormato" IN ('435x3', '435x2+220x1');
 
 
 

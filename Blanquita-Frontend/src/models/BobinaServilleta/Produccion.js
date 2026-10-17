@@ -6,8 +6,11 @@ export const AbrirBobinaServilletaRequest = (idBobinaServilleta, observacion) =>
 export const AbrirBobinaServilletaResponse = (data) => ({
   IdBobinaServilleta: data.IdBobinaServilleta,
   IdEstadoMateriaPrima: data.IdEstadoMateriaPrima,
-  CantidadSubBobinas435: data.CantidadSubBobinas435,
-  CantidadSubBobinas220: data.CantidadSubBobinas220,
+  SubBobinas: (data.SubBobinas ?? []).map((s) => ({
+    IdTipoMedidaSubBobina: s.IdTipoMedidaSubBobina,
+    MedidaMm: s.MedidaMm,
+    Cantidad: s.Cantidad
+  })),
   CantidadSubBobinasTotal: data.CantidadSubBobinasTotal
 });
 
