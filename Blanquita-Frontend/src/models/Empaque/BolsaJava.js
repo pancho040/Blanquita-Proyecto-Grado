@@ -3,6 +3,7 @@ export const InventarioBolsaJavaResponse = (data) => ({
   IdTipoBolsaJava: data.IdTipoBolsaJava,
   NombreBolsaJava: data.NombreBolsaJava,
   DescripcionBolsaJava: data.DescripcionBolsaJava ?? null,
+  Activo: data.Activo,
   CantidadActual: data.CantidadActual
 });
 

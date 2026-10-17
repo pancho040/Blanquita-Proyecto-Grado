@@ -66,16 +66,42 @@ class UsuarioRepository:
         return total, self.caller.Consultar(pagina)
 
     def VerificarAdmin(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "VerificarAdmin"(p_IdUsuario => :p_IdUsuario)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
+        filas = self.caller.Consultar(
+            select(
+                Usuario.IsAdmin.label("EsAdminOut"),
+                Usuario.IdEstadoUsuario.label("IdEstadoUsuarioOut"),
+            ).where(Usuario.IdUsuario == params["p_IdUsuario"])
+        )
+        return filas[0] if filas else None
 
     def ObtenerPerfil(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "ObtenerPerfil"(p_IdUsuario => :p_IdUsuario)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
+        filas = self.caller.Consultar(
+            select(
+                Usuario.IdUsuario.label("IdUsuarioOut"),
+                Usuario.Ci.label("CiOut"),
+                Usuario.PrimerNombre.label("PrimerNombreOut"),
+                Usuario.SegundoNombre.label("SegundoNombreOut"),
+                Usuario.ApellidoPaterno.label("ApellidoPaternoOut"),
+                Usuario.ApellidoMaterno.label("ApellidoMaternoOut"),
+                func.concat_ws(
+                    " ",
+                    Usuario.PrimerNombre,
+                    Usuario.SegundoNombre,
+                    Usuario.ApellidoPaterno,
+                    Usuario.ApellidoMaterno,
+                ).label("NombreCompletoOut"),
+                Usuario.Celular.label("CelularOut"),
+                Usuario.IdRol.label("IdRolOut"),
+                Rol.NombreRol.label("NombreRolOut"),
+                Usuario.IdEstadoUsuario.label("IdEstadoUsuarioOut"),
+                EstadoUsuario.NombreEstadoUsuario.label("NombreEstadoUsuarioOut"),
+                Usuario.FechaRegistro.label("FechaRegistroOut"),
+            )
+            .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .join(EstadoUsuario, EstadoUsuario.IdEstadoUsuario == Usuario.IdEstadoUsuario)
+            .where(Usuario.IdUsuario == params["p_IdUsuario"])
+        )
+        return filas[0] if filas else None
 
     def ObtenerUsuarioBloqueado(self, id_usuario: int) -> Usuario | None:
         """Lee el usuario con FOR UPDATE; el bloqueo dura hasta el commit/rollback."""

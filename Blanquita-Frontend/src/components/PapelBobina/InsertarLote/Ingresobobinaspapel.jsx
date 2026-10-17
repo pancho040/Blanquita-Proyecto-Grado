@@ -13,6 +13,7 @@ import { dateFormatter } from "@/utils/dates";
 import { aCodigo } from "@/utils/handlers";
 import { formatearNumero } from "@/utils/numeros";
 import { useCatalogo } from "@/hooks/useCatalogo";
+import { soloActivos } from "@/utils/catalogo";
 import {
   useFilasLote,
   useEnvioLote,
@@ -48,7 +49,7 @@ export default function IngresoBobinasPapel({ usuario }) {
   const [tara, setTara] = useState("");
 
   const proveedores = useCatalogo(ObtenerProveedoresForm);
-  const tipos = useCatalogo(ObtenerTiposPapelBobina, (data) => {
+  const tipos = useCatalogo(soloActivos(ObtenerTiposPapelBobina), (data) => {
     if (data.length) setIdTipoBobina(data[0].IdTipoBobina);
   });
 

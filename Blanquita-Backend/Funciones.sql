@@ -4518,3 +4518,149 @@ BEGIN
 END;
 $function$
 ;
+
+
+CREATE OR REPLACE FUNCTION public."IniciarProduccionBobinaTubo"(p_idbobina1 integer, p_idbobina2 integer, p_idusuario integer, p_idproducto integer DEFAULT NULL::integer)
+ RETURNS TABLE("IdProduccionBobinaTubo" integer, "FechaInicioProduccion" timestamp with time zone, "IdTurno" integer, "NombreTurno" text, "IdProducto" integer, "NombreProducto" text)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  c_IdEstadoProduccion     CONSTANT INTEGER := 1;
+  c_IdEstadoAlmacen        CONSTANT INTEGER := 1;
+  c_IdEstadoEnProdMP       CONSTANT INTEGER := 2;
+  c_IdTipoMovimiento       CONSTANT INTEGER := 2;
+  c_IdTipoHigienico        CONSTANT INTEGER := 1;
+  c_IdTipoToalla           CONSTANT INTEGER := 2;
+  c_IdTipoEconomico        CONSTANT INTEGER := 3;
+  c_IdProductoToalla       CONSTANT INTEGER := 7;
+  c_IdProductoEconomico    CONSTANT INTEGER := 5;
+  c_ProductosHigienico     CONSTANT INTEGER[] := ARRAY[1, 2, 4];
+  v_EstadoBobina1          INTEGER;
+  v_EstadoBobina2          INTEGER;
+  v_TipoBobina1            INTEGER;
+  v_TipoBobina2            INTEGER;
+  v_IdProducto             INTEGER;
+  v_HoraLocal              TIME;
+  v_IdTurno                INTEGER;
+  v_IdProduccionBobinaTubo INTEGER;
+  v_FechaInicioProduccion  TIMESTAMPTZ;
+BEGIN
+  IF p_IdBobina1 IS NULL THEN
+    RAISE EXCEPTION 'IdBobina1 es obligatorio para iniciar producción de Bobina Tubo.';
+  END IF;
+
+  IF p_IdBobina2 IS NULL THEN
+    RAISE EXCEPTION 'IdBobina2 es obligatorio para iniciar producción de Bobina Tubo.';
+  END IF;
+
+  IF p_IdBobina1 = p_IdBobina2 THEN
+    RAISE EXCEPTION 'IdBobina1 e IdBobina2 no pueden ser la misma bobina.';
+  END IF;
+
+  SELECT bp."IdEstadoMateriaPrima", bp."IdTipoBobina"
+  INTO v_EstadoBobina1, v_TipoBobina1
+  FROM "BobinaPapel" AS bp
+  WHERE bp."IdBobinaPapel" = p_IdBobina1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No existe la bobina con IdBobinaPapel = %', p_IdBobina1;
+  END IF;
+
+  SELECT bp."IdEstadoMateriaPrima", bp."IdTipoBobina"
+  INTO v_EstadoBobina2, v_TipoBobina2
+  FROM "BobinaPapel" AS bp
+  WHERE bp."IdBobinaPapel" = p_IdBobina2
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No existe la bobina con IdBobinaPapel = %', p_IdBobina2;
+  END IF;
+
+  IF v_EstadoBobina1 <> c_IdEstadoAlmacen THEN
+    RAISE EXCEPTION 'La bobina % no está En almacén (estado actual: %), no puede ingresar a producción', p_IdBobina1, v_EstadoBobina1;
+  END IF;
+
+  IF v_EstadoBobina2 <> c_IdEstadoAlmacen THEN
+    RAISE EXCEPTION 'La bobina % no está En almacén (estado actual: %), no puede ingresar a producción', p_IdBobina2, v_EstadoBobina2;
+  END IF;
+
+  IF v_TipoBobina1 <> v_TipoBobina2 THEN
+    RAISE EXCEPTION 'Las bobinas deben ser del mismo tipo para iniciar la producción.';
+  END IF;
+
+  IF v_TipoBobina1 = c_IdTipoHigienico THEN
+    IF p_IdProducto IS NULL THEN
+      RAISE EXCEPTION 'Debe seleccionar el producto para la producción de bobinas de papel higiénico.';
+    END IF;
+    IF NOT (p_IdProducto = ANY(c_ProductosHigienico)) THEN
+      RAISE EXCEPTION 'El producto % no es válido para bobinas de papel higiénico.', p_IdProducto;
+    END IF;
+    v_IdProducto := p_IdProducto;
+  ELSIF v_TipoBobina1 = c_IdTipoToalla THEN
+    v_IdProducto := c_IdProductoToalla;
+  ELSIF v_TipoBobina1 = c_IdTipoEconomico THEN
+    v_IdProducto := c_IdProductoEconomico;
+  ELSE
+    RAISE EXCEPTION 'El tipo de bobina % no tiene un producto asociado.', v_TipoBobina1;
+  END IF;
+
+  IF p_IdProducto IS NOT NULL AND p_IdProducto <> v_IdProducto THEN
+    RAISE EXCEPTION 'El producto % no es válido para este tipo de bobina.', p_IdProducto;
+  END IF;
+
+  v_HoraLocal := (now() AT TIME ZONE 'America/La_Paz')::TIME;
+
+  SELECT t."IdTurno" INTO v_IdTurno
+  FROM "Turno" AS t
+  WHERE
+    (t."HoraInicio" <= t."HoraFin" AND v_HoraLocal BETWEEN t."HoraInicio" AND t."HoraFin")
+    OR
+    (t."HoraInicio" > t."HoraFin" AND (v_HoraLocal >= t."HoraInicio" OR v_HoraLocal <= t."HoraFin"))
+  LIMIT 1;
+
+  INSERT INTO "ProduccionBobinaTubo" AS pbt (
+    "IdEstadoProduccion",
+    "IdUsuario",
+    "IdBobina_1",
+    "IdBobina_2",
+    "IdTurno",
+    "IdProducto",
+    "FechaInicioProduccion",
+    "FechaFinProduccion"
+  ) VALUES (
+    c_IdEstadoProduccion,
+    p_IdUsuario,
+    p_IdBobina1,
+    p_IdBobina2,
+    v_IdTurno,
+    v_IdProducto,
+    now(),
+    NULL
+  )
+  RETURNING pbt."IdProduccionBobinaTubo", pbt."FechaInicioProduccion"
+  INTO v_IdProduccionBobinaTubo, v_FechaInicioProduccion;
+
+  UPDATE "BobinaPapel" AS bp
+  SET "IdEstadoMateriaPrima" = c_IdEstadoEnProdMP
+  WHERE bp."IdBobinaPapel" IN (p_IdBobina1, p_IdBobina2);
+
+  INSERT INTO "MovimientoBobina" ("IdBobinaPapel", "IdTipoMovimiento", "IdUsuario", "Observacion")
+  SELECT b."IdBobinaPapel", c_IdTipoMovimiento, p_IdUsuario, 'Traslado a producción - Producción Bobina Tubo #' || v_IdProduccionBobinaTubo
+  FROM "BobinaPapel" AS b
+  WHERE b."IdBobinaPapel" IN (p_IdBobina1, p_IdBobina2);
+
+  RETURN QUERY
+  SELECT
+    v_IdProduccionBobinaTubo,
+    v_FechaInicioProduccion,
+    v_IdTurno,
+    t."NombreTurno",
+    p."IdProducto",
+    p."NombreProducto"
+  FROM "Turno" AS t
+  CROSS JOIN "Producto" AS p
+  WHERE t."IdTurno" = v_IdTurno
+    AND p."IdProducto" = v_IdProducto;
+END;
+$function$

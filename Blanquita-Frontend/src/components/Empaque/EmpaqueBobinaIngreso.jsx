@@ -18,6 +18,7 @@ import { dateFormatter } from "@/utils/dates";
 import { aCodigo } from "@/utils/handlers";
 import { ACENTOS } from "@/constants/Acentos";
 import { useCatalogo } from "@/hooks/useCatalogo";
+import { soloActivos } from "@/utils/catalogo";
 import { useEnvioLote, codigosRepetidos, erroresPorFila } from "@/hooks/useIngresoLote";
 import {
   ResultadoLote,
@@ -55,7 +56,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
   ]);
 
   const proveedores = useCatalogo(ObtenerProveedoresForm);
-  const tipos = useCatalogo(obtenerTiposEmpaque, (data) => {
+  const tipos = useCatalogo(soloActivos(obtenerTiposEmpaque), (data) => {
     if (data.length) {
       setBloques((prev) =>
         prev.map((b) =>

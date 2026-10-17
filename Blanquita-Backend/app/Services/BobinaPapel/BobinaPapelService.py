@@ -1,23 +1,44 @@
-import json
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from collections import Counter
+from datetime import datetime
+from decimal import Decimal
+
 from fastapi import HTTPException, status
-from typing import List
-from app.Repository.BobinaPapel.BobinaPapelRepository import BobinaPapelRepository
+from sqlalchemy.orm import Session
+
+from app.Constants.Cantidades import LONGITUD_MAXIMA_DESCRIPCION, LONGITUD_MINIMA_DESCRIPCION
+from app.Constants.Estados import (
+    ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+    ESTADO_PROVEEDOR_ACTIVO,
+    MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+)
 from app.Models.BobinaPapel.BobinaPapel import (
-    ListaBobinasPapel,
-    BobinaPapelIngresoItem,
-    IngresoModelo,
-    IngresoLoteBobinaPapelResponse,
-    TipoBobinaPapelIngreso,
     EditarBobinaPapelRequest,
     EditarBobinaPapelResponse,
+    IngresoLoteBobinaPapelResponse,
+    IngresoModelo,
+    TipoBobinaPapelIngreso,
 )
-from app.utils.validators import ValidarTexto, REGLA_CARACTERES_OBSERVACION
-from app.Constants.Cantidades import (
-    LONGITUD_MINIMA_DESCRIPCION,
-    LONGITUD_MAXIMA_DESCRIPCION,
-)
+from app.Repository.BobinaPapel.BobinaPapelRepository import BobinaPapelRepository
+from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina
+from app.utils.dates import ZONA_BOLIVIA
+from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+
+OBSERVACION_INGRESO_BOBINA = "Ingreso automático al almacén por registro de bobina"
+
+CAMPOS_CORRECCION_BOBINA = {
+    "CodigoBobina": "Código",
+    "PesoBrutoKg": "Peso bruto",
+    "PesoNetoKg": "Peso neto",
+    "Gramaje": "Gramaje",
+}
+
+
+def _mostrar(valor) -> str:
+    if valor is None:
+        return "sin dato"
+    if isinstance(valor, Decimal):
+        return format(valor.normalize(), "f")
+    return str(valor)
 
 
 class BobinaPapelService:
@@ -25,57 +46,87 @@ class BobinaPapelService:
         self.repository = BobinaPapelRepository(db)
 
     def InsertarBobinasPapel(self, data: IngresoModelo, id_usuario: int) -> IngresoLoteBobinaPapelResponse:
-        params = {
-            "p_IdProveedor": data.IdProveedor,
-            "p_IdTipoBobina": data.IdTipoBobina,
-            "p_IdUsuario": id_usuario,
-            "p_Bobinas": json.dumps([b.model_dump() for b in data.Bobinas], default=str),
-        }
-
-        try:
-            resultado = self.repository.InsertarBobinasPapel(params)
-        except SQLAlchemyError as e:
-            mensaje = str(e.orig) if hasattr(e, "orig") else str(e)
-            if "duplicate key" in mensaje and "CodigoBobina" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Ya existe una bobina registrada con ese código"
-                )
-            if "IdProveedor" in mensaje and "fkey" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El proveedor con id {data.IdProveedor} no existe"
-                )
-            if "IdTipoBobina" in mensaje and "fkey" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"El tipo de bobina con id {data.IdTipoBobina} no existe"
-                )
+        if not data.Bobinas:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo registrar el lote de bobinas, verifica los datos ingresados"
+                detail="Debe enviar al menos una bobina para registrar",
             )
 
-        if not resultado:
+        codigos = [bobina.CodigoBobina.strip() for bobina in data.Bobinas]
+        if any(not codigo for codigo in codigos):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo registrar el lote de bobinas"
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="El código de la bobina es obligatorio",
             )
 
-        return IngresoLoteBobinaPapelResponse(**resultado)
-
-    def ObtenerTiposBobinaPapel(self) -> List[TipoBobinaPapelIngreso]:
-        try:
-            resultado = self.repository.ObtenerTipoBobinaPapel()
-        except SQLAlchemyError:
+        repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
+        if repetidos:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudieron obtener los tipos de bobina"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Los códigos {', '.join(repetidos)} están repetidos en el lote",
             )
-        if not resultado:
-            return []
 
-        return [TipoBobinaPapelIngreso(**tipo) for tipo in resultado]
+        proveedor = self.repository.ObtenerProveedor(data.IdProveedor)
+        if proveedor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El proveedor con id {data.IdProveedor} no existe",
+            )
+
+        if proveedor["IdEstadoProveedor"] != ESTADO_PROVEEDOR_ACTIVO:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El proveedor {proveedor['NombreProveedor']} está inactivo, no se puede registrar el lote",
+            )
+
+        tipo = self.repository.ObtenerTipo(data.IdTipoBobina)
+        if tipo is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El tipo de bobina con id {data.IdTipoBobina} no existe",
+            )
+
+        if not tipo["Activo"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El tipo de bobina {tipo['NombreTipoBobina']} está inactivo, no se puede registrar el lote",
+            )
+
+        registrados = self.repository.CodigosRegistrados(codigos)
+        if registrados:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existen bobinas registradas con los códigos {', '.join(sorted(registrados))}",
+            )
+
+        lote = self.repository.RegistrarLote(
+            LoteBobina(
+                IdProveedor=data.IdProveedor,
+                IdUsuario=id_usuario,
+                FechaRecepcion=datetime.now(ZONA_BOLIVIA).date(),
+            ),
+            [
+                BobinaPapel(
+                    CodigoBobina=codigo,
+                    IdTipoBobina=data.IdTipoBobina,
+                    IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+                    PesoBrutoKg=bobina.PesoBrutoKg,
+                    Gramaje=bobina.Gramaje,
+                    PesoNetoKg=bobina.PesoNetoKg,
+                )
+                for codigo, bobina in zip(codigos, data.Bobinas)
+            ],
+            id_usuario,
+            OBSERVACION_INGRESO_BOBINA,
+        )
+
+        return IngresoLoteBobinaPapelResponse(
+            FechaRecepcion=lote.FechaRecepcion,
+            CantidadBobinas=len(codigos),
+        )
+
+    def ObtenerTiposBobinaPapel(self) -> list[TipoBobinaPapelIngreso]:
+        return [TipoBobinaPapelIngreso(**tipo) for tipo in self.repository.ObtenerTipoBobinaPapel()]
 
     def EditarBobinaPapel(self, data: EditarBobinaPapelRequest, id_usuario: int) -> EditarBobinaPapelResponse:
         motivo = (data.Observacion or "").strip()
@@ -85,22 +136,68 @@ class BobinaPapelService:
                 detail=f"El motivo de la corrección es obligatorio, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
             )
 
-        params = {
-            "p_IdBobinaPapel": data.IdBobinaPapel,
-            "p_IdUsuario": id_usuario,
-            "p_CodigoBobina": data.CodigoBobina.strip(),
-            "p_PesoBrutoKg": data.PesoBrutoKg,
-            "p_PesoNetoKg": data.PesoNetoKg,
-            "p_Gramaje": data.Gramaje,
-            "p_Observacion": motivo,
-        }
-
-        resultado = self.repository.EditarBobinaPapel(params)
-
-        if not resultado:
+        codigo = data.CodigoBobina.strip()
+        if not codigo:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo corregir la bobina",
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="El código de la bobina es obligatorio",
             )
 
-        return EditarBobinaPapelResponse(**resultado)
+        bobina = self.repository.ObtenerBobinaBloqueada(data.IdBobinaPapel)
+        if bobina is None:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe la bobina con id {data.IdBobinaPapel}",
+            )
+
+        nuevos = {
+            "CodigoBobina": codigo,
+            "PesoBrutoKg": data.PesoBrutoKg,
+            "PesoNetoKg": data.PesoNetoKg,
+            "Gramaje": data.Gramaje,
+        }
+        cambios = {
+            campo: valor
+            for campo, valor in nuevos.items()
+            if getattr(bobina, campo) != valor
+        }
+
+        if not cambios:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No hay cambios para guardar",
+            )
+
+        if "CodigoBobina" in cambios and self.repository.CodigosRegistrados([codigo], bobina.IdBobinaPapel):
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existe una bobina registrada con el código {codigo}",
+            )
+
+        detalle = " · ".join(
+            f"{CAMPOS_CORRECCION_BOBINA[campo]}: {_mostrar(getattr(bobina, campo))} → {_mostrar(valor)}"
+            for campo, valor in cambios.items()
+        )
+
+        movimiento = self.repository.RegistrarCorreccion(
+            bobina,
+            cambios,
+            MovimientoBobina(
+                IdBobinaPapel=bobina.IdBobinaPapel,
+                IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+                IdUsuario=id_usuario,
+                Observacion=f"{detalle} · Motivo: {motivo}",
+            ),
+        )
+
+        return EditarBobinaPapelResponse(
+            IdBobinaPapel=bobina.IdBobinaPapel,
+            CodigoBobina=bobina.CodigoBobina,
+            PesoBrutoKg=bobina.PesoBrutoKg,
+            PesoNetoKg=bobina.PesoNetoKg,
+            Gramaje=bobina.Gramaje,
+            FechaMovimiento=movimiento.FechaMovimiento,
+        )

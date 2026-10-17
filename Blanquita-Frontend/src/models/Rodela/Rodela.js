@@ -17,5 +17,6 @@ export const IngresoRodelaResponse = (data) => ({
 export const TipoRodelaIngreso = (data) => ({
   IdTipoRodela: data.IdTipoRodela,
   NombreTipoRodela: data.NombreTipoRodela,
-  Descripcion: data.Descripcion ?? null
+  Descripcion: data.Descripcion ?? null,
+  Activo: data.Activo
 });

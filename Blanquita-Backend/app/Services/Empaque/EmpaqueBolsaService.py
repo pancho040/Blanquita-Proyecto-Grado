@@ -62,6 +62,14 @@ class EmpaqueBolsaService:
                 detail=f"Los tipos de empaque bolsa {', '.join(faltantes)} no existen o no tienen inventario",
             )
 
+        inactivos = [tipo.NombreEmpaqueBolsa for _, tipo in inventarios.values() if not tipo.Activo]
+        if inactivos:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Los tipos de empaque bolsa {', '.join(inactivos)} están inactivos, no se puede registrar el lote",
+            )
+
         registros = []
         for item in data.EmpaquesBolsa:
             inventario, _ = inventarios[item.IdTipoEmpaqueBolsa]

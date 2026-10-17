@@ -77,8 +77,12 @@ class VerInventarioProductoTerminadoResponse(BaseModel):
     CantidadRollosUnidades: int | None
     CantidadPorUnidadTerminada: int | None
     CantidadActual: int
+    Activo: bool
 
 
 class ProductoResponse(BaseModel):
     IdProducto: int
     NombreProducto: str
+    IdTipoBobina: int | None
+    IdTipoBobinaServilleta: int | None
+    Activo: bool

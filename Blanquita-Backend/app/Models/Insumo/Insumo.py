@@ -14,6 +14,7 @@ class CatalogoInsumoResponse(BaseModel):
     CantidadActual: int
     NombreInsumo: str
     DescripcionInsumo: str | None = None
+    Activo: bool
 
 
 class MovimientoInsumoRequest(BaseModel):

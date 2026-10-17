@@ -3,7 +3,8 @@ export const CatalogoInsumoResponse = (data) => ({
   IdTipoInsumo: data.IdTipoInsumo,
   CantidadActual: data.CantidadActual,
   NombreInsumo: data.NombreInsumo,
-  DescripcionInsumo: data.DescripcionInsumo ?? null
+  DescripcionInsumo: data.DescripcionInsumo ?? null,
+  Activo: data.Activo
 });
 
 export const MovimientoInsumoRequest = (idTipoInsumo, cantidad, observacion) => ({

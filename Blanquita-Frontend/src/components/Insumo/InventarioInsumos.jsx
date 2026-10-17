@@ -76,13 +76,13 @@ const esObservacionValida = (texto) => {
   return largo >= MOTIVO_CORRECCION_MIN && largo <= MOTIVO_CORRECCION_MAX;
 };
 
-function SelectorMovimiento({ tipo, sinStock, onCambio }) {
+function SelectorMovimiento({ tipo, sinStock, inactivo, onCambio }) {
   return (
     <div className="grid grid-cols-2 gap-2.5">
       {Object.entries(MOVIMIENTOS).map(([clave, config]) => {
         const { Icono } = config;
         const activo = tipo === clave;
-        const deshabilitado = clave === "salida" && sinStock;
+        const deshabilitado = (clave === "salida" && sinStock) || (clave === "ingreso" && inactivo);
         return (
           <button
             key={clave}
@@ -108,7 +108,8 @@ function SelectorMovimiento({ tipo, sinStock, onCambio }) {
 
 function FormularioMovimiento({ insumo, onRegistrado }) {
   const actual = Number(insumo.CantidadActual || 0);
-  const [tipo, setTipo] = useState("ingreso");
+  const tipoInicial = insumo.Activo ? "ingreso" : "salida";
+  const [tipo, setTipo] = useState(tipoInicial);
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
   const [tocado, setTocado] = useState(false);
@@ -163,7 +164,7 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
         `${config.exito}: ${config.signo > 0 ? "+" : "-"}${respuesta.CantidadMovimiento} ${respuesta.NombreInsumo}`,
       );
       limpiar();
-      setTipo("ingreso");
+      setTipo(tipoInicial);
       setConfirmando(false);
     } catch (e) {
       toast.error(e.message);
@@ -174,7 +175,12 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
 
   return (
     <div className="flex flex-col gap-4 p-5">
-      <SelectorMovimiento tipo={tipo} sinStock={actual === 0} onCambio={cambiarTipo} />
+      <SelectorMovimiento
+        tipo={tipo}
+        sinStock={actual === 0}
+        inactivo={!insumo.Activo}
+        onCambio={cambiarTipo}
+      />
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">

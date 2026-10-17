@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, Text
+from sqlalchemy import Date, DateTime, Numeric, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -16,6 +16,16 @@ class TipoBobinaServilleta(Base):
     CrepadoPorcentaje: Mapped[Decimal] = mapped_column(Numeric)
     ResistenciaKgf: Mapped[Decimal] = mapped_column(Numeric)
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
+
+
+class FormatoSubBobina(Base):
+    __tablename__ = "FormatoSubBobina"
+
+    IdFormatoSubBobina: Mapped[int] = mapped_column(primary_key=True)
+    DescripcionFormato: Mapped[str] = mapped_column(Text)
+    CantidadBobina435: Mapped[int]
+    CantidadBobina220: Mapped[int]
 
 
 class TipoMedidaSubBobina(Base):
@@ -62,3 +72,29 @@ class SubBobinaServilleta(Base):
     IdUnidadBobinaServilleta: Mapped[int]
     IdTipoMedidaSubBobina: Mapped[int]
     IdEstadoMateriaPrima: Mapped[int]
+
+
+class MovimientoBobinaServilleta(Base):
+    __tablename__ = "MovimientoBobinaServilleta"
+
+    IdMovimientoBobinaServilleta: Mapped[int] = mapped_column(primary_key=True)
+    IdBobinaServilleta: Mapped[int]
+    IdTipoMovimiento: Mapped[int]
+    IdUsuario: Mapped[int]
+    FechaMovimiento: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    Observacion: Mapped[str | None] = mapped_column(Text)
+
+
+class MovimientoSubBobina(Base):
+    __tablename__ = "MovimientoSubBobina"
+
+    IdMovimientoSubBobina: Mapped[int] = mapped_column(primary_key=True)
+    IdSubBobinaServilleta: Mapped[int]
+    IdTipoMovimiento: Mapped[int]
+    IdUsuario: Mapped[int]
+    FechaMovimiento: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    Observacion: Mapped[str | None] = mapped_column(Text)

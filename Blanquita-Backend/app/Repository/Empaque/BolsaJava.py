@@ -26,6 +26,7 @@ class BolsaJavaRepository:
                 InventarioBolsaJava.CantidadActual,
                 TipoBolsaJava.NombreBolsaJava,
                 TipoBolsaJava.DescripcionBolsaJava,
+                TipoBolsaJava.Activo,
             )
             .join(
                 TipoBolsaJava,

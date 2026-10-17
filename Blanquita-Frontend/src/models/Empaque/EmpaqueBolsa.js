@@ -3,6 +3,7 @@ export const InventarioEmpaqueBolsaResponse = (data) => ({
   IdTipoEmpaqueBolsa: data.IdTipoEmpaqueBolsa,
   NombreEmpaqueBolsa: data.NombreEmpaqueBolsa,
   DescripcionEmpaqueBolsa: data.DescripcionEmpaqueBolsa ?? null,
+  Activo: data.Activo,
   CantidadActual: data.CantidadActual
 });
 

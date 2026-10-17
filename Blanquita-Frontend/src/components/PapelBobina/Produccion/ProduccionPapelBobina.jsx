@@ -26,11 +26,10 @@ import {
 } from "../../../services/BobinaPapel/Produccion";
 import { ObtenerTiposPapelBobina } from "../../../services/BobinaPapel/BobinaPapel";
 import { obtenerProductos } from "../../../services/Inventario/Inventario";
+import { productosActivosDelTipo } from "@/utils/catalogo";
 import { movimientosOperador, ObservacionesInsertarLogs } from "../../../constants/OperadorConfig";
 import {
   Roles,
-  ID_TIPO_BOBINA_HIGIENICO,
-  IDS_PRODUCTO_BOBINA_HIGIENICO,
   CANTIDAD_MAXIMA_LOGS,
 } from "@/constants/Values";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
@@ -66,19 +65,29 @@ export default function ProduccionBobinaTubo({ usuario }) {
 
   const [tiposBobina, setTiposBobina] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState("");
-  const [productosHigienico, setProductosHigienico] = useState([]);
+  const [productos, setProductos] = useState([]);
   const [filtroProducto, setFiltroProducto] = useState("");
   const [buscarCodigoBobina, setBuscarCodigoBobina] = useState("");
 
   const idTipoFiltro = filtroTipo === "" ? undefined : Number(filtroTipo);
   const idProductoFiltro = filtroProducto === "" ? undefined : Number(filtroProducto);
-  const permiteFiltroProducto =
-    filtroTipo === "" || Number(filtroTipo) === ID_TIPO_BOBINA_HIGIENICO;
+  const productosDelFiltro = productos.filter((p) =>
+    filtroTipo === "" ? p.IdTipoBobina !== null : p.IdTipoBobina === Number(filtroTipo),
+  );
+  const permiteFiltroProducto = productosDelFiltro.length > 1;
 
   const cambiarFiltroTipo = (valor) => {
     setFiltroTipo(valor);
-    if (valor !== "" && Number(valor) !== ID_TIPO_BOBINA_HIGIENICO) setFiltroProducto("");
+    const sigueEnTipo = productos.some(
+      (p) =>
+        String(p.IdProducto) === filtroProducto &&
+        (valor === "" || p.IdTipoBobina === Number(valor)),
+    );
+    if (!sigueEnTipo) setFiltroProducto("");
   };
+
+  const permiteCambioLinea = (produccion) =>
+    productosActivosDelTipo(productos, produccion.IdTipoBobina).length > 1;
 
   const {
     activas,
@@ -109,7 +118,9 @@ export default function ProduccionBobinaTubo({ usuario }) {
   const [enviandoCambioLinea, setEnviandoCambioLinea] = useState(false);
 
   const productosDisponibles = cambioLinea
-    ? productosHigienico.filter((p) => p.IdProducto !== cambioLinea.IdProducto)
+    ? productosActivosDelTipo(productos, cambioLinea.IdTipoBobina).filter(
+        (p) => p.IdProducto !== cambioLinea.IdProducto,
+      )
     : [];
 
   const abrirCambioLinea = (produccion) => {
@@ -151,12 +162,8 @@ export default function ProduccionBobinaTubo({ usuario }) {
       .then(setTiposBobina)
       .catch(() => setTiposBobina([]));
     obtenerProductos()
-      .then((data) =>
-        setProductosHigienico(
-          data.filter((p) => IDS_PRODUCTO_BOBINA_HIGIENICO.includes(p.IdProducto)),
-        ),
-      )
-      .catch(() => setProductosHigienico([]));
+      .then(setProductos)
+      .catch(() => setProductos([]));
   }, []);
 
   const requiereObservacion =
@@ -313,7 +320,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
           </div>
         )}
 
-        {permiteFiltroProducto && productosHigienico.length > 0 && (
+        {permiteFiltroProducto && (
           <div className="mb-5 flex flex-col gap-1.5">
             <span className="text-xs font-bold uppercase tracking-wide text-slate-600">
               Filtrar por producto
@@ -329,7 +336,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
               >
                 Todos
               </ToggleGroupItem>
-              {productosHigienico.map((p) => (
+              {productosDelFiltro.map((p) => (
                 <ToggleGroupItem
                   key={p.IdProducto}
                   value={String(p.IdProducto)}
@@ -390,7 +397,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
                 onPausar={() => pausa.abrir(p)}
                 onFinalizar={esEncargado ? () => finalizacion.abrir(p) : undefined}
                 onCambiarLinea={
-                  esEncargado && p.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO
+                  esEncargado && permiteCambioLinea(p)
                     ? () => abrirCambioLinea(p)
                     : undefined
                 }

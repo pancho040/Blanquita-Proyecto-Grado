@@ -52,5 +52,6 @@ export const DetalleInventarioEmpaqueResponse = (data) => ({
 
 export const TipoEmpaqueIngreso = (data) => ({
   IdTipoEmpaque: data.IdTipoEmpaque,
-  NombreTipoEmpaque: data.NombreTipoEmpaque
+  NombreTipoEmpaque: data.NombreTipoEmpaque,
+  Activo: data.Activo
 });

@@ -181,6 +181,13 @@ class InsumoService:
         inventario, tipo = encontrado
         cantidad_actual = int(inventario.CantidadActual)
 
+        if id_tipo_movimiento == ID_TIPO_MOVIMIENTO_INGRESO and not tipo.Activo:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El insumo {tipo.NombreInsumo} está inactivo, no se puede registrar el ingreso",
+            )
+
         if id_tipo_movimiento == ID_TIPO_MOVIMIENTO_SALIDA:
             if data.Cantidad > cantidad_actual:
                 self.repository.Revertir()

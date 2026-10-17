@@ -56,7 +56,8 @@ CREATE TABLE "TipoBobina" (
   "DiametroMm" NUMERIC NOT NULL DEFAULT 1210,
   "Formato" NUMERIC NOT NULL DEFAULT 2760,
   "TaraKg" NUMERIC NOT NULL DEFAULT 38,
-  "Descripcion" TEXT
+  "Descripcion" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "EstadoMateriaPrima" (
@@ -89,7 +90,8 @@ CREATE TABLE "TipoBobinaServilleta" (
   "DiametroMm" NUMERIC NOT NULL DEFAULT 1210,
   "CrepadoPorcentaje" NUMERIC NOT NULL DEFAULT 14,
   "ResistenciaKgf" NUMERIC NOT NULL DEFAULT 1.35,
-  "Descripcion" TEXT
+  "Descripcion" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "FormatoSubBobina" (
@@ -151,7 +153,8 @@ CREATE TABLE "LoteEmpaque" (
 
 CREATE TABLE "TipoEmpaque" (
   "IdTipoEmpaque" SERIAL PRIMARY KEY,
-  "NombreTipoEmpaque" TEXT NOT NULL
+  "NombreTipoEmpaque" TEXT NOT NULL,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "Empaque" (
@@ -174,7 +177,8 @@ CREATE TABLE "LoteRodela" (
 CREATE TABLE "TipoRodela" (
   "IdTipoRodela" SERIAL PRIMARY KEY,
   "NombreTipoRodela" TEXT NOT NULL,
-  "Descripcion" TEXT
+  "Descripcion" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "Rodela" (
@@ -304,9 +308,13 @@ CREATE TABLE "Producto" (
   "IdProducto" SERIAL PRIMARY KEY,
   "NombreProducto" TEXT NOT NULL,
   "SiglasProducto" TEXT NOT NULL,
+  "IdTipoBobina" INTEGER REFERENCES "TipoBobina"("IdTipoBobina") ON DELETE RESTRICT,
+  "IdTipoBobinaServilleta" INTEGER REFERENCES "TipoBobinaServilleta"("IdTipoBobinaServilleta") ON DELETE RESTRICT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
   CONSTRAINT "uq_producto_nombre" UNIQUE ("NombreProducto"),
   CONSTRAINT "uq_producto_siglas" UNIQUE ("SiglasProducto"),
-  CONSTRAINT "ck_producto_siglas" CHECK ("SiglasProducto" ~ '^[A-Z]{3}$')
+  CONSTRAINT "ck_producto_siglas" CHECK ("SiglasProducto" ~ '^[A-Z]{3}$'),
+  CONSTRAINT "ck_producto_un_tipo" CHECK (num_nonnulls("IdTipoBobina", "IdTipoBobinaServilleta") <= 1)
 );
 
 ALTER TABLE "ProduccionBobinaTubo"
@@ -319,7 +327,8 @@ CREATE TABLE "PresentacionProducto" (
   "TipoContenedor" TEXT NOT NULL,
   "CantidadRollosUnidades" INTEGER,
   "CantidadPorUnidadTerminada" INTEGER,
-  "CodigoPresentacion" TEXT UNIQUE NOT NULL
+  "CodigoPresentacion" TEXT UNIQUE NOT NULL,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 CREATE INDEX "idx_presentacion_producto" ON "PresentacionProducto"("IdProducto");
 
@@ -349,7 +358,8 @@ CREATE TABLE "InventarioProductoTerminado" (
 CREATE TABLE "TipoInsumo" (
   "IdTipoInsumo" SERIAL PRIMARY KEY,
   "NombreInsumo" TEXT NOT NULL,
-  "DescripcionInsumo" TEXT
+  "DescripcionInsumo" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "MovimientoInsumo" (
@@ -372,7 +382,8 @@ CREATE TABLE "InventarioInsumo" (
 CREATE TABLE "TipoEmpaqueBolsa" (
   "IdTipoEmpaqueBolsa" SERIAL PRIMARY KEY,
   "NombreEmpaqueBolsa" TEXT NOT NULL,
-  "DescripcionEmpaqueBolsa" TEXT
+  "DescripcionEmpaqueBolsa" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "MovimientoEmpaqueBolsa" (
@@ -401,7 +412,8 @@ CREATE TABLE "InventarioEmpaqueBolsa" (
 CREATE TABLE "TipoBolsaJava" (
   "IdTipoBolsaJava" SERIAL PRIMARY KEY,
   "NombreBolsaJava" TEXT NOT NULL,
-  "DescripcionBolsaJava" TEXT
+  "DescripcionBolsaJava" TEXT,
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE TABLE "MovimientoBolsaJava" (

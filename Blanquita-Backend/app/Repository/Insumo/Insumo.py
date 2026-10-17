@@ -21,6 +21,7 @@ class InsumoRepository:
                 InventarioInsumo.CantidadActual,
                 TipoInsumo.NombreInsumo,
                 TipoInsumo.DescripcionInsumo,
+                TipoInsumo.Activo,
             )
             .join(TipoInsumo, InventarioInsumo.IdTipoInsumo == TipoInsumo.IdTipoInsumo)
             .order_by(TipoInsumo.NombreInsumo)

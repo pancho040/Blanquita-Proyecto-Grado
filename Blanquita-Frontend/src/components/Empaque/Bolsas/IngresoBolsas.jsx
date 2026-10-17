@@ -10,6 +10,7 @@ import Header from "@/components/layout/Header";
 import { ControlCantidad } from "@/components/InventarioProductos/comunes";
 import { ObtenerProveedoresForm } from "../../../services/Proveedor/Proveedor";
 import { useCatalogo } from "@/hooks/useCatalogo";
+import { soloActivos } from "@/utils/catalogo";
 import { useEnvioLote, erroresPorFila } from "@/hooks/useIngresoLote";
 import {
   ResultadoLote,
@@ -37,7 +38,7 @@ export default function IngresoBolsas({ tipo }) {
   const [filas, setFilas] = useState([{ id: 0, IdTipo: "", Cantidad: "" }]);
 
   const proveedores = useCatalogo(ObtenerProveedoresForm);
-  const tipos = useCatalogo(config.verInventario);
+  const tipos = useCatalogo(soloActivos(config.verInventario));
 
   const envio = useEnvioLote();
   const { tocado } = envio;

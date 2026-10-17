@@ -6,6 +6,7 @@ class ResumenInventarioRodelaResponse(BaseModel):
     IdTipoRodela: int
     NombreTipoRodela: str
     Descripcion: str | None
+    Activo: bool
     CantidadEnAlmacen: int
     CantidadAbiertas: int
 

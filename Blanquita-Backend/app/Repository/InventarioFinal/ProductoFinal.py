@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.Schemas.Producto import (
     MovimientoProductoTerminado,
     PresentacionProducto,
     Producto,
+    TipoMovimientoInventario,
 )
 
 
@@ -17,14 +18,22 @@ class ProductoFinalRepository:
         self.db = db
         self.caller = DbCaller(db)
 
-    def InsertarIngresoProductoTerminado(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "InsertarIngresoProductoTerminado"(
-                :p_IdUsuario,
-                :p_Presentaciones
+    def ObtenerPresentaciones(
+        self, ids_presentacion: list[int]
+    ) -> dict[int, tuple[PresentacionProducto, Producto]]:
+        try:
+            filas = self.db.execute(
+                select(PresentacionProducto, Producto)
+                .join(Producto, PresentacionProducto.IdProducto == Producto.IdProducto)
+                .where(PresentacionProducto.IdPresentacion.in_(ids_presentacion))
+            ).all()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al obtener las presentaciones de producto terminado",
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+        return {presentacion.IdPresentacion: (presentacion, producto) for presentacion, producto in filas}
 
     def ObtenerInventariosBloqueados(
         self, ids_presentacion: list[int]
@@ -53,13 +62,23 @@ class ProductoFinalRepository:
             for inventario, presentacion, producto in filas
         }
 
-    def RegistrarSalida(
+    def NombreTipoMovimiento(self, id_tipo_movimiento: int) -> str:
+        filas = self.caller.Consultar(
+            select(TipoMovimientoInventario.NombreTipoMovimientoInventario).where(
+                TipoMovimientoInventario.IdTipoMovimientoInventario == id_tipo_movimiento
+            )
+        )
+        return filas[0]["NombreTipoMovimientoInventario"] if filas else ""
+
+    def RegistrarMovimientos(
         self,
         registros: list[tuple[InventarioProductoTerminado, MovimientoProductoTerminado, int]],
+        mensaje_error: str,
     ) -> list[MovimientoProductoTerminado]:
         try:
             for inventario, movimiento, cantidad_nueva in registros:
                 inventario.CantidadActual = cantidad_nueva
+                self.db.add(inventario)
                 self.db.add(movimiento)
 
             self.db.commit()
@@ -70,36 +89,41 @@ class ProductoFinalRepository:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo registrar la salida de producto terminado",
+                detail=mensaje_error,
             )
 
     def Revertir(self) -> None:
         self.db.rollback()
 
-    def CorregirInventarioProductoTerminado(self, params: dict) -> dict | None:
-        sql = """
-            SELECT * FROM "CorregirInventarioProductoTerminado"(
-                :p_IdTipoMovimientoInventario,
-                :p_IdPresentacion,
-                :p_IdUsuario,
-                :p_Cantidad,
-                :p_Observacion
+    def VerInventarioProductoTerminado(self, id_producto: int | None) -> list[dict]:
+        consulta = (
+            select(
+                PresentacionProducto.IdPresentacion,
+                PresentacionProducto.CodigoPresentacion,
+                Producto.NombreProducto,
+                PresentacionProducto.TipoContenedor,
+                PresentacionProducto.CantidadRollosUnidades,
+                PresentacionProducto.CantidadPorUnidadTerminada,
+                InventarioProductoTerminado.CantidadActual,
+                and_(Producto.Activo, PresentacionProducto.Activo).label("Activo"),
             )
-        """
-        return self.caller.LlamarUnRegistro(sql, params)
-
-    def VerInventarioProductoTerminado(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "VerInventarioProductoTerminado"(
-                :p_IdProducto
+            .join(
+                PresentacionProducto,
+                PresentacionProducto.IdPresentacion == InventarioProductoTerminado.IdPresentacion,
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+            .join(Producto, Producto.IdProducto == PresentacionProducto.IdProducto)
+            .order_by(Producto.NombreProducto, PresentacionProducto.CodigoPresentacion)
+        )
+        if id_producto is not None:
+            consulta = consulta.where(Producto.IdProducto == id_producto)
+        return self.caller.Consultar(consulta)
 
     def ObtenerProductos(self) -> list[dict]:
-        sql = """
-            SELECT "IdProducto", "NombreProducto"
-            FROM "Producto"
-            ORDER BY "IdProducto"
-        """
-        return self.caller.LlamarFuncion(sql)
+        consulta = select(
+            Producto.IdProducto,
+            Producto.NombreProducto,
+            Producto.IdTipoBobina,
+            Producto.IdTipoBobinaServilleta,
+            Producto.Activo,
+        ).order_by(Producto.IdProducto)
+        return self.caller.Consultar(consulta)

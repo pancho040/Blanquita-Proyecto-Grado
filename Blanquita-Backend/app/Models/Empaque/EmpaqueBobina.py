@@ -42,6 +42,7 @@ class TrasladarEmpaquesProduccionResponseItem(BaseModel):
 class ResumenInventarioEmpaqueResponse(BaseModel):
     IdTipoEmpaque: int
     NombreTipoEmpaque: str
+    Activo: bool
     CantidadEmpaques: int
 
 
@@ -60,3 +61,4 @@ class DetalleInventarioEmpaqueResponse(BaseModel):
 class TipoEmpaque(BaseModel):
     IdTipoEmpaque: int
     NombreTipoEmpaque: str
+    Activo: bool

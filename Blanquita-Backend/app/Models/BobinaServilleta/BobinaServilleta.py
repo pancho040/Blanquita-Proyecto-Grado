@@ -30,3 +30,4 @@ class IngresoBobinaServilletaResponse(BaseModel):
 class TipoBobinaServilletaIngreso(BaseModel):
     IdTipoBobinaServilleta: int
     NombreTipoBobinaServilleta: str
+    Activo: bool

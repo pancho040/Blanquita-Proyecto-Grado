@@ -1,4 +1,4 @@
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import Text, and_, case, cast, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.Repository.DbCaller import DbCaller
@@ -6,7 +6,9 @@ from app.Repository.Consultas import (
     filtro_rango as _filtro_rango,
     nombre_operador as _nombre_operador,
 )
-from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, TipoBobina
+from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN
+from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina, TipoBobina
+from app.Schemas.MateriaPrima import EstadoMateriaPrima, TipoMovimientoMateriaPrima
 from app.Schemas.Produccion import (
     CancelacionProduccionBobinaTubo,
     EstadoProduccion,
@@ -26,12 +28,43 @@ class ReporteBobinaPapelRepository:
         self.caller = DbCaller(db)
 
     def ReporteInventario(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "ReporteInventarioBobinaPapel"(
-                CAST(:p_IdsTipoBobina AS integer[])
+        por_tipo = {"partition_by": BobinaPapel.IdTipoBobina}
+        consulta = (
+            select(
+                func.now().label("FechaGeneracion"),
+                func.count().over().label("TotalBobinasInforme"),
+                func.coalesce(func.sum(BobinaPapel.PesoNetoKg).over(), 0).label("PesoNetoGeneralKg"),
+                TipoBobina.IdTipoBobina,
+                TipoBobina.NombreTipoBobina,
+                func.count().over(**por_tipo).label("CantidadBobinasTipo"),
+                func.coalesce(func.sum(BobinaPapel.PesoNetoKg).over(**por_tipo), 0).label(
+                    "PesoNetoTotalTipoKg"
+                ),
+                func.coalesce(func.round(func.avg(BobinaPapel.Gramaje).over(**por_tipo), 2), 0).label(
+                    "GramajePromedioTipo"
+                ),
+                func.min(LoteBobina.FechaRecepcion).over(**por_tipo).label("RecepcionMasAntiguaTipo"),
+                func.max(LoteBobina.FechaRecepcion).over(**por_tipo).label("RecepcionMasRecienteTipo"),
+                BobinaPapel.IdBobinaPapel,
+                BobinaPapel.CodigoBobina,
+                cast(LoteBobina.IdLoteBobina, Text).label("CodigoLote"),
+                LoteBobina.FechaRecepcion,
+                Proveedor.NombreProveedor,
+                BobinaPapel.PesoBrutoKg,
+                BobinaPapel.PesoNetoKg,
+                BobinaPapel.Gramaje,
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+            .join(TipoBobina, TipoBobina.IdTipoBobina == BobinaPapel.IdTipoBobina)
+            .join(LoteBobina, LoteBobina.IdLoteBobina == BobinaPapel.IdLoteBobina)
+            .join(Proveedor, Proveedor.IdProveedor == LoteBobina.IdProveedor)
+            .where(BobinaPapel.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN)
+            .order_by(TipoBobina.NombreTipoBobina, LoteBobina.FechaRecepcion, BobinaPapel.CodigoBobina)
+        )
+
+        if params.get("p_IdsTipoBobina"):
+            consulta = consulta.where(BobinaPapel.IdTipoBobina.in_(params["p_IdsTipoBobina"]))
+
+        return self.caller.Consultar(consulta)
 
     def VerProduccionesBobinaTubo(self, params: dict) -> list[dict]:
         pb = ProduccionBobinaTubo
@@ -331,45 +364,117 @@ class ReporteBobinaPapelRepository:
 
         return self.caller.Consultar(consulta)
 
-    # ---------------------------------------------------------------- lotes
-
     def VerLotesBobinaPapel(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "VerLotesBobinaPapel"(
-                :p_FechaInicio,
-                :p_FechaFin,
-                :p_IdProveedor,
-                CAST(:p_IdsTipoBobina AS integer[])
+        condiciones_bobina = [BobinaPapel.IdLoteBobina == LoteBobina.IdLoteBobina]
+        if params.get("p_IdsTipoBobina"):
+            condiciones_bobina.append(BobinaPapel.IdTipoBobina.in_(params["p_IdsTipoBobina"]))
+
+        cantidad = func.count(BobinaPapel.IdBobinaPapel)
+        consulta = (
+            select(
+                LoteBobina.IdLoteBobina,
+                LoteBobina.FechaRecepcion,
+                Proveedor.NombreProveedor,
+                cantidad.label("CantidadBobinas"),
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+            .join(Proveedor, Proveedor.IdProveedor == LoteBobina.IdProveedor)
+            .outerjoin(BobinaPapel, and_(*condiciones_bobina))
+            .group_by(LoteBobina.IdLoteBobina, LoteBobina.FechaRecepcion, Proveedor.NombreProveedor)
+            .order_by(LoteBobina.FechaRecepcion.desc())
+        )
+
+        if params.get("p_FechaInicio") is not None:
+            consulta = consulta.where(LoteBobina.FechaRecepcion >= params["p_FechaInicio"])
+        if params.get("p_FechaFin") is not None:
+            consulta = consulta.where(LoteBobina.FechaRecepcion <= params["p_FechaFin"])
+        if params.get("p_IdProveedor") is not None:
+            consulta = consulta.where(LoteBobina.IdProveedor == params["p_IdProveedor"])
+        if params.get("p_IdsTipoBobina"):
+            consulta = consulta.having(cantidad > 0)
+
+        return self.caller.Consultar(consulta)
 
     def ReporteLoteBobinaPapelDetalle(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "ReporteLoteBobinaPapelDetalle"(
-                :p_IdLoteBobina
+        consulta = (
+            select(
+                BobinaPapel.CodigoBobina,
+                TipoBobina.NombreTipoBobina,
+                BobinaPapel.PesoBrutoKg,
+                BobinaPapel.Gramaje,
+                BobinaPapel.PesoNetoKg,
+                LoteBobina.FechaRecepcion,
+                Proveedor.NombreProveedor,
+                func.count().over().label("CantidadBobinas"),
+                Usuario.Ci,
+                Usuario.PrimerNombre,
+                Usuario.ApellidoPaterno,
+                Rol.NombreRol,
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
-
-    # ---------------------------------------------------------------- bobinas
+            .join(LoteBobina, LoteBobina.IdLoteBobina == BobinaPapel.IdLoteBobina)
+            .join(Proveedor, Proveedor.IdProveedor == LoteBobina.IdProveedor)
+            .join(TipoBobina, TipoBobina.IdTipoBobina == BobinaPapel.IdTipoBobina)
+            .join(Usuario, Usuario.IdUsuario == LoteBobina.IdUsuario)
+            .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .where(BobinaPapel.IdLoteBobina == params["p_IdLoteBobina"])
+            .order_by(TipoBobina.NombreTipoBobina, BobinaPapel.CodigoBobina)
+        )
+        return self.caller.Consultar(consulta)
 
     def VerBobinasPapel(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "VerBobinasPapel"(
-                :p_CodigoBobina,
-                :p_IdProveedor,
-                CAST(:p_IdsTipoBobina AS integer[]),
-                :p_IdEstadoMateriaPrima,
-                :p_IdBobinaPapel
+        consulta = (
+            select(
+                BobinaPapel.IdBobinaPapel,
+                BobinaPapel.CodigoBobina,
+                BobinaPapel.PesoBrutoKg,
+                BobinaPapel.Gramaje,
+                TipoBobina.NombreTipoBobina,
+                EstadoMateriaPrima.TipoEstado,
+                Proveedor.NombreProveedor,
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+            .join(TipoBobina, TipoBobina.IdTipoBobina == BobinaPapel.IdTipoBobina)
+            .join(
+                EstadoMateriaPrima,
+                EstadoMateriaPrima.IdEstadoMateriaPrima == BobinaPapel.IdEstadoMateriaPrima,
+            )
+            .join(LoteBobina, LoteBobina.IdLoteBobina == BobinaPapel.IdLoteBobina)
+            .join(Proveedor, Proveedor.IdProveedor == LoteBobina.IdProveedor)
+            .order_by(BobinaPapel.CodigoBobina)
+        )
+
+        if params.get("p_CodigoBobina") is not None:
+            consulta = consulta.where(BobinaPapel.CodigoBobina == params["p_CodigoBobina"])
+        if params.get("p_IdProveedor") is not None:
+            consulta = consulta.where(LoteBobina.IdProveedor == params["p_IdProveedor"])
+        if params.get("p_IdsTipoBobina"):
+            consulta = consulta.where(BobinaPapel.IdTipoBobina.in_(params["p_IdsTipoBobina"]))
+        if params.get("p_IdEstadoMateriaPrima") is not None:
+            consulta = consulta.where(
+                BobinaPapel.IdEstadoMateriaPrima == params["p_IdEstadoMateriaPrima"]
+            )
+        if params.get("p_IdBobinaPapel") is not None:
+            consulta = consulta.where(BobinaPapel.IdBobinaPapel == params["p_IdBobinaPapel"])
+
+        return self.caller.Consultar(consulta)
 
     def ReporteHistorialMovimientosBobina(self, params: dict) -> list[dict]:
-        sql = """
-            SELECT * FROM "ReporteHistorialMovimientosBobina"(
-                :p_IdBobinaPapel
+        consulta = (
+            select(
+                MovimientoBobina.IdMovimientoBobina,
+                TipoMovimientoMateriaPrima.NombreMovimiento,
+                MovimientoBobina.FechaMovimiento,
+                MovimientoBobina.Observacion,
+                Usuario.Ci,
+                Usuario.PrimerNombre,
+                Usuario.ApellidoPaterno,
+                Rol.NombreRol,
             )
-        """
-        return self.caller.LlamarFuncion(sql, params)
+            .join(
+                TipoMovimientoMateriaPrima,
+                TipoMovimientoMateriaPrima.IdTipoMovimiento == MovimientoBobina.IdTipoMovimiento,
+            )
+            .join(Usuario, Usuario.IdUsuario == MovimientoBobina.IdUsuario)
+            .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .where(MovimientoBobina.IdBobinaPapel == params["p_IdBobinaPapel"])
+            .order_by(MovimientoBobina.FechaMovimiento)
+        )
+        return self.caller.Consultar(consulta)

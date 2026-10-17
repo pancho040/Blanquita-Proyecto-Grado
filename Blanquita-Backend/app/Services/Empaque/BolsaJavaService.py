@@ -62,6 +62,14 @@ class BolsaJavaService:
                 detail=f"Los tipos de bolsa de jaba {', '.join(faltantes)} no existen o no tienen inventario",
             )
 
+        inactivos = [tipo.NombreBolsaJava for _, tipo in inventarios.values() if not tipo.Activo]
+        if inactivos:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Los tipos de bolsa de jaba {', '.join(inactivos)} están inactivos, no se puede registrar el lote",
+            )
+
         registros = []
         for item in data.BolsasJava:
             inventario, _ = inventarios[item.IdTipoBolsaJava]

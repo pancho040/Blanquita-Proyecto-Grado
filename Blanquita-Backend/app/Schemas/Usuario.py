@@ -40,3 +40,11 @@ class Usuario(Base):
     FechaRegistro: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class AuthUsuario(Base):
+    __tablename__ = "users"
+    __table_args__ = {"schema": "auth"}
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    email: Mapped[str | None] = mapped_column(Text)

@@ -55,4 +55,5 @@ class InventarioEmpaqueBolsaResponse(BaseModel):
     IdTipoEmpaqueBolsa: int
     NombreEmpaqueBolsa: str
     DescripcionEmpaqueBolsa: str | None = None
+    Activo: bool
     CantidadActual: int

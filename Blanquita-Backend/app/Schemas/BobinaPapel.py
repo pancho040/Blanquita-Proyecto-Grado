@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, Text, text
+from sqlalchemy import Date, DateTime, Numeric, Text, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -16,6 +16,7 @@ class TipoBobina(Base):
     Formato: Mapped[Decimal] = mapped_column(Numeric, server_default=text("2760"))
     TaraKg: Mapped[Decimal] = mapped_column(Numeric, server_default=text("38"))
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class LoteBobina(Base):
@@ -38,3 +39,16 @@ class BobinaPapel(Base):
     PesoBrutoKg: Mapped[Decimal | None] = mapped_column(Numeric)
     Gramaje: Mapped[Decimal | None] = mapped_column(Numeric)
     PesoNetoKg: Mapped[Decimal | None] = mapped_column(Numeric)
+
+
+class MovimientoBobina(Base):
+    __tablename__ = "MovimientoBobina"
+
+    IdMovimientoBobina: Mapped[int] = mapped_column(primary_key=True)
+    IdBobinaPapel: Mapped[int]
+    IdTipoMovimiento: Mapped[int]
+    IdUsuario: Mapped[int]
+    FechaMovimiento: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    Observacion: Mapped[str | None] = mapped_column(Text)

@@ -42,18 +42,10 @@ import { ListaMovilBobinas } from "./ListaMovilBobinas";
 import ModalEditarBobina from "./ModalEditarBobina";
 import DialogoIniciarProduccion from "./DialogoIniciarProduccion";
 import Header from "@/components/layout/Header";
-import {
-  Roles,
-  ID_TIPO_BOBINA_HIGIENICO,
-  IDS_PRODUCTO_BOBINA_HIGIENICO,
-} from "@/constants/Values";
+import { Roles } from "@/constants/Values";
+import { productosActivosDelTipo } from "@/utils/catalogo";
 
 const sinDatos = async () => [];
-
-const cargarProductosHigienico = async () =>
-  (await obtenerProductos()).filter((p) =>
-    IDS_PRODUCTO_BOBINA_HIGIENICO.includes(p.IdProducto),
-  );
 
 export default function InventarioBobinasPapel({ usuario }) {
   const esLider = usuario?.IdRol === Roles.Encargado;
@@ -80,14 +72,16 @@ export default function InventarioBobinasPapel({ usuario }) {
   const { marcadas, setMarcadas } = detalle;
   const listas = marcadas.length === requeridas;
 
-  const productosHigienico = useOpciones(cargarProductosHigienico);
+  const productos = useOpciones(obtenerProductos);
   const [idProducto, setIdProducto] = useState(null);
-  const esHigienico = tipoSel?.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO;
-  const faltaProducto = esHigienico && idProducto === null;
+  const productosTipo = tipoSel ? productosActivosDelTipo(productos, tipoSel.IdTipoBobina) : [];
+  const eligeProducto = productosTipo.length > 1;
+  const productoAsignado = eligeProducto
+    ? productosTipo.find((p) => p.IdProducto === idProducto)
+    : productosTipo[0];
+  const faltaProducto = !productoAsignado;
   const [confirmarInicio, setConfirmarInicio] = useState(false);
-  const nombreProductoSel = esHigienico
-    ? productosHigienico.find((p) => p.IdProducto === idProducto)?.NombreProducto
-    : tipoSel?.NombreTipoBobina;
+  const nombreProductoSel = productoAsignado?.NombreProducto;
 
   useEffect(() => {
     setIdProducto(null);
@@ -142,7 +136,7 @@ export default function InventarioBobinasPapel({ usuario }) {
         iniciarProduccion(
           bobina1.IdBobinaPapel,
           bobina2.IdBobinaPapel,
-          esHigienico ? idProducto : null,
+          productoAsignado.IdProducto,
         ),
       (res) => `${marcadas.join(" + ")} → En producción · ${res.NombreProducto}`,
       () => {
@@ -286,7 +280,7 @@ export default function InventarioBobinasPapel({ usuario }) {
               </div>
             </ContenidoLista>
 
-            {marcadas.length > 0 && esHigienico && (
+            {marcadas.length > 0 && eligeProducto && (
               <div className="flex flex-col gap-2 border-t border-slate-200 bg-white px-5 py-4">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">
                   Producto a elaborar
@@ -295,7 +289,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                   value={idProducto === null ? [] : [String(idProducto)]}
                   className="flex flex-wrap justify-start gap-2"
                 >
-                  {productosHigienico.map((p) => (
+                  {productosTipo.map((p) => (
                     <ToggleGroupItem
                       key={p.IdProducto}
                       value={String(p.IdProducto)}
@@ -320,7 +314,9 @@ export default function InventarioBobinasPapel({ usuario }) {
                   !listas
                     ? `Selecciona ${requeridas - marcadas.length} más`
                     : faltaProducto
-                      ? "Selecciona el producto"
+                      ? eligeProducto
+                        ? "Selecciona el producto"
+                        : "Este tipo no tiene productos activos"
                       : "Listo para enviar"
                 }
                 listo={listas && !faltaProducto}

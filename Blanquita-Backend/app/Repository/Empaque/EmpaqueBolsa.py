@@ -26,6 +26,7 @@ class EmpaqueBolsaRepository:
                 InventarioEmpaqueBolsa.CantidadActual,
                 TipoEmpaqueBolsa.NombreEmpaqueBolsa,
                 TipoEmpaqueBolsa.DescripcionEmpaqueBolsa,
+                TipoEmpaqueBolsa.Activo,
             )
             .join(
                 TipoEmpaqueBolsa,

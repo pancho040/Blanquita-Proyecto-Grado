@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class VerResumenInventarioBobinaPapelResponse(BaseModel):
     IdTipoBobina: int
     NombreTipoBobina: str
+    Activo: bool
     CantidadBobinas: int
     PesoNetoTotalKg: Decimal
     GramajePromedio: Decimal

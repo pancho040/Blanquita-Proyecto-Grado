@@ -29,6 +29,7 @@ class ReingresarSubBobinaInventarioResponse(BaseModel):
 class ResumenInventarioBobinaServilletaResponse(BaseModel):
     IdTipoBobinaServilleta: int
     NombreTipoBobinaServilleta: str
+    Activo: bool
     CantidadBobinaServilleta: int
 
 

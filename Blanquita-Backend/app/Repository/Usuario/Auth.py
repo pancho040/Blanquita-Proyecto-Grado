@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.RegistroIngreso import RegistroIngreso
-from app.Schemas.Usuario import Usuario
+from app.Schemas.Usuario import AuthUsuario, EstadoUsuario, Usuario
 
 
 class AuthRepository:
@@ -13,16 +13,17 @@ class AuthRepository:
         self.caller = DbCaller(db)
 
     def ResolverCorreoPorCi(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "ResolverCorreoPorCi"(p_Ci => :p_Ci)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
-
-    def ObtenerUsuarioPorId(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "ObtenerUsuarioPorId"(p_IdUsuario => :p_IdUsuario)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
+        filas = self.caller.Consultar(
+            select(
+                AuthUsuario.email.label("CorreoOut"),
+                Usuario.IdEstadoUsuario.label("IdEstadoUsuarioOut"),
+                EstadoUsuario.NombreEstadoUsuario.label("NombreEstadoUsuarioOut"),
+            )
+            .join(AuthUsuario, AuthUsuario.id == Usuario.AuthUserId)
+            .join(EstadoUsuario, EstadoUsuario.IdEstadoUsuario == Usuario.IdEstadoUsuario)
+            .where(Usuario.Ci == params["p_Ci"])
+        )
+        return filas[0] if filas else None
 
     def ObtenerIdUsuarioPorCi(self, ci: str) -> int | None:
         try:

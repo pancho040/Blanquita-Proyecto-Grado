@@ -24,6 +24,9 @@ INSERT INTO "TipoBobina" ("NombreTipoBobina", "DiametroMm", "Formato", "TaraKg")
 ('Toalla', 1210, 2760, 38),
 ('Económico', 1210, 2760, 38);
 
+INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf") VALUES
+('G-18 CR-14%', 1210, 14, 1.35);
+
 
 
 INSERT INTO "EstadoMateriaPrima" ("TipoEstado") VALUES
@@ -61,14 +64,14 @@ INSERT INTO "EstadoProduccion" ("NombreEstadoProduccion", "DescripcionEstadoProd
 ('Cancelada', 'Producción interrumpida de forma definitiva por falla; no se reanuda con el mismo par de bobinas'),
 ('Cambio de línea', 'Producción cerrada por cambio de producto; las bobinas continúan en producción en una nueva producción');
 
-INSERT INTO "Producto" ("NombreProducto", "SiglasProducto") VALUES
-('Luxury', 'LUX'),
-('EcoPack', 'ECO'),
-('Servilleta', 'SRV'),
-('Mega Rollo', 'MRO'),
-('Economico', 'ECN'),
-('Merma', 'MER'),
-('Toalla', 'TOA');
+INSERT INTO "Producto" ("NombreProducto", "SiglasProducto", "IdTipoBobina", "IdTipoBobinaServilleta") VALUES
+('Luxury', 'LUX', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('EcoPack', 'ECO', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('Servilleta', 'SRV', NULL, (SELECT "IdTipoBobinaServilleta" FROM "TipoBobinaServilleta" WHERE "NombreTipoBobinaServilleta" = 'G-18 CR-14%')),
+('Mega Rollo', 'MRO', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('Economico', 'ECN', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Económico'), NULL),
+('Merma', 'MER', NULL, NULL),
+('Toalla', 'TOA', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Toalla'), NULL);
 
 INSERT INTO "PresentacionProducto" ("IdProducto", "TipoContenedor", "CantidadRollosUnidades", "CantidadPorUnidadTerminada", "CodigoPresentacion") VALUES
 ((SELECT "IdProducto" FROM "Producto" WHERE "NombreProducto" = 'Luxury'), 'Jaba', 6, 6, 'LUX-J06'),
@@ -159,9 +162,6 @@ FROM "TipoInsumo";
 INSERT INTO "TipoMedidaSubBobina" ("MedidaMm", "Descripcion") VALUES
 (435, 'Sub-bobina 435mm'),
 (220, 'Sub-bobina 220mm');
-
-INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf") VALUES
-('G-18 CR-14%', 1210, 14, 1.35);
 
 INSERT INTO "FormatoSubBobina" ("DescripcionFormato", "CantidadBobina435", "CantidadBobina220") VALUES
 ('435x3', 3, 0),

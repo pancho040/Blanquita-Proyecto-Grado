@@ -1,7 +1,4 @@
-import json
-
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Constants.Cantidades import (
@@ -26,13 +23,18 @@ from app.Models.InventarioFinal.ProductoFinal import(
       ProductoResponse
 )
 
-from app.Schemas.Producto import MovimientoProductoTerminado
+from app.Schemas.Producto import InventarioProductoTerminado, MovimientoProductoTerminado
 
+ID_TIPO_MOVIMIENTO_ENTRADA = 1
 ID_TIPO_MOVIMIENTO_SALIDA = 2
 ID_TIPO_MOVIMIENTO_DESCUENTO = 3
 ID_TIPO_MOVIMIENTO_AUMENTO = 4
 ID_TIPO_MOVIMIENTO_AJUSTE_POSITIVO = 5
 ID_TIPO_MOVIMIENTO_AJUSTE_NEGATIVO = 6
+
+MOVIMIENTOS_QUE_RESTAN = {ID_TIPO_MOVIMIENTO_DESCUENTO, ID_TIPO_MOVIMIENTO_AJUSTE_NEGATIVO}
+
+OBSERVACION_INGRESO_PRODUCTO = "Ingreso al inventario de producto terminado"
 
 class ProductoFinalService:
     def __init__(self, db: Session):
@@ -59,16 +61,69 @@ class ProductoFinalService:
                     detail=f"La cantidad máxima de ingreso por presentación es de {CANTIDAD_INGRESO_PRODUCTO_TERMINADO}",
                 )
 
-        params = {
-            "p_IdUsuario": id_usuario,
-            "p_Presentaciones": json.dumps(
-                [e.model_dump() for e in data.Presentaciones]
+        ids_presentacion = [item.IdPresentacion for item in data.Presentaciones]
+        if len(set(ids_presentacion)) != len(ids_presentacion):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Hay presentaciones repetidas en el ingreso",
             )
-        }
 
-        filas = self.repository.InsertarIngresoProductoTerminado(params)
+        presentaciones = self.repository.ObtenerPresentaciones(ids_presentacion)
+        faltantes = [str(i) for i in ids_presentacion if i not in presentaciones]
+        if faltantes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Las presentaciones {', '.join(faltantes)} no existen",
+            )
 
-        return [IngresoProductoTerminadoResponse(**fila) for fila in filas]
+        inactivas = [
+            presentacion.CodigoPresentacion
+            for presentacion, producto in presentaciones.values()
+            if not (presentacion.Activo and producto.Activo)
+        ]
+        if inactivas:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Las presentaciones {', '.join(inactivas)} están inactivas, no se puede registrar el ingreso",
+            )
+
+        inventarios = self.repository.ObtenerInventariosBloqueados(sorted(ids_presentacion))
+
+        registros = []
+        for item in data.Presentaciones:
+            inventario = (
+                inventarios[item.IdPresentacion][0]
+                if item.IdPresentacion in inventarios
+                else InventarioProductoTerminado(IdPresentacion=item.IdPresentacion, CantidadActual=0)
+            )
+            registros.append(
+                (
+                    inventario,
+                    MovimientoProductoTerminado(
+                        IdTipoMovimientoInventario=ID_TIPO_MOVIMIENTO_ENTRADA,
+                        IdPresentacion=item.IdPresentacion,
+                        IdUsuario=id_usuario,
+                        CantidadIngresoInventario=item.Cantidad,
+                        Observacion=(item.Observacion or "").strip() or OBSERVACION_INGRESO_PRODUCTO,
+                    ),
+                    int(inventario.CantidadActual) + item.Cantidad,
+                )
+            )
+
+        self.repository.RegistrarMovimientos(
+            registros, "No se pudo registrar el ingreso de producto terminado"
+        )
+
+        return [
+            IngresoProductoTerminadoResponse(
+                IdPresentacion=movimiento.IdPresentacion,
+                CodigoPresentacion=presentaciones[movimiento.IdPresentacion][0].CodigoPresentacion,
+                NombreProducto=presentaciones[movimiento.IdPresentacion][1].NombreProducto,
+                CantidadIngresada=int(movimiento.CantidadIngresoInventario),
+                CantidadActual=cantidad_nueva,
+            )
+            for _, movimiento, cantidad_nueva in registros
+        ]
 
     def InsertarSalidaProductoTerminado(
         self, data: SalidaProductoTerminadoRequest, id_usuario: int
@@ -146,7 +201,9 @@ class ProductoFinalService:
                 detail=f"Stock insuficiente: {'; '.join(insuficientes)}",
             )
 
-        movimientos = self.repository.RegistrarSalida(registros)
+        movimientos = self.repository.RegistrarMovimientos(
+            registros, "No se pudo registrar la salida de producto terminado"
+        )
 
         presentaciones = [
             SalidaProductoTerminadoItemResponse(
@@ -221,30 +278,60 @@ class ProductoFinalService:
                 detail=f"La observación es obligatoria, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
             )
 
-        params = {
-            "p_IdTipoMovimientoInventario": id_tipo_movimiento,
-            "p_IdPresentacion": data.IdPresentacion,
-            "p_IdUsuario": id_usuario,
-            "p_Cantidad": data.Cantidad,
-            "p_Observacion": observacion,
-        }
-
-        fila = self.repository.CorregirInventarioProductoTerminado(params)
-
-        if not fila:
+        encontrado = self.repository.ObtenerInventariosBloqueados([data.IdPresentacion]).get(
+            data.IdPresentacion
+        )
+        if encontrado is None:
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo registrar la corrección de producto terminado",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe inventario registrado para la presentación {data.IdPresentacion}",
             )
 
-        return CorreccionProductoTerminadoResponse(**fila)
+        inventario, presentacion, producto = encontrado
+        disponible = int(inventario.CantidadActual)
+
+        if id_tipo_movimiento in MOVIMIENTOS_QUE_RESTAN:
+            if data.Cantidad > disponible:
+                self.repository.Revertir()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Stock insuficiente para {presentacion.CodigoPresentacion} (disponible {disponible}, solicitado {data.Cantidad})",
+                )
+            cantidad_nueva = disponible - data.Cantidad
+        else:
+            cantidad_nueva = disponible + data.Cantidad
+
+        self.repository.RegistrarMovimientos(
+            [
+                (
+                    inventario,
+                    MovimientoProductoTerminado(
+                        IdTipoMovimientoInventario=id_tipo_movimiento,
+                        IdPresentacion=data.IdPresentacion,
+                        IdUsuario=id_usuario,
+                        CantidadIngresoInventario=data.Cantidad,
+                        Observacion=observacion,
+                    ),
+                    cantidad_nueva,
+                )
+            ],
+            "No se pudo registrar la corrección de producto terminado",
+        )
+
+        return CorreccionProductoTerminadoResponse(
+            IdPresentacion=presentacion.IdPresentacion,
+            CodigoPresentacion=presentacion.CodigoPresentacion,
+            NombreProducto=producto.NombreProducto,
+            NombreTipoMovimientoInventario=self.repository.NombreTipoMovimiento(id_tipo_movimiento),
+            CantidadAplicada=data.Cantidad,
+            CantidadActual=cantidad_nueva,
+        )
 
     def VerInventarioProductoTerminado(
         self, id_producto: int | None
     ) -> list[VerInventarioProductoTerminadoResponse]:
-        params = {"p_IdProducto": id_producto}
-
-        filas = self.repository.VerInventarioProductoTerminado(params)
+        filas = self.repository.VerInventarioProductoTerminado(id_producto)
 
         return [VerInventarioProductoTerminadoResponse(**fila) for fila in filas]
 

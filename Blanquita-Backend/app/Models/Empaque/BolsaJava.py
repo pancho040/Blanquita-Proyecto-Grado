@@ -55,4 +55,5 @@ class InventarioBolsaJavaResponse(BaseModel):
     IdTipoBolsaJava: int
     NombreBolsaJava: str
     DescripcionBolsaJava: str | None = None
+    Activo: bool
     CantidadActual: int

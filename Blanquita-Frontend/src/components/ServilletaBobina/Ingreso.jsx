@@ -14,6 +14,7 @@ import { Formatos } from "@/constants/BobinaServilleta";
 import { aCodigo } from "@/utils/handlers";
 import { numeroONulo } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
+import { soloActivos } from "@/utils/catalogo";
 import {
   useFilasLote,
   useEnvioLote,
@@ -104,7 +105,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
   const [idTipoBobinaServilleta, setIdTipoBobinaServilleta] = useState(null);
 
   const proveedores = useCatalogo(ObtenerProveedoresForm);
-  const tipos = useCatalogo(ObtenerTiposBobinaServilleta, (data) => {
+  const tipos = useCatalogo(soloActivos(ObtenerTiposBobinaServilleta), (data) => {
     if (data.length) setIdTipoBobinaServilleta(data[0].IdTipoBobinaServilleta);
   });
 

@@ -23,5 +23,6 @@ export const IngresoBobinaServilletaResponse = (data) => ({
 
 export const TipoBobinaServilletaIngreso = (data) => ({
   IdTipoBobinaServilleta: data.IdTipoBobinaServilleta,
-  NombreTipoBobinaServilleta: data.NombreTipoBobinaServilleta
+  NombreTipoBobinaServilleta: data.NombreTipoBobinaServilleta,
+  Activo: data.Activo
 });

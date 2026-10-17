@@ -12,6 +12,7 @@ import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
 import { aCodigo } from "@/utils/handlers";
 import { useCatalogo } from "@/hooks/useCatalogo";
+import { soloActivos } from "@/utils/catalogo";
 import {
   useFilasLote,
   useEnvioLote,
@@ -39,7 +40,7 @@ export default function IngresoRodelas({ usuario }) {
   const [idTipoRodela, setIdTipoRodela] = useState(null);
 
   const proveedores = useCatalogo(ObtenerProveedoresForm);
-  const tipos = useCatalogo(ObtenerTiposRodela, (data) => {
+  const tipos = useCatalogo(soloActivos(ObtenerTiposRodela), (data) => {
     if (data.length) setIdTipoRodela(data[0].IdTipoRodela);
   });
 
