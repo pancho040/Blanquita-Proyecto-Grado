@@ -213,29 +213,29 @@ export function DialogoProveedor({ abierto, proveedor, onCerrar, onGuardado }) {
 }
 
 export function DialogoCambiarEstado({ proveedor, onCerrar, onCambiado }) {
-  const [idEstado, setIdEstado] = useState(null);
+  const [activo, setActivo] = useState(null);
   const [motivo, setMotivo] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!proveedor) return;
-    setIdEstado(null);
+    setActivo(null);
     setMotivo("");
     setError("");
   }, [proveedor]);
 
   const destinos = proveedor
-    ? EstadosProveedor.filter((e) => e.IdEstadoProveedor !== proveedor.IdEstadoProveedor)
+    ? EstadosProveedor.filter((e) => e.Activo !== proveedor.Activo)
     : [];
   const largo = motivo.trim().length;
-  const valido = idEstado !== null && largo >= MOTIVO_MIN && largo <= MOTIVO_MAX;
+  const valido = activo !== null && largo >= MOTIVO_MIN && largo <= MOTIVO_MAX;
 
   const confirmar = async () => {
     setEnviando(true);
     setError("");
     try {
-      onCambiado(await cambiarEstadoProveedor(proveedor.IdProveedor, idEstado, motivo));
+      onCambiado(await cambiarEstadoProveedor(proveedor.IdProveedor, activo, motivo));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -262,10 +262,10 @@ export function DialogoCambiarEstado({ proveedor, onCerrar, onCambiado }) {
               <div className="flex flex-wrap gap-2">
                 {destinos.map((estado) => (
                   <button
-                    key={estado.IdEstadoProveedor}
+                    key={estado.NombreEstadoProveedor}
                     type="button"
-                    aria-pressed={idEstado === estado.IdEstadoProveedor}
-                    onClick={() => setIdEstado(estado.IdEstadoProveedor)}
+                    aria-pressed={activo === estado.Activo}
+                    onClick={() => setActivo(estado.Activo)}
                     className={PILDORA_FILTRO}
                   >
                     {estado.NombreEstadoProveedor}

@@ -42,10 +42,10 @@ export async function editarProveedor(idProveedor, datos) {
   return ProveedorResponse(data);
 }
 
-export async function cambiarEstadoProveedor(idProveedor, idEstadoProveedor, motivo) {
+export async function cambiarEstadoProveedor(idProveedor, activo, motivo) {
   const data = await pedirJson(`${BASE_URL}/estado`, {
     method: "PATCH",
-    body: CambiarEstadoProveedorRequest(idProveedor, idEstadoProveedor, motivo),
+    body: CambiarEstadoProveedorRequest(idProveedor, activo, motivo),
   });
   return CambiarEstadoProveedorResponse(data);
 }

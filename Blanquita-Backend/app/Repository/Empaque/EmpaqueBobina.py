@@ -66,7 +66,7 @@ class EmpaqueBobinaRepository:
             select(
                 Proveedor.IdProveedor,
                 Proveedor.NombreProveedor,
-                Proveedor.IdEstadoProveedor,
+                Proveedor.Activo,
             ).where(Proveedor.IdProveedor == id_proveedor)
         )
         return filas[0] if filas else None

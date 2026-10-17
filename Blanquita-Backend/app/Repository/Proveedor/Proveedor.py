@@ -3,40 +3,35 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Constants.Estados import ESTADO_PROVEEDOR_ACTIVO
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.HistorialAdmin import HistorialAdmin
-from app.Schemas.Proveedor import EstadoProveedor, Proveedor
+from app.Schemas.Proveedor import Proveedor
 
 
 class ProveedorRepository():
-    def __init__(self,db:Session):
+    def __init__(self, db: Session):
         self.db = db
-        self.caller=DbCaller(db)
+        self.caller = DbCaller(db)
 
-    def ObtenerProveedorForm(self)-> list[dict]:
+    def ObtenerProveedorForm(self) -> list[dict]:
         consulta = (
             select(Proveedor.IdProveedor, Proveedor.NombreProveedor)
-            .where(Proveedor.IdEstadoProveedor == ESTADO_PROVEEDOR_ACTIVO)
+            .where(Proveedor.Activo)
             .order_by(Proveedor.NombreProveedor)
         )
         return self.caller.Consultar(consulta)
 
     def ListarProveedores(self, params: dict) -> tuple[int, list[dict]]:
-        consulta = (
-            select(
-                Proveedor.IdProveedor,
-                Proveedor.NombreProveedor,
-                Proveedor.CelularProveedor,
-                Proveedor.CorreoProveedor,
-                Proveedor.IdEstadoProveedor,
-                EstadoProveedor.NombreEstadoProveedor,
-            )
-            .join(EstadoProveedor, Proveedor.IdEstadoProveedor == EstadoProveedor.IdEstadoProveedor)
+        consulta = select(
+            Proveedor.IdProveedor,
+            Proveedor.NombreProveedor,
+            Proveedor.CelularProveedor,
+            Proveedor.CorreoProveedor,
+            Proveedor.Activo,
         )
 
-        if params.get("IdEstadoProveedor") is not None:
-            consulta = consulta.where(Proveedor.IdEstadoProveedor == params["IdEstadoProveedor"])
+        if params.get("Activo") is not None:
+            consulta = consulta.where(Proveedor.Activo == params["Activo"])
 
         busqueda = (params.get("Busqueda") or "").strip()
         if busqueda:
@@ -58,19 +53,6 @@ class ProveedorRepository():
 
         return total, self.caller.Consultar(pagina)
 
-    def ListarEstados(self) -> list[dict]:
-        consulta = select(
-            EstadoProveedor.IdEstadoProveedor,
-            EstadoProveedor.NombreEstadoProveedor,
-            EstadoProveedor.DescripcionEstadoProveedor,
-        ).order_by(EstadoProveedor.IdEstadoProveedor)
-        return self.caller.Consultar(consulta)
-
-    def NombresEstados(self) -> dict[int, str]:
-        return {
-            f["IdEstadoProveedor"]: f["NombreEstadoProveedor"] for f in self.ListarEstados()
-        }
-
     def NombreEnUso(self, nombre: str, excluir_id: int | None = None) -> bool:
         consulta = select(Proveedor.IdProveedor).where(
             func.lower(func.trim(Proveedor.NombreProveedor)) == nombre.lower()
@@ -80,7 +62,6 @@ class ProveedorRepository():
         return bool(self.caller.Consultar(consulta.limit(1)))
 
     def ObtenerProveedorBloqueado(self, id_proveedor: int) -> Proveedor | None:
-        """Lee el proveedor con FOR UPDATE; el bloqueo dura hasta el commit/rollback."""
         try:
             return self.db.execute(
                 select(Proveedor).where(Proveedor.IdProveedor == id_proveedor).with_for_update()
@@ -93,7 +74,6 @@ class ProveedorRepository():
             )
 
     def CrearProveedor(self, proveedor: Proveedor, observacion, id_admin: int) -> Proveedor:
-        """`observacion` recibe el proveedor ya insertado para poder incluir su Id."""
         try:
             self.db.add(proveedor)
             self.db.flush()
@@ -111,7 +91,6 @@ class ProveedorRepository():
     def EditarProveedor(
         self, proveedor: Proveedor, cambios: dict, observacion: str, id_admin: int
     ) -> Proveedor:
-        """Aplica los cambios y registra el historial en la misma transacción."""
         try:
             for campo, valor in cambios.items():
                 setattr(proveedor, campo, valor)
@@ -127,11 +106,10 @@ class ProveedorRepository():
             )
 
     def CambiarEstado(
-        self, proveedor: Proveedor, id_estado: int, observacion: str, id_admin: int
+        self, proveedor: Proveedor, activo: bool, observacion: str, id_admin: int
     ) -> None:
-        """Actualiza el estado y registra el historial en la misma transacción."""
         try:
-            proveedor.IdEstadoProveedor = id_estado
+            proveedor.Activo = activo
             self.db.add(HistorialAdmin(IdUsuario=id_admin, Observacion=observacion))
             self.db.commit()
         except SQLAlchemyError:

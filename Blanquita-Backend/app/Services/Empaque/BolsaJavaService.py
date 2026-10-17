@@ -8,7 +8,6 @@ from app.Constants.Cantidades import (
     LONGITUD_MAXIMA_DESCRIPCION,
     LONGITUD_MINIMA_DESCRIPCION,
 )
-from app.Constants.Estados import ESTADO_PROVEEDOR_ACTIVO
 from app.Models.Empaque.BolsaJava import (
     IngresoBolsaJavaItemResponse,
     IngresoBolsaJavaRequest,
@@ -45,7 +44,7 @@ class BolsaJavaService:
                 detail=f"El proveedor con id {data.IdProveedor} no existe",
             )
 
-        if proveedor["IdEstadoProveedor"] != ESTADO_PROVEEDOR_ACTIVO:
+        if not proveedor["Activo"]:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"El proveedor {proveedor['NombreProveedor']} está inactivo, no se puede registrar el lote",

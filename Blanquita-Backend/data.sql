@@ -13,9 +13,6 @@ INSERT INTO "EstadoUsuario" ("NombreEstadoUsuario", "DescripcionEstadoUsuario") 
 ('Suspendido', 'Usuario bloqueado por incumplimiento de políticas');
 
 
-INSERT INTO "EstadoProveedor" ("NombreEstadoProveedor", "DescripcionEstadoProveedor") VALUES
-('Activo', 'Proveedor habilitado para recepción de materia prima'),
-('Inactivo', 'Proveedor deshabilitado temporalmente');
 
 
 
@@ -170,5 +167,5 @@ INSERT INTO "FormatoSubBobina" ("DescripcionFormato", "CantidadBobina435", "Cant
 
 
 
-INSERT INTO "Proveedor" ("NombreProveedor", "CelularProveedor", "CorreoProveedor","IdEstadoProveedor") VALUES
-('Papelera del Sur S.R.L.', '70012345', 'ventas@papeleradelsur.com',1);
+INSERT INTO "Proveedor" ("NombreProveedor", "CelularProveedor", "CorreoProveedor", "Activo") VALUES
+('Papelera del Sur S.R.L.', '70012345', 'ventas@papeleradelsur.com', true);

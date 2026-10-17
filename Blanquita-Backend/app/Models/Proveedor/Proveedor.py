@@ -11,14 +11,8 @@ PATRON_CORREO = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
 
 
 class ProveedorForm(BaseModel):
-    IdProveedor:int
-    NombreProveedor:str
-
-
-class EstadoProveedorItem(BaseModel):
-    IdEstadoProveedor: int
-    NombreEstadoProveedor: str
-    DescripcionEstadoProveedor: str | None
+    IdProveedor: int
+    NombreProveedor: str
 
 
 class ProveedorItem(BaseModel):
@@ -26,12 +20,11 @@ class ProveedorItem(BaseModel):
     NombreProveedor: str
     CelularProveedor: str | None
     CorreoProveedor: str | None
-    IdEstadoProveedor: int
-    NombreEstadoProveedor: str
+    Activo: bool
 
 
 class ListarProveedoresRequest(BaseModel):
-    IdEstadoProveedor: int | None = None
+    Activo: bool | None = None
     Busqueda: str | None = Field(default=None, max_length=50)
     Pagina: int = Field(default=1, ge=1)
     TamanoPagina: int = Field(default=20, ge=1, le=100)
@@ -53,7 +46,6 @@ class ProveedorContacto(BaseModel):
     @field_validator("CelularProveedor", "CorreoProveedor", mode="before")
     @classmethod
     def VacioANulo(cls, valor):
-        """El formulario manda "" cuando el campo opcional queda vacío."""
         if isinstance(valor, str):
             valor = valor.strip()
             return valor or None
@@ -69,8 +61,6 @@ class CrearProveedorRequest(ProveedorContacto):
 
 
 class EditarProveedorRequest(ProveedorContacto):
-    """El nombre no se edita: queda fijo desde el registro."""
-
     IdProveedor: int = Field(..., gt=0)
 
 
@@ -80,14 +70,12 @@ class ProveedorResponse(ProveedorItem):
 
 class CambiarEstadoProveedorRequest(BaseModel):
     IdProveedor: int = Field(..., gt=0)
-    IdEstadoProveedor: int = Field(..., gt=0)
+    Activo: bool
     Motivo: str
 
 
 class CambiarEstadoProveedorResponse(BaseModel):
     IdProveedor: int
     NombreProveedor: str
-    IdEstadoAnterior: int
-    NombreEstadoAnterior: str
-    IdEstadoProveedor: int
-    NombreEstadoProveedor: str
+    ActivoAnterior: bool
+    Activo: bool

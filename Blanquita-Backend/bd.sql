@@ -34,21 +34,15 @@ CREATE TABLE "Usuario" (
   CONSTRAINT "chk_usuario_celular" CHECK ("Celular" IS NULL OR "Celular" ~ '^[67][0-9]{7}$')
 );
 
-CREATE TABLE "EstadoProveedor" (
-  "IdEstadoProveedor" SERIAL PRIMARY KEY,
-  "NombreEstadoProveedor" TEXT NOT NULL,
-  "DescripcionEstadoProveedor" TEXT
-);
-
 CREATE TABLE "Proveedor" (
   "IdProveedor" SERIAL PRIMARY KEY,
   "NombreProveedor" TEXT NOT NULL,
   "CelularProveedor" TEXT,
   "CorreoProveedor" TEXT,
-  "IdEstadoProveedor" INTEGER NOT NULL DEFAULT 1 REFERENCES "EstadoProveedor"("IdEstadoProveedor") ON DELETE CASCADE
+  "Activo" BOOLEAN NOT NULL DEFAULT true
 );
 
-CREATE INDEX "idx_proveedor_estado" ON "Proveedor"("IdEstadoProveedor");
+CREATE INDEX "idx_proveedor_activo" ON "Proveedor"("Activo");
 
 CREATE TABLE "TipoBobina" (
   "IdTipoBobina" SERIAL PRIMARY KEY,
