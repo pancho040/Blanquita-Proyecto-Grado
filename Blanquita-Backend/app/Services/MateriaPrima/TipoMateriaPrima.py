@@ -181,15 +181,18 @@ def cambiar_estado(
     etiqueta: str,
     campo_nombre: str,
     validar_cambio=None,
+    femenino: bool = False,
 ) -> CambiarEstadoTipoResponse:
     motivo = validar_motivo(data.Motivo)
+    articulo = "La" if femenino else "El"
+    contraccion = "de la" if femenino else "del"
 
     tipo = repository.ObtenerTipoBloqueado(data.Id)
     if tipo is None:
         repository.Revertir()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"El {etiqueta} no existe",
+            detail=f"{articulo} {etiqueta} no existe",
         )
 
     anterior = tipo.Activo
@@ -198,7 +201,7 @@ def cambiar_estado(
         repository.Revertir()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"El {etiqueta} {nombre} ya se encuentra {estado(anterior)}",
+            detail=f"{articulo} {etiqueta} {nombre} ya se encuentra {estado(anterior)}",
         )
 
     if validar_cambio is not None:
@@ -211,7 +214,7 @@ def cambiar_estado(
             f"{estado(anterior)} → {estado(data.Activo)}. Motivo: {motivo}"
         ),
         id_admin,
-        f"No se pudo cambiar el estado del {etiqueta}",
+        f"No se pudo cambiar el estado {contraccion} {etiqueta}",
     )
 
     return CambiarEstadoTipoResponse(

@@ -4,19 +4,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import InputForModal from "@/components/layout/InputForModal";
 import { BadgeEstado } from "@/components/Reportes/comunes";
-import { BotonEnviar, ErrorDialogo } from "@/components/Admin/Usuarios/Dialogos";
+import { ErrorDialogo } from "@/components/Admin/Usuarios/Dialogos";
 import { CamposStock, errorStock } from "@/components/Admin/CamposStock";
-import { ANCHO_DIALOGO_ADMIN, CasillaConfirmacion } from "@/components/Admin/CasillaConfirmacion";
+import { CasillaConfirmacion } from "@/components/Admin/CasillaConfirmacion";
+import { DialogoUmbralStock } from "@/components/Admin/DialogoUmbralStock";
+import { guardarMensaje } from "@/utils/mensajeFlash";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import {
   MEDIDA_MINIMA_SUB_BOBINA_MM as MEDIDA_MIN,
@@ -30,16 +24,21 @@ import {
   crearFormatoSubBobina,
   cambiarEstadoFormatoSubBobina,
 } from "@/services/BobinaServilleta/FormatoSubBobina";
-import { listarUmbralesStock, editarUmbralStock } from "@/services/AlertaStock/AlertaStock";
+import { listarUmbralesStock } from "@/services/AlertaStock/AlertaStock";
 import {
   BadgeStock,
   BotonAccion,
   DialogoCambiarEstadoTipo,
   ESTILOS_ESTADO_TIPO,
+  Indicacion,
+  PaginaFormulario,
+  PieFormulario,
+  Seccion,
   textoUmbral,
 } from "./comunes";
 
 const DOMINIO_SUB_BOBINA = "subbobina";
+export const RUTA_FORMATOS = "/admin/bobina-servilleta?pestana=formatos";
 
 const CONFIG_ESTADO = {
   idDe: (f) => f.IdFormatoSubBobina,
@@ -70,18 +69,12 @@ function erroresFila(fila, filas, esNueva) {
   return errores;
 }
 
-function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
+export function FormularioFormatoSubBobina() {
+  const formatos = useCatalogo(listarFormatosSubBobina);
   const [filas, setFilas] = useState([FILA_VACIA]);
   const [confirmado, setConfirmado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!abierto) return;
-    setFilas([FILA_VACIA]);
-    setConfirmado(false);
-    setError("");
-  }, [abierto]);
 
   const cambiarFila = (indice, campo, valor) => {
     setFilas((previas) =>
@@ -90,7 +83,17 @@ function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
     setConfirmado(false);
   };
 
-  const medidasConocidas = new Set(formatos.flatMap((f) => f.Detalle.map((d) => d.MedidaMm)));
+  const quitarFila = (indice) => {
+    setFilas((previas) => previas.filter((_, j) => j !== indice));
+    setConfirmado(false);
+  };
+
+  const agregarFila = () => {
+    setFilas((previas) => [...previas, FILA_VACIA]);
+    setConfirmado(false);
+  };
+
+  const medidasConocidas = new Set(formatos.datos.flatMap((f) => f.Detalle.map((d) => d.MedidaMm)));
   const esNueva = (fila) => {
     const medida = Number(fila.MedidaMm);
     return fila.MedidaMm !== "" && medida >= MEDIDA_MIN && medida <= MEDIDA_MAX && !medidasConocidas.has(medida);
@@ -98,7 +101,7 @@ function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
   const errores = filas.map((f) => erroresFila(f, filas, esNueva(f)));
   const descripcion = descripcionFormato(filas);
   const medidasNuevas = [...new Set(filas.filter(esNueva).map((f) => Number(f.MedidaMm)))];
-  const repetido = formatos.find((f) => f.DescripcionFormato === descripcion);
+  const repetido = formatos.datos.find((f) => f.DescripcionFormato === descripcion);
   const valido =
     errores.every((e) => Object.keys(e).length === 0) && !repetido && confirmado && descripcion;
 
@@ -106,33 +109,43 @@ function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
     setEnviando(true);
     setError("");
     try {
-      onGuardado(
-        await crearFormatoSubBobina(
-          filas.map((f) => (esNueva(f) ? f : { ...f, StockMinimo: "", StockPreventivo: "" })),
-        ),
+      const creado = await crearFormatoSubBobina(
+        filas.map((f) => (esNueva(f) ? f : { ...f, StockMinimo: "", StockPreventivo: "" })),
       );
+      guardarMensaje(
+        `Formato ${creado.DescripcionFormato} registrado. Asígnalo a los tipos de servilleta que lo usan.`,
+      );
+      window.location.href = RUTA_FORMATOS;
     } catch (e) {
       setError(e.message);
-    } finally {
       setEnviando(false);
     }
   };
 
   return (
-    <Dialog open={abierto} onOpenChange={(open) => !open && !enviando && onCerrar()}>
-      <DialogContent className={ANCHO_DIALOGO_ADMIN}>
-        <DialogHeader>
-          <DialogTitle>Registrar formato de corte</DialogTitle>
-          <DialogDescription>
-            Indica cuántas sub-bobinas de cada medida salen de una unidad al abrirla. El nombre se
-            arma solo y el formato no se puede editar después.
-          </DialogDescription>
-        </DialogHeader>
+    <PaginaFormulario
+      subtitulo="Registrar formato de corte"
+      volver={RUTA_FORMATOS}
+      cargando={formatos.cargando}
+      error={formatos.error}
+    >
+      <Indicacion>
+        <span className="font-bold text-slate-900">
+          Indica cuántas sub-bobinas de cada medida salen de una unidad al abrirla.
+        </span>
+        <span>
+          El nombre del formato se arma solo y no se puede editar después. Al terminar, asígnalo en
+          Formatos permitidos de los tipos de servilleta que lo usan.
+        </span>
+      </Indicacion>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3">
-            {filas.map((fila, i) => (
-              <div key={i} className="flex flex-col gap-2">
+      <Seccion
+        titulo="Corte de la unidad"
+        ayuda={`Hasta ${FILAS_MAX} medidas distintas, entre ${MEDIDA_MIN} y ${MEDIDA_MAX} mm, con 1 a ${CANTIDAD_MAX} sub-bobinas cada una.`}
+      >
+        <div className="flex flex-col gap-3">
+          {filas.map((fila, i) => (
+            <div key={i} className="flex flex-col gap-3">
               <div className="flex items-start gap-3">
                 <InputForModal
                   id={`formato-medida-${i}`}
@@ -159,7 +172,7 @@ function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
                   variant="ghost"
                   size="icon"
                   disabled={filas.length === 1}
-                  onClick={() => setFilas((previas) => previas.filter((_, j) => j !== i))}
+                  onClick={() => quitarFila(i)}
                   className={i === 0 ? "mt-6 h-11 w-11 text-slate-400" : "h-11 w-11 text-slate-400"}
                   aria-label="Quitar medida"
                 >
@@ -176,59 +189,54 @@ function DialogoFormato({ abierto, formatos, onCerrar, onGuardado }) {
                   onCambio={(campo, valor) => cambiarFila(i, campo, valor)}
                 />
               )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={filas.length >= FILAS_MAX}
-              onClick={() => setFilas((previas) => [...previas, FILA_VACIA])}
-              className="h-10 self-start gap-1.5 font-bold"
-            >
-              <Plus size={15} strokeWidth={2.5} />
-              Agregar medida
-            </Button>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Formato</div>
-            <div className="font-mono text-lg font-extrabold text-slate-900">{descripcion || "—"}</div>
-            {repetido && (
-              <div className="text-xs font-semibold text-red-600">Este formato ya está registrado.</div>
-            )}
-            {medidasNuevas.length > 0 && (
-              <div className="text-xs font-semibold text-amber-700">
-                Se creará la medida {medidasNuevas.map((m) => `${m} mm`).join(", ")} con su propio
-                inventario de sub-bobinas.
-              </div>
-            )}
-          </div>
-
-          <CasillaConfirmacion
-            marcada={confirmado}
-            onCambio={setConfirmado}
-            titulo={`Confirmo el registro del formato${descripcion ? ` «${descripcion}»` : ""}`}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={filas.length >= FILAS_MAX}
+            onClick={agregarFila}
+            className="h-10 self-start gap-1.5 font-bold"
           >
-            El registro quedará en el historial de acciones del administrador. El formato no se puede
-            eliminar ni cambiar: si el corte cambia, registra uno nuevo y desactiva el anterior. Luego
-            asígnalo a los tipos que lo usan.
-          </CasillaConfirmacion>
-
-          {error && <ErrorDialogo mensaje={error} />}
+            <Plus size={15} strokeWidth={2.5} />
+            Agregar medida
+          </Button>
         </div>
+      </Seccion>
 
-        <DialogFooter>
-          <BotonEnviar
-            onClick={confirmar}
-            enviando={enviando}
-            deshabilitado={!valido}
-            className="bg-slate-900 hover:bg-slate-800"
-          >
-            Registrar formato
-          </BotonEnviar>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Formato resultante</div>
+        <div className="font-mono text-2xl font-extrabold text-slate-900">{descripcion || "—"}</div>
+        {repetido && (
+          <div className="text-xs font-semibold text-red-600">Este formato ya está registrado.</div>
+        )}
+        {medidasNuevas.length > 0 && (
+          <div className="text-xs font-semibold text-amber-700">
+            Se creará la medida {medidasNuevas.map((m) => `${m} mm`).join(", ")} con su propio
+            inventario de sub-bobinas.
+          </div>
+        )}
+      </div>
+
+      <CasillaConfirmacion
+        marcada={confirmado}
+        onCambio={setConfirmado}
+        titulo={`Confirmo el registro del formato${descripcion ? ` «${descripcion}»` : ""}`}
+      >
+        El registro quedará en el historial de acciones del administrador. El formato no se puede
+        eliminar ni cambiar: si el corte cambia, registra uno nuevo y desactiva el anterior.
+      </CasillaConfirmacion>
+
+      {error && <ErrorDialogo mensaje={error} />}
+
+      <PieFormulario
+        volver={RUTA_FORMATOS}
+        onEnviar={confirmar}
+        enviando={enviando}
+        deshabilitado={!valido}
+        texto="Registrar formato"
+      />
+    </PaginaFormulario>
   );
 }
 
@@ -299,99 +307,6 @@ function TarjetaFormato({ formato, onCambiarEstado }) {
   );
 }
 
-function DialogoUmbralMedida({ medida, onCerrar, onGuardado }) {
-  const [datos, setDatos] = useState({ StockMinimo: "", StockPreventivo: "" });
-  const [confirmado, setConfirmado] = useState(false);
-  const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!medida) return;
-    setDatos({
-      StockMinimo: medida.StockMinimo ?? "",
-      StockPreventivo: medida.StockPreventivo ?? "",
-    });
-    setConfirmado(false);
-    setError("");
-  }, [medida]);
-
-  const sinCambios =
-    medida &&
-    String(medida.StockMinimo ?? "") === String(datos.StockMinimo) &&
-    String(medida.StockPreventivo ?? "") === String(datos.StockPreventivo);
-  const valido =
-    medida && !errorStock(datos.StockMinimo, datos.StockPreventivo) && !sinCambios && confirmado;
-
-  const confirmar = async () => {
-    setEnviando(true);
-    setError("");
-    try {
-      onGuardado(await editarUmbralStock(DOMINIO_SUB_BOBINA, medida.Id, datos));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  return (
-    <Dialog open={Boolean(medida)} onOpenChange={(open) => !open && !enviando && onCerrar()}>
-      <DialogContent className={ANCHO_DIALOGO_ADMIN}>
-        <DialogHeader>
-          <DialogTitle>Alerta de stock</DialogTitle>
-          <DialogDescription>
-            Define cuándo avisar que quedan pocas sub-bobinas de esta medida en almacén.
-          </DialogDescription>
-        </DialogHeader>
-
-        {medida && (
-          <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-[15px] font-extrabold text-slate-900">{medida.Nombre}</div>
-              <div className="text-[12.5px] text-slate-500">
-                {medida.CantidadActual} sub-bobinas en almacén · {textoUmbral(medida)}
-              </div>
-            </div>
-
-            <CamposStock
-              prefijoId="medida"
-              stockMinimo={datos.StockMinimo}
-              stockPreventivo={datos.StockPreventivo}
-              onCambio={(campo, valor) => {
-                setDatos((previos) => ({ ...previos, [campo]: valor }));
-                setConfirmado(false);
-              }}
-              unidad="sub-bobinas en almacén"
-            />
-
-            <CasillaConfirmacion
-              marcada={confirmado}
-              onCambio={setConfirmado}
-              titulo={`Confirmo el cambio de alerta de ${medida.Nombre}`}
-            >
-              El cambio quedará registrado en el historial de acciones del administrador con el valor
-              anterior y el nuevo.
-            </CasillaConfirmacion>
-
-            {error && <ErrorDialogo mensaje={error} />}
-          </div>
-        )}
-
-        <DialogFooter>
-          <BotonEnviar
-            onClick={confirmar}
-            enviando={enviando}
-            deshabilitado={!valido}
-            className="bg-slate-900 hover:bg-slate-800"
-          >
-            Guardar alerta
-          </BotonEnviar>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function TarjetaMedida({ medida, onEditar }) {
   return (
     <div
@@ -418,7 +333,7 @@ function TarjetaMedida({ medida, onEditar }) {
   );
 }
 
-export default function FormatosSubBobina({ creando, onCerrarCreacion, onContador, irA }) {
+export default function FormatosSubBobina({ onContador }) {
   const formatos = useCatalogo(listarFormatosSubBobina);
   const medidas = useCatalogo(() => listarUmbralesStock(DOMINIO_SUB_BOBINA));
   const [cambioEstado, setCambioEstado] = useState(null);
@@ -429,16 +344,6 @@ export default function FormatosSubBobina({ creando, onCerrarCreacion, onContado
       formatos.cargando ? null : { valor: formatos.datos.length, singular: "formato", plural: "formatos" },
     );
   }, [formatos.cargando, formatos.datos]);
-
-  const alGuardar = (creado) => {
-    onCerrarCreacion();
-    toast.success(`Formato ${creado.DescripcionFormato} registrado`, {
-      description: "Asígnalo a los tipos de servilleta que lo usan.",
-      action: { label: "Ir a tipos", onClick: () => irA("tipos") },
-    });
-    formatos.recargar();
-    medidas.recargar();
-  };
 
   const alCambiarEstado = (resultado) => {
     setCambioEstado(null);
@@ -506,20 +411,17 @@ export default function FormatosSubBobina({ creando, onCerrarCreacion, onContado
         )}
       </section>
 
-      <DialogoFormato
-        abierto={creando}
-        formatos={formatos.datos}
-        onCerrar={onCerrarCreacion}
-        onGuardado={alGuardar}
-      />
       <DialogoCambiarEstadoTipo
         tipo={cambioEstado}
         config={CONFIG_ESTADO}
         onCerrar={() => setCambioEstado(null)}
         onCambiado={alCambiarEstado}
       />
-      <DialogoUmbralMedida
-        medida={editandoMedida}
+      <DialogoUmbralStock
+        item={editandoMedida}
+        dominio={DOMINIO_SUB_BOBINA}
+        unidad="sub-bobinas en almacén"
+        descripcion="Define cuándo avisar que quedan pocas sub-bobinas de esta medida en almacén."
         onCerrar={() => setEditandoMedida(null)}
         onGuardado={alGuardarMedida}
       />

@@ -16,7 +16,8 @@ import {
   Package,
   Cuboid,
   PackagePlus,
-  DoorClosedLocked
+  DoorClosedLocked,
+  PackageCheck
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 import { Roles } from "@/constants/Values";
@@ -265,6 +266,12 @@ export const RutasAdmin = [
     icono: Container,
     ruta: "empaques",
     descripcion: "Tipos de empaque en bobina, en bolsa y bolsas de jaba con sus alertas de stock",
+  },
+  {
+    titulo: "Productos",
+    icono: PackageCheck,
+    ruta: "productos",
+    descripcion: "Líneas de producto, sus presentaciones y alertas de stock",
   },
   {
     titulo: "Accesos sistema",

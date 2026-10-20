@@ -49,7 +49,7 @@ import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 import { limpiarTexto } from "@/models/MateriaPrima/TipoMateriaPrima";
 import { guardarMensaje, tomarMensaje } from "@/utils/mensajeFlash";
 
-const PATRON_NOMBRE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,%()/-]+$/;
+export const PATRON_NOMBRE_TIPO = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,%()/-]+$/;
 
 export const ESTILOS_ESTADO_TIPO = {
   Activo: "border-emerald-300 bg-emerald-50 text-emerald-700",
@@ -126,10 +126,19 @@ export function Indicacion({ icono: Icono = Info, children }) {
 const rutaRegistrar = (config) => config.rutaRegistrar ?? `${config.rutaBase}/registrar`;
 const rutaEditar = (config, id) => config.rutaEditar?.(id) ?? `${config.rutaBase}/editar/${id}`;
 
-export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], barra = null }) {
+export function PaginaTipos({
+  config,
+  columnas,
+  datosTarjeta,
+  pestanas = [],
+  barra = null,
+  pestanaInicial = "tipos",
+}) {
   const reporte = useReporte(config.listar, FILTROS_INICIALES, ["Busqueda"]);
   const [cambioEstado, setCambioEstado] = useState(null);
-  const [pestana, setPestana] = useState("tipos");
+  const [pestana, setPestana] = useState(
+    pestanas.some((p) => p.id === pestanaInicial) ? pestanaInicial : "tipos",
+  );
   const [creandoExtra, setCreandoExtra] = useState(false);
   const [contadorExtra, setContadorExtra] = useState(null);
 
@@ -144,6 +153,11 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
     setPestana(id);
     setCreandoExtra(false);
     setContadorExtra(null);
+    window.history.replaceState(
+      null,
+      "",
+      id === "tipos" ? config.rutaBase : `${config.rutaBase}?pestana=${id}`,
+    );
     if (id === "tipos") reporte.recargar();
   };
 
@@ -164,8 +178,9 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
     reporte.recargar();
   };
 
+  const [singularLista, pluralLista] = config.nombres ?? ["tipo", "tipos"];
   const contadorTipos = reporte.catalogo
-    ? { valor: reporte.catalogo.Total, singular: "tipo", plural: "tipos" }
+    ? { valor: reporte.catalogo.Total, singular: singularLista, plural: pluralLista }
     : null;
 
   return (
@@ -179,9 +194,16 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
           contador={extra ? contadorExtra : contadorTipos}
           accion={
             extra
-              ? { texto: extra.textoRegistrar, icono: Plus, onClick: () => setCreandoExtra(true) }
+              ? {
+                  texto: extra.textoRegistrar,
+                  icono: Plus,
+                  onClick: () =>
+                    extra.rutaRegistrar
+                      ? (window.location.href = extra.rutaRegistrar)
+                      : setCreandoExtra(true),
+                }
               : {
-                  texto: "Registrar tipo",
+                  texto: config.textoRegistrar ?? "Registrar tipo",
                   icono: Plus,
                   onClick: () => (window.location.href = rutaRegistrar(config)),
                 }
@@ -228,7 +250,7 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
                     reporte={reporte}
                     campo="Busqueda"
                     etiqueta="Buscar"
-                    placeholder="Nombre o descripción"
+                    placeholder={config.placeholderBusqueda ?? "Nombre o descripción"}
                     mono={false}
                   />
                   <SelectFiltro
@@ -246,7 +268,7 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
                 reporte={reporte}
                 elementos={reporte.catalogo?.Tipos}
                 clave={config.idDe}
-                nombres={["tipo", "tipos"]}
+                nombres={[singularLista, pluralLista]}
                 columnas={columnas}
                 anchoAccion="w-24"
                 accion={acciones}
@@ -254,7 +276,7 @@ export function PaginaTipos({ config, columnas, datosTarjeta, pestanas = [], bar
                   <TarjetaReporte
                     titulo={config.nombreDe(t)}
                     tamanoTitulo="text-[14px] font-sans"
-                    subtitulo={t.Descripcion ?? "Sin descripción"}
+                    subtitulo={config.subtituloDe?.(t) ?? t.Descripcion ?? "Sin descripción"}
                     estado={t.NombreEstado}
                     estilos={ESTILOS_ESTADO_TIPO}
                   >
@@ -304,7 +326,7 @@ export function Seccion({ titulo, ayuda, children }) {
   );
 }
 
-function Pildora({ marcada, deshabilitada = false, onClick, children }) {
+export function Pildora({ marcada, deshabilitada = false, onClick, children }) {
   return (
     <button
       type="button"
@@ -348,7 +370,7 @@ const firma = (config, datos) =>
 function erroresTipo(config, datos, editando) {
   const errores = {};
   const nombre = limpiarTexto(datos.Nombre);
-  if (!editando && nombre && (nombre.length < NOMBRE_MIN || !PATRON_NOMBRE.test(nombre)))
+  if (!editando && nombre && (nombre.length < NOMBRE_MIN || !PATRON_NOMBRE_TIPO.test(nombre)))
     errores.Nombre = `Entre ${NOMBRE_MIN} y ${NOMBRE_MAX} caracteres: letras, números, espacios y . , % ( ) / -`;
 
   const descripcion = limpiarTexto(datos.Descripcion);

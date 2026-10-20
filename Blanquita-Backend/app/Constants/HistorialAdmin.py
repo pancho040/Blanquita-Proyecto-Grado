@@ -3,6 +3,7 @@ MODULO_PROVEEDORES = "Proveedores"
 MODULO_INSUMOS = "Insumos"
 MODULO_STOCK = "Stock"
 MODULO_MATERIA_PRIMA = "Materia prima"
+MODULO_PRODUCTOS = "Productos"
 MODULO_OTROS = "Otros"
 
 PREFIJOS_MODULO_HISTORIAL_ADMIN = {
@@ -30,6 +31,13 @@ PREFIJOS_MODULO_HISTORIAL_ADMIN = {
         "Cambio de estado · Tipo de ",
         "Crear formato de ",
         "Cambio de estado · Formato de ",
+    ),
+    MODULO_PRODUCTOS: (
+        "Crear línea de producto ·",
+        "Editar línea de producto ·",
+        "Cambio de estado · Línea de producto",
+        "Crear presentación ·",
+        "Cambio de estado · Presentación",
     ),
 }
 

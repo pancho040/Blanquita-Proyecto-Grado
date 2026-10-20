@@ -25,6 +25,8 @@ import {
 } from "./comunes";
 import FormatosSubBobina from "./FormatosSubBobina";
 
+export { FormularioFormatoSubBobina } from "./FormatosSubBobina";
+
 const textoFormatos = (t) =>
   t.Formatos.length ? t.Formatos.map((f) => f.DescripcionFormato).join(", ") : "Sin formatos";
 
@@ -107,6 +109,7 @@ const PESTANAS = [
     icono: Scissors,
     subtitulo: "Formatos de corte de servilleta",
     textoRegistrar: "Registrar formato",
+    rutaRegistrar: "/admin/bobina-servilleta/formatos/registrar",
     ayuda: (
       <>
         <span className="font-bold text-slate-900">
@@ -127,7 +130,7 @@ export function FormularioTipoBobinaServilleta({ id = null }) {
   return <PaginaFormularioTipo config={CONFIG} id={id} />;
 }
 
-export default function TiposBobinaServilleta() {
+export default function TiposBobinaServilleta({ pestanaInicial }) {
   return (
     <PaginaTipos
       config={CONFIG}
@@ -141,6 +144,7 @@ export default function TiposBobinaServilleta() {
         </>
       )}
       pestanas={PESTANAS}
+      pestanaInicial={pestanaInicial}
     />
   );
 }
