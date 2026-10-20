@@ -242,6 +242,31 @@ export const RutasAdmin = [
     descripcion: "Registrar insumos y editar su descripción",
   },
   {
+    titulo: "Bobina Papel",
+    icono: toiletRoll,
+    ruta: "bobina-papel",
+    esIconoLab: true,
+    descripcion: "Tipos de bobina papel, sus productos y alertas de stock",
+  },
+  {
+    titulo: "Bobina Servilleta",
+    icono: SquareStack,
+    ruta: "bobina-servilleta",
+    descripcion: "Tipos de bobina servilleta, formatos, productos y alertas de stock",
+  },
+  {
+    titulo: "Rodela",
+    icono: Database,
+    ruta: "rodela",
+    descripcion: "Tipos de rodela y alertas de stock",
+  },
+  {
+    titulo: "Empaques",
+    icono: Container,
+    ruta: "empaques",
+    descripcion: "Tipos de empaque en bobina, en bolsa y bolsas de jaba con sus alertas de stock",
+  },
+  {
     titulo: "Accesos sistema",
     icono: DoorClosedLocked,
     ruta: "accesos",

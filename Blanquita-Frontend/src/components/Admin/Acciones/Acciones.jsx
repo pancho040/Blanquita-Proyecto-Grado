@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, FileUser, Package, Search, Truck, UserShield, Users } from "lucide-react";
+import { Boxes, FileText, FileUser, Gauge, Package, Search, Truck, UserShield, Users } from "lucide-react";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,8 @@ const MODULOS = [
   { valor: "Usuarios", texto: "Usuarios" },
   { valor: "Proveedores", texto: "Proveedores" },
   { valor: "Insumos", texto: "Insumos" },
+  { valor: "Materia prima", texto: "Materia prima" },
+  { valor: "Stock", texto: "Stock" },
 ];
 
 const ESTILOS_MODULO = {
@@ -50,6 +52,16 @@ const ESTILOS_MODULO = {
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icono: Package,
     tarjeta: "bg-emerald-50 text-emerald-700",
+  },
+  "Materia prima": {
+    badge: "bg-violet-50 text-violet-700 ring-violet-200",
+    icono: Boxes,
+    tarjeta: "bg-violet-50 text-violet-700",
+  },
+  Stock: {
+    badge: "bg-rose-50 text-rose-700 ring-rose-200",
+    icono: Gauge,
+    tarjeta: "bg-rose-50 text-rose-700",
   },
   Otros: { badge: "bg-slate-100 text-slate-700 ring-slate-200", icono: FileText, tarjeta: "bg-slate-100 text-slate-700" },
 };

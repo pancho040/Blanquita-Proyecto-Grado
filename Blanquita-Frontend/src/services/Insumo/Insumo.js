@@ -47,6 +47,12 @@ export async function listarInsumos(filtros) {
   return ListarInsumosResponse(data);
 }
 
+export async function obtenerInsumo(idTipoInsumo) {
+  const data = await pedirJson(`${BASE_URL}/detalle/${idTipoInsumo}`);
+
+  return InsumoResponse(data);
+}
+
 export async function crearInsumo(datos) {
   const data = await pedirJson(`${BASE_URL}/crear`, {
     method: "POST",

@@ -10,23 +10,28 @@ from app.Routes.BobinaPapel.BobinaPapelRouter import BobinaPapelRouter
 from app.Routes.BobinaPapel.InventarioRouter import InventarioBobinaPapelRouter
 from app.Routes.BobinaPapel.ProduccionRouter import ProduccionBobinaPapelRouter
 from app.Routes.BobinaPapel.Reporte import bpReporteRouter
+from app.Routes.BobinaPapel.TipoBobinaRouter import TipoBobinaRouter
 
 
 from app.Routes.Rodela.RodelaRouter import RodelaRouter
 from app.Routes.Rodela.InventarioRouter import InventarioRodelaRouter
 from app.Routes.Rodela.Reporte import RodelaReporteRouter
+from app.Routes.Rodela.TipoRodelaRouter import TipoRodelaRouter
 
 
 from app.Routes.Empaque.EmpaqueBobinaRouter import EmpaqueBobinaRouter
 from app.Routes.Empaque.EmpaqueBolsaRouter import EmpaqueBolsaRouter
 from app.Routes.Empaque.BolsaJavaRouter import BolsaJavaRouter
 from app.Routes.Empaque.Reporte import EmpaqueReporteRouter
+from app.Routes.Empaque.TipoEmpaqueRouter import TipoEmpaqueRouter
 
 
 from app.Routes.BobinaServilleta.BobinaServilletaRouter import BobinaServilletaRouter
 from app.Routes.BobinaServilleta.ProduccionRouter import ProduccionBobinaServilletaRouter
 from app.Routes.BobinaServilleta.InventarioRouter import InventarioBobinaServilletaRouter
 from app.Routes.BobinaServilleta.Reporte import bs_ReporteRouter
+from app.Routes.BobinaServilleta.TipoBobinaServilletaRouter import TipoBobinaServilletaRouter
+from app.Routes.BobinaServilleta.FormatoSubBobinaRouter import FormatoSubBobinaRouter
 
 from app.Routes.InventarioFinal.ProductoFinal import ProductoFinalRouter
 from app.Routes.InventarioFinal.Reporte import ProductoFinalReporteRouter
@@ -92,12 +97,14 @@ app.include_router(BobinaPapelRouter)
 app.include_router(InventarioBobinaPapelRouter)
 app.include_router(ProduccionBobinaPapelRouter)
 app.include_router(bpReporteRouter)
+app.include_router(TipoBobinaRouter)
 
 
 #ROUTERS RODELA
 app.include_router(RodelaRouter)
 app.include_router(InventarioRodelaRouter)
 app.include_router(RodelaReporteRouter)
+app.include_router(TipoRodelaRouter)
 
 
 
@@ -107,6 +114,8 @@ app.include_router(BobinaServilletaRouter)
 app.include_router(ProduccionBobinaServilletaRouter)
 app.include_router(InventarioBobinaServilletaRouter)
 app.include_router(bs_ReporteRouter)
+app.include_router(TipoBobinaServilletaRouter)
+app.include_router(FormatoSubBobinaRouter)
 
 
 #ROUTERS EMPAQUE BOBINA / BOLSA / BOLSA JABA
@@ -114,6 +123,7 @@ app.include_router(EmpaqueBobinaRouter)
 app.include_router(EmpaqueBolsaRouter)
 app.include_router(BolsaJavaRouter)
 app.include_router(EmpaqueReporteRouter)
+app.include_router(TipoEmpaqueRouter)
 
 #ROUTERS INVENTARIO PRODUCTO FINAL
 app.include_router(ProductoFinalRouter)

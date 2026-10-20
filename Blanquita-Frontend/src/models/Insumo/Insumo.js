@@ -1,4 +1,5 @@
 import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+import { numeroONulo } from "@/utils/validators";
 
 export const CatalogoInsumoResponse = (data) => ({
   IdInventarioInsumo: data.IdInventarioInsumo,
@@ -30,7 +31,8 @@ export const InsumoItem = (data) => ({
   IdTipoInsumo: data.IdTipoInsumo,
   NombreInsumo: data.NombreInsumo,
   DescripcionInsumo: data.DescripcionInsumo ?? null,
-  CantidadActual: data.CantidadActual
+  CantidadActual: data.CantidadActual,
+  ...NivelStockResponse(data)
 });
 
 export const ListarInsumosRequest = (filtros = {}) => ({
@@ -50,14 +52,18 @@ const limpiarTexto = (texto) => (texto ?? "").trim().replace(/\s+/g, " ");
 
 export const InsumoDatos = (datos) => ({
   NombreInsumo: limpiarTexto(datos.NombreInsumo),
-  DescripcionInsumo: limpiarTexto(datos.DescripcionInsumo)
+  DescripcionInsumo: limpiarTexto(datos.DescripcionInsumo),
+  StockMinimo: numeroONulo(datos.StockMinimo),
+  StockPreventivo: numeroONulo(datos.StockPreventivo)
 });
 
 export const CrearInsumoRequest = InsumoDatos;
 
 export const EditarInsumoRequest = (idTipoInsumo, datos) => ({
   IdTipoInsumo: idTipoInsumo,
-  DescripcionInsumo: limpiarTexto(datos.DescripcionInsumo)
+  DescripcionInsumo: limpiarTexto(datos.DescripcionInsumo),
+  StockMinimo: numeroONulo(datos.StockMinimo),
+  StockPreventivo: numeroONulo(datos.StockPreventivo)
 });
 
 export const InsumoResponse = InsumoItem;

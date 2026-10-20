@@ -40,7 +40,7 @@ class ListarInsumosRequest(BaseModel):
     TamanoPagina: int = Field(default=20, ge=1, le=100)
 
 
-class InsumoItem(BaseModel):
+class InsumoItem(NivelStockResponse):
     IdTipoInsumo: int
     NombreInsumo: str
     DescripcionInsumo: str | None = None
@@ -61,11 +61,15 @@ class CrearInsumoRequest(BaseModel):
         max_length=LONGITUD_MAXIMA_NOMBRE_INSUMO,
     )
     DescripcionInsumo: str
+    StockMinimo: int | None = Field(default=None, ge=0)
+    StockPreventivo: int | None = Field(default=None, ge=0)
 
 
 class EditarInsumoRequest(BaseModel):
     IdTipoInsumo: int = Field(..., gt=0)
     DescripcionInsumo: str
+    StockMinimo: int | None = Field(default=None, ge=0)
+    StockPreventivo: int | None = Field(default=None, ge=0)
 
 
 class InsumoResponse(InsumoItem):

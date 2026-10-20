@@ -2,6 +2,7 @@ MODULO_USUARIOS = "Usuarios"
 MODULO_PROVEEDORES = "Proveedores"
 MODULO_INSUMOS = "Insumos"
 MODULO_STOCK = "Stock"
+MODULO_MATERIA_PRIMA = "Materia prima"
 MODULO_OTROS = "Otros"
 
 PREFIJOS_MODULO_HISTORIAL_ADMIN = {
@@ -22,6 +23,13 @@ PREFIJOS_MODULO_HISTORIAL_ADMIN = {
     ),
     MODULO_STOCK: (
         "Umbral de stock ·",
+    ),
+    MODULO_MATERIA_PRIMA: (
+        "Crear tipo de ",
+        "Editar tipo de ",
+        "Cambio de estado · Tipo de ",
+        "Crear formato de ",
+        "Cambio de estado · Formato de ",
     ),
 }
 

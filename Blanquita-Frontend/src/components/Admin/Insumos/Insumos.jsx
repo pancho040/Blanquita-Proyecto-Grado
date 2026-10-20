@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { Pencil, Plus } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,12 @@ import {
   TarjetaReporte,
   PieTarjeta,
   Dato,
-  DERECHA,
 } from "@/components/Reportes/comunes";
+import { BadgeStock, columnaStock } from "@/components/Admin/MateriaPrima/comunes";
 import { useReporte } from "@/hooks/useReporte";
 import { formatearNumero } from "@/utils/numeros";
 import { listarInsumos } from "@/services/Insumo/Insumo";
-import { DialogoInsumo } from "./Dialogos";
+import { tomarMensaje } from "@/utils/mensajeFlash";
 
 const FILTROS_INICIALES = { Busqueda: "" };
 
@@ -29,7 +29,7 @@ const COLUMNAS = [
     valor: (i) => i.NombreInsumo,
   },
   { titulo: "Descripción", clase: "text-slate-600", valor: (i) => i.DescripcionInsumo ?? "-" },
-  { titulo: "Stock", ...DERECHA, valor: stock },
+  columnaStock((i) => Number(i.CantidadActual || 0)),
 ];
 
 function BotonAccion({ ayuda, icono: Icono, onClick }) {
@@ -54,27 +54,21 @@ function BotonAccion({ ayuda, icono: Icono, onClick }) {
 
 export default function Insumos() {
   const reporte = useReporte(listarInsumos, FILTROS_INICIALES, ["Busqueda"]);
-  const [dialogo, setDialogo] = useState({ abierto: false, insumo: null });
+
+  useEffect(() => {
+    const mensaje = tomarMensaje();
+    if (mensaje) toast.success(mensaje);
+  }, []);
 
   const acciones = (i) => (
     <div className="flex justify-end gap-1">
       <BotonAccion
-        ayuda="Editar descripción"
+        ayuda="Editar insumo"
         icono={Pencil}
-        onClick={() => setDialogo({ abierto: true, insumo: i })}
+        onClick={() => (window.location.href = `/admin/insumos/editar/${i.IdTipoInsumo}`)}
       />
     </div>
   );
-
-  const alGuardar = (guardado, editando) => {
-    setDialogo({ abierto: false, insumo: null });
-    toast.success(
-      editando
-        ? `Insumo ${guardado.NombreInsumo} actualizado`
-        : `Insumo ${guardado.NombreInsumo} registrado`,
-    );
-    reporte.recargar();
-  };
 
   return (
     <TooltipProvider>
@@ -92,7 +86,7 @@ export default function Insumos() {
           accion={{
             texto: "Registrar insumo",
             icono: Plus,
-            onClick: () => setDialogo({ abierto: true, insumo: null }),
+            onClick: () => (window.location.href = "/admin/insumos/registrar"),
           }}
         />
 
@@ -123,19 +117,13 @@ export default function Insumos() {
               >
                 <PieTarjeta accion={acciones(i)}>
                   <Dato etiqueta="Stock">{stock(i)}</Dato>
+                  <BadgeStock cantidad={Number(i.CantidadActual || 0)} tipo={i} />
                 </PieTarjeta>
               </TarjetaReporte>
             )}
           />
         </main>
       </div>
-
-      <DialogoInsumo
-        abierto={dialogo.abierto}
-        insumo={dialogo.insumo}
-        onCerrar={() => setDialogo({ abierto: false, insumo: null })}
-        onGuardado={alGuardar}
-      />
     </TooltipProvider>
   );
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import require_admin_db, require_role
@@ -81,6 +81,19 @@ def ListarInsumos(
             TamanoPagina=TamanoPagina,
         )
     )
+
+
+@InsumoRouter.get(
+    "/detalle/{IdTipoInsumo}",
+    response_model=InsumoResponse,
+    status_code=200,
+)
+def ObtenerInsumo(
+    IdTipoInsumo: int = Path(..., gt=0),
+    usuario_actual: dict = Depends(require_admin_db),
+    service: InsumoService = Depends(insumo_service),
+):
+    return service.ObtenerInsumo(IdTipoInsumo)
 
 
 @InsumoRouter.post(

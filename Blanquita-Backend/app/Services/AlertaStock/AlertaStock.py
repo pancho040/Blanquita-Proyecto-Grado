@@ -20,10 +20,33 @@ def _item(fila: dict) -> UmbralStockItem:
     return UmbralStockItem(**fila, NombreDominio=NOMBRES_DOMINIO_STOCK[fila["Dominio"]])
 
 
-def _mostrar_umbral(stock_minimo: int | None, stock_preventivo: int | None) -> str:
+def mostrar_umbral(stock_minimo: int | None, stock_preventivo: int | None) -> str:
     if stock_minimo is None:
         return "sin umbral"
     return f"mínimo {stock_minimo}, preventivo {stock_preventivo}"
+
+
+def validar_umbral_stock(stock_minimo: int | None, stock_preventivo: int | None) -> None:
+    if (stock_minimo is None) != (stock_preventivo is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="El stock mínimo y el preventivo se registran juntos o se quitan juntos",
+        )
+
+    if stock_minimo is None:
+        return
+
+    if stock_preventivo <= stock_minimo:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="El stock preventivo debe ser mayor al stock mínimo",
+        )
+
+    if stock_preventivo > STOCK_UMBRAL_MAXIMO:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"El stock preventivo no puede superar {STOCK_UMBRAL_MAXIMO}",
+        )
 
 
 class AlertaStockService:
@@ -49,7 +72,7 @@ class AlertaStockService:
 
     def EditarUmbral(self, data: EditarUmbralStockRequest, id_admin: int) -> UmbralStockItem:
         self._ValidarDominio(data.Dominio)
-        self._ValidarUmbral(data.StockMinimo, data.StockPreventivo)
+        validar_umbral_stock(data.StockMinimo, data.StockPreventivo)
 
         registro = self.repository.ObtenerRegistroBloqueado(data.Dominio, data.Id)
         if registro is None:
@@ -71,7 +94,7 @@ class AlertaStockService:
         nombre = self.repository.ListarStock(dominio=data.Dominio, id_item=data.Id)[0]["Nombre"]
         observacion = (
             f"Umbral de stock · {NOMBRES_DOMINIO_STOCK[data.Dominio]} #{data.Id} {nombre}: "
-            f"{_mostrar_umbral(*anterior)} → {_mostrar_umbral(*nuevo)}"
+            f"{mostrar_umbral(*anterior)} → {mostrar_umbral(*nuevo)}"
         )
         self.repository.GuardarUmbral(registro, data.StockMinimo, data.StockPreventivo, observacion, id_admin)
 
@@ -82,26 +105,4 @@ class AlertaStockService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"El dominio debe ser uno de: {', '.join(DOMINIOS_STOCK)}",
-            )
-
-    def _ValidarUmbral(self, stock_minimo: int | None, stock_preventivo: int | None) -> None:
-        if (stock_minimo is None) != (stock_preventivo is None):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El stock mínimo y el preventivo se registran juntos o se quitan juntos",
-            )
-
-        if stock_minimo is None:
-            return
-
-        if stock_preventivo <= stock_minimo:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El stock preventivo debe ser mayor al stock mínimo",
-            )
-
-        if stock_preventivo > STOCK_UMBRAL_MAXIMO:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"El stock preventivo no puede superar {STOCK_UMBRAL_MAXIMO}",
             )

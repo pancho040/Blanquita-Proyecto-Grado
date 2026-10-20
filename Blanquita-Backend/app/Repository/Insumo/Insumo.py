@@ -67,16 +67,22 @@ class InsumoRepository:
                 detail="No se pudo registrar el movimiento del insumo",
             )
 
+    def _ConsultaInsumos(self):
+        cantidad = func.coalesce(InventarioInsumo.CantidadActual, 0)
+        return select(
+            TipoInsumo.IdTipoInsumo,
+            TipoInsumo.NombreInsumo,
+            TipoInsumo.DescripcionInsumo,
+            cantidad.label("CantidadActual"),
+            InventarioInsumo.StockMinimo,
+            InventarioInsumo.StockPreventivo,
+            nivel_stock(
+                cantidad, InventarioInsumo.StockMinimo, InventarioInsumo.StockPreventivo
+            ).label("NivelStock"),
+        ).outerjoin(InventarioInsumo, InventarioInsumo.IdTipoInsumo == TipoInsumo.IdTipoInsumo)
+
     def ListarInsumos(self, params: dict) -> tuple[int, list[dict]]:
-        consulta = (
-            select(
-                TipoInsumo.IdTipoInsumo,
-                TipoInsumo.NombreInsumo,
-                TipoInsumo.DescripcionInsumo,
-                func.coalesce(InventarioInsumo.CantidadActual, 0).label("CantidadActual"),
-            )
-            .outerjoin(InventarioInsumo, InventarioInsumo.IdTipoInsumo == TipoInsumo.IdTipoInsumo)
-        )
+        consulta = self._ConsultaInsumos()
 
         busqueda = (params.get("Busqueda") or "").strip()
         if busqueda:
@@ -117,20 +123,48 @@ class InsumoRepository:
                 detail="Error al obtener el insumo",
             )
 
-    def CantidadActual(self, id_tipo_insumo: int) -> int:
+    def ObtenerInsumo(self, id_tipo_insumo: int) -> dict | None:
         filas = self.caller.Consultar(
-            select(InventarioInsumo.CantidadActual).where(
-                InventarioInsumo.IdTipoInsumo == id_tipo_insumo
-            )
+            self._ConsultaInsumos().where(TipoInsumo.IdTipoInsumo == id_tipo_insumo)
         )
-        return int(filas[0]["CantidadActual"]) if filas else 0
+        return filas[0] if filas else None
 
-    def CrearInsumo(self, tipo: TipoInsumo, observacion, id_admin: int) -> TipoInsumo:
+    def ObtenerInventarioDeTipoBloqueado(self, id_tipo_insumo: int) -> InventarioInsumo | None:
+        try:
+            return self.db.execute(
+                select(InventarioInsumo)
+                .where(InventarioInsumo.IdTipoInsumo == id_tipo_insumo)
+                .order_by(InventarioInsumo.IdInventarioInsumo)
+                .limit(1)
+                .with_for_update()
+            ).scalars().first()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al obtener el inventario del insumo",
+            )
+
+    def CrearInsumo(
+        self,
+        tipo: TipoInsumo,
+        stock_minimo: int | None,
+        stock_preventivo: int | None,
+        observacion,
+        id_admin: int,
+    ) -> TipoInsumo:
         nombre = tipo.NombreInsumo
         try:
             self.db.add(tipo)
             self.db.flush()
-            self.db.add(InventarioInsumo(IdTipoInsumo=tipo.IdTipoInsumo, CantidadActual=0))
+            self.db.add(
+                InventarioInsumo(
+                    IdTipoInsumo=tipo.IdTipoInsumo,
+                    CantidadActual=0,
+                    StockMinimo=stock_minimo,
+                    StockPreventivo=stock_preventivo,
+                )
+            )
             self.db.add(HistorialAdmin(IdUsuario=id_admin, Observacion=observacion(tipo)))
             self.db.commit()
             self.db.refresh(tipo)
@@ -148,11 +182,20 @@ class InsumoRepository:
                 detail="No se pudo crear el insumo",
             )
 
-    def EditarDescripcion(
-        self, tipo: TipoInsumo, descripcion: str, observacion: str, id_admin: int
+    def EditarInsumo(
+        self,
+        tipo: TipoInsumo,
+        inventario: InventarioInsumo,
+        descripcion: str,
+        stock_minimo: int | None,
+        stock_preventivo: int | None,
+        observacion: str,
+        id_admin: int,
     ) -> TipoInsumo:
         try:
             tipo.DescripcionInsumo = descripcion
+            inventario.StockMinimo = stock_minimo
+            inventario.StockPreventivo = stock_preventivo
             self.db.add(HistorialAdmin(IdUsuario=id_admin, Observacion=observacion))
             self.db.commit()
             self.db.refresh(tipo)

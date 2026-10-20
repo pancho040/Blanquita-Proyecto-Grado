@@ -23,6 +23,7 @@ from app.Models.Insumo.Insumo import (
 )
 from app.Repository.Insumo.Insumo import InsumoRepository
 from app.Schemas.Insumo import MovimientoInsumo, TipoInsumo
+from app.Services.AlertaStock.AlertaStock import mostrar_umbral, validar_umbral_stock
 from app.utils.validators import EsCantidadValida, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 ID_TIPO_MOVIMIENTO_INGRESO = 1
@@ -67,56 +68,72 @@ class InsumoService:
             Insumos=[InsumoItem(**fila) for fila in filas],
         )
 
+    def ObtenerInsumo(self, id_tipo_insumo: int) -> InsumoResponse:
+        insumo = self.repository.ObtenerInsumo(id_tipo_insumo)
+        if insumo is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El insumo no existe",
+            )
+        return InsumoResponse(**insumo)
+
     def CrearInsumo(self, datos: CrearInsumoRequest, id_admin: int) -> InsumoResponse:
         nombre = self._ValidarNombre(datos.NombreInsumo)
         descripcion = self._ValidarDescripcion(datos.DescripcionInsumo)
+        validar_umbral_stock(datos.StockMinimo, datos.StockPreventivo)
 
         creado = self.repository.CrearInsumo(
             TipoInsumo(NombreInsumo=nombre, DescripcionInsumo=descripcion),
+            datos.StockMinimo,
+            datos.StockPreventivo,
             lambda t: (
                 f"Crear insumo · #{t.IdTipoInsumo} {t.NombreInsumo} "
-                f"(descripción: {_mostrar(t.DescripcionInsumo)}), inventario inicial 0"
+                f"(descripción: {_mostrar(t.DescripcionInsumo)}, "
+                f"stock: {mostrar_umbral(datos.StockMinimo, datos.StockPreventivo)}), inventario inicial 0"
             ),
             id_admin,
         )
 
-        return InsumoResponse(
-            IdTipoInsumo=creado.IdTipoInsumo,
-            NombreInsumo=creado.NombreInsumo,
-            DescripcionInsumo=creado.DescripcionInsumo,
-            CantidadActual=0,
-        )
+        return InsumoResponse(**self.repository.ObtenerInsumo(creado.IdTipoInsumo))
 
     def EditarInsumo(self, datos: EditarInsumoRequest, id_admin: int) -> InsumoResponse:
-        descripcion = self._ValidarDescripcion(datos.DescripcionInsumo)
+        validar_umbral_stock(datos.StockMinimo, datos.StockPreventivo)
 
         tipo = self.repository.ObtenerTipoInsumoBloqueado(datos.IdTipoInsumo)
-        if tipo is None:
+        inventario = self.repository.ObtenerInventarioDeTipoBloqueado(datos.IdTipoInsumo)
+        if tipo is None or inventario is None:
+            self.repository.Revertir()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="El insumo no existe",
             )
 
-        anterior = tipo.DescripcionInsumo
-        if anterior == descripcion:
+        descripcion = _limpiar(datos.DescripcionInsumo or "")
+        detalle = []
+        if descripcion != _limpiar(tipo.DescripcionInsumo or ""):
+            descripcion = self._ValidarDescripcion(descripcion)
+            detalle.append(f"descripción: {_mostrar(tipo.DescripcionInsumo)} → {descripcion}")
+        else:
+            descripcion = tipo.DescripcionInsumo
+
+        stock_anterior = (inventario.StockMinimo, inventario.StockPreventivo)
+        stock_nuevo = (datos.StockMinimo, datos.StockPreventivo)
+        if stock_anterior != stock_nuevo:
+            detalle.append(f"stock: {mostrar_umbral(*stock_anterior)} → {mostrar_umbral(*stock_nuevo)}")
+
+        if not detalle:
             self.repository.Revertir()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="No hay cambios para guardar",
             )
 
-        observacion = (
-            f"Editar insumo · #{tipo.IdTipoInsumo} {tipo.NombreInsumo}: "
-            f"descripción: {_mostrar(anterior)} → {descripcion}"
+        observacion = f"Editar insumo · #{tipo.IdTipoInsumo} {tipo.NombreInsumo}: {'; '.join(detalle)}"
+        self.repository.EditarInsumo(
+            tipo, inventario, descripcion, datos.StockMinimo, datos.StockPreventivo, observacion, id_admin
         )
-        editado = self.repository.EditarDescripcion(tipo, descripcion, observacion, id_admin)
 
-        return InsumoResponse(
-            IdTipoInsumo=editado.IdTipoInsumo,
-            NombreInsumo=editado.NombreInsumo,
-            DescripcionInsumo=editado.DescripcionInsumo,
-            CantidadActual=self.repository.CantidadActual(editado.IdTipoInsumo),
-        )
+        return InsumoResponse(**self.repository.ObtenerInsumo(datos.IdTipoInsumo))
 
     def _ValidarNombre(self, nombre: str) -> str:
         nombre = _limpiar(nombre)

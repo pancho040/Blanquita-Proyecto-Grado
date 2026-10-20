@@ -77,3 +77,10 @@ export const EstadosProveedor = [
 ];
 
 export const nombreEstadoProveedor = (activo) => (activo ? "Activo" : "Inactivo");
+
+export const EstadosCatalogo = [
+  { Activo: true, NombreEstado: "Activo" },
+  { Activo: false, NombreEstado: "Inactivo" },
+];
+
+export const nombreEstadoCatalogo = (activo) => (activo ? "Activo" : "Inactivo");
