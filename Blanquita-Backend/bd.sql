@@ -328,7 +328,8 @@ CREATE TABLE "PausaProduccionBobinaTubo" (
   "IdUsuario" INTEGER NOT NULL REFERENCES "Usuario"("IdUsuario") ON DELETE CASCADE,
   "FechaHoraPausa" TIMESTAMPTZ NOT NULL,
   "MotivoPausaProduccion" TEXT,
-  "FechaHoraReanudacion" TIMESTAMPTZ
+  "FechaHoraReanudacion" TIMESTAMPTZ,
+  "MotivoReanudacion" TEXT
 );
 CREATE INDEX "idx_pausabobinatubo_fecha" ON "PausaProduccionBobinaTubo"("FechaHoraPausa");
 CREATE INDEX IF NOT EXISTS "idx_pausabobinatubo_produccion"
@@ -340,7 +341,8 @@ CREATE TABLE "PausaProduccionServilleta" (
   "IdUsuario" INTEGER NOT NULL REFERENCES "Usuario"("IdUsuario") ON DELETE CASCADE,
   "FechaHoraPausa" TIMESTAMPTZ NOT NULL,
   "MotivoPausaProduccion" TEXT,
-  "FechaHoraReanudacion" TIMESTAMPTZ
+  "FechaHoraReanudacion" TIMESTAMPTZ,
+  "MotivoReanudacion" TEXT
 );
 CREATE INDEX "idx_pausaservilleta_fecha" ON "PausaProduccionServilleta"("FechaHoraPausa");
 

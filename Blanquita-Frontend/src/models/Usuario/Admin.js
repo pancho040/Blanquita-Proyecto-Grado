@@ -23,6 +23,7 @@ export const UsuarioListaItem = (data) => ({
     .join(" "),
   Celular: data.Celular ?? null,
   FechaRegistro: data.FechaRegistro,
+  IsAdmin: Boolean(data.IsAdmin),
   IdRol: data.IdRol,
   NombreRol: data.NombreRol,
   IdEstadoUsuario: data.IdEstadoUsuario,

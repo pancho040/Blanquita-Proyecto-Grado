@@ -50,6 +50,7 @@ class UsuarioListaItem(BaseModel):
     ApellidoMaterno: str | None = None
     Celular: str | None = None
     FechaRegistro: datetime
+    IsAdmin: bool
     IdRol: int
     NombreRol: str
     IdEstadoUsuario: int

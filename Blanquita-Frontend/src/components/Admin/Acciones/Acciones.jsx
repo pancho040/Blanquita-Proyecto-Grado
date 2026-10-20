@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   Boxes,
   FileText,
-  FileUser,
   Gauge,
   Package,
   PackageCheck,
@@ -23,7 +22,6 @@ import {
   CampoFiltro,
   BuscadorFiltro,
   BotonInforme,
-  BotonDescargaFila,
   ResultadosReporte,
   TarjetaReporte,
   PieTarjeta,
@@ -37,7 +35,6 @@ import {
   listarHistorialAdmin,
   verResumenUsuarioHistorialAdmin,
   descargarReporteHistorialAdmin,
-  descargarReporteUsuarioHistorialAdmin,
 } from "@/services/Usuario/HistorialAdmin";
 
 const LONGITUD_MINIMA_CI = 6;
@@ -278,17 +275,6 @@ export default function Acciones() {
   };
   const hayAcciones = Boolean(catalogo?.Total);
   const consulta = useAdministradorConsultado(parametros);
-  const ciCompleto = (filtros.Ci ?? "").length >= LONGITUD_MINIMA_CI;
-
-  const reporteAdministrador = (a) => (
-    <div className="flex justify-end">
-      <BotonDescargaFila
-        icono={FileUser}
-        ayuda={`Reporte de acciones del CI ${a.Ci} en el período`}
-        descargar={() => descargarReporteUsuarioHistorialAdmin({ ...parametros, Ci: a.Ci })}
-      />
-    </div>
-  );
 
   return (
     <TooltipProvider>
@@ -312,31 +298,15 @@ export default function Acciones() {
                 Boolean(reporte.textos.Busqueda),
             }}
             informe={
-              <>
-                <BotonInforme
-                  texto="Reporte del administrador"
-                  disponible={rangoCompleto && ciCompleto && Boolean(consulta?.Acciones.length)}
-                  ayuda={`PDF con las acciones del CI ${filtros.Ci} en el período`}
-                  ayudaNoDisponible={
-                    !rangoCompleto
-                      ? undefined
-                      : ciCompleto
-                        ? "Ese CI no tiene acciones en el período y los filtros elegidos"
-                        : `Escribe un CI de al menos ${LONGITUD_MINIMA_CI} dígitos`
-                  }
-                  exito="Reporte de acciones del administrador descargado"
-                  descargar={() => descargarReporteUsuarioHistorialAdmin(parametros)}
-                />
-                <BotonInforme
-                  disponible={rangoCompleto && hayAcciones}
-                  ayuda="PDF con el resumen por módulo y el detalle de acciones del período y los filtros elegidos"
-                  ayudaNoDisponible={
-                    rangoCompleto ? "No hay acciones en el período y los filtros elegidos" : undefined
-                  }
-                  exito="Reporte de acciones de administrador descargado"
-                  descargar={() => descargarReporteHistorialAdmin(parametros)}
-                />
-              </>
+              <BotonInforme
+                disponible={rangoCompleto && hayAcciones}
+                ayuda="PDF con el resumen por módulo y el detalle de acciones del período y los filtros elegidos"
+                ayudaNoDisponible={
+                  rangoCompleto ? "No hay acciones en el período y los filtros elegidos" : undefined
+                }
+                exito="Reporte de acciones de administrador descargado"
+                descargar={() => descargarReporteHistorialAdmin(parametros)}
+              />
             }
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -391,7 +361,6 @@ export default function Acciones() {
               clave={(a) => a.IdHistorialAdmin}
               nombres={["acción", "acciones"]}
               columnas={COLUMNAS}
-              accion={reporteAdministrador}
               tarjeta={(a) => (
                 <TarjetaReporte
                   titulo={a.Accion}
@@ -402,7 +371,7 @@ export default function Acciones() {
                     <BadgeModulo modulo={a.Modulo} />
                     {a.Detalle && <span>{a.Detalle}</span>}
                   </div>
-                  <PieTarjeta accion={reporteAdministrador(a)}>
+                  <PieTarjeta>
                     <Dato etiqueta="Por">{nombreAdministrador(a)}</Dato>
                     <Dato etiqueta="CI">{a.Ci}</Dato>
                   </PieTarjeta>

@@ -24,6 +24,7 @@ class UsuarioRepository:
                 Usuario.ApellidoMaterno,
                 Usuario.Celular,
                 Usuario.FechaRegistro,
+                Usuario.IsAdmin,
                 Rol.IdRol,
                 Rol.NombreRol,
                 EstadoUsuario.IdEstadoUsuario,
