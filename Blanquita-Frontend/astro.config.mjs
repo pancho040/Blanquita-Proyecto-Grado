@@ -16,6 +16,9 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      include: ['print-js'],
+    },
     resolve: {
       alias: {
         '@': path.resolve('./src'),

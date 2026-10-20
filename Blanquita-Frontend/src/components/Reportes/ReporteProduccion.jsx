@@ -16,6 +16,7 @@ import {
   ESTADOS_PRODUCCION,
   DERECHA,
 } from "@/components/Reportes/comunes";
+import { ATAJOS, atajoActivo } from "@/components/Reportes/Empaque/filtros";
 import { useReporte } from "@/hooks/useReporte";
 import { EstadosProduccion } from "@/constants/Estados";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
@@ -78,6 +79,7 @@ export default function ReporteProduccion({
   );
   const { filtros, catalogo } = reporte;
   const { Rango } = filtros;
+  const atajo = atajoActivo(Rango);
 
   const [verCancelaciones, setVerCancelaciones] = useState(false);
   const [verMovimientos, setVerMovimientos] = useState(false);
@@ -148,6 +150,21 @@ export default function ReporteProduccion({
             placeholder="Todos los estados"
           />
         </div>
+
+        <CampoFiltro etiqueta="Período">
+          <ToggleGroup value={atajo ? [atajo] : []} className="flex flex-wrap justify-start gap-2">
+            {ATAJOS.map((a) => (
+              <ToggleGroupItem
+                key={a.valor}
+                value={a.valor}
+                onClick={() => reporte.cambiar("Rango", a.rango(new Date()))}
+                className={PILDORA_FILTRO}
+              >
+                {a.texto}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </CampoFiltro>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <BuscadorFiltro

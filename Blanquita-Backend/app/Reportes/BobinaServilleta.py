@@ -22,8 +22,8 @@ def _formatear_duracion(duracion: Optional[timedelta]) -> str:
         return "-"
     total_segundos = int(duracion.total_seconds())
     horas, resto = divmod(total_segundos, 3600)
-    minutos = resto // 60
-    return f"{horas}h {minutos:02d}m"
+    minutos, segundos = divmod(resto, 60)
+    return f"{horas}h {minutos:02d}m {segundos:02d}s"
 
 
 def _tabla_pausas_servilleta(reporte: Reporte, pausas) -> None:
