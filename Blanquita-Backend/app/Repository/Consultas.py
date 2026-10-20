@@ -1,8 +1,9 @@
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, literal, null, select
 
+from app.Constants.AlertaStock import NIVEL_STOCK_BAJO, NIVEL_STOCK_CRITICO, NIVEL_STOCK_NORMAL
 from app.Schemas.Produccion import Turno
 
 ZONA_HORARIA = "America/La_Paz"
@@ -21,6 +22,15 @@ def filtro_rango(columna, fecha_inicio, fecha_fin):
     if fecha_fin is not None:
         condiciones.append(columna < fecha_fin + timedelta(days=1))
     return condiciones
+
+
+def nivel_stock(cantidad, minimo, preventivo):
+    return case(
+        (minimo.is_(None), null()),
+        (cantidad <= minimo, literal(NIVEL_STOCK_CRITICO)),
+        (cantidad <= preventivo, literal(NIVEL_STOCK_BAJO)),
+        else_=literal(NIVEL_STOCK_NORMAL),
+    )
 
 
 def _turno_cubre_hora(turno: dict, hora: time) -> bool:

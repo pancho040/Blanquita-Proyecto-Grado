@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
+
 
 class IngresoProductoTerminadoItem(BaseModel):
     IdPresentacion: int
@@ -69,7 +71,7 @@ class VerInventarioProductoTerminadoRequest(BaseModel):
     IdProducto: int | None = None
 
 
-class VerInventarioProductoTerminadoResponse(BaseModel):
+class VerInventarioProductoTerminadoResponse(NivelStockResponse):
     IdPresentacion: int
     CodigoPresentacion: str
     NombreProducto: str

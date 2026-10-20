@@ -17,6 +17,8 @@ class TipoBobina(Base):
     TaraKg: Mapped[Decimal] = mapped_column(Numeric, server_default=text("38"))
     Descripcion: Mapped[str | None] = mapped_column(Text)
     Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class LoteBobina(Base):

@@ -1,3 +1,5 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const EmpaqueItem = (codigoEmpaque, idTipoEmpaque, pesoKg) => ({
   CodigoEmpaque: codigoEmpaque,
   IdTipoEmpaque: idTipoEmpaque,
@@ -35,7 +37,8 @@ export const TrasladarEmpaquesProduccionResponseItem = (data) => ({
 export const ResumenInventarioEmpaqueResponse = (data) => ({
   IdTipoEmpaque: data.IdTipoEmpaque,
   NombreTipoEmpaque: data.NombreTipoEmpaque,
-  CantidadEmpaques: data.CantidadEmpaques
+  CantidadEmpaques: data.CantidadEmpaques,
+  ...NivelStockResponse(data)
 });
 
 export const DetalleInventarioEmpaqueRequest = (idTipoEmpaque) => ({

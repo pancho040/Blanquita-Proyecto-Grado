@@ -8,6 +8,7 @@ from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_FUERA_INVENTARIO,
     MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
 )
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina, TipoBobina
 from app.Schemas.Proveedor import Proveedor
@@ -19,14 +20,18 @@ class InventarioBobinaPapelRepository:
         self.caller = DbCaller(db)
 
     def VerResumen(self) -> list[dict]:
+        cantidad = func.count(BobinaPapel.IdBobinaPapel)
         consulta = (
             select(
                 TipoBobina.IdTipoBobina,
                 TipoBobina.NombreTipoBobina,
                 TipoBobina.Activo,
-                func.count(BobinaPapel.IdBobinaPapel).label("CantidadBobinas"),
+                cantidad.label("CantidadBobinas"),
                 func.coalesce(func.sum(BobinaPapel.PesoNetoKg), 0).label("PesoNetoTotalKg"),
                 func.coalesce(func.avg(BobinaPapel.Gramaje), 0).label("GramajePromedio"),
+                TipoBobina.StockMinimo,
+                TipoBobina.StockPreventivo,
+                nivel_stock(cantidad, TipoBobina.StockMinimo, TipoBobina.StockPreventivo).label("NivelStock"),
             )
             .outerjoin(
                 BobinaPapel,
@@ -35,7 +40,13 @@ class InventarioBobinaPapelRepository:
                     BobinaPapel.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN,
                 ),
             )
-            .group_by(TipoBobina.IdTipoBobina, TipoBobina.NombreTipoBobina, TipoBobina.Activo)
+            .group_by(
+                TipoBobina.IdTipoBobina,
+                TipoBobina.NombreTipoBobina,
+                TipoBobina.Activo,
+                TipoBobina.StockMinimo,
+                TipoBobina.StockPreventivo,
+            )
             .order_by(TipoBobina.IdTipoBobina)
         )
         return self.caller.Consultar(consulta)

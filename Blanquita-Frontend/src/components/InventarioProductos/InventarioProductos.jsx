@@ -18,12 +18,14 @@ import { descargarReporteInventarioProducto } from "@/services/Inventario/Report
 import { Roles } from "@/constants/Values";
 import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
-import { estadoStock, ESTILO_ESTADO, descripcionContenido } from "./comunes";
+import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
+import { descripcionContenido } from "./comunes";
 
 const FILTROS = [
   { id: "todos", texto: "Todos" },
   { id: "disponible", texto: "Con stock" },
   { id: "bajo", texto: "Stock bajo" },
+  { id: "critico", texto: "Stock crítico" },
   { id: "agotado", texto: "Sin stock" },
 ];
 
@@ -84,7 +86,7 @@ export default function InventarioProductoTerminado({ usuario }) {
     return inventario.filter((p) => {
       if (productoFiltro !== "todos" && p.NombreProducto !== productoFiltro)
         return false;
-      if (estadoFiltro !== "todos" && estadoStock(p.CantidadActual) !== estadoFiltro)
+      if (estadoFiltro !== "todos" && estadoStock(p.CantidadActual, p) !== estadoFiltro)
         return false;
       if (!termino) return true;
       return (
@@ -255,7 +257,7 @@ export default function InventarioProductoTerminado({ usuario }) {
                   </TableHeader>
                   <TableBody>
                     {filtradas.map((p) => {
-                      const estado = estadoStock(p.CantidadActual);
+                      const estado = estadoStock(p.CantidadActual, p);
                       return (
                         <TableRow key={p.IdPresentacion} className="hover:bg-slate-50">
                           <TableCell className="pl-5 font-mono font-bold text-c3">
@@ -275,13 +277,18 @@ export default function InventarioProductoTerminado({ usuario }) {
                               variant="outline"
                               className={cn(
                                 "border-0 font-bold",
-                                ESTILO_ESTADO[estado].clase,
+                                ESTILO_STOCK[estado].clase,
                               )}
                             >
-                              {ESTILO_ESTADO[estado].texto}
+                              {ESTILO_STOCK[estado].texto}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right text-[15px] font-extrabold tabular-nums text-slate-900">
+                          <TableCell
+                            className={cn(
+                              "text-right text-[15px] font-extrabold tabular-nums",
+                              ESTILO_STOCK[estado].numero,
+                            )}
+                          >
                             {p.CantidadActual}
                           </TableCell>
                         </TableRow>
@@ -293,7 +300,7 @@ export default function InventarioProductoTerminado({ usuario }) {
 
               <div className="flex flex-col gap-2.5 p-3.5 md:hidden">
                 {filtradas.map((p) => {
-                  const estado = estadoStock(p.CantidadActual);
+                  const estado = estadoStock(p.CantidadActual, p);
                   return (
                     <div
                       key={p.IdPresentacion}
@@ -312,17 +319,22 @@ export default function InventarioProductoTerminado({ usuario }) {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <div className="text-xl font-extrabold tabular-nums text-slate-900">
+                          <div
+                            className={cn(
+                              "text-xl font-extrabold tabular-nums",
+                              ESTILO_STOCK[estado].numero,
+                            )}
+                          >
                             {p.CantidadActual}
                           </div>
                           <Badge
                             variant="outline"
                             className={cn(
                               "border-0 text-[11px] font-bold",
-                              ESTILO_ESTADO[estado].clase,
+                              ESTILO_STOCK[estado].clase,
                             )}
                           >
-                            {ESTILO_ESTADO[estado].texto}
+                            {ESTILO_STOCK[estado].texto}
                           </Badge>
                         </div>
                       </div>

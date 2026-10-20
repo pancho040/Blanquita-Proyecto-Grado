@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN, MOVIMIENTO_MATERIA_PRIMA_INGRESO
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque, TipoEmpaque
 from app.Schemas.Proveedor import Proveedor
@@ -15,12 +16,16 @@ class EmpaqueBobinaRepository:
         self.caller = DbCaller(db)
 
     def VerResumenInventarioEmpaque(self) -> list[dict]:
+        cantidad = func.count(Empaque.IdEmpaque)
         consulta = (
             select(
                 TipoEmpaque.IdTipoEmpaque,
                 TipoEmpaque.NombreTipoEmpaque,
                 TipoEmpaque.Activo,
-                func.count(Empaque.IdEmpaque).label("CantidadEmpaques"),
+                cantidad.label("CantidadEmpaques"),
+                TipoEmpaque.StockMinimo,
+                TipoEmpaque.StockPreventivo,
+                nivel_stock(cantidad, TipoEmpaque.StockMinimo, TipoEmpaque.StockPreventivo).label("NivelStock"),
             )
             .outerjoin(
                 Empaque,
@@ -29,7 +34,13 @@ class EmpaqueBobinaRepository:
                     Empaque.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN,
                 ),
             )
-            .group_by(TipoEmpaque.IdTipoEmpaque, TipoEmpaque.NombreTipoEmpaque, TipoEmpaque.Activo)
+            .group_by(
+                TipoEmpaque.IdTipoEmpaque,
+                TipoEmpaque.NombreTipoEmpaque,
+                TipoEmpaque.Activo,
+                TipoEmpaque.StockMinimo,
+                TipoEmpaque.StockPreventivo,
+            )
             .order_by(TipoEmpaque.IdTipoEmpaque)
         )
         return self.caller.Consultar(consulta)

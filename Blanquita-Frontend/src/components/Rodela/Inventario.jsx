@@ -311,7 +311,7 @@ export default function InventarioRodelas({ usuario }) {
                 onClick={() => detalle.seleccionar(t.IdTipoRodela)}
                 icono={Disc}
                 nombre={t.NombreTipoRodela}
-                etiqueta={t.badge}
+                stock={t.stock}
                 cantidad={t.CantidadEnAlmacen}
                 unidad="rodelas en almacén"
                 textoVer="Ver rodelas"

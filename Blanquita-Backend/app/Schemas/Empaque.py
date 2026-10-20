@@ -23,6 +23,8 @@ class TipoEmpaque(Base):
     IdTipoEmpaque: Mapped[int] = mapped_column(primary_key=True)
     NombreTipoEmpaque: Mapped[str] = mapped_column(Text)
     Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class Empaque(Base):
@@ -64,6 +66,8 @@ class InventarioEmpaqueBolsa(Base):
     IdInventarioEmpaqueBolsa: Mapped[int] = mapped_column(primary_key=True)
     IdTipoEmpaqueBolsa: Mapped[int]
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class TipoBolsaJava(Base):
@@ -81,6 +85,8 @@ class InventarioBolsaJava(Base):
     IdInventarioBolsaJava: Mapped[int] = mapped_column(primary_key=True)
     IdTipoBolsaJava: Mapped[int]
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class MovimientoBolsaJava(Base):

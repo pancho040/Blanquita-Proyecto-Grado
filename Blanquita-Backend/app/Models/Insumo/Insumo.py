@@ -6,9 +6,10 @@ from app.Constants.Cantidades import (
     LONGITUD_MAXIMA_NOMBRE_INSUMO,
     LONGITUD_MINIMA_NOMBRE_INSUMO,
 )
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
 
 
-class CatalogoInsumoResponse(BaseModel):
+class CatalogoInsumoResponse(NivelStockResponse):
     IdInventarioInsumo: int
     IdTipoInsumo: int
     CantidadActual: int

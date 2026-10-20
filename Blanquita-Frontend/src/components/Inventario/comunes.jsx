@@ -19,6 +19,7 @@ import { ACENTOS } from "@/constants/Acentos";
 import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
 import { dateFormatter } from "@/utils/dates";
 import { limpiarObservacion } from "@/utils/validators";
+import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 
 export const GRID_TARJETAS = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
@@ -27,14 +28,11 @@ const TARJETA =
 
 const MENSAJE = "p-8 text-center text-sm text-slate-400";
 
-export const etiquetaStock = (cantidad, umbral) =>
-  cantidad === 0 ? "Sin stock" : cantidad < umbral ? "Stock bajo" : "Disponible";
-
-export const conAcentos = (lista, { cantidadDe, umbral = 6, desplazamiento = 0 } = {}) =>
+export const conAcentos = (lista, { cantidadDe, desplazamiento = 0 } = {}) =>
   lista.map((t, i) => ({
     ...t,
     ...ACENTOS[(i + desplazamiento) % ACENTOS.length],
-    ...(cantidadDe ? { badge: etiquetaStock(cantidadDe(t), umbral) } : {}),
+    ...(cantidadDe ? { stock: estadoStock(cantidadDe(t), t) } : {}),
   }));
 
 export const coincide = (busqueda, ...valores) => {
@@ -51,11 +49,13 @@ export function TarjetaTipo({
   grosorIcono = 2,
   nombre,
   etiqueta,
+  stock,
   cantidad,
   unidad,
   textoVer,
   children,
 }) {
+  const estilo = stock ? ESTILO_STOCK[stock] : null;
   return (
     <button onClick={onClick} className={cn(TARJETA, activo ? acento.border : "border-slate-200")}>
       <div className="flex items-center justify-between gap-2">
@@ -63,8 +63,11 @@ export function TarjetaTipo({
           <Icono className={cn(claseIcono, "shrink-0", acento.text)} strokeWidth={grosorIcono} />
           <div className="text-[17px] font-extrabold text-slate-900">{nombre}</div>
         </div>
-        <Badge variant="outline" className={cn("border-0 font-bold", acento.soft, acento.text)}>
-          {etiqueta}
+        <Badge
+          variant="outline"
+          className={cn("border-0 font-bold", estilo ? estilo.clase : cn(acento.soft, acento.text))}
+        >
+          {estilo ? estilo.texto : etiqueta}
         </Badge>
       </div>
 

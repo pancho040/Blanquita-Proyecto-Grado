@@ -324,9 +324,11 @@ export default function InventarioBobinaServilleta({ usuario }) {
 
   const tiposBobina = conAcentos(resumenBobinas.datos, {
     cantidadDe: (t) => t.CantidadBobinaServilleta,
-    umbral: 4,
   });
-  const tiposSub = conAcentos(resumenSubs.datos, { desplazamiento: 2 });
+  const tiposSub = conAcentos(resumenSubs.datos, {
+    cantidadDe: (t) => t.CantidadSubBobinas,
+    desplazamiento: 2,
+  });
 
   const { sel } = detalle;
   const tipoSel =
@@ -561,7 +563,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       }
                       icono={Database}
                       nombre={t.NombreTipoBobinaServilleta}
-                      etiqueta={t.badge}
+                      stock={t.stock}
                       cantidad={t.CantidadBobinaServilleta}
                       unidad="bobinas en almacén"
                       textoVer="Ver bobinas"
@@ -587,7 +589,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                     icono={Disc}
                     claseIcono="h-7 w-7"
                     nombre={t.NombreTipoMedida}
-                    etiqueta="Sub-bobina"
+                    stock={t.stock}
                     cantidad={t.CantidadSubBobinas}
                     unidad="sub-bobinas en almacén"
                     textoVer="Ver sub-bobinas"

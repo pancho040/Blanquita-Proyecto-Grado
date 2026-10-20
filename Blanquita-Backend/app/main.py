@@ -38,6 +38,8 @@ from app.Routes.Qr.InventarioProducto import qrRouter
 from app.Routes.Insumo.Insumo import InsumoRouter
 from app.Routes.Insumo.Reporte import InsumoReporteRouter
 
+from app.Routes.AlertaStock.AlertaStock import AlertaStockRouter
+
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
@@ -126,3 +128,6 @@ app.include_router(qrRouter)
 #ROUTERS INSUMOS
 app.include_router(InsumoRouter)
 app.include_router(InsumoReporteRouter)
+
+#ROUTERS ALERTAS DE STOCK
+app.include_router(AlertaStockRouter)

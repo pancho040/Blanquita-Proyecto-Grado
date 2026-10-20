@@ -134,7 +134,7 @@ function CardCorreccion({
             <span className="font-mono text-[16px] font-extrabold text-c3">
               {presentacion.CodigoPresentacion}
             </span>
-            <BadgeEstado cantidad={presentacion.CantidadActual} />
+            <BadgeEstado cantidad={presentacion.CantidadActual} umbral={presentacion} />
           </div>
           <div className="text-[13px] font-semibold text-slate-900">
             {presentacion.NombreProducto}

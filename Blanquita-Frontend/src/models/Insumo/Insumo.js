@@ -1,10 +1,13 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const CatalogoInsumoResponse = (data) => ({
   IdInventarioInsumo: data.IdInventarioInsumo,
   IdTipoInsumo: data.IdTipoInsumo,
   CantidadActual: data.CantidadActual,
   NombreInsumo: data.NombreInsumo,
   DescripcionInsumo: data.DescripcionInsumo ?? null,
-  Activo: data.Activo
+  Activo: data.Activo,
+  ...NivelStockResponse(data)
 });
 
 export const MovimientoInsumoRequest = (idTipoInsumo, cantidad, observacion) => ({

@@ -13,6 +13,8 @@ class TipoRodela(Base):
     NombreTipoRodela: Mapped[str] = mapped_column(Text)
     Descripcion: Mapped[str | None] = mapped_column(Text)
     Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class LoteRodela(Base):

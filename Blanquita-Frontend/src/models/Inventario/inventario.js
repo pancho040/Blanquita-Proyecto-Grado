@@ -106,6 +106,9 @@ export const VerInventarioProductoTerminadoResponse = ({
   CantidadPorUnidadTerminada,
   CantidadActual,
   Activo,
+  StockMinimo = null,
+  StockPreventivo = null,
+  NivelStock = null,
 }) => ({
   IdPresentacion,
   CodigoPresentacion,
@@ -115,6 +118,9 @@ export const VerInventarioProductoTerminadoResponse = ({
   CantidadPorUnidadTerminada,
   CantidadActual,
   Activo,
+  StockMinimo,
+  StockPreventivo,
+  NivelStock,
 });
 
 export const VerInventarioProductoTerminadoResponseList = (jsonList) =>

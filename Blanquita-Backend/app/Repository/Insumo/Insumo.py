@@ -3,6 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.HistorialAdmin import HistorialAdmin
 from app.Schemas.Insumo import InventarioInsumo, MovimientoInsumo, TipoInsumo
@@ -22,6 +23,9 @@ class InsumoRepository:
                 TipoInsumo.NombreInsumo,
                 TipoInsumo.DescripcionInsumo,
                 TipoInsumo.Activo,
+                InventarioInsumo.StockMinimo,
+                InventarioInsumo.StockPreventivo,
+                nivel_stock(InventarioInsumo.CantidadActual, InventarioInsumo.StockMinimo, InventarioInsumo.StockPreventivo).label("NivelStock"),
             )
             .join(TipoInsumo, InventarioInsumo.IdTipoInsumo == TipoInsumo.IdTipoInsumo)
             .order_by(TipoInsumo.NombreInsumo)

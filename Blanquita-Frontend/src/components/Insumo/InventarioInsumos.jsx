@@ -379,7 +379,7 @@ export default function InventarioInsumos({ usuario }) {
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
                 nombre={i.NombreInsumo}
-                etiqueta={i.badge}
+                stock={i.stock}
                 cantidad={Number(i.CantidadActual || 0)}
                 unidad="en almacén"
                 textoVer="Registrar movimiento"

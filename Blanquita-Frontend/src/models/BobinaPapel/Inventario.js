@@ -1,9 +1,12 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const VerResumenInventarioBobinaPapelResponse = (data) => ({
   IdTipoBobina: data.IdTipoBobina,
   NombreTipoBobina: data.NombreTipoBobina,
   CantidadBobinas: data.CantidadBobinas,
   PesoNetoTotalKg: data.PesoNetoTotalKg,
-  GramajePromedio: data.GramajePromedio
+  GramajePromedio: data.GramajePromedio,
+  ...NivelStockResponse(data)
 });
 
 export const VerDetalleInventarioBobinaPapelRequest = (idTipoBobina) => ({

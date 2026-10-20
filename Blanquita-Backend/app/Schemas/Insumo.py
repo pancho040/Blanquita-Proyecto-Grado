@@ -22,6 +22,8 @@ class InventarioInsumo(Base):
     IdInventarioInsumo: Mapped[int] = mapped_column(primary_key=True)
     IdTipoInsumo: Mapped[int]
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class MovimientoInsumo(Base):

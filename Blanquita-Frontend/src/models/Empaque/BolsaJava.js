@@ -1,10 +1,13 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const InventarioBolsaJavaResponse = (data) => ({
   IdInventarioBolsaJava: data.IdInventarioBolsaJava,
   IdTipoBolsaJava: data.IdTipoBolsaJava,
   NombreBolsaJava: data.NombreBolsaJava,
   DescripcionBolsaJava: data.DescripcionBolsaJava ?? null,
   Activo: data.Activo,
-  CantidadActual: data.CantidadActual
+  CantidadActual: data.CantidadActual,
+  ...NivelStockResponse(data)
 });
 
 export const IngresoBolsaJavaRequest = (idProveedor, cantidadToneladasPedida, bolsasJava) => ({

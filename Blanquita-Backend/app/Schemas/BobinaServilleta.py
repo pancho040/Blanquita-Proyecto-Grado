@@ -18,6 +18,8 @@ class TipoBobinaServilleta(Base):
     Descripcion: Mapped[str | None] = mapped_column(Text)
     CantidadUnidades: Mapped[int] = mapped_column(server_default=text("1"))
     Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class FormatoSubBobina(Base):
@@ -35,6 +37,8 @@ class TipoMedidaSubBobina(Base):
     MedidaMm: Mapped[int]
     Descripcion: Mapped[str | None] = mapped_column(Text)
     Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class FormatoSubBobinaDetalle(Base):

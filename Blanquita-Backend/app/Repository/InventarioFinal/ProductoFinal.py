@@ -3,6 +3,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
     InventarioProductoTerminado,
@@ -106,6 +107,9 @@ class ProductoFinalRepository:
                 PresentacionProducto.CantidadPorUnidadTerminada,
                 InventarioProductoTerminado.CantidadActual,
                 and_(Producto.Activo, PresentacionProducto.Activo).label("Activo"),
+                InventarioProductoTerminado.StockMinimo,
+                InventarioProductoTerminado.StockPreventivo,
+                nivel_stock(InventarioProductoTerminado.CantidadActual, InventarioProductoTerminado.StockMinimo, InventarioProductoTerminado.StockPreventivo).label("NivelStock"),
             )
             .join(
                 PresentacionProducto,

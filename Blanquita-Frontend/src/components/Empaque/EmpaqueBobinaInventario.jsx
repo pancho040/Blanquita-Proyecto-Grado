@@ -206,7 +206,7 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
                 nombre={t.NombreTipoEmpaque}
-                etiqueta={t.badge}
+                stock={t.stock}
                 cantidad={t.CantidadEmpaques}
                 unidad="empaques en almacén"
                 textoVer="Ver empaques"

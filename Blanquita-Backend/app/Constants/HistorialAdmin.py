@@ -1,6 +1,7 @@
 MODULO_USUARIOS = "Usuarios"
 MODULO_PROVEEDORES = "Proveedores"
 MODULO_INSUMOS = "Insumos"
+MODULO_STOCK = "Stock"
 MODULO_OTROS = "Otros"
 
 PREFIJOS_MODULO_HISTORIAL_ADMIN = {
@@ -18,6 +19,9 @@ PREFIJOS_MODULO_HISTORIAL_ADMIN = {
     MODULO_INSUMOS: (
         "Crear insumo ·",
         "Editar insumo ·",
+    ),
+    MODULO_STOCK: (
+        "Umbral de stock ·",
     ),
 }
 

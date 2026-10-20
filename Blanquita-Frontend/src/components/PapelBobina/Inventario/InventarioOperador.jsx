@@ -215,7 +215,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                 onClick={() => detalle.seleccionar(t.IdTipoBobina)}
                 icono={Cylinder}
                 nombre={t.NombreTipoBobina}
-                etiqueta={t.badge}
+                stock={t.stock}
                 cantidad={t.CantidadBobinas}
                 unidad="bobinas en almacén"
                 textoVer="Ver bobinas"

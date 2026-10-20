@@ -1,5 +1,6 @@
 import { UnidadServilletaResponse } from "./BobinaServilleta";
 import { numeroONulo } from "@/utils/validators";
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
 
 export const ReingresarSubBobinaInventarioRequest = (idSubBobina, observacion) => ({
   IdSubBobina: idSubBobina,
@@ -15,7 +16,8 @@ export const ReingresarSubBobinaInventarioResponse = (data) => ({
 export const ResumenInventarioBobinaServilletaResponse = (data) => ({
   IdTipoBobinaServilleta: data.IdTipoBobinaServilleta,
   NombreTipoBobinaServilleta: data.NombreTipoBobinaServilleta,
-  CantidadBobinaServilleta: data.CantidadBobinaServilleta
+  CantidadBobinaServilleta: data.CantidadBobinaServilleta,
+  ...NivelStockResponse(data)
 });
 
 export const DetalleInventarioBobinaServilletaRequest = (idTipoBobinaServilleta) => ({
@@ -32,7 +34,8 @@ export const DetalleInventarioBobinaServilletaResponse = (data) => ({
 export const ResumenInventarioSubBobinaServilletaResponse = (data) => ({
   IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
   NombreTipoMedida: data.NombreTipoMedida,
-  CantidadSubBobinas: data.CantidadSubBobinas
+  CantidadSubBobinas: data.CantidadSubBobinas,
+  ...NivelStockResponse(data)
 });
 
 export const DetalleInventarioSubBobinaServilletaRequest = (idTipoMedidaSubBobina) => ({

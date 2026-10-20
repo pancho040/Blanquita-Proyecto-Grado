@@ -1,8 +1,10 @@
 from datetime import date, datetime
 from pydantic import BaseModel
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
 
-class ResumenInventarioRodelaResponse(BaseModel):
+
+class ResumenInventarioRodelaResponse(NivelStockResponse):
     IdTipoRodela: int
     NombreTipoRodela: str
     Descripcion: str | None

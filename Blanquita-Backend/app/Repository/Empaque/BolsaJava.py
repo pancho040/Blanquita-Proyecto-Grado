@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import (
     InventarioBolsaJava,
@@ -27,6 +28,9 @@ class BolsaJavaRepository:
                 TipoBolsaJava.NombreBolsaJava,
                 TipoBolsaJava.DescripcionBolsaJava,
                 TipoBolsaJava.Activo,
+                InventarioBolsaJava.StockMinimo,
+                InventarioBolsaJava.StockPreventivo,
+                nivel_stock(InventarioBolsaJava.CantidadActual, InventarioBolsaJava.StockMinimo, InventarioBolsaJava.StockPreventivo).label("NivelStock"),
             )
             .join(
                 TipoBolsaJava,

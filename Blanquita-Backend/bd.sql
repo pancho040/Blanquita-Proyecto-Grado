@@ -51,7 +51,12 @@ CREATE TABLE "TipoBobina" (
   "Formato" NUMERIC NOT NULL DEFAULT 2760,
   "TaraKg" NUMERIC NOT NULL DEFAULT 38,
   "Descripcion" TEXT,
-  "Activo" BOOLEAN NOT NULL DEFAULT true
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_tipobobina_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_tipobobina_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_tipobobina_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "EstadoMateriaPrima" (
@@ -87,7 +92,12 @@ CREATE TABLE "TipoBobinaServilleta" (
   "Descripcion" TEXT,
   "CantidadUnidades" INTEGER NOT NULL DEFAULT 1,
   "Activo" BOOLEAN NOT NULL DEFAULT true,
-  CONSTRAINT "ck_tipobobinaservilleta_unidades" CHECK ("CantidadUnidades" > 0)
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_tipobobinaservilleta_unidades" CHECK ("CantidadUnidades" > 0),
+  CONSTRAINT "ck_tipobobinaservilleta_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_tipobobinaservilleta_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_tipobobinaservilleta_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "FormatoSubBobina" (
@@ -102,8 +112,13 @@ CREATE TABLE "TipoMedidaSubBobina" (
   "MedidaMm" INTEGER NOT NULL,
   "Descripcion" TEXT,
   "Activo" BOOLEAN NOT NULL DEFAULT true,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
   CONSTRAINT "uq_tipomedidasubbobina_medida" UNIQUE ("MedidaMm"),
-  CONSTRAINT "ck_tipomedidasubbobina_medida" CHECK ("MedidaMm" > 0)
+  CONSTRAINT "ck_tipomedidasubbobina_medida" CHECK ("MedidaMm" > 0),
+  CONSTRAINT "ck_tipomedidasubbobina_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_tipomedidasubbobina_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_tipomedidasubbobina_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "FormatoSubBobinaDetalle" (
@@ -169,7 +184,12 @@ CREATE TABLE "LoteEmpaque" (
 CREATE TABLE "TipoEmpaque" (
   "IdTipoEmpaque" SERIAL PRIMARY KEY,
   "NombreTipoEmpaque" TEXT NOT NULL,
-  "Activo" BOOLEAN NOT NULL DEFAULT true
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_tipoempaque_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_tipoempaque_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_tipoempaque_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "Empaque" (
@@ -193,7 +213,12 @@ CREATE TABLE "TipoRodela" (
   "IdTipoRodela" SERIAL PRIMARY KEY,
   "NombreTipoRodela" TEXT NOT NULL,
   "Descripcion" TEXT,
-  "Activo" BOOLEAN NOT NULL DEFAULT true
+  "Activo" BOOLEAN NOT NULL DEFAULT true,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_tiporodela_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_tiporodela_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_tiporodela_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "Rodela" (
@@ -367,7 +392,12 @@ CREATE INDEX "idx_movprodterm_fecha" ON "MovimientoProductoTerminado"("FechaMovi
 
 CREATE TABLE "InventarioProductoTerminado" (
   "IdPresentacion" INTEGER PRIMARY KEY REFERENCES "PresentacionProducto"("IdPresentacion") ON DELETE CASCADE,
-  "CantidadActual" NUMERIC NOT NULL DEFAULT 0
+  "CantidadActual" NUMERIC NOT NULL DEFAULT 0,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_invpt_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_invpt_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_invpt_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "TipoInsumo" (
@@ -391,7 +421,12 @@ CREATE INDEX "idx_movinsumo_tipo_fecha" ON "MovimientoInsumo"("IdTipoInsumo", "F
 CREATE TABLE "InventarioInsumo" (
   "IdInventarioInsumo" SERIAL PRIMARY KEY,
   "IdTipoInsumo" INTEGER NOT NULL REFERENCES "TipoInsumo"("IdTipoInsumo") ON DELETE CASCADE,
-  "CantidadActual" NUMERIC NOT NULL DEFAULT 0
+  "CantidadActual" NUMERIC NOT NULL DEFAULT 0,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_invinsumo_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_invinsumo_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_invinsumo_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "TipoEmpaqueBolsa" (
@@ -421,7 +456,12 @@ CHECK ("IdTipoMovimiento" <> 1 OR "IdLoteEmpaque" IS NOT NULL);
 CREATE TABLE "InventarioEmpaqueBolsa" (
   "IdInventarioEmpaqueBolsa" SERIAL PRIMARY KEY,
   "IdTipoEmpaqueBolsa" INTEGER NOT NULL REFERENCES "TipoEmpaqueBolsa"("IdTipoEmpaqueBolsa") ON DELETE CASCADE,
-  "CantidadActual" NUMERIC NOT NULL DEFAULT 0
+  "CantidadActual" NUMERIC NOT NULL DEFAULT 0,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_invempaquebolsa_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_invempaquebolsa_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_invempaquebolsa_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "TipoBolsaJava" (
@@ -451,7 +491,12 @@ CHECK ("IdTipoMovimiento" <> 1 OR "IdLoteEmpaque" IS NOT NULL);
 CREATE TABLE "InventarioBolsaJava" (
   "IdInventarioBolsaJava" SERIAL PRIMARY KEY,
   "IdTipoBolsaJava" INTEGER NOT NULL REFERENCES "TipoBolsaJava"("IdTipoBolsaJava") ON DELETE CASCADE,
-  "CantidadActual" NUMERIC NOT NULL DEFAULT 0
+  "CantidadActual" NUMERIC NOT NULL DEFAULT 0,
+  "StockMinimo" INTEGER,
+  "StockPreventivo" INTEGER,
+  CONSTRAINT "ck_invbolsajava_stockminimo" CHECK ("StockMinimo" IS NULL OR "StockMinimo" >= 0),
+  CONSTRAINT "ck_invbolsajava_umbrales_completos" CHECK (num_nonnulls("StockMinimo", "StockPreventivo") IN (0, 2)),
+  CONSTRAINT "ck_invbolsajava_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
 CREATE TABLE "TipoMovimientoOperadorLogs" (

@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
+
 
 class IngresoBolsaJavaItem(BaseModel):
     IdTipoBolsaJava: int = Field(..., gt=0)
@@ -50,7 +52,7 @@ class SalidaBolsaJavaResponse(BaseModel):
     FechaMovimiento: datetime
 
 
-class InventarioBolsaJavaResponse(BaseModel):
+class InventarioBolsaJavaResponse(NivelStockResponse):
     IdInventarioBolsaJava: int
     IdTipoBolsaJava: int
     NombreBolsaJava: str

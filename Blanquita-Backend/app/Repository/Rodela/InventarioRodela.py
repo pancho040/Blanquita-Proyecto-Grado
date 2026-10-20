@@ -11,6 +11,7 @@ from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_EN_ALMACEN,
     MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
 )
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.MateriaPrima import EstadoMateriaPrima
 from app.Schemas.Proveedor import Proveedor
@@ -25,18 +26,22 @@ class InventarioRodelaRepository:
         self.caller = DbCaller(db)
 
     def VerResumenInventarioRodela(self) -> list[dict]:
+        cantidad = func.count(Rodela.IdRodela).filter(
+            Rodela.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN
+        )
         consulta = (
             select(
                 TipoRodela.IdTipoRodela,
                 TipoRodela.NombreTipoRodela,
                 TipoRodela.Descripcion,
                 TipoRodela.Activo,
-                func.count(Rodela.IdRodela)
-                .filter(Rodela.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN)
-                .label("CantidadEnAlmacen"),
+                cantidad.label("CantidadEnAlmacen"),
                 func.count(Rodela.IdRodela)
                 .filter(Rodela.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_ABIERTA)
                 .label("CantidadAbiertas"),
+                TipoRodela.StockMinimo,
+                TipoRodela.StockPreventivo,
+                nivel_stock(cantidad, TipoRodela.StockMinimo, TipoRodela.StockPreventivo).label("NivelStock"),
             )
             .outerjoin(
                 Rodela,
@@ -52,6 +57,8 @@ class InventarioRodelaRepository:
                 TipoRodela.NombreTipoRodela,
                 TipoRodela.Descripcion,
                 TipoRodela.Activo,
+                TipoRodela.StockMinimo,
+                TipoRodela.StockPreventivo,
             )
             .order_by(TipoRodela.IdTipoRodela)
         )

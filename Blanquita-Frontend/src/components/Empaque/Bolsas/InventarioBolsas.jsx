@@ -307,7 +307,7 @@ export default function InventarioBolsas({ tipo, usuario }) {
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
                 nombre={i[config.campoNombre]}
-                etiqueta={i.badge}
+                stock={i.stock}
                 cantidad={Number(i.CantidadActual || 0)}
                 unidad="paquetes en almacén"
                 textoVer="Registrar salida"

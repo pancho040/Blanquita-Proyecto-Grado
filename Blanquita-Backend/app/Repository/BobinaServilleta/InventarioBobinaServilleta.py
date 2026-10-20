@@ -9,6 +9,7 @@ from app.Constants.Estados import (
     MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
 )
 from app.Repository.BobinaServilleta.Unidades import con_unidades, unidades_de_bobinas
+from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
@@ -28,12 +29,16 @@ class InventarioBobinaServilletaRepository:
         self.caller = DbCaller(db)
 
     def VerResumenInventarioBobinaServilleta(self) -> list[dict]:
+        cantidad = func.count(BobinaServilleta.IdBobinaServilleta)
         consulta = (
             select(
                 TipoBobinaServilleta.IdTipoBobinaServilleta,
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
                 TipoBobinaServilleta.Activo,
-                func.count(BobinaServilleta.IdBobinaServilleta).label("CantidadBobinaServilleta"),
+                cantidad.label("CantidadBobinaServilleta"),
+                TipoBobinaServilleta.StockMinimo,
+                TipoBobinaServilleta.StockPreventivo,
+                nivel_stock(cantidad, TipoBobinaServilleta.StockMinimo, TipoBobinaServilleta.StockPreventivo).label("NivelStock"),
             )
             .outerjoin(
                 BobinaServilleta,
@@ -47,6 +52,8 @@ class InventarioBobinaServilletaRepository:
                 TipoBobinaServilleta.IdTipoBobinaServilleta,
                 TipoBobinaServilleta.NombreTipoBobinaServilleta,
                 TipoBobinaServilleta.Activo,
+                TipoBobinaServilleta.StockMinimo,
+                TipoBobinaServilleta.StockPreventivo,
             )
             .order_by(TipoBobinaServilleta.IdTipoBobinaServilleta)
         )
@@ -76,11 +83,15 @@ class InventarioBobinaServilletaRepository:
         return unidades_de_bobinas(self.caller, ids_bobina)
 
     def VerResumenInventarioSubBobinaServilleta(self) -> list[dict]:
+        cantidad = func.count(SubBobinaServilleta.IdSubBobinaServilleta)
         consulta = (
             select(
                 TipoMedidaSubBobina.IdTipoMedidaSubBobina,
                 TipoMedidaSubBobina.Descripcion.label("NombreTipoMedida"),
-                func.count(SubBobinaServilleta.IdSubBobinaServilleta).label("CantidadSubBobinas"),
+                cantidad.label("CantidadSubBobinas"),
+                TipoMedidaSubBobina.StockMinimo,
+                TipoMedidaSubBobina.StockPreventivo,
+                nivel_stock(cantidad, TipoMedidaSubBobina.StockMinimo, TipoMedidaSubBobina.StockPreventivo).label("NivelStock"),
             )
             .outerjoin(
                 SubBobinaServilleta,
@@ -90,7 +101,12 @@ class InventarioBobinaServilletaRepository:
                     SubBobinaServilleta.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_EN_ALMACEN,
                 ),
             )
-            .group_by(TipoMedidaSubBobina.IdTipoMedidaSubBobina, TipoMedidaSubBobina.Descripcion)
+            .group_by(
+                TipoMedidaSubBobina.IdTipoMedidaSubBobina,
+                TipoMedidaSubBobina.Descripcion,
+                TipoMedidaSubBobina.StockMinimo,
+                TipoMedidaSubBobina.StockPreventivo,
+            )
             .order_by(TipoMedidaSubBobina.IdTipoMedidaSubBobina)
         )
         return self.caller.Consultar(consulta)

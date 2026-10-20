@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime,date
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
 from app.Models.BobinaServilleta.BobinaServilleta import UnidadServilletaResponse
 
 
@@ -15,7 +16,7 @@ class ReingresarSubBobinaInventarioResponse(BaseModel):
     FechaMovimiento: datetime
 
 
-class ResumenInventarioBobinaServilletaResponse(BaseModel):
+class ResumenInventarioBobinaServilletaResponse(NivelStockResponse):
     IdTipoBobinaServilleta: int
     NombreTipoBobinaServilleta: str
     Activo: bool
@@ -33,7 +34,7 @@ class DetalleInventarioBobinaServilletaResponse(BaseModel):
     Unidades: list[UnidadServilletaResponse]
 
 
-class ResumenInventarioSubBobinaServilletaResponse(BaseModel):
+class ResumenInventarioSubBobinaServilletaResponse(NivelStockResponse):
     IdTipoMedidaSubBobina: int
     NombreTipoMedida: str
     CantidadSubBobinas: int

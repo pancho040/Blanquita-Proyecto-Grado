@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
+
 
 class IngresoEmpaqueBolsaItem(BaseModel):
     IdTipoEmpaqueBolsa: int = Field(..., gt=0)
@@ -50,7 +52,7 @@ class SalidaEmpaqueBolsaResponse(BaseModel):
     FechaMovimiento: datetime
 
 
-class InventarioEmpaqueBolsaResponse(BaseModel):
+class InventarioEmpaqueBolsaResponse(NivelStockResponse):
     IdInventarioEmpaqueBolsa: int
     IdTipoEmpaqueBolsa: int
     NombreEmpaqueBolsa: str

@@ -35,6 +35,8 @@ class InventarioProductoTerminado(Base):
 
     IdPresentacion: Mapped[int] = mapped_column(primary_key=True)
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class MovimientoProductoTerminado(Base):
