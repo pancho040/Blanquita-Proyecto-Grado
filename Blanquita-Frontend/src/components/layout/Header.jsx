@@ -37,13 +37,12 @@ export default function Header({
       </>
     );
     botonAccion = accion.href ? (
-      <Button asChild className={CLASES_ACCION}>
-        <a
-          href={accion.href}
-          className="inline-flex items-center gap-2 whitespace-nowrap"
-        >
-          {contenido}
-        </a>
+      <Button
+        nativeButton={false}
+        render={<a href={accion.href} />}
+        className={`${CLASES_ACCION} whitespace-nowrap`}
+      >
+        {contenido}
       </Button>
     ) : (
       <Button onClick={accion.onClick} className={CLASES_ACCION}>

@@ -39,16 +39,17 @@ def _turno_cubre_hora(turno: dict, hora: time) -> bool:
     return hora >= turno["HoraInicio"] or hora <= turno["HoraFin"]
 
 
-def turno_actual(caller) -> dict | None:
-    turnos = caller.Consultar(
+def listar_turnos(caller) -> list[dict]:
+    return caller.Consultar(
         select(Turno.IdTurno, Turno.NombreTurno, Turno.HoraInicio, Turno.HoraFin).order_by(
             Turno.IdTurno
         )
     )
+
+
+def turno_de_hora(turnos: list[dict], hora: time) -> dict | None:
     if not turnos:
         return None
-
-    hora = datetime.now(ZoneInfo(ZONA_HORARIA)).time().replace(microsecond=0)
 
     for turno in turnos:
         if _turno_cubre_hora(turno, hora):
@@ -56,3 +57,8 @@ def turno_actual(caller) -> dict | None:
 
     anteriores = [turno for turno in turnos if turno["HoraInicio"] <= hora]
     return max(anteriores or turnos, key=lambda turno: turno["HoraInicio"])
+
+
+def turno_actual(caller) -> dict | None:
+    hora = datetime.now(ZoneInfo(ZONA_HORARIA)).time().replace(microsecond=0)
+    return turno_de_hora(listar_turnos(caller), hora)

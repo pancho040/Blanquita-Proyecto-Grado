@@ -88,6 +88,8 @@ class InventarioBobinaServilletaRepository:
             select(
                 TipoMedidaSubBobina.IdTipoMedidaSubBobina,
                 TipoMedidaSubBobina.Descripcion.label("NombreTipoMedida"),
+                TipoMedidaSubBobina.MedidaMm,
+                TipoMedidaSubBobina.Activo,
                 cantidad.label("CantidadSubBobinas"),
                 TipoMedidaSubBobina.StockMinimo,
                 TipoMedidaSubBobina.StockPreventivo,
@@ -104,6 +106,8 @@ class InventarioBobinaServilletaRepository:
             .group_by(
                 TipoMedidaSubBobina.IdTipoMedidaSubBobina,
                 TipoMedidaSubBobina.Descripcion,
+                TipoMedidaSubBobina.MedidaMm,
+                TipoMedidaSubBobina.Activo,
                 TipoMedidaSubBobina.StockMinimo,
                 TipoMedidaSubBobina.StockPreventivo,
             )

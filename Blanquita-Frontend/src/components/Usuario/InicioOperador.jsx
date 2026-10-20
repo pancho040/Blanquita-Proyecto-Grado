@@ -112,7 +112,7 @@ function TileAcceso({ subruta, href, destacado }) {
   );
 }
 
-export default function InicioOperador({ usuario }) {
+export default function InicioOperador({ usuario, paneles = {} }) {
   const [areaId, setAreaId] = useState(idAreaPorDefecto);
   const [ahora, setAhora] = useState(null);
 
@@ -123,6 +123,8 @@ export default function InicioOperador({ usuario }) {
 
   const area = getArea(areaId) ?? AREAS_TRABAJO[0];
   const idRol = usuario?.IdRol ?? 1;
+  const Panel = paneles[area.id];
+  const ancho = Object.keys(paneles).length ? "max-w-6xl" : "max-w-5xl";
 
   const seleccionar = (id) => {
     if (!id || id === areaId) return;
@@ -133,21 +135,21 @@ export default function InicioOperador({ usuario }) {
   return (
     <div className="contenido-con-sidebar flex min-h-screen flex-col bg-slate-50 pt-20 font-sans text-slate-900 md:pt-0">
       <header className="bg-gradient-to-r from-c3 to-c4 px-5 py-5 text-white sm:px-7">
-        <div className="mx-auto w-full max-w-5xl">
+        <div className={cn("mx-auto w-full", ancho)}>
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
             {ahora
               ? `Turno ${turnoActual(ahora)} · ${capitalizar(fechaLarga(ahora))}`
               : " "}
           </div>
           <div className="mt-0.5 text-xl font-extrabold">
-            Hola, operador
+            {EsEncargado(idRol) ? "Hola, encargado" : "Hola, operador"}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6 sm:px-6">
+      <main className={cn("mx-auto w-full flex-1 px-5 py-6 sm:px-6", ancho)}>
         <div className="mb-2 text-sm font-bold text-slate-700">
-          ¿En qué vas a trabajar?
+          {EsEncargado(idRol) ? "¿Qué área quieres revisar?" : "¿En qué vas a trabajar?"}
         </div>
 
         <ToggleGroup
@@ -177,21 +179,25 @@ export default function InicioOperador({ usuario }) {
           )}
         </div>
 
-        <div
-          key={area.id}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {area.subrutas
-            .filter((s) => !s.soloLider || EsEncargado(idRol))
-            .map((s, i) => (
-              <TileAcceso
-                key={s.ruta}
-                subruta={s}
-                href={rutaAcceso(idRol, area, s)}
-                destacado={i === 0}
-              />
-            ))}
-        </div>
+        {Panel ? (
+          <Panel key={area.id} />
+        ) : (
+          <div
+            key={area.id}
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {area.subrutas
+              .filter((s) => !s.soloLider || EsEncargado(idRol))
+              .map((s, i) => (
+                <TileAcceso
+                  key={s.ruta}
+                  subruta={s}
+                  href={rutaAcceso(idRol, area, s)}
+                  destacado={i === 0}
+                />
+              ))}
+          </div>
+        )}
       </main>
     </div>
   );

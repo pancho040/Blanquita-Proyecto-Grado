@@ -37,6 +37,8 @@ class DetalleInventarioBobinaServilletaResponse(BaseModel):
 class ResumenInventarioSubBobinaServilletaResponse(NivelStockResponse):
     IdTipoMedidaSubBobina: int
     NombreTipoMedida: str
+    MedidaMm: int
+    Activo: bool
     CantidadSubBobinas: int
 
 
