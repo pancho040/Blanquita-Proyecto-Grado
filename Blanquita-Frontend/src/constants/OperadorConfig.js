@@ -196,7 +196,6 @@ export const AREAS_TRABAJO = [
 
 export const ObservacionesRodela = [
   "Error en registro de envío de Rodela a producción",
-  "Se escaneó el código de una rodela equivocada",
   "Rodela enviada a un tipo de producción incorrecto",
   "Traslado duplicado de la misma rodela",
   "La producción se canceló antes de usar la rodela",
