@@ -27,7 +27,11 @@ import {
 import { ObtenerTiposPapelBobina } from "../../../services/BobinaPapel/BobinaPapel";
 import { obtenerProductos } from "../../../services/Inventario/Inventario";
 import { productosActivosDelTipo } from "@/utils/catalogo";
-import { movimientosOperador, ObservacionesInsertarLogs } from "../../../constants/OperadorConfig";
+import {
+  movimientosOperador,
+  ObservacionesInsertarLogs,
+  MotivosReanudacionProduccion,
+} from "../../../constants/OperadorConfig";
 import {
   Roles,
   CANTIDAD_MAXIMA_LOGS,
@@ -43,6 +47,7 @@ import {
 } from "@/components/Produccion/comunes";
 import {
   DialogoPausar,
+  DialogoReanudar,
   DialogoCancelar,
   AlertaFinalizar,
 } from "@/components/Produccion/Dialogos";
@@ -96,6 +101,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
     pausa,
     cancelacion,
     finalizacion,
+    reanudacion,
     procesandoId,
     reanudar,
   } = useProduccion({
@@ -621,6 +627,12 @@ export default function ProduccionBobinaTubo({ usuario }) {
       </Dialog>
 
       <DialogoPausar dialogo={pausa} tituloDe={codigosDe} opciones={opcionesPausa} />
+
+      <DialogoReanudar
+        dialogo={reanudacion}
+        tituloDe={codigosDe}
+        opciones={MotivosReanudacionProduccion}
+      />
 
       <DialogoCancelar
         dialogo={cancelacion}

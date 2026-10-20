@@ -246,6 +246,7 @@ class ReporteBobinaPapelRepository:
                 pausa.FechaHoraPausa,
                 pausa.MotivoPausaProduccion,
                 pausa.FechaHoraReanudacion,
+                pausa.MotivoReanudacion,
                 (pausa.FechaHoraReanudacion - pausa.FechaHoraPausa).label("DuracionPausa"),
                 _nombre_operador(Usuario).label("OperadorPausa"),
                 Rol.NombreRol.label("RolPausa"),

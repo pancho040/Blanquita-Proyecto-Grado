@@ -43,6 +43,7 @@ export const tipoEmpaque = (clase) => ({
 });
 
 export const ID_TIPO_MOVIMIENTO_INGRESO = 1;
+export const ID_TIPO_MOVIMIENTO_REINGRESO = 6;
 
 export const ATAJOS = [
   { valor: "hoy", texto: "Hoy", rango: (hoy) => ({ from: hoy, to: hoy }) },

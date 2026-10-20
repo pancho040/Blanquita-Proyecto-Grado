@@ -49,3 +49,11 @@ export const SalidaBolsaJavaResponse = (data) => ({
   CantidadActual: data.CantidadActual,
   FechaMovimiento: data.FechaMovimiento
 });
+
+export const ReingresoBolsaJavaRequest = (idTipo, cantidad, observacion) => ({
+  IdTipoBolsaJava: idTipo,
+  Cantidad: cantidad,
+  Observacion: observacion
+});
+
+export const ReingresoBolsaJavaResponse = SalidaBolsaJavaResponse;

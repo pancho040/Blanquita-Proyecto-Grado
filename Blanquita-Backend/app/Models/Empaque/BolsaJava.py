@@ -52,6 +52,15 @@ class SalidaBolsaJavaResponse(BaseModel):
     FechaMovimiento: datetime
 
 
+class ReingresoBolsaJavaRequest(BaseModel):
+    IdTipoBolsaJava: int = Field(..., gt=0)
+    Cantidad: int
+    Observacion: str
+
+
+ReingresoBolsaJavaResponse = SalidaBolsaJavaResponse
+
+
 class InventarioBolsaJavaResponse(NivelStockResponse):
     IdInventarioBolsaJava: int
     IdTipoBolsaJava: int

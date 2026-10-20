@@ -8,7 +8,7 @@ import {
   finalizarProduccionServilleta,
   cancelarProduccionServilleta,
 } from "../../services/BobinaServilleta/Produccion";
-import { ObservacionServilleta } from "@/constants/OperadorConfig";
+import { ObservacionServilleta, MotivosReanudacionProduccion } from "@/constants/OperadorConfig";
 import { Roles } from "@/constants/Values";
 import { useProduccion } from "@/hooks/useProduccion";
 import {
@@ -19,6 +19,7 @@ import {
 import ConcluidasServilleta from "./Concluidas";
 import {
   DialogoPausar,
+  DialogoReanudar,
   DialogoCancelar,
   AlertaFinalizar,
 } from "@/components/Produccion/Dialogos";
@@ -48,6 +49,7 @@ export default function ProduccionBobinaServilleta({ usuario }) {
     pausa,
     cancelacion,
     finalizacion,
+    reanudacion,
     procesandoId,
     reanudar,
   } = useProduccion({
@@ -125,6 +127,12 @@ export default function ProduccionBobinaServilleta({ usuario }) {
       </main>
 
       <DialogoPausar dialogo={pausa} tituloDe={tituloDe} opciones={ObservacionServilleta} />
+
+      <DialogoReanudar
+        dialogo={reanudacion}
+        tituloDe={tituloDe}
+        opciones={MotivosReanudacionProduccion}
+      />
 
       <DialogoCancelar
         dialogo={cancelacion}

@@ -64,3 +64,23 @@ class TipoEmpaque(BaseModel):
     IdTipoEmpaque: int
     NombreTipoEmpaque: str
     Activo: bool
+
+
+class EmpaqueReingresableResponse(BaseModel):
+    IdEmpaque: int
+    CodigoEmpaque: str
+    IdTipoEmpaque: int
+    NombreTipoEmpaque: str
+    PesoKg: float
+    FechaRecepcion: date
+    NombreProveedor: str
+    FechaTraslado: datetime
+    MinutosRestantes: int
+
+
+class ReingresarEmpaqueRequest(BaseModel):
+    IdEmpaque: int
+    Observacion: str
+
+
+ReingresarEmpaqueResponse = TrasladarEmpaquesProduccionResponseItem

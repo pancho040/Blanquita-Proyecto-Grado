@@ -9,6 +9,7 @@ import {
   Combine,
   Package,
   Cuboid,
+  Undo2,
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 export const movimientosOperador = [
@@ -133,6 +134,12 @@ export const AREAS_TRABAJO = [
         soloLider: true,
       },
       {
+        titulo: "Reingreso de bobinas",
+        descripcion: "Devolver al almacén bobinas enviadas por error",
+        icono: Undo2,
+        ruta: "bobina-reingreso",
+      },
+      {
         titulo: "Empaque en bolsa",
         descripcion: "Stock y salida de paquetes de bolsas",
         icono: Cuboid,
@@ -227,6 +234,14 @@ export const ObservacionServilleta=[
   "Falta de personal para producción"
 ]
 
+export const MotivosReanudacionProduccion=[
+  "Se solucionó la falla de la máquina",
+  "Se completó el empalme",
+  "Llegó el material o insumo faltante",
+  "Se reincorporó el personal",
+  "Terminó la limpieza de la máquina"
+]
+
 export const ObservacionMovimientosInsumo={
   ingreso:[
     "Ingreso a almacén insumos",
@@ -246,6 +261,22 @@ export const ObservacionSalidaEmpaqueBolsa={
   jaba:[
     "Salida de bolsas de jaba para producción",
     "Bolsas de jaba dañadas en almacén",
+    "Corrección de conteo de paquetes"
+  ]
+}
+
+export const ObservacionReingresoEmpaque={
+  bobina:[
+    "Se envió a producción una bobina de empaque equivocada",
+    "Error en el registro de envío a producción",
+    "La bobina de empaque no se llegó a usar"
+  ],
+  bolsa:[
+    "Paquetes de empaque bolsa no usados en producción",
+    "Corrección de conteo de paquetes"
+  ],
+  jaba:[
+    "Paquetes de bolsas de jaba no usados en producción",
     "Corrección de conteo de paquetes"
   ]
 }

@@ -49,6 +49,7 @@ class PausaProduccionServilletaResponse(BaseModel):
 
 class ReanudarProduccionServilletaRequest(BaseModel):
     IdProduccionServilleta: int
+    MotivoReanudacion: str | None = None
 
 
 class ReanudarProduccionServilletaResponse(BaseModel):
@@ -57,6 +58,7 @@ class ReanudarProduccionServilletaResponse(BaseModel):
     FechaHoraPausa: datetime
     MotivoPausaProduccion: str | None
     FechaHoraReanudacion: datetime
+    MotivoReanudacion: str | None = None
     IdEstadoProduccion: int
 
 

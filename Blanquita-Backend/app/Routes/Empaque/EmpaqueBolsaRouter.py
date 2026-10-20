@@ -8,6 +8,8 @@ from app.Models.Empaque.EmpaqueBolsa import (
     IngresoEmpaqueBolsaRequest,
     IngresoEmpaqueBolsaResponse,
     InventarioEmpaqueBolsaResponse,
+    ReingresoEmpaqueBolsaRequest,
+    ReingresoEmpaqueBolsaResponse,
     SalidaEmpaqueBolsaRequest,
     SalidaEmpaqueBolsaResponse,
 )
@@ -59,3 +61,16 @@ def SacarEmpaqueBolsa(
     service: EmpaqueBolsaService = Depends(empaque_bolsa_service),
 ):
     return service.SacarEmpaqueBolsa(data, usuario_actual["IdUsuario"])
+
+
+@EmpaqueBolsaRouter.post(
+    "/reingreso",
+    response_model=ReingresoEmpaqueBolsaResponse,
+    status_code=201,
+)
+def ReingresarEmpaqueBolsa(
+    data: ReingresoEmpaqueBolsaRequest,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: EmpaqueBolsaService = Depends(empaque_bolsa_service),
+):
+    return service.ReingresarEmpaqueBolsa(data, usuario_actual["IdUsuario"])

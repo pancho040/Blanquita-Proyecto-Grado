@@ -1,13 +1,23 @@
+from datetime import datetime, timedelta
+
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import Integer, and_, cast, func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN, MOVIMIENTO_MATERIA_PRIMA_INGRESO
+from app.Constants.Cantidades import MINUTOS_REINGRESO_EMPAQUE_BOBINA
+from app.Constants.Estados import (
+    ESTADO_MATERIA_PRIMA_AGOTADO,
+    ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+    MOVIMIENTO_MATERIA_PRIMA_INGRESO,
+    MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
+)
 from app.Repository.Consultas import nivel_stock
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque, TipoEmpaque
 from app.Schemas.Proveedor import Proveedor
+
+VENTANA_REINGRESO = timedelta(minutes=MINUTOS_REINGRESO_EMPAQUE_BOBINA)
 
 
 class EmpaqueBobinaRepository:
@@ -152,8 +162,67 @@ class EmpaqueBobinaRepository:
             )
         return {empaque.IdEmpaque: empaque for empaque in empaques}
 
-    def RegistrarTraslado(
-        self, empaques: list[Empaque], movimientos: list[MovimientoEmpaque], id_estado: int
+    def ListarEmpaquesReingresables(self) -> list[dict]:
+        ultimo_traslado = (
+            select(
+                MovimientoEmpaque.IdEmpaque,
+                func.max(MovimientoEmpaque.FechaMovimiento).label("FechaTraslado"),
+            )
+            .where(MovimientoEmpaque.IdTipoMovimiento == MOVIMIENTO_MATERIA_PRIMA_TRASLADO)
+            .group_by(MovimientoEmpaque.IdEmpaque)
+            .subquery()
+        )
+        limite = ultimo_traslado.c.FechaTraslado + VENTANA_REINGRESO
+        consulta = (
+            select(
+                Empaque.IdEmpaque,
+                Empaque.CodigoEmpaque,
+                Empaque.IdTipoEmpaque,
+                TipoEmpaque.NombreTipoEmpaque,
+                Empaque.PesoKg,
+                LoteEmpaque.FechaRecepcion,
+                Proveedor.NombreProveedor,
+                ultimo_traslado.c.FechaTraslado,
+                cast(
+                    func.greatest(
+                        0, func.ceil(func.extract("epoch", limite - func.now()) / 60.0)
+                    ),
+                    Integer,
+                ).label("MinutosRestantes"),
+            )
+            .join(ultimo_traslado, ultimo_traslado.c.IdEmpaque == Empaque.IdEmpaque)
+            .join(TipoEmpaque, TipoEmpaque.IdTipoEmpaque == Empaque.IdTipoEmpaque)
+            .join(LoteEmpaque, LoteEmpaque.IdLoteEmpaque == Empaque.IdLoteEmpaque)
+            .join(Proveedor, Proveedor.IdProveedor == LoteEmpaque.IdProveedor)
+            .where(
+                Empaque.IdEstadoMateriaPrima == ESTADO_MATERIA_PRIMA_AGOTADO,
+                limite >= func.now(),
+            )
+            .order_by(ultimo_traslado.c.FechaTraslado)
+        )
+        return self.caller.Consultar(consulta)
+
+    def UltimoTraslado(self, id_empaque: int) -> datetime | None:
+        try:
+            return self.db.scalar(
+                select(func.max(MovimientoEmpaque.FechaMovimiento)).where(
+                    MovimientoEmpaque.IdEmpaque == id_empaque,
+                    MovimientoEmpaque.IdTipoMovimiento == MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
+                )
+            )
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al obtener el traslado del empaque",
+            )
+
+    def RegistrarMovimientos(
+        self,
+        empaques: list[Empaque],
+        movimientos: list[MovimientoEmpaque],
+        id_estado: int,
+        mensaje_error: str,
     ) -> list[MovimientoEmpaque]:
         try:
             for empaque in empaques:
@@ -167,7 +236,7 @@ class EmpaqueBobinaRepository:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo trasladar los empaques a producción",
+                detail=mensaje_error,
             )
 
     def Revertir(self) -> None:

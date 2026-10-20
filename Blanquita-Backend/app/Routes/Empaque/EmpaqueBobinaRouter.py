@@ -16,6 +16,9 @@ from app.Models.Empaque.EmpaqueBobina import(
     ResumenInventarioEmpaqueResponse,
     DetalleInventarioEmpaqueRequest,
     DetalleInventarioEmpaqueResponse,
+    EmpaqueReingresableResponse,
+    ReingresarEmpaqueRequest,
+    ReingresarEmpaqueResponse,
     TipoEmpaque
 )
 
@@ -53,6 +56,30 @@ def TrasladarProduccion(
 ):
     return service.TrasladarEmpaquesAProduccion(data, usuario_actual["IdUsuario"])
 
+
+@EmpaqueBobinaRouter.get(
+    "/reingresables",
+    response_model=list[EmpaqueReingresableResponse],
+    status_code=200
+)
+def ListarReingresables(
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: EmpaqueBobinaService = Depends(empaque_bobina_service)
+):
+    return service.ListarEmpaquesReingresables()
+
+
+@EmpaqueBobinaRouter.post(
+    "/reingresar",
+    response_model=ReingresarEmpaqueResponse,
+    status_code=200
+)
+def Reingresar(
+    data: ReingresarEmpaqueRequest,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: EmpaqueBobinaService = Depends(empaque_bobina_service)
+):
+    return service.ReingresarEmpaque(data, usuario_actual["IdUsuario"])
 
 
 @EmpaqueBobinaRouter.get(

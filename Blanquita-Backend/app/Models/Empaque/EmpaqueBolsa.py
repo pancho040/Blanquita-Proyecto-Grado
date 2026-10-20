@@ -52,6 +52,15 @@ class SalidaEmpaqueBolsaResponse(BaseModel):
     FechaMovimiento: datetime
 
 
+class ReingresoEmpaqueBolsaRequest(BaseModel):
+    IdTipoEmpaqueBolsa: int = Field(..., gt=0)
+    Cantidad: int
+    Observacion: str
+
+
+ReingresoEmpaqueBolsaResponse = SalidaEmpaqueBolsaResponse
+
+
 class InventarioEmpaqueBolsaResponse(NivelStockResponse):
     IdInventarioEmpaqueBolsa: int
     IdTipoEmpaqueBolsa: int

@@ -3,7 +3,9 @@ import {
   IngresoEmpaqueBolsaRequest,
   IngresoEmpaqueBolsaResponse,
   SalidaEmpaqueBolsaRequest,
-  SalidaEmpaqueBolsaResponse
+  SalidaEmpaqueBolsaResponse,
+  ReingresoEmpaqueBolsaRequest,
+  ReingresoEmpaqueBolsaResponse
 } from "../../models/Empaque/EmpaqueBolsa";
 import { pedirJson } from "@/utils/api";
 
@@ -31,4 +33,13 @@ export async function sacarEmpaqueBolsa(idTipoEmpaqueBolsa, cantidad, observacio
   });
 
   return SalidaEmpaqueBolsaResponse(data);
+}
+
+export async function reingresarEmpaqueBolsa(idTipo, cantidad, observacion) {
+  const data = await pedirJson(`${BASE_URL}/reingreso`, {
+    method: "POST",
+    body: ReingresoEmpaqueBolsaRequest(idTipo, cantidad, observacion)
+  });
+
+  return ReingresoEmpaqueBolsaResponse(data);
 }

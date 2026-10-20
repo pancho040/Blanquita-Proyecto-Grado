@@ -29,6 +29,7 @@ import {
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
+  DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
 
 const ERROR_INPUT = "border-red-300 focus-visible:ring-red-300";
@@ -156,15 +157,17 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
     !hayErroresFilas &&
     !hayErroresBloques;
 
+  const validarLote = () => {
+    if (!idProveedor) return "Selecciona el proveedor del lote.";
+    if (!toneladasValidas) return "Indica la cantidad de toneladas pedidas.";
+    if (hayErroresBloques) return "Selecciona el tipo de empaque en cada bloque.";
+    if (hayErroresFilas) return "Revisa los empaques marcados en rojo antes de guardar.";
+    return null;
+  };
+
   const guardarLote = () =>
     envio.guardar({
-      validar: () => {
-        if (!idProveedor) return "Selecciona el proveedor del lote.";
-        if (!toneladasValidas) return "Indica la cantidad de toneladas pedidas.";
-        if (hayErroresBloques) return "Selecciona el tipo de empaque en cada bloque.";
-        if (hayErroresFilas) return "Revisa los empaques marcados en rojo antes de guardar.";
-        return null;
-      },
+      validar: validarLote,
       enviar: () =>
         cargarLoteEmpaque(
           Number(idProveedor),
@@ -481,7 +484,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
 
         {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
 
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={guardarLote}>
+        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
           <span className="font-extrabold text-white">
             {filasPlanas.length} {filasPlanas.length === 1 ? "empaque" : "empaques"}
           </span>
@@ -494,6 +497,31 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
           </span>
         </BarraGuardarLote>
       </main>
+
+      <DialogoConfirmarLote
+        abierto={envio.confirmando}
+        enviando={envio.enviando}
+        cantidad={filasPlanas.length}
+        unidad={filasPlanas.length === 1 ? "bobina de empaque" : "bobinas de empaque"}
+        detalles={[
+          {
+            etiqueta: "Proveedor",
+            valor:
+              proveedores.datos.find((p) => String(p.IdProveedor) === String(idProveedor))
+                ?.NombreProveedor ?? "-",
+          },
+          { etiqueta: "Toneladas pedidas", valor: cantidadToneladasPedida || "-" },
+          { etiqueta: "Peso total", valor: `${totalPesoKg.toFixed(2)} kg` },
+        ]}
+        lineas={bloques.map((b) => ({
+          etiqueta: nombreTipo(b.IdTipoEmpaque) || "Sin tipo",
+          valor: `${b.filas.length} ${b.filas.length === 1 ? "bobina" : "bobinas"}`,
+        }))}
+        codigos={filasPlanas.map((f) => f.CodigoEmpaque.trim())}
+        aviso="Una vez registrado el lote ya no se podrán editar los códigos, los pesos, la cantidad, el tipo ni el proveedor."
+        onCancelar={envio.cancelarConfirmacion}
+        onConfirmar={guardarLote}
+      />
     </div>
   );
 }

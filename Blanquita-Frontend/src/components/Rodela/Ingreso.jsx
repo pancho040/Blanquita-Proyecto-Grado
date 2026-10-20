@@ -31,6 +31,7 @@ import {
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
+  DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
 
 const filaVacia = () => ({ CodigoRodela: "" });
@@ -61,14 +62,16 @@ export default function IngresoRodelas({ usuario }) {
 
   const listo = !!idProveedor && !!idTipoRodela && filas.length > 0 && !hayErrores;
 
+  const validarLote = () => {
+    if (!idProveedor) return "Selecciona el proveedor del lote.";
+    if (!idTipoRodela) return "Selecciona el tipo de rodela del lote.";
+    if (hayErrores) return "Revisa las rodelas marcadas en rojo antes de guardar.";
+    return null;
+  };
+
   const guardarLote = () =>
     envio.guardar({
-      validar: () => {
-        if (!idProveedor) return "Selecciona el proveedor del lote.";
-        if (!idTipoRodela) return "Selecciona el tipo de rodela del lote.";
-        if (hayErrores) return "Revisa las rodelas marcadas en rojo antes de guardar.";
-        return null;
-      },
+      validar: validarLote,
       enviar: () =>
         cargarLoteRodela(
           Number(idProveedor),
@@ -230,7 +233,7 @@ export default function IngresoRodelas({ usuario }) {
 
         {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
 
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={guardarLote}>
+        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
           <span className="font-extrabold text-white">
             {filas.length} {filas.length === 1 ? "rodela" : "rodelas"}
           </span>
@@ -242,6 +245,26 @@ export default function IngresoRodelas({ usuario }) {
           )}
         </BarraGuardarLote>
       </main>
+
+      <DialogoConfirmarLote
+        abierto={envio.confirmando}
+        enviando={envio.enviando}
+        cantidad={filas.length}
+        unidad={filas.length === 1 ? "rodela" : "rodelas"}
+        detalles={[
+          {
+            etiqueta: "Proveedor",
+            valor:
+              proveedores.datos.find((p) => String(p.IdProveedor) === String(idProveedor))
+                ?.NombreProveedor ?? "-",
+          },
+          { etiqueta: "Tipo", valor: tipoActual?.NombreTipoRodela ?? "-" },
+        ]}
+        codigos={filas.map((f) => f.CodigoRodela.trim())}
+        editable="el código de cada rodela"
+        onCancelar={envio.cancelarConfirmacion}
+        onConfirmar={guardarLote}
+      />
     </div>
   );
 }

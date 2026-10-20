@@ -24,6 +24,8 @@ from app.utils.dates import ZONA_BOLIVIA
 
 ID_TIPO_MOVIMIENTO_INGRESO = 1
 ID_TIPO_MOVIMIENTO_SALIDA = 2
+ID_TIPO_MOVIMIENTO_REINGRESO = 6
+TIPOS_MOVIMIENTO_ENTRADA = {ID_TIPO_MOVIMIENTO_INGRESO, ID_TIPO_MOVIMIENTO_REINGRESO}
 
 CLASES = {
     ClaseEmpaque.bobina: {"nombre": "Empaque en bobina", "unidad": "bobinas"},
@@ -34,6 +36,7 @@ CLASES = {
 NOMBRES_MOVIMIENTO_CONTEO = {
     ID_TIPO_MOVIMIENTO_INGRESO: "Ingreso",
     ID_TIPO_MOVIMIENTO_SALIDA: "Salida",
+    ID_TIPO_MOVIMIENTO_REINGRESO: "Reingreso",
 }
 
 
@@ -168,7 +171,7 @@ class ReporteEmpaqueService:
         self, fila: dict, movimientos: list[MovimientoEmpaqueReporteResponse]
     ) -> ResumenTipoEmpaqueResponse:
         propios = [m for m in movimientos if m.IdTipo == fila["IdTipo"]]
-        ingresos = sum(m.Cantidad for m in propios if m.IdTipoMovimiento == ID_TIPO_MOVIMIENTO_INGRESO)
+        ingresos = sum(m.Cantidad for m in propios if m.IdTipoMovimiento in TIPOS_MOVIMIENTO_ENTRADA)
         salidas = sum(m.Cantidad for m in propios if m.IdTipoMovimiento == ID_TIPO_MOVIMIENTO_SALIDA)
 
         return ResumenTipoEmpaqueResponse(

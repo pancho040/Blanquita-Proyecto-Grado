@@ -22,6 +22,7 @@ import {
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
+  DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
 import { CANTIDAD_MAXIMA_EMPAQUE_BOLSA } from "@/constants/Values";
 import { aEntero } from "@/utils/validators";
@@ -89,14 +90,16 @@ export default function IngresoBolsas({ tipo }) {
   const stockTipo = (id) =>
     Number(tipos.datos.find((t) => String(t[config.campoId]) === id)?.CantidadActual ?? 0);
 
+  const validarLote = () => {
+    if (!idProveedor) return "Selecciona el proveedor del lote.";
+    if (!toneladasValidas) return "Las toneladas pedidas deben ser mayores a 0.";
+    if (hayErrores) return "Revisa las filas marcadas en rojo antes de guardar.";
+    return null;
+  };
+
   const guardarLote = () =>
     envio.guardar({
-      validar: () => {
-        if (!idProveedor) return "Selecciona el proveedor del lote.";
-        if (!toneladasValidas) return "Las toneladas pedidas deben ser mayores a 0.";
-        if (hayErrores) return "Revisa las filas marcadas en rojo antes de guardar.";
-        return null;
-      },
+      validar: validarLote,
       enviar: () =>
         config.cargarLote(
           Number(idProveedor),
@@ -263,7 +266,7 @@ export default function IngresoBolsas({ tipo }) {
 
         {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
 
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={guardarLote}>
+        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
           <span className="font-extrabold text-white">
             {totalPaquetes} {totalPaquetes === 1 ? "paquete" : "paquetes"}
           </span>
@@ -272,6 +275,29 @@ export default function IngresoBolsas({ tipo }) {
           </span>
         </BarraGuardarLote>
       </main>
+
+      <DialogoConfirmarLote
+        abierto={envio.confirmando}
+        enviando={envio.enviando}
+        cantidad={totalPaquetes}
+        unidad={totalPaquetes === 1 ? "paquete" : "paquetes"}
+        detalles={[
+          {
+            etiqueta: "Proveedor",
+            valor:
+              proveedores.datos.find((p) => String(p.IdProveedor) === String(idProveedor))
+                ?.NombreProveedor ?? "-",
+          },
+          { etiqueta: "Toneladas pedidas", valor: toneladas || "-" },
+        ]}
+        lineas={filas.map((f) => ({
+          etiqueta: nombreTipo(f.IdTipo),
+          valor: `${aEntero(f.Cantidad)} ${aEntero(f.Cantidad) === 1 ? "paquete" : "paquetes"}`,
+        }))}
+        aviso="Una vez registrado el lote ya no se podrá editar; las diferencias solo se corrigen con salidas o reingresos de máximo 5 paquetes."
+        onCancelar={envio.cancelarConfirmacion}
+        onConfirmar={guardarLote}
+      />
     </div>
   );
 }

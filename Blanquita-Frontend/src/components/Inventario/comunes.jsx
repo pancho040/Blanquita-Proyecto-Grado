@@ -260,6 +260,40 @@ export function BuscadorCodigo({ valor, onCambio, placeholder = "Buscar por cód
   );
 }
 
+export function BuscadorNombre({ valor, onCambio, placeholder = "Buscar por nombre..." }) {
+  return (
+    <div className="relative mb-4 max-w-sm">
+      <Search
+        size={16}
+        strokeWidth={2.5}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <Input
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+        placeholder={placeholder}
+        className="h-11 bg-white pl-9"
+      />
+      {valor && (
+        <button
+          onClick={() => onCambio("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+        >
+          <X size={15} strokeWidth={2.75} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SinCoincidencias({ busqueda }) {
+  return (
+    <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+      Ningún tipo coincide con "{busqueda}".
+    </div>
+  );
+}
+
 export function ContenidoLista({
   cargando,
   error,

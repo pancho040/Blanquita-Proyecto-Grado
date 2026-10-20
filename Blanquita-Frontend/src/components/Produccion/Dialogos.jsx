@@ -56,7 +56,14 @@ function useConfirmacion(abierto) {
   return [confirmado, setConfirmado];
 }
 
-function CasillaIrreversible({ id, accion, confirmado, setConfirmado, deshabilitado }) {
+function CasillaIrreversible({
+  id,
+  accion,
+  confirmado,
+  setConfirmado,
+  deshabilitado,
+  detalle = "Esta acción es irreversible y quedará registrada con su usuario.",
+}) {
   return (
     <label
       htmlFor={id}
@@ -74,22 +81,33 @@ function CasillaIrreversible({ id, accion, confirmado, setConfirmado, deshabilit
         <span className="text-sm font-bold text-slate-900">
           Confirmo que voy a {accion} esta producción
         </span>
-        <span className="text-[12.5px] text-slate-600">
-          Esta acción es irreversible y quedará registrada con su usuario.
-        </span>
+        <span className="text-[12.5px] text-slate-600">{detalle}</span>
       </span>
     </label>
   );
 }
 
-export function DialogoPausar({ dialogo, tituloDe, opciones }) {
+function DialogoMotivoProduccion({
+  dialogo,
+  tituloDe,
+  opciones,
+  id,
+  titulo,
+  etiqueta,
+  placeholder,
+  accion,
+  detalle,
+  textoBoton,
+  claseBoton,
+}) {
+  const [confirmado, setConfirmado] = useConfirmacion(dialogo.abierto);
   const seleccionados = opciones.filter((m) => dialogo.motivo.includes(m));
 
   return (
     <Dialog open={dialogo.abierto} onOpenChange={(open) => !open && dialogo.cerrar()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Pausar producción</DialogTitle>
+          <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -123,19 +141,28 @@ export function DialogoPausar({ dialogo, tituloDe, opciones }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="motivo-pausa" className={ETIQUETA}>
-              Detalle de la pausa
+            <Label htmlFor={id} className={ETIQUETA}>
+              {etiqueta}
             </Label>
             <Textarea
-              id="motivo-pausa"
+              id={id}
               value={dialogo.motivo}
               onChange={(e) => dialogo.setMotivo(limpiarObservacion(e.target.value))}
-              placeholder="Ej. Falla de máquina, cambio de turno..."
+              placeholder={placeholder}
               className="min-h-20"
               maxLength={MOTIVO_CANCELACION_MAX}
             />
             <ContadorMotivo motivo={dialogo.motivo} />
           </div>
+
+          <CasillaIrreversible
+            id={`confirmar-${id}`}
+            accion={accion}
+            detalle={detalle}
+            confirmado={confirmado}
+            setConfirmado={setConfirmado}
+            deshabilitado={dialogo.enviando}
+          />
 
           {dialogo.error && <ErrorDialogo mensaje={dialogo.error} />}
         </div>
@@ -143,18 +170,50 @@ export function DialogoPausar({ dialogo, tituloDe, opciones }) {
         <DialogFooter>
           <Button
             onClick={dialogo.confirmar}
-            disabled={dialogo.enviando || !dialogo.valido}
-            className="h-11 w-full gap-2 bg-amber-500 font-extrabold text-white hover:bg-amber-600 sm:w-auto"
+            disabled={dialogo.enviando || !dialogo.valido || !confirmado}
+            className={`h-11 w-full gap-2 font-extrabold text-white sm:w-auto ${claseBoton}`}
           >
-            {dialogo.enviando ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              "Pausar producción"
-            )}
+            {dialogo.enviando ? <Loader2 size={16} className="animate-spin" /> : textoBoton}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function DialogoPausar({ dialogo, tituloDe, opciones }) {
+  return (
+    <DialogoMotivoProduccion
+      dialogo={dialogo}
+      tituloDe={tituloDe}
+      opciones={opciones}
+      id="motivo-pausa"
+      titulo="Pausar producción"
+      etiqueta="Detalle de la pausa"
+      placeholder="Ej. Falla de máquina, cambio de turno..."
+      accion="pausar"
+      detalle="Quedará registrada con su usuario. Recuerde reanudarla para no inflar la duración de la pausa."
+      textoBoton="Pausar producción"
+      claseBoton="bg-amber-500 hover:bg-amber-600"
+    />
+  );
+}
+
+export function DialogoReanudar({ dialogo, tituloDe, opciones }) {
+  return (
+    <DialogoMotivoProduccion
+      dialogo={dialogo}
+      tituloDe={tituloDe}
+      opciones={opciones}
+      id="motivo-reanudacion"
+      titulo="Reanudar producción"
+      etiqueta="Detalle de la reanudación"
+      placeholder="Ej. Se reparó la máquina, se terminó el empalme..."
+      accion="reanudar"
+      detalle="La pausa se cerrará con la hora actual y quedará registrada con su usuario."
+      textoBoton="Reanudar producción"
+      claseBoton="bg-emerald-600 hover:bg-emerald-700"
+    />
   );
 }
 

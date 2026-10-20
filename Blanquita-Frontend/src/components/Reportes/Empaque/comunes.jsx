@@ -50,6 +50,7 @@ const MOVIMIENTOS = [
   { valor: "", texto: "Todos" },
   { valor: 1, texto: "Ingresos" },
   { valor: 2, texto: "Salidas" },
+  { valor: 6, texto: "Reingresos" },
 ];
 
 export function FiltrosEmpaque({ reporte, idRango, etiquetaRango, conMovimiento = false }) {

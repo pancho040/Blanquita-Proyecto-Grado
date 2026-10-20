@@ -28,6 +28,7 @@ from app.utils.validators import (
 )
 from app.Auth.Security import ValidarClaveNueva
 from app.Constants.Cantidades import LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
 from app.Constants.Estados import (
     ESTADO_USUARIO_ACTIVO,
     ESTADO_USUARIO_SUSPENDIDO,
@@ -383,6 +384,12 @@ class UsuarioService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="El rol indicado no existe",
+            )
+
+        if datos.IsAdmin and datos.IdRol != ROL_LIDER_INVENTARIO_PRODUCCION:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Solo un Líder de Inventario y Producción puede tener acceso de administrador",
             )
 
         if self.repository.ExisteCi(ci):

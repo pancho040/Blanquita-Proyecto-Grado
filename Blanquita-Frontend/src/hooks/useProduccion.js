@@ -130,20 +130,12 @@ export function useProduccion({
     }
   };
 
-  const [procesandoId, setProcesandoId] = useState(null);
-
-  const reanudarProduccion = async (p) => {
-    setProcesandoId(idDe(p));
-    try {
-      await reanudar(idDe(p));
-      toast.success("Producción reanudada");
-      recargarTodo();
-    } catch (e) {
-      toast.error(mensajeDe(e));
-    } finally {
-      setProcesandoId(null);
-    }
-  };
+  const reanudacion = useDialogoMotivo({
+    enviar: (p, motivo) => reanudar(idDe(p), motivo),
+    exito: "Producción reanudada",
+    invalido: `El motivo de la reanudación debe tener entre ${MOTIVO_CANCELACION_MIN} y ${MOTIVO_CANCELACION_MAX} caracteres`,
+    alTerminar: recargarTodo,
+  });
 
   return {
     activas,
@@ -159,7 +151,9 @@ export function useProduccion({
       cerrar: () => setPorFinalizar(null),
       confirmar: confirmarFinalizar,
     },
-    procesandoId,
-    reanudar: reanudarProduccion,
+    reanudacion,
+    procesandoId:
+      reanudacion.enviando && reanudacion.produccion ? idDe(reanudacion.produccion) : null,
+    reanudar: reanudacion.abrir,
   };
 }

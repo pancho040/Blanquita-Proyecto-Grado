@@ -3,13 +3,18 @@ import {
   verInventarioEmpaqueBolsa,
   cargarLoteEmpaqueBolsa,
   sacarEmpaqueBolsa,
+  reingresarEmpaqueBolsa,
 } from "../../../services/Empaque/EmpaqueBolsa";
 import {
   verInventarioBolsaJava,
   cargarLoteBolsaJava,
   sacarBolsaJava,
+  reingresarBolsaJava,
 } from "../../../services/Empaque/BolsaJava";
-import { ObservacionSalidaEmpaqueBolsa } from "@/constants/OperadorConfig";
+import {
+  ObservacionSalidaEmpaqueBolsa,
+  ObservacionReingresoEmpaque,
+} from "@/constants/OperadorConfig";
 
 export const CONFIG_BOLSAS = {
   bolsa: {
@@ -32,9 +37,15 @@ export const CONFIG_BOLSAS = {
         toneladas,
         items.map((i) => ({ IdTipoEmpaqueBolsa: i.IdTipo, Cantidad: i.Cantidad })),
       ),
-    sacar: sacarEmpaqueBolsa,
-    nombreSalida: (r) => r.NombreEmpaqueBolsa,
-    observaciones: ObservacionSalidaEmpaqueBolsa.bolsa,
+    nombreMovimiento: (r) => r.NombreEmpaqueBolsa,
+    salida: {
+      observaciones: ObservacionSalidaEmpaqueBolsa.bolsa,
+      enviar: sacarEmpaqueBolsa,
+    },
+    reingreso: {
+      observaciones: ObservacionReingresoEmpaque.bolsa,
+      enviar: reingresarEmpaqueBolsa,
+    },
   },
   jaba: {
     icono: Package,
@@ -56,8 +67,14 @@ export const CONFIG_BOLSAS = {
         toneladas,
         items.map((i) => ({ IdTipoBolsaJava: i.IdTipo, Cantidad: i.Cantidad })),
       ),
-    sacar: sacarBolsaJava,
-    nombreSalida: (r) => r.NombreBolsaJava,
-    observaciones: ObservacionSalidaEmpaqueBolsa.jaba,
+    nombreMovimiento: (r) => r.NombreBolsaJava,
+    salida: {
+      observaciones: ObservacionSalidaEmpaqueBolsa.jaba,
+      enviar: sacarBolsaJava,
+    },
+    reingreso: {
+      observaciones: ObservacionReingresoEmpaque.jaba,
+      enviar: reingresarBolsaJava,
+    },
   },
 };

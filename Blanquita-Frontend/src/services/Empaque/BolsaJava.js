@@ -3,7 +3,9 @@ import {
   IngresoBolsaJavaRequest,
   IngresoBolsaJavaResponse,
   SalidaBolsaJavaRequest,
-  SalidaBolsaJavaResponse
+  SalidaBolsaJavaResponse,
+  ReingresoBolsaJavaRequest,
+  ReingresoBolsaJavaResponse
 } from "../../models/Empaque/BolsaJava";
 import { pedirJson } from "@/utils/api";
 
@@ -31,4 +33,13 @@ export async function sacarBolsaJava(idTipoBolsaJava, cantidad, observacion) {
   });
 
   return SalidaBolsaJavaResponse(data);
+}
+
+export async function reingresarBolsaJava(idTipo, cantidad, observacion) {
+  const data = await pedirJson(`${BASE_URL}/reingreso`, {
+    method: "POST",
+    body: ReingresoBolsaJavaRequest(idTipo, cantidad, observacion)
+  });
+
+  return ReingresoBolsaJavaResponse(data);
 }

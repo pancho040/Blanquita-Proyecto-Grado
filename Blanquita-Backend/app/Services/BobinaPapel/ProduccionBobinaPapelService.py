@@ -287,6 +287,10 @@ class ProduccionBobinaPapelService:
     def ReanudarProduccion(
         self, data: ReanudarProduccionBobinaTuboRequest, id_usuario: int
     ) -> ReanudarProduccionBobinaTuboResponse:
+        motivo = self._ValidarTexto(
+            data.MotivoReanudacion, "El motivo de la reanudación es obligatorio"
+        )
+
         produccion = self._ObtenerProduccion(data.IdProduccionBobinaTubo)
 
         if produccion.IdEstadoProduccion != ESTADO_PRODUCCION_PAUSA:
@@ -303,6 +307,7 @@ class ProduccionBobinaPapelService:
             )
 
         pausa.FechaHoraReanudacion = _ahora()
+        pausa.MotivoReanudacion = motivo
         produccion.IdEstadoProduccion = ESTADO_PRODUCCION_EN_PRODUCCION
         self.repository.Guardar(
             produccion,
@@ -316,6 +321,7 @@ class ProduccionBobinaPapelService:
             FechaHoraPausa=pausa.FechaHoraPausa,
             MotivoPausaProduccion=pausa.MotivoPausaProduccion,
             FechaHoraReanudacion=pausa.FechaHoraReanudacion,
+            MotivoReanudacion=pausa.MotivoReanudacion,
             IdEstadoProduccion=ESTADO_PRODUCCION_EN_PRODUCCION,
         )
 

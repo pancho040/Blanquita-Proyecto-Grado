@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.Constants.Cantidades import (
     CANTIDAD_MOVIMIENTO_BOLSA_JAVA,
+    CANTIDAD_REINGRESO_EMPAQUE,
     LONGITUD_MAXIMA_DESCRIPCION,
     LONGITUD_MINIMA_DESCRIPCION,
 )
@@ -13,11 +14,19 @@ from app.Models.Empaque.BolsaJava import (
     IngresoBolsaJavaRequest,
     IngresoBolsaJavaResponse,
     InventarioBolsaJavaResponse,
+    ReingresoBolsaJavaRequest,
+    ReingresoBolsaJavaResponse,
     SalidaBolsaJavaRequest,
     SalidaBolsaJavaResponse,
 )
 from app.Repository.Empaque.BolsaJava import BolsaJavaRepository
-from app.Schemas.Empaque import LoteEmpaque, MovimientoBolsaJava
+from app.Constants.Estados import MOVIMIENTO_MATERIA_PRIMA_REINGRESO
+from app.Schemas.Empaque import (
+    InventarioBolsaJava,
+    LoteEmpaque,
+    MovimientoBolsaJava,
+    TipoBolsaJava,
+)
 from app.utils.dates import ZONA_BOLIVIA
 from app.utils.validators import EsCantidadValida, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
@@ -122,25 +131,8 @@ class BolsaJavaService:
         self, data: SalidaBolsaJavaRequest, id_usuario: int
     ) -> SalidaBolsaJavaResponse:
         self._ValidarCantidad(data.Cantidad)
-
-        observacion = (data.Observacion or "").strip()
-        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"La observación es obligatoria, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
-            )
-
-        encontrado = self.repository.ObtenerInventariosBloqueados([data.IdTipoBolsaJava]).get(
-            data.IdTipoBolsaJava
-        )
-        if encontrado is None:
-            self.repository.Revertir()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"El tipo de bolsa de jaba con id {data.IdTipoBolsaJava} no existe o no tiene inventario",
-            )
-
-        inventario, tipo = encontrado
+        observacion = self._ValidarObservacion(data.Observacion)
+        inventario, tipo = self._ObtenerInventario(data.IdTipoBolsaJava)
         cantidad_actual = int(inventario.CantidadActual)
 
         if data.Cantidad > cantidad_actual:
@@ -150,13 +142,79 @@ class BolsaJavaService:
                 detail=f"No hay suficiente {tipo.NombreBolsaJava} en almacén, disponible: {cantidad_actual}",
             )
 
-        cantidad_nueva = cantidad_actual - data.Cantidad
+        return self._RegistrarMovimiento(
+            inventario,
+            tipo,
+            data,
+            observacion,
+            ID_TIPO_MOVIMIENTO_SALIDA,
+            "Salida",
+            cantidad_actual - data.Cantidad,
+            id_usuario,
+        )
 
+    def ReingresarBolsaJava(
+        self, data: ReingresoBolsaJavaRequest, id_usuario: int
+    ) -> ReingresoBolsaJavaResponse:
+        if data.Cantidad <= 0 or data.Cantidad > CANTIDAD_REINGRESO_EMPAQUE:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"La cantidad a reingresar debe estar entre 1 y {CANTIDAD_REINGRESO_EMPAQUE} paquetes",
+            )
+
+        observacion = self._ValidarObservacion(data.Observacion)
+        inventario, tipo = self._ObtenerInventario(data.IdTipoBolsaJava)
+
+        return self._RegistrarMovimiento(
+            inventario,
+            tipo,
+            data,
+            observacion,
+            MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+            "Reingreso",
+            int(inventario.CantidadActual) + data.Cantidad,
+            id_usuario,
+        )
+
+    def _ValidarObservacion(self, observacion: str | None) -> str:
+        observacion = (observacion or "").strip()
+        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"La observación es obligatoria, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
+            )
+        return observacion
+
+    def _ObtenerInventario(
+        self, id_tipo_bolsa_java: int
+    ) -> tuple[InventarioBolsaJava, TipoBolsaJava]:
+        encontrado = self.repository.ObtenerInventariosBloqueados([id_tipo_bolsa_java]).get(
+            id_tipo_bolsa_java
+        )
+        if encontrado is None:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El tipo de bolsa de jaba con id {id_tipo_bolsa_java} no existe o no tiene inventario",
+            )
+        return encontrado
+
+    def _RegistrarMovimiento(
+        self,
+        inventario: InventarioBolsaJava,
+        tipo: TipoBolsaJava,
+        data: SalidaBolsaJavaRequest | ReingresoBolsaJavaRequest,
+        observacion: str,
+        id_tipo_movimiento: int,
+        nombre_movimiento: str,
+        cantidad_nueva: int,
+        id_usuario: int,
+    ) -> SalidaBolsaJavaResponse:
         movimiento = self.repository.RegistrarMovimiento(
             inventario,
             MovimientoBolsaJava(
                 IdTipoBolsaJava=data.IdTipoBolsaJava,
-                IdTipoMovimiento=ID_TIPO_MOVIMIENTO_SALIDA,
+                IdTipoMovimiento=id_tipo_movimiento,
                 IdUsuario=id_usuario,
                 CantidadMovimiento=data.Cantidad,
                 Observacion=observacion,
@@ -168,7 +226,7 @@ class BolsaJavaService:
             IdMovimientoBolsaJava=movimiento.IdMovimientoBolsaJava,
             IdTipoBolsaJava=movimiento.IdTipoBolsaJava,
             NombreBolsaJava=tipo.NombreBolsaJava,
-            NombreMovimiento="Salida",
+            NombreMovimiento=nombre_movimiento,
             CantidadMovimiento=data.Cantidad,
             CantidadActual=cantidad_nueva,
             FechaMovimiento=movimiento.FechaMovimiento,

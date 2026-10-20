@@ -40,6 +40,8 @@ export const turnos=[
 export const CANTIDAD_MAXIMA_LOGS = 100;
 export const CANTIDAD_MAXIMA_INSUMO = 100;
 export const CANTIDAD_MAXIMA_EMPAQUE_BOLSA = 100;
+export const CANTIDAD_MAXIMA_REINGRESO_EMPAQUE = 5;
+export const MINUTOS_REINGRESO_EMPAQUE_BOBINA = 30;
 
 export const MOTIVO_CANCELACION_MIN = 5;
 export const MOTIVO_CANCELACION_MAX = 150;

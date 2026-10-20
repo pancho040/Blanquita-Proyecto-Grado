@@ -224,6 +224,10 @@ class ProduccionBobinaServilletaService:
     def ReanudarProduccionServilleta(
         self, data: ReanudarProduccionServilletaRequest, id_usuario: int
     ) -> ReanudarProduccionServilletaResponse:
+        motivo = self._ValidarTexto(
+            data.MotivoReanudacion, "El motivo de la reanudación es obligatorio"
+        )
+
         produccion = self._ObtenerProduccion(data.IdProduccionServilleta)
         if produccion.IdEstadoProduccion != ESTADO_PRODUCCION_PAUSA:
             self._Revertir(
@@ -239,6 +243,7 @@ class ProduccionBobinaServilletaService:
             )
 
         pausa.FechaHoraReanudacion = _ahora()
+        pausa.MotivoReanudacion = motivo
         produccion.IdEstadoProduccion = ESTADO_PRODUCCION_EN_PRODUCCION
         self.repository.Guardar(
             produccion,
@@ -252,6 +257,7 @@ class ProduccionBobinaServilletaService:
             FechaHoraPausa=pausa.FechaHoraPausa,
             MotivoPausaProduccion=pausa.MotivoPausaProduccion,
             FechaHoraReanudacion=pausa.FechaHoraReanudacion,
+            MotivoReanudacion=pausa.MotivoReanudacion,
             IdEstadoProduccion=ESTADO_PRODUCCION_EN_PRODUCCION,
         )
 

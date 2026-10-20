@@ -90,6 +90,7 @@ class PausaProduccionServilleta(Base):
     FechaHoraPausa: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     MotivoPausaProduccion: Mapped[str | None] = mapped_column(Text)
     FechaHoraReanudacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoReanudacion: Mapped[str | None] = mapped_column(Text)
 
 
 class CancelacionProduccionServilleta(Base):
@@ -111,3 +112,4 @@ class PausaProduccionBobinaTubo(Base):
     FechaHoraPausa: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     MotivoPausaProduccion: Mapped[str | None] = mapped_column(Text)
     FechaHoraReanudacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoReanudacion: Mapped[str | None] = mapped_column(Text)

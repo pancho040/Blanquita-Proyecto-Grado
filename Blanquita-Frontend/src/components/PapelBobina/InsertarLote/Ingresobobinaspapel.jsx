@@ -32,6 +32,7 @@ import {
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
+  DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
 
 const ETIQUETA_MOVIL = "text-[11px] font-bold uppercase tracking-wide text-slate-600";
@@ -78,14 +79,16 @@ export default function IngresoBobinasPapel({ usuario }) {
   const totalNeto = filas.reduce((s, f) => s + Number(f.PesoNetoKg || 0), 0);
   const listo = !!idProveedor && !!idTipoBobina && filas.length > 0 && !hayErrores;
 
+  const validarLote = () => {
+    if (!idProveedor) return "Selecciona el proveedor del lote.";
+    if (!idTipoBobina) return "Selecciona el tipo de bobina del lote.";
+    if (hayErrores) return "Revisa las bobinas marcadas en rojo antes de guardar.";
+    return null;
+  };
+
   const guardarLote = () =>
     envio.guardar({
-      validar: () => {
-        if (!idProveedor) return "Selecciona el proveedor del lote.";
-        if (!idTipoBobina) return "Selecciona el tipo de bobina del lote.";
-        if (hayErrores) return "Revisa las bobinas marcadas en rojo antes de guardar.";
-        return null;
-      },
+      validar: validarLote,
       enviar: () =>
         cargarLoteBobinaPapel(
           Number(idProveedor),
@@ -338,7 +341,7 @@ export default function IngresoBobinasPapel({ usuario }) {
 
         {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
 
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={guardarLote}>
+        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
           <span className="font-extrabold text-white">
             {filas.length} {filas.length === 1 ? "bobina" : "bobinas"}
           </span>
@@ -352,6 +355,28 @@ export default function IngresoBobinasPapel({ usuario }) {
           </span>
         </BarraGuardarLote>
       </main>
+
+      <DialogoConfirmarLote
+        abierto={envio.confirmando}
+        enviando={envio.enviando}
+        cantidad={filas.length}
+        unidad={filas.length === 1 ? "bobina" : "bobinas"}
+        detalles={[
+          {
+            etiqueta: "Proveedor",
+            valor:
+              proveedores.datos.find((p) => String(p.IdProveedor) === String(idProveedor))
+                ?.NombreProveedor ?? "-",
+          },
+          { etiqueta: "Tipo", valor: tipoActual?.NombreTipoBobina ?? "-" },
+          { etiqueta: "Peso bruto", valor: `${formatearNumero(totalBruto)} kg` },
+          { etiqueta: "Peso neto", valor: `${formatearNumero(totalNeto)} kg` },
+        ]}
+        codigos={filas.map((f) => f.CodigoBobina.trim())}
+        editable="el código, los pesos y el gramaje de cada bobina"
+        onCancelar={envio.cancelarConfirmacion}
+        onConfirmar={guardarLote}
+      />
     </div>
   );
 }

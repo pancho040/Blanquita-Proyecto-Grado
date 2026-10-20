@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import Header from "@/components/layout/Header";
 import InputForModal from "@/components/layout/InputForModal";
 import { SelectEntidad } from "@/components/layout/Selectentidad";
-import { RolesUsuario } from "@/constants/Values";
+import { Roles, RolesUsuario } from "@/constants/Values";
 import { crearUsuario } from "@/services/Usuario/Admin";
 import {
   CamposClave,
@@ -105,6 +105,15 @@ export default function RegistrarUsuario() {
 
   const cambiar = (campo) => (valor) => setDatos((previos) => ({ ...previos, [campo]: valor }));
 
+  const puedeSerAdmin = Number(datos.IdRol) === Roles.Encargado;
+
+  const cambiarRol = (valor) =>
+    setDatos((previos) => ({
+      ...previos,
+      IdRol: valor,
+      IsAdmin: Number(valor) === Roles.Encargado ? previos.IsAdmin : false,
+    }));
+
   const errores = erroresRegistro(datos);
   const completo =
     datos.Ci && datos.PrimerNombre && datos.ApellidoPaterno && datos.Celular && datos.IdRol;
@@ -185,27 +194,29 @@ export default function RegistrarUsuario() {
                 <SelectEntidad
                   opciones={RolesUsuario}
                   valor={datos.IdRol}
-                  onCambio={cambiar("IdRol")}
+                  onCambio={cambiarRol}
                   campoValor="IdRol"
                   campoEtiqueta="NombreRol"
                   placeholder="Selecciona un rol"
                 />
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={datos.IsAdmin}
-                  onChange={(e) => cambiar("IsAdmin")(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-slate-900"
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-sm font-bold text-slate-900">Acceso de administrador</span>
-                  <span className="text-[12.5px] text-slate-500">
-                    Podrá entrar al panel de administración y gestionar usuarios.
+              {puedeSerAdmin && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={datos.IsAdmin}
+                    onChange={(e) => cambiar("IsAdmin")(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-slate-900"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-slate-900">Acceso de administrador</span>
+                    <span className="text-[12.5px] text-slate-500">
+                      Podrá entrar al panel de administración y hacer gestión completa del sistema.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              )}
             </Seccion>
 
             <Seccion

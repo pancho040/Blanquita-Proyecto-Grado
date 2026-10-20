@@ -1,20 +1,29 @@
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.Constants.Cantidades import (
+    LONGITUD_MAXIMA_DESCRIPCION,
+    LONGITUD_MINIMA_DESCRIPCION,
+    MINUTOS_REINGRESO_EMPAQUE_BOBINA,
+)
 from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_AGOTADO,
     ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+    MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
     MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
 )
 from app.Models.Empaque.EmpaqueBobina import (
     DetalleInventarioEmpaqueRequest,
     DetalleInventarioEmpaqueResponse,
+    EmpaqueReingresableResponse,
     IngresoEmpaqueRequest,
     IngresoEmpaqueResponse,
     IngresoEmpaqueResponseItem,
+    ReingresarEmpaqueRequest,
+    ReingresarEmpaqueResponse,
     ResumenInventarioEmpaqueResponse,
     TipoEmpaque,
     TrasladarEmpaquesProduccionRequest,
@@ -23,6 +32,7 @@ from app.Models.Empaque.EmpaqueBobina import (
 from app.Repository.Empaque.EmpaqueBobina import EmpaqueBobinaRepository
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque
 from app.utils.dates import ZONA_BOLIVIA
+from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 OBSERVACION_INGRESO_EMPAQUE = "Ingreso automático al almacén por registro de empaque"
 OBSERVACION_TRASLADO_EMPAQUE = "Empaque trasladado a producción"
@@ -155,7 +165,7 @@ class EmpaqueBobinaService:
                 detail=f"Los empaques {', '.join(no_disponibles)} no están En almacén, no pueden trasladarse a producción",
             )
 
-        movimientos = self.repository.RegistrarTraslado(
+        movimientos = self.repository.RegistrarMovimientos(
             list(empaques.values()),
             [
                 MovimientoEmpaque(
@@ -167,6 +177,7 @@ class EmpaqueBobinaService:
                 for id_empaque in ids_empaque
             ],
             ESTADO_MATERIA_PRIMA_AGOTADO,
+            "No se pudo trasladar los empaques a producción",
         )
 
         return [
@@ -178,6 +189,75 @@ class EmpaqueBobinaService:
             )
             for movimiento in movimientos
         ]
+
+    def ListarEmpaquesReingresables(self) -> list[EmpaqueReingresableResponse]:
+        return [
+            EmpaqueReingresableResponse(**fila)
+            for fila in self.repository.ListarEmpaquesReingresables()
+        ]
+
+    def ReingresarEmpaque(
+        self, data: ReingresarEmpaqueRequest, id_usuario: int
+    ) -> ReingresarEmpaqueResponse:
+        observacion = (data.Observacion or "").strip()
+        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"La observación es obligatoria, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
+            )
+
+        empaque = self.repository.ObtenerEmpaquesBloqueados([data.IdEmpaque]).get(data.IdEmpaque)
+        if empaque is None:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe el empaque con id {data.IdEmpaque}",
+            )
+
+        if empaque.IdEstadoMateriaPrima != ESTADO_MATERIA_PRIMA_AGOTADO:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El empaque {empaque.CodigoEmpaque} no fue enviado a producción, no puede reingresarse",
+            )
+
+        fecha_traslado = self.repository.UltimoTraslado(empaque.IdEmpaque)
+        if fecha_traslado is None:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El empaque {empaque.CodigoEmpaque} no tiene un traslado a producción registrado",
+            )
+
+        if datetime.now(timezone.utc) - fecha_traslado > timedelta(
+            minutes=MINUTOS_REINGRESO_EMPAQUE_BOBINA
+        ):
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Pasaron más de {MINUTOS_REINGRESO_EMPAQUE_BOBINA} minutos desde el traslado; el empaque {empaque.CodigoEmpaque} ya no puede reingresarse al almacén",
+            )
+
+        movimiento = self.repository.RegistrarMovimientos(
+            [empaque],
+            [
+                MovimientoEmpaque(
+                    IdEmpaque=empaque.IdEmpaque,
+                    IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+                    IdUsuario=id_usuario,
+                    Observacion=observacion,
+                )
+            ],
+            ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+            "No se pudo reingresar el empaque al almacén",
+        )[0]
+
+        return ReingresarEmpaqueResponse(
+            IdEmpaque=empaque.IdEmpaque,
+            CodigoEmpaque=empaque.CodigoEmpaque,
+            IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+            FechaMovimiento=movimiento.FechaMovimiento,
+        )
 
     def VerResumenInventarioEmpaque(self) -> list[ResumenInventarioEmpaqueResponse]:
         return [
