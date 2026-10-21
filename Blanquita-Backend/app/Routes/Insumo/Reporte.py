@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import get_generado_por, require_role
 from app.Config.supabase import get_db
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Models.Insumo.Reporte import (
     ReporteInventarioInsumoRequest,
     ReporteInventarioInsumoResponse,
@@ -35,7 +35,7 @@ InsumoReporteRouter = APIRouter(
     "/inventario/resumen",
     response_model=ReporteInventarioInsumoResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenInventarioInsumo(
     IdsTipoInsumo: list[int] | None = Query(
@@ -54,7 +54,7 @@ def ResumenInventarioInsumo(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteInventarioInsumo(
     IdsTipoInsumo: list[int] | None = Query(
@@ -82,7 +82,7 @@ def ReporteInventarioInsumo(
     "/movimientos/resumen",
     response_model=ReporteMovimientosInsumoResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenMovimientosInsumo(
     FechaInicio: date,
@@ -107,7 +107,7 @@ def ResumenMovimientosInsumo(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteMovimientosInsumo(
     FechaInicio: date,

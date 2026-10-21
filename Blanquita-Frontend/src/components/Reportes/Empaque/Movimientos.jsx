@@ -14,7 +14,7 @@ import {
   verResumenMovimientosEmpaque,
   descargarReporteMovimientosEmpaque,
 } from "@/services/Empaque/Reporte";
-import { ID_TIPO_MOVIMIENTO_INGRESO, claseEmpaque } from "./filtros";
+import { ID_TIPO_MOVIMIENTO_INGRESO, ID_TIPO_MOVIMIENTO_REINGRESO, claseEmpaque } from "./filtros";
 import {
   FiltrosEmpaque,
   filtrosIniciales,
@@ -30,7 +30,8 @@ const consultarResumen = (parametros) =>
 
 const entero = (valor) => formatearNumero(valor, { decimales: 0 });
 
-const esIngreso = (m) => m.IdTipoMovimiento === ID_TIPO_MOVIMIENTO_INGRESO;
+const esIngreso = (m) =>
+  [ID_TIPO_MOVIMIENTO_INGRESO, ID_TIPO_MOVIMIENTO_REINGRESO].includes(m.IdTipoMovimiento);
 
 const textoCantidad = (m) => `${esIngreso(m) ? "+" : "-"}${entero(m.Cantidad)}`;
 

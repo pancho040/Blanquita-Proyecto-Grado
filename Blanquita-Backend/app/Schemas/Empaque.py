@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Numeric, Text, func
+from sqlalchemy import Date, DateTime, Numeric, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -22,6 +22,9 @@ class TipoEmpaque(Base):
 
     IdTipoEmpaque: Mapped[int] = mapped_column(primary_key=True)
     NombreTipoEmpaque: Mapped[str] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class Empaque(Base):
@@ -54,6 +57,7 @@ class TipoEmpaqueBolsa(Base):
     IdTipoEmpaqueBolsa: Mapped[int] = mapped_column(primary_key=True)
     NombreEmpaqueBolsa: Mapped[str] = mapped_column(Text)
     DescripcionEmpaqueBolsa: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class InventarioEmpaqueBolsa(Base):
@@ -62,6 +66,8 @@ class InventarioEmpaqueBolsa(Base):
     IdInventarioEmpaqueBolsa: Mapped[int] = mapped_column(primary_key=True)
     IdTipoEmpaqueBolsa: Mapped[int]
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class TipoBolsaJava(Base):
@@ -70,6 +76,7 @@ class TipoBolsaJava(Base):
     IdTipoBolsaJava: Mapped[int] = mapped_column(primary_key=True)
     NombreBolsaJava: Mapped[str] = mapped_column(Text)
     DescripcionBolsaJava: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class InventarioBolsaJava(Base):
@@ -78,6 +85,8 @@ class InventarioBolsaJava(Base):
     IdInventarioBolsaJava: Mapped[int] = mapped_column(primary_key=True)
     IdTipoBolsaJava: Mapped[int]
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class MovimientoBolsaJava(Base):

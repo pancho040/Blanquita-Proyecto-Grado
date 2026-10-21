@@ -94,6 +94,7 @@ class PausaProduccionBobinaTuboResponse(BaseModel):
     FechaHoraPausa: datetime
     MotivoPausaProduccion: Optional[str]
     FechaHoraReanudacion: Optional[datetime]
+    MotivoReanudacion: Optional[str] = None
     DuracionPausa: Optional[timedelta]
     OperadorPausa: str
     RolPausa: str

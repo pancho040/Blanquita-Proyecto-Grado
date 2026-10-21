@@ -20,14 +20,14 @@ export const CLASES_EMPAQUE = [
     texto: "Empaque en bolsa",
     unidad: "paquetes",
     cargarTipos: () =>
-      verInventarioEmpaqueBolsa().then(normalizar("IdTipoEmpaqueBolsa", "NombreEmpaqueBolsa")),
+      verInventarioEmpaqueBolsa(true).then(normalizar("IdTipoEmpaqueBolsa", "NombreEmpaqueBolsa")),
   },
   {
     valor: "jaba",
     texto: "Bolsas de jaba",
     unidad: "paquetes",
     cargarTipos: () =>
-      verInventarioBolsaJava().then(normalizar("IdTipoBolsaJava", "NombreBolsaJava")),
+      verInventarioBolsaJava(true).then(normalizar("IdTipoBolsaJava", "NombreBolsaJava")),
   },
 ];
 
@@ -43,6 +43,7 @@ export const tipoEmpaque = (clase) => ({
 });
 
 export const ID_TIPO_MOVIMIENTO_INGRESO = 1;
+export const ID_TIPO_MOVIMIENTO_REINGRESO = 6;
 
 export const ATAJOS = [
   { valor: "hoy", texto: "Hoy", rango: (hoy) => ({ from: hoy, to: hoy }) },

@@ -1,14 +1,20 @@
-import json
-from typing import List
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from collections import Counter
+from datetime import datetime
+
 from fastapi import HTTPException, status
-from app.Repository.Rodela.RodelaRepository import RodelaRepository
+from sqlalchemy.orm import Session
+
+from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN
 from app.Models.Rodela.Rodela import (
     IngresoRodelaRequest,
     IngresoRodelaResponse,
     TipoRodela,
 )
+from app.Repository.Rodela.RodelaRepository import RodelaRepository
+from app.Schemas.Rodela import LoteRodela, Rodela
+from app.utils.dates import ZONA_BOLIVIA
+
+OBSERVACION_INGRESO_RODELA = "Ingreso automático al almacén por registro de rodela"
 
 
 class RodelaService:
@@ -16,48 +22,81 @@ class RodelaService:
         self.repository = RodelaRepository(db)
 
     def InsertarRodelas(self, data: IngresoRodelaRequest, id_usuario: int) -> IngresoRodelaResponse:
-        params = {
-            "p_IdProveedor": data.IdProveedor,
-            "p_IdTipoRodela": data.IdTipoRodela,
-            "p_IdUsuario": id_usuario,
-            "p_Rodelas": json.dumps([rodela.model_dump() for rodela in data.Rodelas]),
-        }
-
-        try:
-            resultado = self.repository.InsertarRodelas(params)
-        except SQLAlchemyError as e:
-            mensaje = str(e.orig) if hasattr(e, "orig") else str(e)
-            if "duplicate key" in mensaje or "CodigoRodela" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Ya existe una rodela registrada con ese código"
-                )
-            if "al menos una rodela" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Debe enviar al menos una rodela para registrar"
-                )
+        if not data.Rodelas:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo registrar el lote de rodelas, verifica los datos ingresados"
+                detail="Debe enviar al menos una rodela para registrar",
             )
 
-        if not resultado:
+        codigos = [rodela.CodigoRodela.strip() for rodela in data.Rodelas]
+        if any(not codigo for codigo in codigos):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo registrar el lote de rodelas"
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="El código de la rodela es obligatorio",
             )
 
-        return IngresoRodelaResponse(**resultado)
-
-    def ObtenerTiposRodela(self) -> List[TipoRodela]:
-        try:
-            resultado = self.repository.ObtenerTipoRodela()
-        except SQLAlchemyError:
+        repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
+        if repetidos:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudieron obtener los tipos de rodela"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Los códigos {', '.join(repetidos)} están repetidos en el lote",
             )
-        if not resultado:
-            return []
-        return [TipoRodela(**tipo) for tipo in resultado]
+
+        proveedor = self.repository.ObtenerProveedor(data.IdProveedor)
+        if proveedor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El proveedor con id {data.IdProveedor} no existe",
+            )
+
+        if not proveedor["Activo"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El proveedor {proveedor['NombreProveedor']} está inactivo, no se puede registrar el lote",
+            )
+
+        tipo = self.repository.ObtenerTipo(data.IdTipoRodela)
+        if tipo is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El tipo de rodela con id {data.IdTipoRodela} no existe",
+            )
+
+        if not tipo["Activo"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El tipo de rodela {tipo['NombreTipoRodela']} está inactivo, no se puede registrar el lote",
+            )
+
+        registrados = self.repository.CodigosRegistrados(codigos)
+        if registrados:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existen rodelas registradas con los códigos {', '.join(sorted(registrados))}",
+            )
+
+        lote = self.repository.RegistrarLote(
+            LoteRodela(
+                IdProveedor=data.IdProveedor,
+                IdUsuario=id_usuario,
+                FechaRecepcion=datetime.now(ZONA_BOLIVIA).date(),
+            ),
+            [
+                Rodela(
+                    CodigoRodela=codigo,
+                    IdTipoRodela=data.IdTipoRodela,
+                    IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+                )
+                for codigo in codigos
+            ],
+            id_usuario,
+            OBSERVACION_INGRESO_RODELA,
+        )
+
+        return IngresoRodelaResponse(
+            FechaRecepcion=lote.FechaRecepcion,
+            CantidadRodelas=len(codigos),
+        )
+
+    def ObtenerTiposRodela(self) -> list[TipoRodela]:
+        return [TipoRodela(**tipo) for tipo in self.repository.ObtenerTipoRodela()]

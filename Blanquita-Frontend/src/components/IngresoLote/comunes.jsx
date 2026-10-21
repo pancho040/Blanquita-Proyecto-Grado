@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -5,6 +6,7 @@ import {
   CheckCircle2,
   PackageCheck,
   AlertCircle,
+  TriangleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,8 +14,40 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SelectEntidad } from "@/components/layout/Selectentidad";
+import { CasillaConfirmacion } from "@/components/Admin/CasillaConfirmacion";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const ETIQUETA = "text-xs font-bold uppercase tracking-wide text-slate-600";
+
+const PESTANA = "flex-1 font-bold sm:flex-none sm:px-6";
+
+export function PestanasIngreso({ lotes, children }) {
+  return (
+    <Tabs defaultValue="ingresar">
+      <TabsList className="mb-5 h-11 w-full sm:w-auto">
+        <TabsTrigger value="ingresar" className={PESTANA}>
+          Ingresar lote
+        </TabsTrigger>
+        <TabsTrigger value="lotes" className={PESTANA}>
+          Ver lotes
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="ingresar">{children}</TabsContent>
+      <TabsContent value="lotes">
+        <TooltipProvider>{lotes}</TooltipProvider>
+      </TabsContent>
+    </Tabs>
+  );
+}
 
 export function ResultadoLote({ descripcion, children, onCerrar }) {
   return (
@@ -285,5 +319,132 @@ export function BarraGuardarLote({ listo, enviando, onGuardar, children }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+export function DialogoConfirmarLote({
+  abierto,
+  enviando,
+  cantidad,
+  unidad,
+  detalles,
+  lineas = [],
+  codigos = [],
+  editable,
+  aviso = "Una vez registrado el lote ya no se podrá editar.",
+  onCancelar,
+  onConfirmar,
+}) {
+  const [revisado, setRevisado] = useState(false);
+
+  useEffect(() => {
+    if (abierto) setRevisado(false);
+  }, [abierto]);
+
+  return (
+    <Dialog open={abierto} onOpenChange={(open) => !open && !enviando && onCancelar()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-extrabold">Confirmar ingreso del lote</DialogTitle>
+          <DialogDescription>
+            Estás por ingresar{" "}
+            <strong className="text-slate-900">
+              {cantidad} {unidad}
+            </strong>{" "}
+            al almacén.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {detalles.map(({ etiqueta, valor }) => (
+            <div key={etiqueta} className="rounded-lg bg-slate-50 px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {etiqueta}
+              </div>
+              <div className="text-sm font-bold text-slate-900">{valor}</div>
+            </div>
+          ))}
+        </div>
+
+        {lineas.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className={ETIQUETA}>Detalle por tipo</div>
+            <div className="flex flex-col divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {lineas.map(({ etiqueta, valor }) => (
+                <div key={etiqueta} className="flex items-center justify-between gap-3 px-3.5 py-2">
+                  <span className="text-[13px] font-semibold text-slate-700">{etiqueta}</span>
+                  <span className="text-[13px] font-extrabold tabular-nums text-slate-900">
+                    {valor}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {codigos.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className={ETIQUETA}>Códigos ({codigos.length})</div>
+            <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-slate-200 p-2.5">
+              {codigos.map((codigo) => (
+                <span
+                  key={codigo}
+                  className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[13px] font-bold text-slate-900"
+                >
+                  {codigo}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-start gap-2.5 rounded-xl bg-red-50 px-3.5 py-3 text-[13px] text-red-700">
+          <TriangleAlert size={17} strokeWidth={2.5} className="mt-0.5 shrink-0" />
+          <span>
+            ¿Revisaste bien {codigos.length > 0 ? "los códigos y " : ""}la cantidad de materia
+            prima que vas a ingresar?{" "}
+            {editable
+              ? `Una vez registrado el lote solo se podrá editar ${editable}; la cantidad, el tipo y el proveedor ya no se pueden cambiar.`
+              : aviso}
+          </span>
+        </div>
+
+        <CasillaConfirmacion
+          marcada={revisado}
+          onCambio={setRevisado}
+          titulo={codigos.length > 0 ? "Revisé los códigos y la cantidad" : "Revisé la cantidad"}
+        >
+          Confirmo que los datos coinciden con la materia prima recibida.
+        </CasillaConfirmacion>
+
+        <DialogFooter className="gap-2">
+          <Button
+            variant="ghost"
+            onClick={onCancelar}
+            disabled={enviando}
+            className="h-11 font-bold text-slate-500 hover:text-slate-900"
+          >
+            Volver a revisar
+          </Button>
+          <Button
+            onClick={onConfirmar}
+            disabled={!revisado || enviando}
+            className="h-11 gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
+          >
+            {enviando ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              <>
+                <PackageCheck size={16} strokeWidth={2.75} />
+                Confirmar ingreso
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

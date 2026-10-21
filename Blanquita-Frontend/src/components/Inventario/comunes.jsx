@@ -19,22 +19,20 @@ import { ACENTOS } from "@/constants/Acentos";
 import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
 import { dateFormatter } from "@/utils/dates";
 import { limpiarObservacion } from "@/utils/validators";
+import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 
 export const GRID_TARJETAS = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 const TARJETA =
-  "flex flex-col gap-3.5 rounded-2xl border-2 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md";
+  "flex flex-col gap-3.5 rounded-2xl border-2 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:hover:translate-y-0 disabled:hover:shadow-sm";
 
 const MENSAJE = "p-8 text-center text-sm text-slate-400";
 
-export const etiquetaStock = (cantidad, umbral) =>
-  cantidad === 0 ? "Sin stock" : cantidad < umbral ? "Stock bajo" : "Disponible";
-
-export const conAcentos = (lista, { cantidadDe, umbral = 6, desplazamiento = 0 } = {}) =>
+export const conAcentos = (lista, { cantidadDe, desplazamiento = 0 } = {}) =>
   lista.map((t, i) => ({
     ...t,
     ...ACENTOS[(i + desplazamiento) % ACENTOS.length],
-    ...(cantidadDe ? { badge: etiquetaStock(cantidadDe(t), umbral) } : {}),
+    ...(cantidadDe ? { stock: estadoStock(cantidadDe(t), t) } : {}),
   }));
 
 export const coincide = (busqueda, ...valores) => {
@@ -42,29 +40,51 @@ export const coincide = (busqueda, ...valores) => {
   return !q || valores.some((v) => String(v ?? "").toLowerCase().includes(q));
 };
 
+export function BadgeInactivo({ className }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("border-amber-300 bg-amber-50 font-bold text-amber-700", className)}
+    >
+      Inactivo
+    </Badge>
+  );
+}
+
 export function TarjetaTipo({
   acento,
   activo,
+  inactivo = false,
   onClick,
   icono: Icono,
   claseIcono = "h-8 w-8",
   grosorIcono = 2,
   nombre,
   etiqueta,
+  stock,
   cantidad,
   unidad,
   textoVer,
   children,
 }) {
+  const estilo = stock ? ESTILO_STOCK[stock] : null;
   return (
-    <button onClick={onClick} className={cn(TARJETA, activo ? acento.border : "border-slate-200")}>
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(TARJETA, activo ? acento.border : "border-slate-200")}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Icono className={cn(claseIcono, "shrink-0", acento.text)} strokeWidth={grosorIcono} />
           <div className="text-[17px] font-extrabold text-slate-900">{nombre}</div>
+          {inactivo && <BadgeInactivo />}
         </div>
-        <Badge variant="outline" className={cn("border-0 font-bold", acento.soft, acento.text)}>
-          {etiqueta}
+        <Badge
+          variant="outline"
+          className={cn("border-0 font-bold", estilo ? estilo.clase : cn(acento.soft, acento.text))}
+        >
+          {estilo ? estilo.texto : etiqueta}
         </Badge>
       </div>
 
@@ -75,10 +95,12 @@ export function TarjetaTipo({
 
       {children}
 
-      <div className={cn("flex items-center justify-end gap-1.5 text-xs font-bold", acento.text)}>
-        {textoVer}
-        <ArrowRight size={14} strokeWidth={2.75} />
-      </div>
+      {textoVer && (
+        <div className={cn("flex items-center justify-end gap-1.5 text-xs font-bold", acento.text)}>
+          {textoVer}
+          <ArrowRight size={14} strokeWidth={2.75} />
+        </div>
+      )}
     </button>
   );
 }
@@ -257,6 +279,40 @@ export function BuscadorCodigo({ valor, onCambio, placeholder = "Buscar por cód
   );
 }
 
+export function BuscadorNombre({ valor, onCambio, placeholder = "Buscar por nombre..." }) {
+  return (
+    <div className="relative mb-4 max-w-sm">
+      <Search
+        size={16}
+        strokeWidth={2.5}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <Input
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+        placeholder={placeholder}
+        className="h-11 bg-white pl-9"
+      />
+      {valor && (
+        <button
+          onClick={() => onCambio("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+        >
+          <X size={15} strokeWidth={2.75} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SinCoincidencias({ busqueda }) {
+  return (
+    <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+      Ningún tipo coincide con "{busqueda}".
+    </div>
+  );
+}
+
 export function ContenidoLista({
   cargando,
   error,
@@ -411,13 +467,15 @@ export function ItemFueraInventario({
           </div>
         )}
       </div>
-      <Button
-        onClick={onReingresar}
-        disabled={procesando}
-        className="h-10 gap-2 self-start bg-emerald-600 font-bold text-white hover:bg-emerald-700 sm:self-auto"
-      >
-        {procesando ? <Loader2 size={15} className="animate-spin" /> : contenidoReingresar}
-      </Button>
+      {onReingresar && (
+        <Button
+          onClick={onReingresar}
+          disabled={procesando}
+          className="h-10 gap-2 self-start bg-emerald-600 font-bold text-white hover:bg-emerald-700 sm:self-auto"
+        >
+          {procesando ? <Loader2 size={15} className="animate-spin" /> : contenidoReingresar}
+        </Button>
+      )}
     </div>
   );
 }

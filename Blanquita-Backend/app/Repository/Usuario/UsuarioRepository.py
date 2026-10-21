@@ -24,6 +24,7 @@ class UsuarioRepository:
                 Usuario.ApellidoMaterno,
                 Usuario.Celular,
                 Usuario.FechaRegistro,
+                Usuario.IsAdmin,
                 Rol.IdRol,
                 Rol.NombreRol,
                 EstadoUsuario.IdEstadoUsuario,
@@ -66,19 +67,44 @@ class UsuarioRepository:
         return total, self.caller.Consultar(pagina)
 
     def VerificarAdmin(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "VerificarAdmin"(p_IdUsuario => :p_IdUsuario)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
+        filas = self.caller.Consultar(
+            select(
+                Usuario.IsAdmin.label("EsAdminOut"),
+                Usuario.IdEstadoUsuario.label("IdEstadoUsuarioOut"),
+            ).where(Usuario.IdUsuario == params["p_IdUsuario"])
+        )
+        return filas[0] if filas else None
 
     def ObtenerPerfil(self, params: dict) -> dict | None:
-        consulta = '''
-            SELECT * FROM "ObtenerPerfil"(p_IdUsuario => :p_IdUsuario)
-        '''
-        return self.caller.LlamarUnRegistro(consulta, params, commit=False)
+        filas = self.caller.Consultar(
+            select(
+                Usuario.IdUsuario.label("IdUsuarioOut"),
+                Usuario.Ci.label("CiOut"),
+                Usuario.PrimerNombre.label("PrimerNombreOut"),
+                Usuario.SegundoNombre.label("SegundoNombreOut"),
+                Usuario.ApellidoPaterno.label("ApellidoPaternoOut"),
+                Usuario.ApellidoMaterno.label("ApellidoMaternoOut"),
+                func.concat_ws(
+                    " ",
+                    Usuario.PrimerNombre,
+                    Usuario.SegundoNombre,
+                    Usuario.ApellidoPaterno,
+                    Usuario.ApellidoMaterno,
+                ).label("NombreCompletoOut"),
+                Usuario.Celular.label("CelularOut"),
+                Usuario.IdRol.label("IdRolOut"),
+                Rol.NombreRol.label("NombreRolOut"),
+                Usuario.IdEstadoUsuario.label("IdEstadoUsuarioOut"),
+                EstadoUsuario.NombreEstadoUsuario.label("NombreEstadoUsuarioOut"),
+                Usuario.FechaRegistro.label("FechaRegistroOut"),
+            )
+            .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .join(EstadoUsuario, EstadoUsuario.IdEstadoUsuario == Usuario.IdEstadoUsuario)
+            .where(Usuario.IdUsuario == params["p_IdUsuario"])
+        )
+        return filas[0] if filas else None
 
     def ObtenerUsuarioBloqueado(self, id_usuario: int) -> Usuario | None:
-        """Lee el usuario con FOR UPDATE; el bloqueo dura hasta el commit/rollback."""
         try:
             return self.db.execute(
                 select(Usuario).where(Usuario.IdUsuario == id_usuario).with_for_update()
@@ -99,7 +125,6 @@ class UsuarioRepository:
     def CambiarEstado(
         self, usuario: Usuario, id_estado: int, observacion: str, id_admin: int
     ) -> None:
-        """Actualiza el estado y registra el historial en la misma transacción."""
         try:
             usuario.IdEstadoUsuario = id_estado
             self.db.add(HistorialAdmin(IdUsuario=id_admin, Observacion=observacion))
@@ -114,7 +139,6 @@ class UsuarioRepository:
     def EditarUsuario(
         self, usuario: Usuario, datos: dict, observacion: str, id_admin: int
     ) -> None:
-        """Actualiza los datos y registra el historial en la misma transacción."""
         try:
             for campo, valor in datos.items():
                 setattr(usuario, campo, valor)
@@ -128,7 +152,6 @@ class UsuarioRepository:
             )
 
     def AgregarHistorial(self, id_admin: int, observacion: str) -> None:
-        """Deja el registro pendiente en la transacción; se guarda con Confirmar()."""
         try:
             self.db.add(HistorialAdmin(IdUsuario=id_admin, Observacion=observacion))
             self.db.flush()
@@ -162,7 +185,6 @@ class UsuarioRepository:
         return bool(self.caller.Consultar(select(Usuario.IdUsuario).where(Usuario.Ci == ci)))
 
     def CrearUsuario(self, usuario: Usuario, observacion: str, id_admin: int) -> Usuario:
-        """Inserta el usuario y su registro en HistorialAdmin en una sola transacción."""
         try:
             self.db.add(usuario)
             self.db.flush()

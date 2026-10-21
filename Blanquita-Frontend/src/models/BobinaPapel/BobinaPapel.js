@@ -36,6 +36,7 @@ export const IngresoLoteBobinaPapelResponse = (data) => ({
 export const TipoBobinaPapelIngreso = (data) => ({
   IdTipoBobina: data.IdTipoBobina,
   NombreTipoBobina: data.NombreTipoBobina,
+  Activo: data.Activo,
 });
 
 export const EditarBobinaPapelRequest = (data) => ({

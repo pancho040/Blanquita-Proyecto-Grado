@@ -6,11 +6,16 @@ class AbrirBobinaServilletaRequest(BaseModel):
     Observacion: str | None = None
 
 
+class SubBobinasMedidaResponse(BaseModel):
+    IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    Cantidad: int
+
+
 class AbrirBobinaServilletaResponse(BaseModel):
     IdBobinaServilleta: int
     IdEstadoMateriaPrima: int
-    CantidadSubBobinas435: int
-    CantidadSubBobinas220: int
+    SubBobinas: list[SubBobinasMedidaResponse]
     CantidadSubBobinasTotal: int
 
 
@@ -44,6 +49,7 @@ class PausaProduccionServilletaResponse(BaseModel):
 
 class ReanudarProduccionServilletaRequest(BaseModel):
     IdProduccionServilleta: int
+    MotivoReanudacion: str | None = None
 
 
 class ReanudarProduccionServilletaResponse(BaseModel):
@@ -52,6 +58,7 @@ class ReanudarProduccionServilletaResponse(BaseModel):
     FechaHoraPausa: datetime
     MotivoPausaProduccion: str | None
     FechaHoraReanudacion: datetime
+    MotivoReanudacion: str | None = None
     IdEstadoProduccion: int
 
 
@@ -91,6 +98,8 @@ class VerProduccionServilletaActivasResponse(BaseModel):
     IdSubBobina: int
     CodigoUnidadOrigen: str
     IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    DescripcionFormato: str
     NombreTurno: str
     FechaInicioProduccion: datetime
 
@@ -100,5 +109,8 @@ class VerPausasProduccionServilletaActivasResponse(BaseModel):
     IdProduccionServilleta: int
     IdSubBobina: int
     CodigoUnidadOrigen: str
+    IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    DescripcionFormato: str
     FechaHoraPausa: datetime
     NombreEstadoProduccion: str

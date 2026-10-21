@@ -50,6 +50,7 @@ class PausarProduccionBobinaTuboResponse(BaseModel):
 
 class ReanudarProduccionBobinaTuboRequest(BaseModel):
     IdProduccionBobinaTubo: int
+    MotivoReanudacion: Optional[str] = None
 
 
 class ReanudarProduccionBobinaTuboResponse(BaseModel):
@@ -58,6 +59,7 @@ class ReanudarProduccionBobinaTuboResponse(BaseModel):
     FechaHoraPausa: datetime
     MotivoPausaProduccion: Optional[str] = None
     FechaHoraReanudacion: datetime
+    MotivoReanudacion: Optional[str] = None
     IdEstadoProduccion: int
 
 

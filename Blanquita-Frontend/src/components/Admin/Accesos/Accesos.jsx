@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileUser, LogIn, LogOut, Search, ShieldAlert, Users } from "lucide-react";
+import { LogIn, LogOut, Search, ShieldAlert, Users } from "lucide-react";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,6 @@ import {
   TarjetaFiltros,
   CampoFiltro,
   BotonInforme,
-  BotonDescargaFila,
   ResultadosReporte,
   TarjetaReporte,
   PieTarjeta,
@@ -25,7 +24,6 @@ import {
   listarRegistroIngreso,
   verResumenUsuarioRegistroIngreso,
   descargarReporteRegistroIngreso,
-  descargarReporteUsuarioRegistroIngreso,
 } from "@/services/Usuario/RegistroIngreso";
 
 const LONGITUD_MINIMA_CI = 6;
@@ -238,19 +236,6 @@ export default function Accesos() {
   };
   const hayRegistros = Boolean(catalogo?.Total);
   const usuario = useUsuarioConsultado(parametros);
-  const ciCompleto = (filtros.Ci ?? "").length >= LONGITUD_MINIMA_CI;
-
-  const reporteUsuario = (r) => (
-    <div className="flex justify-end">
-      {r.Ci && (
-        <BotonDescargaFila
-          icono={FileUser}
-          ayuda={`Reporte de accesos del CI ${r.Ci} en el período`}
-          descargar={() => descargarReporteUsuarioRegistroIngreso({ ...parametros, Ci: r.Ci })}
-        />
-      )}
-    </div>
-  );
 
   return (
     <TooltipProvider>
@@ -270,31 +255,15 @@ export default function Accesos() {
               hayFiltros: atajo !== "hoy" || Boolean(filtros.Registro) || Boolean(reporte.textos.Ci),
             }}
             informe={
-              <>
-                <BotonInforme
-                  texto="Reporte del usuario"
-                  disponible={rangoCompleto && ciCompleto && Boolean(usuario?.Registros.length)}
-                  ayuda={`PDF con el historial de accesos del CI ${filtros.Ci} en el período`}
-                  ayudaNoDisponible={
-                    !rangoCompleto
-                      ? undefined
-                      : ciCompleto
-                        ? "Ese CI no tiene accesos en el período y el registro elegidos"
-                        : `Escribe un CI de al menos ${LONGITUD_MINIMA_CI} dígitos`
-                  }
-                  exito="Reporte de accesos del usuario descargado"
-                  descargar={() => descargarReporteUsuarioRegistroIngreso(parametros)}
-                />
-                <BotonInforme
-                  disponible={rangoCompleto && hayRegistros}
-                  ayuda="PDF con el resumen y el detalle de accesos del período y los filtros elegidos"
-                  ayudaNoDisponible={
-                    rangoCompleto ? "No hay accesos en el período y los filtros elegidos" : undefined
-                  }
-                  exito="Reporte de accesos descargado"
-                  descargar={() => descargarReporteRegistroIngreso(parametros)}
-                />
-              </>
+              <BotonInforme
+                disponible={rangoCompleto && hayRegistros}
+                ayuda="PDF con el resumen y el detalle de accesos del período y los filtros elegidos"
+                ayudaNoDisponible={
+                  rangoCompleto ? "No hay accesos en el período y los filtros elegidos" : undefined
+                }
+                exito="Reporte de accesos descargado"
+                descargar={() => descargarReporteRegistroIngreso(parametros)}
+              />
             }
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -341,7 +310,6 @@ export default function Accesos() {
               clave={(r) => r.IdRegistroIngreso}
               nombres={["registro", "registros"]}
               columnas={COLUMNAS}
-              accion={reporteUsuario}
               tarjeta={(r) => (
                 <TarjetaReporte
                   titulo={nombreUsuario(r)}
@@ -352,7 +320,7 @@ export default function Accesos() {
                     <BadgeRegistro registro={r.Registro} />
                     {r.Detalle && <span>{r.Detalle}</span>}
                   </div>
-                  <PieTarjeta accion={reporteUsuario(r)}>
+                  <PieTarjeta>
                     <Dato etiqueta="IP">{r.DireccionIp ?? "-"}</Dato>
                     <Dato etiqueta="Equipo">{r.Dispositivo}</Dato>
                   </PieTarjeta>

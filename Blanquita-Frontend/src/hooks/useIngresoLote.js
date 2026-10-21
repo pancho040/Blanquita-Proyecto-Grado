@@ -55,6 +55,22 @@ export function useEnvioLote() {
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState("");
   const [resultado, setResultado] = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
+
+  const pedirConfirmacion = (validar) => {
+    setTocado(true);
+    setErrorEnvio("");
+
+    const error = validar();
+    if (error) {
+      setErrorEnvio(error);
+      return;
+    }
+
+    setConfirmando(true);
+  };
+
+  const cancelarConfirmacion = () => setConfirmando(false);
 
   const guardar = async ({ validar, enviar, alGuardar }) => {
     setTocado(true);
@@ -63,6 +79,7 @@ export function useEnvioLote() {
     const error = validar();
     if (error) {
       setErrorEnvio(error);
+      setConfirmando(false);
       return;
     }
 
@@ -78,8 +95,19 @@ export function useEnvioLote() {
       toast.error(e.message);
     } finally {
       setEnviando(false);
+      setConfirmando(false);
     }
   };
 
-  return { tocado, enviando, errorEnvio, resultado, setResultado, guardar };
+  return {
+    tocado,
+    enviando,
+    errorEnvio,
+    resultado,
+    setResultado,
+    guardar,
+    confirmando,
+    pedirConfirmacion,
+    cancelarConfirmacion,
+  };
 }

@@ -50,8 +50,8 @@ export async function pausarProduccionServilleta(idProduccionServilleta, motivoP
   return PausaProduccionServilletaResponse(data);
 }
 
-export async function reanudarProduccionServilleta(idProduccionServilleta) {
-  const payload = ReanudarProduccionServilletaRequest(idProduccionServilleta);
+export async function reanudarProduccionServilleta(idProduccionServilleta, motivoReanudacion) {
+  const payload = ReanudarProduccionServilletaRequest(idProduccionServilleta, motivoReanudacion);
 
   const data = await pedirJson("/api/bobinaservilleta/produccion/reanudar", {
     method: "POST",

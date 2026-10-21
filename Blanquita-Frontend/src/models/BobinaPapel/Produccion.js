@@ -42,8 +42,9 @@ export const PausarProduccionBobinaTuboResponse = (data) => ({
   IdEstadoProduccion: data.IdEstadoProduccion
 });
 
-export const ReanudarProduccionBobinaTuboRequest = (idProduccionBobinaTubo) => ({
-  IdProduccionBobinaTubo: idProduccionBobinaTubo
+export const ReanudarProduccionBobinaTuboRequest = (idProduccionBobinaTubo, motivoReanudacion) => ({
+  IdProduccionBobinaTubo: idProduccionBobinaTubo,
+  MotivoReanudacion: motivoReanudacion ?? null
 });
 
 export const ReanudarProduccionBobinaTuboResponse = (data) => ({
@@ -52,6 +53,7 @@ export const ReanudarProduccionBobinaTuboResponse = (data) => ({
   FechaHoraPausa: data.FechaHoraPausa,
   MotivoPausaProduccion: data.MotivoPausaProduccion ?? null,
   FechaHoraReanudacion: data.FechaHoraReanudacion,
+  MotivoReanudacion: data.MotivoReanudacion ?? null,
   IdEstadoProduccion: data.IdEstadoProduccion
 });
 

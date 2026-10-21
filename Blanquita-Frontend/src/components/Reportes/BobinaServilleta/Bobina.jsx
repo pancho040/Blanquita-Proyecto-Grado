@@ -13,20 +13,27 @@ import {
 import { formatearNumero } from "@/utils/numeros";
 import { TIPO_BOBINA_SERVILLETA, CODIGO_UNIDAD } from "./filtros";
 
-function UnidadCelda({ bobina, numero }) {
-  const codigo = bobina[`CodigoUnidad${numero}`];
-  if (!codigo) return <span className="text-slate-300">-</span>;
-
+function UnidadCelda({ unidad }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-[13px] font-bold text-slate-900">{codigo}</span>
+      <span className="font-mono text-[13px] font-bold text-slate-900">{unidad.CodigoBobina}</span>
+      <span className="text-[11.5px] text-slate-500">{unidad.DescripcionFormato}</span>
       <span className="text-[11.5px] text-slate-500">
-        {bobina[`DescripcionFormato${numero}`]}
+        {formatearNumero(unidad.PesoBrutoKg, { vacio: "-" })} kg ·{" "}
+        {formatearNumero(unidad.GramajeGr, { vacio: "-" })} gr
       </span>
-      <span className="text-[11.5px] text-slate-500">
-        {formatearNumero(bobina[`PesoBrutoKg${numero}`], { vacio: "-" })} kg ·{" "}
-        {formatearNumero(bobina[`GramajeGr${numero}`], { vacio: "-" })} gr
-      </span>
+    </div>
+  );
+}
+
+function UnidadesCelda({ bobina }) {
+  if (!bobina.Unidades.length) return <span className="text-slate-300">-</span>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {bobina.Unidades.map((u) => (
+        <UnidadCelda key={u.IdUnidadBobinaServilleta} unidad={u} />
+      ))}
     </div>
   );
 }
@@ -47,8 +54,7 @@ const COLUMNAS = [
   COLUMNA_PROVEEDOR,
   { titulo: "Tipo", valor: (b) => b.NombreTipoBobinaServilleta },
   COLUMNA_ESTADO,
-  { titulo: "Unidad 1", valor: (b) => <UnidadCelda bobina={b} numero={1} /> },
-  { titulo: "Unidad 2", valor: (b) => <UnidadCelda bobina={b} numero={2} /> },
+  { titulo: "Unidades", valor: (b) => <UnidadesCelda bobina={b} /> },
 ];
 
 export default function BobinaReporteServilleta() {
@@ -84,8 +90,9 @@ export default function BobinaReporteServilleta() {
           estado={b.TipoEstado}
         >
           <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-2.5">
-            <UnidadCelda bobina={b} numero={1} />
-            <UnidadCelda bobina={b} numero={2} />
+            {b.Unidades.map((u) => (
+              <UnidadCelda key={u.IdUnidadBobinaServilleta} unidad={u} />
+            ))}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2.5">

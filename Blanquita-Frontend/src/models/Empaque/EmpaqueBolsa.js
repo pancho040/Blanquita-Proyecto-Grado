@@ -1,9 +1,13 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const InventarioEmpaqueBolsaResponse = (data) => ({
   IdInventarioEmpaqueBolsa: data.IdInventarioEmpaqueBolsa,
   IdTipoEmpaqueBolsa: data.IdTipoEmpaqueBolsa,
   NombreEmpaqueBolsa: data.NombreEmpaqueBolsa,
   DescripcionEmpaqueBolsa: data.DescripcionEmpaqueBolsa ?? null,
-  CantidadActual: data.CantidadActual
+  Activo: data.Activo,
+  CantidadActual: data.CantidadActual,
+  ...NivelStockResponse(data)
 });
 
 export const IngresoEmpaqueBolsaRequest = (idProveedor, cantidadToneladasPedida, empaquesBolsa) => ({
@@ -45,3 +49,11 @@ export const SalidaEmpaqueBolsaResponse = (data) => ({
   CantidadActual: data.CantidadActual,
   FechaMovimiento: data.FechaMovimiento
 });
+
+export const ReingresoEmpaqueBolsaRequest = (idTipo, cantidad, observacion) => ({
+  IdTipoEmpaqueBolsa: idTipo,
+  Cantidad: cantidad,
+  Observacion: observacion
+});
+
+export const ReingresoEmpaqueBolsaResponse = SalidaEmpaqueBolsaResponse;

@@ -1,4 +1,4 @@
-import { PaginaReporte } from "@/components/Reportes/PaginaReporte";
+import { PaginaReporte, SinContenedor } from "@/components/Reportes/PaginaReporte";
 import { TarjetaFiltros, BotonInforme, DERECHA, contar } from "@/components/Reportes/comunes";
 import {
   TarjetaSeccion,
@@ -8,6 +8,7 @@ import {
   TarjetaFila,
 } from "@/components/Reportes/Producto/comunes";
 import { useReporte } from "@/hooks/useReporte";
+import { useDiasDestacados } from "@/hooks/useDiasDestacados";
 import { dateFormatter } from "@/utils/dates";
 import { formatearNumero } from "@/utils/numeros";
 import { verResumenLotesEmpaque, descargarReporteLotesEmpaque } from "@/services/Empaque/Reporte";
@@ -170,22 +171,30 @@ function ResultadosLotes({ reporte }) {
   );
 }
 
-export default function LotesReporteEmpaque({ usuario }) {
-  const reporte = useReporte(consultarResumen, filtrosIniciales());
+export function LotesEmpaque({ usuario, claseFija, contenedor: Contenedor = SinContenedor }) {
+  const reporte = useReporte(consultarResumen, filtrosIniciales(false, claseFija));
   const { filtros, catalogo: resumen } = reporte;
   const clase = claseEmpaque(filtros.Clase);
   const completo = rangoCompleto(filtros);
   const hayLotes = Boolean(resumen?.Lotes.length);
+  const destacados = useDiasDestacados(
+    (FechaInicio, FechaFin) =>
+      verResumenLotesEmpaque(clase.valor, { FechaInicio, FechaFin }).then((r) => r.Lotes),
+    (lote) => ({
+      fecha: lote.FechaRecepcion,
+      texto: `Lote #${lote.IdLoteEmpaque} · ${lote.NombreProveedor}`,
+    }),
+  );
 
   return (
-    <PaginaReporte
+    <Contenedor
       usuario={usuario}
       titulo="Reportes · Empaque"
       subtitulo="Lotes recibidos"
       contador={resumen ? { valor: resumen.Lotes.length, singular: "lote", plural: "lotes" } : null}
     >
       <TarjetaFiltros
-        reporte={{ ...reporte, hayFiltros: hayFiltrosEmpaque(filtros) }}
+        reporte={{ ...reporte, hayFiltros: hayFiltrosEmpaque(filtros, Boolean(claseFija)) }}
         informe={
           <BotonInforme
             disponible={completo && hayLotes}
@@ -198,10 +207,21 @@ export default function LotesReporteEmpaque({ usuario }) {
           />
         }
       >
-        <FiltrosEmpaque reporte={reporte} idRango="rango-lotes-empaque" etiquetaRango="Fecha de recepción" />
+        <FiltrosEmpaque
+          reporte={reporte}
+          idRango={`rango-lotes-empaque-${clase.valor}`}
+          etiquetaRango="Fecha de recepción"
+          claseFija={Boolean(claseFija)}
+          diasDestacados={destacados.dias}
+          onRangoVisibleChange={destacados.cargar}
+        />
       </TarjetaFiltros>
 
       <ResultadosLotes reporte={reporte} />
-    </PaginaReporte>
+    </Contenedor>
   );
+}
+
+export default function LotesReporteEmpaque({ usuario }) {
+  return <LotesEmpaque usuario={usuario} contenedor={PaginaReporte} />;
 }

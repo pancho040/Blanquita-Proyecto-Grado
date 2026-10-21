@@ -7,7 +7,7 @@ from typing import List
 from app.Services.BobinaServilleta.BobinaServilletaService import BobinaServilletaService
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION,ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaServilleta.BobinaServilleta import (
     IngresoBobinaServilletaResponse,
@@ -37,7 +37,7 @@ def CargarLoteBobinaServilleta(
     status_code=200
 )
 def ObtenerTiposBobinaServilleta(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: BobinaServilletaService = Depends(bobina_servilleta_service)
 ):
     return service.ObtenerTiposBobinaServilleta()

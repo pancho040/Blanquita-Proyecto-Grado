@@ -6,7 +6,7 @@ from app.Services.Rodela.RodelaService import RodelaService
 
 from typing import List
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.Rodela.Rodela import (
     IngresoRodelaRequest,
@@ -41,7 +41,7 @@ def CargarLoteRodela(
     status_code=200
 )
 def ObtenerTiposRodela(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: RodelaService = Depends(rodela_service)
 ):
     return service.ObtenerTiposRodela()

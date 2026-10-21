@@ -1,108 +1,148 @@
-import json
+from decimal import Decimal
 
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.Repository.BobinaServilleta.InventarioBobinaServilleta import InventarioBobinaServilletaRepository
-from app.Models.BobinaServilleta.InventarioBobinaServilleta import(
+from app.Constants.Cantidades import LONGITUD_MAXIMA_DESCRIPCION, LONGITUD_MINIMA_DESCRIPCION
+from app.Constants.Estados import (
+    ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+    ESTADO_MATERIA_PRIMA_FUERA_INVENTARIO,
+    MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+    MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+)
+from app.Models.BobinaServilleta.InventarioBobinaServilleta import (
+    DetalleInventarioBobinaServilletaRequest,
+    DetalleInventarioBobinaServilletaResponse,
+    DetalleInventarioSubBobinaServilletaRequest,
+    DetalleInventarioSubBobinaServilletaResponse,
+    EditarBobinaServilletaRequest,
+    EditarBobinaServilletaResponse,
     ReingresarSubBobinaInventarioRequest,
     ReingresarSubBobinaInventarioResponse,
     ResumenInventarioBobinaServilletaResponse,
-    DetalleInventarioBobinaServilletaRequest,
-    DetalleInventarioBobinaServilletaResponse,
     ResumenInventarioSubBobinaServilletaResponse,
-    DetalleInventarioSubBobinaServilletaRequest,
-    DetalleInventarioSubBobinaServilletaResponse,
     SubBobinaServilletaFueraInventarioResponse,
-    EditarBobinaServilletaRequest,
-    EditarBobinaServilletaResponse
 )
-from app.utils.validators import ValidarTexto, REGLA_CARACTERES_OBSERVACION
-from app.Constants.Cantidades import (
-    LONGITUD_MINIMA_DESCRIPCION,
-    LONGITUD_MAXIMA_DESCRIPCION,
+from app.Repository.BobinaServilleta.InventarioBobinaServilleta import (
+    InventarioBobinaServilletaRepository,
 )
+from app.Schemas.BobinaServilleta import MovimientoBobinaServilleta, MovimientoSubBobina
+from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+
+CAMPOS_CORRECCION_UNIDAD = {
+    "CodigoBobina": "Código",
+    "PesoBrutoKg": "Peso bruto",
+    "GramajeGr": "Gramaje",
+}
+
+
+def _mostrar(valor) -> str:
+    if valor is None:
+        return "sin dato"
+    if isinstance(valor, (Decimal, float)):
+        return format(Decimal(str(valor)).normalize(), "f")
+    return str(valor)
+
+
+def _igual(actual, nuevo) -> bool:
+    if actual is None or nuevo is None:
+        return actual is None and nuevo is None
+    if isinstance(actual, Decimal):
+        return actual == Decimal(str(nuevo))
+    return actual == nuevo
 
 
 class InventarioBobinaServilletaService:
     def __init__(self, db: Session):
-            self.repository = InventarioBobinaServilletaRepository(db)
+        self.repository = InventarioBobinaServilletaRepository(db)
+
     def ReingresarSubBobinaAInventario(
-    self, data: ReingresarSubBobinaInventarioRequest, id_usuario: int
+        self, data: ReingresarSubBobinaInventarioRequest, id_usuario: int
     ) -> ReingresarSubBobinaInventarioResponse:
-        observacion = (data.Observacion or "").strip()
-        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"La observación es obligatoria, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
+        observacion = self._ValidarObservacion(data.Observacion, "La observación es obligatoria")
+
+        sub_bobina = self.repository.ObtenerSubBobinaBloqueada(data.IdSubBobina)
+        if sub_bobina is None:
+            self._Revertir(
+                status.HTTP_404_NOT_FOUND,
+                f"No existe la sub-bobina con id {data.IdSubBobina}",
             )
 
-        params = {
-            "p_IdSubBobina": data.IdSubBobina,
-            "p_IdUsuario": id_usuario,
-            "p_Observacion": observacion,
-        }
-
-        resultado = self.repository.ReingresarSubBobinaAInventario(params)
-
-        if resultado is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo reingresar la sub-bobina a inventario."
+        if sub_bobina.IdEstadoMateriaPrima != ESTADO_MATERIA_PRIMA_FUERA_INVENTARIO:
+            self._Revertir(
+                status.HTTP_409_CONFLICT,
+                f"La sub-bobina {data.IdSubBobina} no está Fuera de Inventario, no puede reingresarse",
             )
 
-        return ReingresarSubBobinaInventarioResponse(**resultado)
+        sub_bobina.IdEstadoMateriaPrima = ESTADO_MATERIA_PRIMA_EN_ALMACEN
+        movimiento = MovimientoSubBobina(
+            IdSubBobinaServilleta=sub_bobina.IdSubBobinaServilleta,
+            IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+            IdUsuario=id_usuario,
+            Observacion=observacion,
+        )
+        self.repository.Guardar(
+            sub_bobina,
+            movimiento,
+            mensaje_error="No se pudo reingresar la sub-bobina a inventario",
+        )
+
+        return ReingresarSubBobinaInventarioResponse(
+            IdSubBobina=sub_bobina.IdSubBobinaServilleta,
+            IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+            FechaMovimiento=movimiento.FechaMovimiento,
+        )
 
     def VerResumenInventarioBobinaServilleta(self) -> list[ResumenInventarioBobinaServilletaResponse]:
-        resultados = self.repository.VerResumenInventarioBobinaServilleta()
-        return [ResumenInventarioBobinaServilletaResponse(**fila) for fila in resultados]
+        return [
+            ResumenInventarioBobinaServilletaResponse(**fila)
+            for fila in self.repository.VerResumenInventarioBobinaServilleta()
+        ]
 
     def VerDetalleInventarioBobinaServilleta(
         self, data: DetalleInventarioBobinaServilletaRequest
     ) -> list[DetalleInventarioBobinaServilletaResponse]:
-        params = {
-            "p_IdTipoBobinaServilleta": data.IdTipoBobinaServilleta,
-        }
+        return [
+            DetalleInventarioBobinaServilletaResponse(**fila)
+            for fila in self.repository.VerDetalleInventarioBobinaServilleta(
+                data.IdTipoBobinaServilleta
+            )
+        ]
 
-        resultados = self.repository.VerDetalleInventarioBobinaServilleta(params)
-
-        return [DetalleInventarioBobinaServilletaResponse(**fila) for fila in resultados]
-
-
-    def VerResumenInventarioSubBobinaServilleta(self) -> list[ResumenInventarioSubBobinaServilletaResponse]:
-        resultados = self.repository.VerResumenInventarioSubBobinaServilleta()
-        return [ResumenInventarioSubBobinaServilletaResponse(**fila) for fila in resultados]
+    def VerResumenInventarioSubBobinaServilleta(
+        self,
+    ) -> list[ResumenInventarioSubBobinaServilletaResponse]:
+        return [
+            ResumenInventarioSubBobinaServilletaResponse(**fila)
+            for fila in self.repository.VerResumenInventarioSubBobinaServilleta()
+        ]
 
     def VerDetalleInventarioSubBobinaServilleta(
         self, data: DetalleInventarioSubBobinaServilletaRequest
     ) -> list[DetalleInventarioSubBobinaServilletaResponse]:
-        params = {
-            "p_IdTipoMedidaSubBobina": data.IdTipoMedidaSubBobina,
-        }
+        return [
+            DetalleInventarioSubBobinaServilletaResponse(**fila)
+            for fila in self.repository.VerDetalleInventarioSubBobinaServilleta(
+                data.IdTipoMedidaSubBobina
+            )
+        ]
 
-        resultados = self.repository.VerDetalleInventarioSubBobinaServilleta(params)
-
-        return [DetalleInventarioSubBobinaServilletaResponse(**fila) for fila in resultados]
-
-    def VerSubBobinasServilletaFueraInventario(self) -> list[SubBobinaServilletaFueraInventarioResponse]:
-        resultados = self.repository.VerSubBobinasServilletaFueraInventario()
-        return [SubBobinaServilletaFueraInventarioResponse(**fila) for fila in resultados]
+    def VerSubBobinasServilletaFueraInventario(
+        self,
+    ) -> list[SubBobinaServilletaFueraInventarioResponse]:
+        return [
+            SubBobinaServilletaFueraInventarioResponse(**fila)
+            for fila in self.repository.VerSubBobinasServilletaFueraInventario()
+        ]
 
     def EditarBobinaServilleta(
         self, data: EditarBobinaServilletaRequest, id_usuario: int
     ) -> list[EditarBobinaServilletaResponse]:
-        observacion = data.Observacion.strip()
-        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=(
-                    "El motivo de la corrección es obligatorio, debe tener entre "
-                    f"{LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}"
-                ),
-            )
+        observacion = self._ValidarObservacion(
+            data.Observacion, "El motivo de la corrección es obligatorio"
+        )
 
-        unidades = []
+        nuevos = []
         for unidad in data.Unidades:
             codigo = unidad.CodigoBobina.strip()
             if not codigo:
@@ -110,33 +150,117 @@ class InventarioBobinaServilletaService:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="El código de cada unidad es obligatorio",
                 )
-            unidades.append({**unidad.model_dump(), "CodigoBobina": codigo})
+            nuevos.append(
+                {
+                    "IdUnidadBobinaServilleta": unidad.IdUnidadBobinaServilleta,
+                    "CodigoBobina": codigo,
+                    "PesoBrutoKg": unidad.PesoBrutoKg,
+                    "GramajeGr": unidad.GramajeGr,
+                }
+            )
 
-        if unidades[0]["IdUnidadBobinaServilleta"] == unidades[1]["IdUnidadBobinaServilleta"]:
+        ids_unidad = [nuevo["IdUnidadBobinaServilleta"] for nuevo in nuevos]
+        if len(set(ids_unidad)) != len(ids_unidad):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Las dos unidades deben ser distintas",
+                detail="Las unidades deben ser distintas",
             )
 
-        if unidades[0]["CodigoBobina"].lower() == unidades[1]["CodigoBobina"].lower():
+        codigos = [nuevo["CodigoBobina"].lower() for nuevo in nuevos]
+        if len(set(codigos)) != len(codigos):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Las dos unidades no pueden tener el mismo código",
+                detail="Las unidades no pueden tener códigos repetidos",
             )
 
-        params = {
-            "p_IdBobinaServilleta": data.IdBobinaServilleta,
-            "p_IdUsuario": id_usuario,
-            "p_Unidades": json.dumps(unidades),
-            "p_Observacion": observacion,
-        }
+        bobina = self.repository.ObtenerBobinaBloqueada(data.IdBobinaServilleta)
+        if bobina is None:
+            self._Revertir(
+                status.HTTP_404_NOT_FOUND,
+                f"No existe la bobina servilleta con id {data.IdBobinaServilleta}",
+            )
 
-        resultados = self.repository.EditarBobinaServilleta(params)
+        unidades = self.repository.ObtenerUnidadesBloqueadas(bobina.IdBobinaServilleta)
+        if len(nuevos) != len(unidades) or any(
+            nuevo["IdUnidadBobinaServilleta"] not in unidades for nuevo in nuevos
+        ):
+            self._Revertir(
+                status.HTTP_409_CONFLICT,
+                "Debe enviar todas las unidades de la bobina servilleta y solo esas",
+            )
 
-        if not resultados:
+        en_uso = self.repository.CodigosEnUso(
+            [nuevo["CodigoBobina"] for nuevo in nuevos], list(unidades)
+        )
+        if en_uso:
+            self._Revertir(
+                status.HTTP_409_CONFLICT,
+                f"Ya existen unidades registradas con los códigos {', '.join(sorted(en_uso))}",
+            )
+
+        detalles = []
+        for nuevo in nuevos:
+            unidad = unidades[nuevo["IdUnidadBobinaServilleta"]]
+            cambios = {
+                campo: nuevo[campo]
+                for campo in CAMPOS_CORRECCION_UNIDAD
+                if not _igual(getattr(unidad, campo), nuevo[campo])
+            }
+            if not cambios:
+                continue
+            detalles.append(
+                f"Unidad {unidad.CodigoBobina}: "
+                + " · ".join(
+                    f"{CAMPOS_CORRECCION_UNIDAD[campo]}: {_mostrar(getattr(unidad, campo))} → {_mostrar(valor)}"
+                    for campo, valor in cambios.items()
+                )
+            )
+            for campo, valor in cambios.items():
+                setattr(unidad, campo, valor)
+
+        if not detalles:
+            self._Revertir(status.HTTP_409_CONFLICT, "No hay cambios para guardar")
+
+        movimiento = MovimientoBobinaServilleta(
+            IdBobinaServilleta=bobina.IdBobinaServilleta,
+            IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+            IdUsuario=id_usuario,
+            Observacion=f"{' | '.join(detalles)} · Motivo: {observacion}",
+        )
+        self.repository.Guardar(
+            movimiento,
+            *unidades.values(),
+            mensaje_error="No se pudo editar la bobina servilleta",
+        )
+
+        return [
+            EditarBobinaServilletaResponse(
+                IdBobinaServilleta=bobina.IdBobinaServilleta,
+                IdUnidadBobinaServilleta=fila["IdUnidadBobinaServilleta"],
+                CodigoBobina=fila["CodigoBobina"],
+                IdFormatoSubBobina=fila["IdFormatoSubBobina"],
+                DescripcionFormato=fila["DescripcionFormato"],
+                PesoBrutoKg=fila["PesoBrutoKg"],
+                GramajeGr=fila["GramajeGr"],
+                FechaMovimiento=movimiento.FechaMovimiento,
+            )
+            for fila in self.repository.UnidadesDeBobinas([bobina.IdBobinaServilleta]).get(
+                bobina.IdBobinaServilleta, []
+            )
+        ]
+
+    def _ValidarObservacion(self, observacion: str | None, mensaje: str) -> str:
+        observacion = (observacion or "").strip()
+        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo editar la bobina servilleta.",
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"{mensaje}, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y "
+                    f"{LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}"
+                ),
             )
+        return observacion
 
-        return [EditarBobinaServilletaResponse(**fila) for fila in resultados]
+    def _Revertir(self, codigo: int, mensaje: str) -> None:
+        self.repository.Revertir()
+        raise HTTPException(status_code=codigo, detail=mensaje)

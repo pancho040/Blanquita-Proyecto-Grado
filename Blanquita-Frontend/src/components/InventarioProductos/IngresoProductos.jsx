@@ -59,7 +59,7 @@ function CardIngreso({
             <span className="font-mono text-[16px] font-extrabold text-c3">
               {presentacion.CodigoPresentacion}
             </span>
-            <BadgeEstado cantidad={presentacion.CantidadActual} />
+            <BadgeEstado cantidad={presentacion.CantidadActual} umbral={presentacion} />
           </div>
           <div className="text-[13px] font-semibold text-slate-900">
             {presentacion.NombreProducto}
@@ -107,14 +107,16 @@ export default function IngresoProductoTerminado({ inventario, onStockActualizad
   const [confirmando, setConfirmando] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  const disponibles = useMemo(() => inventario.filter((p) => p.Activo), [inventario]);
+
   const lineas = useMemo(
-    () => Array.from(new Set(inventario.map((p) => p.NombreProducto))),
-    [inventario],
+    () => Array.from(new Set(disponibles.map((p) => p.NombreProducto))),
+    [disponibles],
   );
 
   const presentacionesLinea = useMemo(
-    () => inventario.filter((p) => p.NombreProducto === linea),
-    [inventario, linea],
+    () => disponibles.filter((p) => p.NombreProducto === linea),
+    [disponibles, linea],
   );
 
   const presentacionDe = (idPresentacion) =>

@@ -5,7 +5,10 @@ import {
   DetalleInventarioEmpaqueResponse,
   TrasladarEmpaquesProduccionRequest,
   TrasladarEmpaquesProduccionResponseItem,
-  TipoEmpaqueIngreso
+  TipoEmpaqueIngreso,
+  EmpaqueReingresableResponse,
+  ReingresarEmpaqueRequest,
+  ReingresarEmpaqueResponse
 } from "../../models/Empaque/EmpaqueBobina";
 import { pedirJson } from "@/utils/api";
 
@@ -49,4 +52,21 @@ export async function obtenerTiposEmpaque() {
   const data = await pedirJson("/api/empaquebobina/obtenertipos");
 
   return data.map(TipoEmpaqueIngreso);
+}
+
+export async function listarEmpaquesReingresables() {
+  const data = await pedirJson("/api/empaquebobina/reingresables");
+
+  return data.map(EmpaqueReingresableResponse);
+}
+
+export async function reingresarEmpaque(idEmpaque, observacion) {
+  const payload = ReingresarEmpaqueRequest(idEmpaque, observacion);
+
+  const data = await pedirJson("/api/empaquebobina/reingresar", {
+    method: "POST",
+    body: payload
+  });
+
+  return ReingresarEmpaqueResponse(data);
 }

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.Config.supabase import get_db
 
 from app.Auth.Dependencies import require_role, get_generado_por
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaPapel.Reportes import (
     ReporteInventarioBobinaPapelRequest,
@@ -59,7 +59,7 @@ bpReporteRouter = APIRouter(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteInventarioBobinasPapel(
     tipos: list[int] | None = Query(
@@ -86,7 +86,7 @@ def ReporteInventarioBobinasPapel(
     "/produccion/catalogo",
     response_model=VerProduccionesBobinaTuboResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ObtenerCatalogoProduccion(
     FechaInicio: date | None = None,
@@ -122,7 +122,7 @@ def ObtenerCatalogoProduccion(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ObtenerDetalleProduccion(
     id_produccion: int,
@@ -152,7 +152,7 @@ def ObtenerDetalleProduccion(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteProduccionCancelada(
     id_produccion: int,
@@ -177,7 +177,7 @@ def ReporteProduccionCancelada(
     "/lote/catalogo",
     response_model=VerLotesBobinaPapelResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ObtenerLoteCatalogo(
     FechaInicio: date | None = None,
@@ -205,7 +205,7 @@ def ObtenerLoteCatalogo(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def CrearReporteLote(
     id_lote_bobina: int,
@@ -231,7 +231,7 @@ def CrearReporteLote(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteLotesPorPeriodo(
     FechaInicio: date,
@@ -258,7 +258,7 @@ def ReporteLotesPorPeriodo(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteProduccionPorPeriodo(
     FechaInicio: date,
@@ -288,7 +288,7 @@ def ReporteProduccionPorPeriodo(
     "/movimientos/catalogo",
     response_model=VerBobinasPapelResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def CatalogoBobinas(
     CodigoBobina: str | None = None,
@@ -316,7 +316,7 @@ def CatalogoBobinas(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteBobinaMovimientos(
     id_bobina_papel: int,

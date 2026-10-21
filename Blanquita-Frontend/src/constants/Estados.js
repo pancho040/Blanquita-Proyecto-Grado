@@ -72,6 +72,15 @@ export const TransicionesEstadoUsuario = {
 };
 
 export const EstadosProveedor = [
-  { IdEstadoProveedor: 1, NombreEstadoProveedor: "Activo" },
-  { IdEstadoProveedor: 2, NombreEstadoProveedor: "Inactivo" },
+  { Activo: true, NombreEstadoProveedor: "Activo" },
+  { Activo: false, NombreEstadoProveedor: "Inactivo" },
 ];
+
+export const nombreEstadoProveedor = (activo) => (activo ? "Activo" : "Inactivo");
+
+export const EstadosCatalogo = [
+  { Activo: true, NombreEstado: "Activo" },
+  { Activo: false, NombreEstado: "Inactivo" },
+];
+
+export const nombreEstadoCatalogo = (activo) => (activo ? "Activo" : "Inactivo");

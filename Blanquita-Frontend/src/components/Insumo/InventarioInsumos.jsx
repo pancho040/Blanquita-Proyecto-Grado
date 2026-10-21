@@ -17,11 +17,14 @@ import { useCatalogo } from "@/hooks/useCatalogo";
 import {
   GRID_TARJETAS,
   conAcentos,
+  coincide,
   TarjetaTipo,
   DatoTarjeta,
   EncabezadoCatalogo,
   EstadoCatalogo,
   PanelDetalle,
+  BuscadorNombre,
+  SinCoincidencias,
 } from "@/components/Inventario/comunes";
 import { ControlCantidad, ResumenStock } from "@/components/InventarioProductos/comunes";
 import Header from "@/components/layout/Header";
@@ -34,7 +37,7 @@ import {
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
-import { EsEncargado, aEntero, limpiarObservacion } from "@/utils/validators";
+import { VeComoLider, EsGerente, aEntero, limpiarObservacion } from "@/utils/validators";
 
 const MOVIMIENTOS = {
   ingreso: {
@@ -76,13 +79,13 @@ const esObservacionValida = (texto) => {
   return largo >= MOTIVO_CORRECCION_MIN && largo <= MOTIVO_CORRECCION_MAX;
 };
 
-function SelectorMovimiento({ tipo, sinStock, onCambio }) {
+function SelectorMovimiento({ tipo, sinStock, inactivo, onCambio }) {
   return (
     <div className="grid grid-cols-2 gap-2.5">
       {Object.entries(MOVIMIENTOS).map(([clave, config]) => {
         const { Icono } = config;
         const activo = tipo === clave;
-        const deshabilitado = clave === "salida" && sinStock;
+        const deshabilitado = (clave === "salida" && sinStock) || (clave === "ingreso" && inactivo);
         return (
           <button
             key={clave}
@@ -108,7 +111,8 @@ function SelectorMovimiento({ tipo, sinStock, onCambio }) {
 
 function FormularioMovimiento({ insumo, onRegistrado }) {
   const actual = Number(insumo.CantidadActual || 0);
-  const [tipo, setTipo] = useState("ingreso");
+  const tipoInicial = insumo.Activo ? "ingreso" : "salida";
+  const [tipo, setTipo] = useState(tipoInicial);
   const [cantidad, setCantidad] = useState("");
   const [observacion, setObservacion] = useState("");
   const [tocado, setTocado] = useState(false);
@@ -163,7 +167,7 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
         `${config.exito}: ${config.signo > 0 ? "+" : "-"}${respuesta.CantidadMovimiento} ${respuesta.NombreInsumo}`,
       );
       limpiar();
-      setTipo("ingreso");
+      setTipo(tipoInicial);
       setConfirmando(false);
     } catch (e) {
       toast.error(e.message);
@@ -174,7 +178,12 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
 
   return (
     <div className="flex flex-col gap-4 p-5">
-      <SelectorMovimiento tipo={tipo} sinStock={actual === 0} onCambio={cambiarTipo} />
+      <SelectorMovimiento
+        tipo={tipo}
+        sinStock={actual === 0}
+        inactivo={!insumo.Activo}
+        onCambio={cambiarTipo}
+      />
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
@@ -317,11 +326,14 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
 }
 
 export default function InventarioInsumos({ usuario }) {
-  const esEncargado = EsEncargado(usuario?.IdRol);
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const catalogo = useCatalogo(verCatalogoInsumo);
   const [sel, setSel] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
 
   const insumos = conAcentos(catalogo.datos, { cantidadDe: (i) => Number(i.CantidadActual || 0) });
+  const filtrados = insumos.filter((i) => coincide(busqueda, i.NombreInsumo, i.DescripcionInsumo));
   const insumoSel = sel === null ? null : insumos.find((i) => i.IdTipoInsumo === sel) ?? null;
 
   const seleccionar = (id) => setSel((actual) => (actual === id ? null : id));
@@ -362,21 +374,28 @@ export default function InventarioInsumos({ usuario }) {
           mensajeVacio="No hay insumos registrados."
           altoSkeleton="h-44"
         >
+          <BuscadorNombre
+            valor={busqueda}
+            onCambio={setBusqueda}
+            placeholder="Buscar insumo por nombre..."
+          />
+          {filtrados.length === 0 && <SinCoincidencias busqueda={busqueda} />}
           <div className={GRID_TARJETAS}>
-            {insumos.map((i) => (
+            {filtrados.map((i) => (
               <TarjetaTipo
                 key={i.IdTipoInsumo}
                 acento={i}
                 activo={sel === i.IdTipoInsumo}
-                onClick={() => seleccionar(i.IdTipoInsumo)}
+                inactivo={!i.Activo}
+                onClick={soloLectura ? undefined : () => seleccionar(i.IdTipoInsumo)}
                 icono={Package}
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
                 nombre={i.NombreInsumo}
-                etiqueta={i.badge}
+                stock={i.stock}
                 cantidad={Number(i.CantidadActual || 0)}
                 unidad="en almacén"
-                textoVer="Registrar movimiento"
+                textoVer={soloLectura ? null : "Registrar movimiento"}
               >
                 {i.DescripcionInsumo && (
                   <DatoTarjeta etiqueta="Descripción">{i.DescripcionInsumo}</DatoTarjeta>

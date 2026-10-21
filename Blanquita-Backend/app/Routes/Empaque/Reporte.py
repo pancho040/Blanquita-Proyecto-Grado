@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import get_generado_por, require_role
 from app.Config.supabase import get_db
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Models.Empaque.Reporte import (
     ClaseEmpaque,
     ReporteEmpaqueRequest,
@@ -41,7 +41,7 @@ DESCRIPCION_MOVIMIENTO = "IdTipoMovimiento a incluir (1 ingreso, 2 salida/trasla
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteInventarioEmpaque(
     clase: ClaseEmpaque,
@@ -64,7 +64,7 @@ def ReporteInventarioEmpaque(
     "/{clase}/movimientos/resumen",
     response_model=ReporteMovimientosEmpaqueResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenMovimientosEmpaque(
     clase: ClaseEmpaque,
@@ -90,7 +90,7 @@ def ResumenMovimientosEmpaque(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteMovimientosEmpaque(
     clase: ClaseEmpaque,
@@ -125,7 +125,7 @@ def ReporteMovimientosEmpaque(
     "/{clase}/lotes/resumen",
     response_model=ReporteLotesEmpaqueResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenLotesEmpaque(
     clase: ClaseEmpaque,
@@ -149,7 +149,7 @@ def ResumenLotesEmpaque(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteLotesEmpaque(
     clase: ClaseEmpaque,

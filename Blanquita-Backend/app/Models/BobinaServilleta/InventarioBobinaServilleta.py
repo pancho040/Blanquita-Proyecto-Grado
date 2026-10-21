@@ -1,18 +1,8 @@
 from pydantic import BaseModel, Field
 from datetime import datetime,date
 
-
-class AbrirBobinaServilletaRequest(BaseModel):
-    IdBobinaServilleta: int
-    Observacion: str | None = None
-
-
-class AbrirBobinaServilletaResponse(BaseModel):
-    IdBobinaServilleta: int
-    IdEstadoMateriaPrima: int
-    CantidadSubBobinas435: int
-    CantidadSubBobinas220: int
-    CantidadSubBobinasTotal: int
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
+from app.Models.BobinaServilleta.BobinaServilleta import UnidadServilletaResponse
 
 
 class ReingresarSubBobinaInventarioRequest(BaseModel):
@@ -26,9 +16,10 @@ class ReingresarSubBobinaInventarioResponse(BaseModel):
     FechaMovimiento: datetime
 
 
-class ResumenInventarioBobinaServilletaResponse(BaseModel):
+class ResumenInventarioBobinaServilletaResponse(NivelStockResponse):
     IdTipoBobinaServilleta: int
     NombreTipoBobinaServilleta: str
+    Activo: bool
     CantidadBobinaServilleta: int
 
 
@@ -40,19 +31,14 @@ class DetalleInventarioBobinaServilletaResponse(BaseModel):
     IdBobinaServilleta: int
     FechaRecepcion: date
     NombreProveedor: str
-    IdUnidad1: int 
-    CodigoUnidad1: str 
-    IdFormatoSubBobina1: int 
-    DescripcionFormato1: str 
-    IdUnidad2: int 
-    CodigoUnidad2: str 
-    IdFormatoSubBobina2: int 
-    DescripcionFormato2: str 
+    Unidades: list[UnidadServilletaResponse]
 
 
-class ResumenInventarioSubBobinaServilletaResponse(BaseModel):
+class ResumenInventarioSubBobinaServilletaResponse(NivelStockResponse):
     IdTipoMedidaSubBobina: int
     NombreTipoMedida: str
+    MedidaMm: int
+    Activo: bool
     CantidadSubBobinas: int
 
 
@@ -84,7 +70,7 @@ class EditarUnidadBobinaServilletaItem(BaseModel):
 
 class EditarBobinaServilletaRequest(BaseModel):
     IdBobinaServilleta: int
-    Unidades: list[EditarUnidadBobinaServilletaItem] = Field(min_length=2, max_length=2)
+    Unidades: list[EditarUnidadBobinaServilletaItem] = Field(min_length=1)
     Observacion: str
 
 

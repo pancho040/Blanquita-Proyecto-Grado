@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, Text, func
+from sqlalchemy import DateTime, Numeric, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -13,6 +13,9 @@ class Producto(Base):
     IdProducto: Mapped[int] = mapped_column(primary_key=True)
     NombreProducto: Mapped[str] = mapped_column(Text)
     SiglasProducto: Mapped[str] = mapped_column(Text)
+    IdTipoBobina: Mapped[int | None]
+    IdTipoBobinaServilleta: Mapped[int | None]
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class PresentacionProducto(Base):
@@ -24,6 +27,7 @@ class PresentacionProducto(Base):
     CantidadRollosUnidades: Mapped[int | None]
     CantidadPorUnidadTerminada: Mapped[int | None]
     CodigoPresentacion: Mapped[str] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class InventarioProductoTerminado(Base):
@@ -31,6 +35,8 @@ class InventarioProductoTerminado(Base):
 
     IdPresentacion: Mapped[int] = mapped_column(primary_key=True)
     CantidadActual: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
 
 
 class MovimientoProductoTerminado(Base):
@@ -45,3 +51,11 @@ class MovimientoProductoTerminado(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     Observacion: Mapped[str | None] = mapped_column(Text)
+
+
+class TipoMovimientoInventario(Base):
+    __tablename__ = "TipoMovimientoInventario"
+
+    IdTipoMovimientoInventario: Mapped[int] = mapped_column(primary_key=True)
+    NombreTipoMovimientoInventario: Mapped[str] = mapped_column(Text)
+    DescripcionTipoMovimientoInventario: Mapped[str | None] = mapped_column(Text)

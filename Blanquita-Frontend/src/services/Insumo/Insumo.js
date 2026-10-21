@@ -8,13 +8,19 @@ import {
   EditarInsumoRequest,
   InsumoResponse
 } from "../../models/Insumo/Insumo";
+import {
+  CambiarEstadoTipoRequest,
+  CambiarEstadoTipoResponse
+} from "@/models/MateriaPrima/TipoMateriaPrima";
 import { pedirJson } from "@/utils/api";
 import { conQueryParams } from "@/utils/params";
 
 const BASE_URL = "/api/insumo";
 
-export async function verCatalogoInsumo() {
-  const data = await pedirJson(`${BASE_URL}/inventario`);
+export async function verCatalogoInsumo(incluirInactivos = false) {
+  const data = await pedirJson(
+    conQueryParams(`${BASE_URL}/inventario`, { IncluirInactivos: incluirInactivos || null })
+  );
 
   return data.map(CatalogoInsumoResponse);
 }
@@ -47,6 +53,12 @@ export async function listarInsumos(filtros) {
   return ListarInsumosResponse(data);
 }
 
+export async function obtenerInsumo(idTipoInsumo) {
+  const data = await pedirJson(`${BASE_URL}/detalle/${idTipoInsumo}`);
+
+  return InsumoResponse(data);
+}
+
 export async function crearInsumo(datos) {
   const data = await pedirJson(`${BASE_URL}/crear`, {
     method: "POST",
@@ -63,4 +75,13 @@ export async function editarInsumo(idTipoInsumo, datos) {
   });
 
   return InsumoResponse(data);
+}
+
+export async function cambiarEstadoInsumo(idTipoInsumo, activo, motivo) {
+  const data = await pedirJson(`${BASE_URL}/estado`, {
+    method: "PATCH",
+    body: CambiarEstadoTipoRequest(idTipoInsumo, activo, motivo)
+  });
+
+  return CambiarEstadoTipoResponse(data);
 }

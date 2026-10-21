@@ -41,6 +41,7 @@ class IngresoLoteBobinaPapelResponse(BaseModel):
 class TipoBobinaPapelIngreso(BaseModel):
     IdTipoBobina: int
     NombreTipoBobina: str
+    Activo: bool
 
 
 class EditarBobinaPapelRequest(BaseModel):

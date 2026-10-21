@@ -26,16 +26,22 @@ import {
 } from "../../../services/BobinaPapel/Produccion";
 import { ObtenerTiposPapelBobina } from "../../../services/BobinaPapel/BobinaPapel";
 import { obtenerProductos } from "../../../services/Inventario/Inventario";
-import { movimientosOperador, ObservacionesInsertarLogs } from "../../../constants/OperadorConfig";
+import { productosActivosDelTipo } from "@/utils/catalogo";
 import {
-  Roles,
-  ID_TIPO_BOBINA_HIGIENICO,
-  IDS_PRODUCTO_BOBINA_HIGIENICO,
-  CANTIDAD_MAXIMA_LOGS,
-} from "@/constants/Values";
+  movimientosOperador,
+  ObservacionesInsertarLogs,
+  MotivosReanudacionProduccion,
+} from "../../../constants/OperadorConfig";
+import { CANTIDAD_MAXIMA_LOGS } from "@/constants/Values";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { alternarMotivoEnTexto } from "@/utils/handlers";
-import { extraerMensajeError, limpiarObservacion } from "@/utils/validators";
+import {
+  extraerMensajeError,
+  limpiarObservacion,
+  VeComoLider,
+  EsEncargado,
+  EsGerente,
+} from "@/utils/validators";
 import { useProduccion } from "@/hooks/useProduccion";
 import {
   ResumenProduccion,
@@ -44,6 +50,7 @@ import {
 } from "@/components/Produccion/comunes";
 import {
   DialogoPausar,
+  DialogoReanudar,
   DialogoCancelar,
   AlertaFinalizar,
 } from "@/components/Produccion/Dialogos";
@@ -56,7 +63,7 @@ const ID_TIPO_DESCUENTO = 2;
 
 const MOTIVOS_PAUSA = [
   "Falta de pegamento",
-  "Falta de personal para continuar la producción",
+  "Falta de personal",
 ];
 
 const codigosDe = (p) => `${p.CodigoBobina1} + ${p.CodigoBobina2}`;
@@ -66,19 +73,29 @@ export default function ProduccionBobinaTubo({ usuario }) {
 
   const [tiposBobina, setTiposBobina] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState("");
-  const [productosHigienico, setProductosHigienico] = useState([]);
+  const [productos, setProductos] = useState([]);
   const [filtroProducto, setFiltroProducto] = useState("");
   const [buscarCodigoBobina, setBuscarCodigoBobina] = useState("");
 
   const idTipoFiltro = filtroTipo === "" ? undefined : Number(filtroTipo);
   const idProductoFiltro = filtroProducto === "" ? undefined : Number(filtroProducto);
-  const permiteFiltroProducto =
-    filtroTipo === "" || Number(filtroTipo) === ID_TIPO_BOBINA_HIGIENICO;
+  const productosDelFiltro = productos.filter((p) =>
+    filtroTipo === "" ? p.IdTipoBobina !== null : p.IdTipoBobina === Number(filtroTipo),
+  );
+  const permiteFiltroProducto = productosDelFiltro.length > 1;
 
   const cambiarFiltroTipo = (valor) => {
     setFiltroTipo(valor);
-    if (valor !== "" && Number(valor) !== ID_TIPO_BOBINA_HIGIENICO) setFiltroProducto("");
+    const sigueEnTipo = productos.some(
+      (p) =>
+        String(p.IdProducto) === filtroProducto &&
+        (valor === "" || p.IdTipoBobina === Number(valor)),
+    );
+    if (!sigueEnTipo) setFiltroProducto("");
   };
+
+  const permiteCambioLinea = (produccion) =>
+    productosActivosDelTipo(productos, produccion.IdTipoBobina).length > 1;
 
   const {
     activas,
@@ -87,6 +104,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
     pausa,
     cancelacion,
     finalizacion,
+    reanudacion,
     procesandoId,
     reanudar,
   } = useProduccion({
@@ -100,7 +118,9 @@ export default function ProduccionBobinaTubo({ usuario }) {
     dependencias: [filtroTipo, filtroProducto],
   });
 
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = EsEncargado(usuario?.IdRol);
+  const veConcluidas = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const [totalConcluidas, setTotalConcluidas] = useState(0);
 
   const [cambioLinea, setCambioLinea] = useState(null);
@@ -109,7 +129,9 @@ export default function ProduccionBobinaTubo({ usuario }) {
   const [enviandoCambioLinea, setEnviandoCambioLinea] = useState(false);
 
   const productosDisponibles = cambioLinea
-    ? productosHigienico.filter((p) => p.IdProducto !== cambioLinea.IdProducto)
+    ? productosActivosDelTipo(productos, cambioLinea.IdTipoBobina).filter(
+        (p) => p.IdProducto !== cambioLinea.IdProducto,
+      )
     : [];
 
   const abrirCambioLinea = (produccion) => {
@@ -151,12 +173,8 @@ export default function ProduccionBobinaTubo({ usuario }) {
       .then(setTiposBobina)
       .catch(() => setTiposBobina([]));
     obtenerProductos()
-      .then((data) =>
-        setProductosHigienico(
-          data.filter((p) => IDS_PRODUCTO_BOBINA_HIGIENICO.includes(p.IdProducto)),
-        ),
-      )
-      .catch(() => setProductosHigienico([]));
+      .then(setProductos)
+      .catch(() => setProductos([]));
   }, []);
 
   const requiereObservacion =
@@ -272,11 +290,11 @@ export default function ProduccionBobinaTubo({ usuario }) {
           onCambio={setVista}
           totalActivas={activasFiltradas.length}
           totalPausadas={pausadasFiltradas.length}
-          mostrarConcluidas={esEncargado}
+          mostrarConcluidas={veConcluidas}
           totalConcluidas={totalConcluidas}
         />
 
-        {vista === "concluidas" && esEncargado && (
+        {vista === "concluidas" && veConcluidas && (
           <ProduccionesConcluidas onTotal={setTotalConcluidas} />
         )}
 
@@ -313,7 +331,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
           </div>
         )}
 
-        {permiteFiltroProducto && productosHigienico.length > 0 && (
+        {permiteFiltroProducto && (
           <div className="mb-5 flex flex-col gap-1.5">
             <span className="text-xs font-bold uppercase tracking-wide text-slate-600">
               Filtrar por producto
@@ -329,7 +347,7 @@ export default function ProduccionBobinaTubo({ usuario }) {
               >
                 Todos
               </ToggleGroupItem>
-              {productosHigienico.map((p) => (
+              {productosDelFiltro.map((p) => (
                 <ToggleGroupItem
                   key={p.IdProducto}
                   value={String(p.IdProducto)}
@@ -386,11 +404,11 @@ export default function ProduccionBobinaTubo({ usuario }) {
               <CardActiva
                 key={p.IdProduccionBobinaTubo}
                 p={p}
-                onInsertar={() => abrirInsertar(p)}
-                onPausar={() => pausa.abrir(p)}
-                onFinalizar={() => finalizacion.abrir(p)}
+                onInsertar={soloLectura ? undefined : () => abrirInsertar(p)}
+                onPausar={soloLectura ? undefined : () => pausa.abrir(p)}
+                onFinalizar={esEncargado ? () => finalizacion.abrir(p) : undefined}
                 onCambiarLinea={
-                  esEncargado && p.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO
+                  esEncargado && permiteCambioLinea(p)
                     ? () => abrirCambioLinea(p)
                     : undefined
                 }
@@ -411,9 +429,9 @@ export default function ProduccionBobinaTubo({ usuario }) {
                 key={p.IdPausaProduccionBobinaTubo}
                 p={p}
                 procesando={procesandoId === p.IdProduccionBobinaTubo}
-                onInsertar={() => abrirInsertar(p)}
-                onReanudar={() => reanudar(p)}
-                onCancelar={() => cancelacion.abrir(p)}
+                onInsertar={soloLectura ? undefined : () => abrirInsertar(p)}
+                onReanudar={soloLectura ? undefined : () => reanudar(p)}
+                onCancelar={esEncargado ? () => cancelacion.abrir(p) : undefined}
               />
             )}
           />
@@ -614,6 +632,12 @@ export default function ProduccionBobinaTubo({ usuario }) {
       </Dialog>
 
       <DialogoPausar dialogo={pausa} tituloDe={codigosDe} opciones={opcionesPausa} />
+
+      <DialogoReanudar
+        dialogo={reanudacion}
+        tituloDe={codigosDe}
+        opciones={MotivosReanudacionProduccion}
+      />
 
       <DialogoCancelar
         dialogo={cancelacion}

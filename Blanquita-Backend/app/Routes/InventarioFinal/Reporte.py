@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.Config.supabase import get_db
 
 from app.Auth.Dependencies import require_role, get_generado_por
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 
 from app.Models.InventarioFinal.Reporte import (
     ReporteProduccionDiariaProductoTerminadoRequest,
@@ -53,7 +53,7 @@ ProductoFinalReporteRouter = APIRouter(
     "/produccion/diaria/resumen",
     response_model=ReporteProduccionDiariaProductoTerminadoResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenProduccionDiariaProductoTerminado(
     FechaInicio: date,
@@ -80,7 +80,7 @@ def ResumenProduccionDiariaProductoTerminado(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteProduccionDiariaProductoTerminado(
     FechaInicio: date,
@@ -118,7 +118,7 @@ def ReporteProduccionDiariaProductoTerminado(
     "/inventario/resumen",
     response_model=ReporteInventarioProductoTerminadoResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenInventarioProductoTerminado(
     IdsProducto: list[int] | None = Query(
@@ -139,7 +139,7 @@ def ResumenInventarioProductoTerminado(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteInventarioProductoTerminado(
     IdsProducto: list[int] | None = Query(
@@ -169,7 +169,7 @@ def ReporteInventarioProductoTerminado(
     "/salidas/resumen",
     response_model=ReporteSalidasConDespachosResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ResumenSalidasProductoTerminado(
     FechaInicio: date,
@@ -193,7 +193,7 @@ def ResumenSalidasProductoTerminado(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteSalidasProductoTerminado(
     FechaInicio: date,
@@ -227,7 +227,7 @@ def ReporteSalidasProductoTerminado(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {MEDIA_TYPE_EXCEL: {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ExcelSalidasProductoTerminado(
     FechaInicio: date,
@@ -260,7 +260,7 @@ def ExcelSalidasProductoTerminado(
     "/salidas/despacho/{id_movimiento}/detalle",
     response_model=DespachoSalidaResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def DetalleDespachoSalida(
     id_movimiento: int,
@@ -276,7 +276,7 @@ def DetalleDespachoSalida(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteDespachoSalida(
     id_movimiento: int,
@@ -302,7 +302,7 @@ def ReporteDespachoSalida(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {MEDIA_TYPE_EXCEL: {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ExcelDespachoSalida(
     id_movimiento: int,

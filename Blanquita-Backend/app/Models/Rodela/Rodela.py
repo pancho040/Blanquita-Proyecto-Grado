@@ -21,3 +21,4 @@ class TipoRodela(BaseModel):
     IdTipoRodela: int
     NombreTipoRodela: str
     Descripcion: str | None = None
+    Activo: bool

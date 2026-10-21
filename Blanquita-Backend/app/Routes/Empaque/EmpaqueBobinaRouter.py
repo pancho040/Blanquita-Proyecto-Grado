@@ -5,7 +5,7 @@ from app.Config.supabase import get_db
 from app.Services.Empaque.EmpaqueBobinaService import EmpaqueBobinaService
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 
 from app.Models.Empaque.EmpaqueBobina import(
@@ -16,6 +16,9 @@ from app.Models.Empaque.EmpaqueBobina import(
     ResumenInventarioEmpaqueResponse,
     DetalleInventarioEmpaqueRequest,
     DetalleInventarioEmpaqueResponse,
+    EmpaqueReingresableResponse,
+    ReingresarEmpaqueRequest,
+    ReingresarEmpaqueResponse,
     TipoEmpaque
 )
 
@@ -54,6 +57,30 @@ def TrasladarProduccion(
     return service.TrasladarEmpaquesAProduccion(data, usuario_actual["IdUsuario"])
 
 
+@EmpaqueBobinaRouter.get(
+    "/reingresables",
+    response_model=list[EmpaqueReingresableResponse],
+    status_code=200
+)
+def ListarReingresables(
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: EmpaqueBobinaService = Depends(empaque_bobina_service)
+):
+    return service.ListarEmpaquesReingresables()
+
+
+@EmpaqueBobinaRouter.post(
+    "/reingresar",
+    response_model=ReingresarEmpaqueResponse,
+    status_code=200
+)
+def Reingresar(
+    data: ReingresarEmpaqueRequest,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: EmpaqueBobinaService = Depends(empaque_bobina_service)
+):
+    return service.ReingresarEmpaque(data, usuario_actual["IdUsuario"])
+
 
 @EmpaqueBobinaRouter.get(
     "/inventario",
@@ -61,7 +88,7 @@ def TrasladarProduccion(
     status_code=200
 )
 def VerInventario(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: EmpaqueBobinaService = Depends(empaque_bobina_service)
 ):
     return service.VerResumenInventarioEmpaque()
@@ -74,7 +101,7 @@ def VerInventario(
 )
 def VerDetalleInventario(
     IdTipoEmpaque: int,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: EmpaqueBobinaService = Depends(empaque_bobina_service)
 ):
     data = DetalleInventarioEmpaqueRequest(IdTipoEmpaque=IdTipoEmpaque)
@@ -87,7 +114,7 @@ def VerDetalleInventario(
     status_code=200
 )
 def ObtenerTiposEmpaque(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: EmpaqueBobinaService = Depends(empaque_bobina_service)
 ):
     return service.ObtenerTiposEmpaque()

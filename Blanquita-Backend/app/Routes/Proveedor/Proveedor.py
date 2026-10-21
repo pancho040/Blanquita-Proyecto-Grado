@@ -4,7 +4,7 @@ from app.Config.supabase import get_db
 
 from app.Services.Proveedor.Proveedor import ProveedorService
 from app.Auth.Dependencies import require_admin_db, require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from typing import List
 
@@ -13,7 +13,6 @@ from app.Models.Proveedor.Proveedor import (
     CambiarEstadoProveedorResponse,
     CrearProveedorRequest,
     EditarProveedorRequest,
-    EstadoProveedorItem,
     ListarProveedoresRequest,
     ListarProveedoresResponse,
     ProveedorForm,
@@ -34,7 +33,7 @@ ProveedorRouter=APIRouter(
     status_code=200
 )
 def ObtenerProveedoresForm(
-    usuario_actual:dict=Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual:dict=Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service:ProveedorService=Depends(proveedor_service)
 ): return service.ObtenerProveedoresForm()
 
@@ -45,7 +44,7 @@ def ObtenerProveedoresForm(
     status_code=200,
 )
 def ListarProveedores(
-    IdEstadoProveedor: int | None = None,
+    Activo: bool | None = None,
     Busqueda: str | None = Query(default=None, max_length=50),
     Pagina: int = Query(default=1, ge=1),
     TamanoPagina: int = Query(default=20, ge=1, le=100),
@@ -54,24 +53,12 @@ def ListarProveedores(
 ):
     return service.ListarProveedores(
         ListarProveedoresRequest(
-            IdEstadoProveedor=IdEstadoProveedor,
+            Activo=Activo,
             Busqueda=Busqueda,
             Pagina=Pagina,
             TamanoPagina=TamanoPagina,
         )
     )
-
-
-@ProveedorRouter.get(
-    "/estados",
-    response_model=List[EstadoProveedorItem],
-    status_code=200,
-)
-def ListarEstadosProveedor(
-    usuario_actual: dict = Depends(require_admin_db),
-    service: ProveedorService = Depends(proveedor_service),
-):
-    return service.ListarEstados()
 
 
 @ProveedorRouter.post(

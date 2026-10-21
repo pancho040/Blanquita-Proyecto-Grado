@@ -19,21 +19,19 @@ import { TIPO_BOBINA_SERVILLETA, CODIGO_UNIDAD } from "./filtros";
 
 function aplanarUnidades(bobinas) {
   return bobinas.flatMap((b) =>
-    [1, 2]
-      .filter((numero) => b[`IdUnidad${numero}`])
-      .map((numero) => ({
-        IdUnidad: b[`IdUnidad${numero}`],
-        CodigoUnidad: b[`CodigoUnidad${numero}`],
-        DescripcionFormato: b[`DescripcionFormato${numero}`],
-        PesoBrutoKg: b[`PesoBrutoKg${numero}`],
-        GramajeGr: b[`GramajeGr${numero}`],
-        IdBobinaServilleta: b.IdBobinaServilleta,
-        CodigoLote: b.CodigoLote,
-        FechaRecepcion: b.FechaRecepcion,
-        NombreProveedor: b.NombreProveedor,
-        NombreTipoBobinaServilleta: b.NombreTipoBobinaServilleta,
-        TipoEstado: b.TipoEstado,
-      })),
+    b.Unidades.map((u) => ({
+      IdUnidad: u.IdUnidadBobinaServilleta,
+      CodigoUnidad: u.CodigoBobina,
+      DescripcionFormato: u.DescripcionFormato,
+      PesoBrutoKg: u.PesoBrutoKg,
+      GramajeGr: u.GramajeGr,
+      IdBobinaServilleta: b.IdBobinaServilleta,
+      CodigoLote: b.CodigoLote,
+      FechaRecepcion: b.FechaRecepcion,
+      NombreProveedor: b.NombreProveedor,
+      NombreTipoBobinaServilleta: b.NombreTipoBobinaServilleta,
+      TipoEstado: b.TipoEstado,
+    })),
   );
 }
 

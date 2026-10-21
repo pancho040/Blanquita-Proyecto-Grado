@@ -6,8 +6,11 @@ export const AbrirBobinaServilletaRequest = (idBobinaServilleta, observacion) =>
 export const AbrirBobinaServilletaResponse = (data) => ({
   IdBobinaServilleta: data.IdBobinaServilleta,
   IdEstadoMateriaPrima: data.IdEstadoMateriaPrima,
-  CantidadSubBobinas435: data.CantidadSubBobinas435,
-  CantidadSubBobinas220: data.CantidadSubBobinas220,
+  SubBobinas: (data.SubBobinas ?? []).map((s) => ({
+    IdTipoMedidaSubBobina: s.IdTipoMedidaSubBobina,
+    MedidaMm: s.MedidaMm,
+    Cantidad: s.Cantidad
+  })),
   CantidadSubBobinasTotal: data.CantidadSubBobinasTotal
 });
 
@@ -36,8 +39,9 @@ export const PausaProduccionServilletaResponse = (data) => ({
   IdEstadoProduccion: data.IdEstadoProduccion
 });
 
-export const ReanudarProduccionServilletaRequest = (idProduccionServilleta) => ({
-  IdProduccionServilleta: idProduccionServilleta
+export const ReanudarProduccionServilletaRequest = (idProduccionServilleta, motivoReanudacion) => ({
+  IdProduccionServilleta: idProduccionServilleta,
+  MotivoReanudacion: motivoReanudacion ?? null
 });
 
 export const ReanudarProduccionServilletaResponse = (data) => ({
@@ -46,6 +50,7 @@ export const ReanudarProduccionServilletaResponse = (data) => ({
   FechaHoraPausa: data.FechaHoraPausa,
   MotivoPausaProduccion: data.MotivoPausaProduccion ?? null,
   FechaHoraReanudacion: data.FechaHoraReanudacion,
+  MotivoReanudacion: data.MotivoReanudacion ?? null,
   IdEstadoProduccion: data.IdEstadoProduccion
 });
 
@@ -83,6 +88,8 @@ export const VerProduccionServilletaActivasResponse = (data) => ({
   IdSubBobina: data.IdSubBobina,
   CodigoUnidadOrigen: data.CodigoUnidadOrigen,
   IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
+  MedidaMm: data.MedidaMm,
+  DescripcionFormato: data.DescripcionFormato,
   NombreTurno: data.NombreTurno,
   FechaInicioProduccion: data.FechaInicioProduccion
 });
@@ -92,6 +99,9 @@ export const VerPausasProduccionServilletaActivasResponse = (data) => ({
   IdProduccionServilleta: data.IdProduccionServilleta,
   IdSubBobina: data.IdSubBobina,
   CodigoUnidadOrigen: data.CodigoUnidadOrigen,
+  IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
+  MedidaMm: data.MedidaMm,
+  DescripcionFormato: data.DescripcionFormato,
   FechaHoraPausa: data.FechaHoraPausa,
   NombreEstadoProduccion: data.NombreEstadoProduccion
 });

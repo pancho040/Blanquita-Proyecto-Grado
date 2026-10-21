@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Cylinder } from "lucide-react";
+import { Plus, Cylinder, History } from "lucide-react";
 import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -40,22 +40,16 @@ import { fmt } from "./constantes";
 import { TablaBobinas } from "./TablaBobinas";
 import { ListaMovilBobinas } from "./ListaMovilBobinas";
 import ModalEditarBobina from "./ModalEditarBobina";
+import DialogoIniciarProduccion from "./DialogoIniciarProduccion";
 import Header from "@/components/layout/Header";
-import {
-  Roles,
-  ID_TIPO_BOBINA_HIGIENICO,
-  IDS_PRODUCTO_BOBINA_HIGIENICO,
-} from "@/constants/Values";
+import { VeComoLider, EsGerente, rutaDeRol } from "@/utils/validators";
+import { productosActivosDelTipo } from "@/utils/catalogo";
 
 const sinDatos = async () => [];
 
-const cargarProductosHigienico = async () =>
-  (await obtenerProductos()).filter((p) =>
-    IDS_PRODUCTO_BOBINA_HIGIENICO.includes(p.IdProducto),
-  );
-
 export default function InventarioBobinasPapel({ usuario }) {
-  const esLider = usuario?.IdRol === Roles.Encargado;
+  const esLider = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   const resumen = useCatalogo(verResumenInventarioBobinaPapel);
   const fuera = useCatalogo(esLider ? verBobinasPapelFueraInventario : sinDatos);
@@ -79,10 +73,16 @@ export default function InventarioBobinasPapel({ usuario }) {
   const { marcadas, setMarcadas } = detalle;
   const listas = marcadas.length === requeridas;
 
-  const productosHigienico = useOpciones(cargarProductosHigienico);
+  const productos = useOpciones(obtenerProductos);
   const [idProducto, setIdProducto] = useState(null);
-  const esHigienico = tipoSel?.IdTipoBobina === ID_TIPO_BOBINA_HIGIENICO;
-  const faltaProducto = esHigienico && idProducto === null;
+  const productosTipo = tipoSel ? productosActivosDelTipo(productos, tipoSel.IdTipoBobina) : [];
+  const eligeProducto = productosTipo.length > 1;
+  const productoAsignado = eligeProducto
+    ? productosTipo.find((p) => p.IdProducto === idProducto)
+    : productosTipo[0];
+  const faltaProducto = !productoAsignado;
+  const [confirmarInicio, setConfirmarInicio] = useState(false);
+  const nombreProductoSel = productoAsignado?.NombreProducto;
 
   useEffect(() => {
     setIdProducto(null);
@@ -119,6 +119,11 @@ export default function InventarioBobinasPapel({ usuario }) {
 
   const quitarChip = (codigo) => setMarcadas((prev) => prev.filter((c) => c !== codigo));
 
+  const abrirConfirmarInicio = () => {
+    if (!listas || esServilleta || faltaProducto) return;
+    setConfirmarInicio(true);
+  };
+
   const enviarProduccion = () => {
     if (!listas || esServilleta || faltaProducto) return;
 
@@ -132,10 +137,11 @@ export default function InventarioBobinasPapel({ usuario }) {
         iniciarProduccion(
           bobina1.IdBobinaPapel,
           bobina2.IdBobinaPapel,
-          esHigienico ? idProducto : null,
+          productoAsignado.IdProducto,
         ),
       (res) => `${marcadas.join(" + ")} → En producción · ${res.NombreProducto}`,
       () => {
+        setConfirmarInicio(false);
         detalle.setDatos((prev) => prev.filter((b) => !marcadas.includes(b.CodigoBobina)));
         setMarcadas([]);
         setIdProducto(null);
@@ -177,9 +183,9 @@ export default function InventarioBobinasPapel({ usuario }) {
         accion={
           esLider
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/bobina-papel/ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "bobina-papel/ingreso"),
               }
             : null
         }
@@ -207,10 +213,11 @@ export default function InventarioBobinasPapel({ usuario }) {
                 key={t.IdTipoBobina}
                 acento={t}
                 activo={detalle.sel === t.IdTipoBobina}
+                inactivo={!t.Activo}
                 onClick={() => detalle.seleccionar(t.IdTipoBobina)}
                 icono={Cylinder}
                 nombre={t.NombreTipoBobina}
-                etiqueta={t.badge}
+                stock={t.stock}
                 cantidad={t.CantidadBobinas}
                 unidad="bobinas en almacén"
                 textoVer="Ver bobinas"
@@ -243,7 +250,7 @@ export default function InventarioBobinasPapel({ usuario }) {
             icono={Cylinder}
             titulo={`Bobinas · ${tipoSel.NombreTipoBobina}`}
             subtitulo={`${tipoSel.CantidadBobinas} en almacén`}
-            etiqueta={esServilleta ? "Se envía 1 bobina" : "Se envían de a 2 bobinas"}
+            etiqueta={soloLectura ? null : esServilleta ? "Se envía 1 bobina" : "Se envían de a 2 bobinas"}
             onCerrar={detalle.cerrar}
           >
             <ContenidoLista
@@ -260,8 +267,8 @@ export default function InventarioBobinasPapel({ usuario }) {
                   bobinas={bobinasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleBobina}
-                  onEditar={esLider ? abrirEditar : undefined}
+                  onToggle={soloLectura ? undefined : toggleBobina}
+                  onEditar={esLider && !soloLectura ? abrirEditar : undefined}
                 />
               </div>
               <div className="md:hidden">
@@ -269,13 +276,13 @@ export default function InventarioBobinasPapel({ usuario }) {
                   bobinas={bobinasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleBobina}
-                  onEditar={esLider ? abrirEditar : undefined}
+                  onToggle={soloLectura ? undefined : toggleBobina}
+                  onEditar={esLider && !soloLectura ? abrirEditar : undefined}
                 />
               </div>
             </ContenidoLista>
 
-            {marcadas.length > 0 && esHigienico && (
+            {marcadas.length > 0 && eligeProducto && (
               <div className="flex flex-col gap-2 border-t border-slate-200 bg-white px-5 py-4">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-600">
                   Producto a elaborar
@@ -284,7 +291,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                   value={idProducto === null ? [] : [String(idProducto)]}
                   className="flex flex-wrap justify-start gap-2"
                 >
-                  {productosHigienico.map((p) => (
+                  {productosTipo.map((p) => (
                     <ToggleGroupItem
                       key={p.IdProducto}
                       value={String(p.IdProducto)}
@@ -309,12 +316,14 @@ export default function InventarioBobinasPapel({ usuario }) {
                   !listas
                     ? `Selecciona ${requeridas - marcadas.length} más`
                     : faltaProducto
-                      ? "Selecciona el producto"
+                      ? eligeProducto
+                        ? "Selecciona el producto"
+                        : "Este tipo no tiene productos activos"
                       : "Listo para enviar"
                 }
                 listo={listas && !faltaProducto}
                 enviando={envio.enProceso === "envio"}
-                onEnviar={enviarProduccion}
+                onEnviar={abrirConfirmarInicio}
                 textoAccion="Enviar a producción"
                 textoEnviando="Enviando..."
               />
@@ -352,7 +361,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                     observacion={b.UltimaObservacion}
                     fechaMovimiento={b.FechaUltimoMovimiento}
                     procesando={accionesFuera.enProceso === b.IdBobinaPapel}
-                    onReingresar={() => setPorReingresar(b)}
+                    onReingresar={soloLectura ? undefined : () => setPorReingresar(b)}
                   />
                 ))}
               </div>
@@ -360,6 +369,16 @@ export default function InventarioBobinasPapel({ usuario }) {
           </PanelFuera>
         )}
       </main>
+
+      <DialogoIniciarProduccion
+        abierto={confirmarInicio}
+        codigos={marcadas}
+        nombreTipo={tipoSel?.NombreTipoBobina}
+        nombreProducto={nombreProductoSel}
+        enviando={envio.enProceso === "envio"}
+        onCerrar={() => setConfirmarInicio(false)}
+        onConfirmar={enviarProduccion}
+      />
 
       {esLider && (
         <DialogReingreso

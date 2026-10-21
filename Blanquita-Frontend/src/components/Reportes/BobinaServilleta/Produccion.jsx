@@ -14,14 +14,16 @@ const ESTADOS_SERVILLETA = ArrayFilter([1, 2, 3, 4], EstadosProduccion);
 const COLUMNAS = [
   { titulo: "Tipo", valor: (p) => p.NombreTipoBobinaServilleta },
   { titulo: "Código", clase: "font-mono text-[12.5px]", valor: (p) => p.CodigoBobina },
-  { titulo: "Formato", valor: (p) => p.DescripcionMedida },
+  { titulo: "Formato", valor: (p) => p.DescripcionFormato },
+  { titulo: "Medida", valor: (p) => p.DescripcionMedida },
 ];
 
 const TARJETA = {
   titulo: (p) => p.CodigoBobina,
   subtitulo: (p) => (
     <>
-      {p.NombreTipoBobinaServilleta} · {p.DescripcionMedida} · {p.NombreTurno}
+      {p.NombreTipoBobinaServilleta} · {p.DescripcionFormato} · {p.DescripcionMedida} ·{" "}
+      {p.NombreTurno}
     </>
   ),
 };

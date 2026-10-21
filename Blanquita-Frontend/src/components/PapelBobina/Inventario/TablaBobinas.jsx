@@ -19,8 +19,8 @@ export function TablaBobinas({ bobinas, tipoSel, marcadas, onToggle, onEditar })
       <Table className="min-w-[640px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Código</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Código</TableHead>
             <TableHead>Lote</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead>Proveedor</TableHead>
@@ -36,13 +36,15 @@ export function TablaBobinas({ bobinas, tipoSel, marcadas, onToggle, onEditar })
             return (
               <TableRow
                 key={b.IdBobinaPapel}
-                onClick={() => onToggle(b.CodigoBobina)}
-                className={cn("cursor-pointer", on && tipoSel.soft)}
+                onClick={onToggle && (() => onToggle(b.CodigoBobina))}
+                className={cn(onToggle && "cursor-pointer", on && tipoSel.soft)}
               >
-                <TableCell className="pl-5">
-                  <CasillaSeleccion marcada={on} acento={tipoSel} />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion marcada={on} acento={tipoSel} />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   <div className="flex items-center gap-2">
                     {b.CodigoBobina}
                     {b.Reingresada && <BadgeReingresada fecha={b.FechaUltimoReingreso} />}

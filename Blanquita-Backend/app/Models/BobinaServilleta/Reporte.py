@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.Models.BobinaServilleta.BobinaServilleta import UnidadServilletaResponse
+
 
 class ReporteInventarioBobinaServilletaRequest(BaseModel):
     IdsTipoBobinaServilleta: Optional[list[int]] = None
@@ -26,14 +28,7 @@ class ReporteInventarioBobinaServilletaDetalleResponse(BaseModel):
     CodigoLote: str
     FechaRecepcion: date
     NombreProveedor: str
-    CodigoUnidad1: Optional[str]
-    DescripcionFormato1: Optional[str]
-    PesoBrutoKg1: Optional[Decimal]
-    GramajeGr1: Optional[Decimal]
-    CodigoUnidad2: Optional[str]
-    DescripcionFormato2: Optional[str]
-    PesoBrutoKg2: Optional[Decimal]
-    GramajeGr2: Optional[Decimal]
+    Unidades: list[UnidadServilletaResponse]
 
 
 class ReporteInventarioBobinaServilletaResponse(BaseModel):
@@ -61,16 +56,7 @@ class BobinaServilletaCatalogoResponse(BaseModel):
     CodigoLote: str
     FechaRecepcion: date
     NombreProveedor: str
-    IdUnidad1: Optional[int]
-    CodigoUnidad1: Optional[str]
-    DescripcionFormato1: Optional[str]
-    PesoBrutoKg1: Optional[Decimal]
-    GramajeGr1: Optional[Decimal]
-    IdUnidad2: Optional[int]
-    CodigoUnidad2: Optional[str]
-    DescripcionFormato2: Optional[str]
-    PesoBrutoKg2: Optional[Decimal]
-    GramajeGr2: Optional[Decimal]
+    Unidades: list[UnidadServilletaResponse]
 
 
 class VerBobinasServilletaResponse(BaseModel):
@@ -225,14 +211,7 @@ class ReporteLoteBobinaServilletaDetalleRequest(BaseModel):
 class BobinaLoteServilletaDetalleResponse(BaseModel):
     IdBobinaServilleta: int
     NombreTipoBobinaServilleta: str
-    CodigoUnidad1: Optional[str]
-    DescripcionFormato1: Optional[str]
-    PesoBrutoKg1: Optional[Decimal]
-    GramajeGr1: Optional[Decimal]
-    CodigoUnidad2: Optional[str]
-    DescripcionFormato2: Optional[str]
-    PesoBrutoKg2: Optional[Decimal]
-    GramajeGr2: Optional[Decimal]
+    Unidades: list[UnidadServilletaResponse]
 
 
 class ReporteLoteBobinaServilletaDetalleResponse(BaseModel):
@@ -279,6 +258,7 @@ class ProduccionServilletaCatalogoResponse(BaseModel):
     NombreTipoBobinaServilleta: str
     CodigoBobina: str
     DescripcionMedida: str
+    DescripcionFormato: str
     IdSubBobinaServilleta: int
     FechaInicioProduccion: datetime
     FechaFinProduccion: Optional[datetime]
@@ -305,6 +285,7 @@ class PausaProduccionServilletaResponse(BaseModel):
     FechaHoraPausa: datetime
     MotivoPausaProduccion: Optional[str]
     FechaHoraReanudacion: Optional[datetime]
+    MotivoReanudacion: Optional[str] = None
     DuracionPausa: Optional[timedelta]
     OperadorPausa: str
     RolPausa: str
@@ -321,6 +302,7 @@ class ReporteProduccionServilletaDetalleResponse(BaseModel):
     NombreTipoBobinaServilleta: str
     CodigoBobina: str
     DescripcionMedida: str
+    DescripcionFormato: str
     IdSubBobinaServilleta: int
     PesoBrutoKg: Optional[Decimal]
     GramajeGr: Optional[Decimal]

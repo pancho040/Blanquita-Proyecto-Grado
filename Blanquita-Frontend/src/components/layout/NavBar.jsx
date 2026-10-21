@@ -5,7 +5,7 @@ import {
   rutaDeItem,
   rutasVisibles,
 } from "@/constants/NavBarRoutes";
-import { Icon, Menu, ChevronDown, LogOut } from "lucide-react";
+import { Icon, Menu, ChevronDown, LogOut, Bell } from "lucide-react";
 import { cerrarSesion } from "@/lib/logout-client";
 import {
   NavigationMenu,
@@ -29,6 +29,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { PREFIJO_POR_ROL } from "@/constants/Values";
+import Notificaciones, { textoContador } from "@/components/layout/Notificaciones";
 
 function IconoItem({ item, size = 18 }) {
   if (item.esIconoLab) {
@@ -197,6 +198,29 @@ export default function NavBar({ idRol, esAdmin = false, seccion }) {
           </button>
         </SheetContent>
       </Sheet>
+
+      <Notificaciones
+        idRol={idRol}
+        renderBoton={({ abrir, total, urgente }) => (
+          <button
+            type="button"
+            onClick={abrir}
+            aria-label="Abrir notificaciones"
+            className="md:hidden absolute right-4 flex items-center justify-center rounded-lg p-2 text-white hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none"
+          >
+            <Bell size={26} />
+            {total > 0 && (
+              <span
+                className={`absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-extrabold tabular-nums ring-2 ring-[#62C1E5] ${
+                  urgente ? "bg-red-600 text-white" : "bg-white text-[#1C96C5]"
+                }`}
+              >
+                {textoContador(total)}
+              </span>
+            )}
+          </button>
+        )}
+      />
 
       <div className="flex flex-row items-center justify-center gap-2">
         <img

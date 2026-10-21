@@ -33,3 +33,18 @@ export function formatearDuracion(duracionIso) {
     const minutos = Number(coincidencia[3] || 0);
     return `${horas}h ${String(minutos).padStart(2, "0")}m`;
 }
+
+export function formatearSegundos(segundos) {
+    const total = Math.max(Math.floor(Number(segundos) || 0), 0);
+    const horas = Math.floor(total / 3600);
+    const minutos = Math.floor((total % 3600) / 60);
+    if (horas === 0) return `${minutos}m`;
+    return `${horas}h ${String(minutos).padStart(2, "0")}m`;
+}
+
+export const segundosDesde = (fecha, ahora = Date.now()) =>
+    fecha ? Math.max(Math.floor((ahora - new Date(fecha).getTime()) / 1000), 0) : 0;
+
+export function diaSemanaCorto(fechaISO) {
+    return format(new Date(`${fechaISO}T00:00:00`), "EEE d", { locale: es });
+}

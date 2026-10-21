@@ -1,3 +1,5 @@
+import { nombreEstadoProveedor } from "@/constants/Estados";
+
 export const ProveedorForm = (data) => ({
   IdProveedor: data.IdProveedor,
   NombreProveedor: data.NombreProveedor,
@@ -8,13 +10,13 @@ export const ProveedorItem = (data) => ({
   NombreProveedor: data.NombreProveedor,
   CelularProveedor: data.CelularProveedor ?? null,
   CorreoProveedor: data.CorreoProveedor ?? null,
-  IdEstadoProveedor: data.IdEstadoProveedor,
-  NombreEstadoProveedor: data.NombreEstadoProveedor,
+  Activo: data.Activo,
+  NombreEstadoProveedor: nombreEstadoProveedor(data.Activo),
 });
 
 export const ListarProveedoresRequest = (filtros = {}) => ({
   Busqueda: filtros.Busqueda ?? null,
-  IdEstadoProveedor: filtros.IdEstadoProveedor ?? null,
+  Activo: filtros.Activo ?? null,
   Pagina: filtros.Pagina ?? 1,
   TamanoPagina: filtros.TamanoPagina ?? 20,
 });
@@ -26,7 +28,6 @@ export const ListarProveedoresResponse = (data) => ({
   Proveedores: (data.Proveedores ?? []).map(ProveedorItem),
 });
 
-// Se mandan siempre los campos de contacto: el PUT reemplaza, un campo ausente se borra.
 export const ProveedorContacto = (datos) => ({
   CelularProveedor: (datos.CelularProveedor ?? "").trim() || null,
   CorreoProveedor: (datos.CorreoProveedor ?? "").trim().toLowerCase() || null,
@@ -39,7 +40,6 @@ export const ProveedorDatos = (datos) => ({
 
 export const CrearProveedorRequest = ProveedorDatos;
 
-// El nombre no se edita: queda fijo desde el registro.
 export const EditarProveedorRequest = (idProveedor, datos) => ({
   IdProveedor: idProveedor,
   ...ProveedorContacto(datos),
@@ -47,17 +47,17 @@ export const EditarProveedorRequest = (idProveedor, datos) => ({
 
 export const ProveedorResponse = ProveedorItem;
 
-export const CambiarEstadoProveedorRequest = (idProveedor, idEstadoProveedor, motivo) => ({
+export const CambiarEstadoProveedorRequest = (idProveedor, activo, motivo) => ({
   IdProveedor: idProveedor,
-  IdEstadoProveedor: idEstadoProveedor,
+  Activo: activo,
   Motivo: (motivo ?? "").trim(),
 });
 
 export const CambiarEstadoProveedorResponse = (data) => ({
   IdProveedor: data.IdProveedor,
   NombreProveedor: data.NombreProveedor,
-  IdEstadoAnterior: data.IdEstadoAnterior,
-  NombreEstadoAnterior: data.NombreEstadoAnterior,
-  IdEstadoProveedor: data.IdEstadoProveedor,
-  NombreEstadoProveedor: data.NombreEstadoProveedor,
+  ActivoAnterior: data.ActivoAnterior,
+  NombreEstadoAnterior: nombreEstadoProveedor(data.ActivoAnterior),
+  Activo: data.Activo,
+  NombreEstadoProveedor: nombreEstadoProveedor(data.Activo),
 });

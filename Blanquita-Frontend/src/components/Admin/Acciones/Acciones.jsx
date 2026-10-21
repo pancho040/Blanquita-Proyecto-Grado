@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { FileText, FileUser, Package, Search, Truck, UserShield, Users } from "lucide-react";
+import {
+  Boxes,
+  FileText,
+  Gauge,
+  Package,
+  PackageCheck,
+  Search,
+  Truck,
+  UserShield,
+  Users,
+} from "lucide-react";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -12,7 +22,6 @@ import {
   CampoFiltro,
   BuscadorFiltro,
   BotonInforme,
-  BotonDescargaFila,
   ResultadosReporte,
   TarjetaReporte,
   PieTarjeta,
@@ -26,7 +35,6 @@ import {
   listarHistorialAdmin,
   verResumenUsuarioHistorialAdmin,
   descargarReporteHistorialAdmin,
-  descargarReporteUsuarioHistorialAdmin,
 } from "@/services/Usuario/HistorialAdmin";
 
 const LONGITUD_MINIMA_CI = 6;
@@ -37,6 +45,9 @@ const MODULOS = [
   { valor: "Usuarios", texto: "Usuarios" },
   { valor: "Proveedores", texto: "Proveedores" },
   { valor: "Insumos", texto: "Insumos" },
+  { valor: "Materia prima", texto: "Materia prima" },
+  { valor: "Productos", texto: "Productos" },
+  { valor: "Stock", texto: "Stock" },
 ];
 
 const ESTILOS_MODULO = {
@@ -50,6 +61,21 @@ const ESTILOS_MODULO = {
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icono: Package,
     tarjeta: "bg-emerald-50 text-emerald-700",
+  },
+  "Materia prima": {
+    badge: "bg-violet-50 text-violet-700 ring-violet-200",
+    icono: Boxes,
+    tarjeta: "bg-violet-50 text-violet-700",
+  },
+  Productos: {
+    badge: "bg-teal-50 text-teal-700 ring-teal-200",
+    icono: PackageCheck,
+    tarjeta: "bg-teal-50 text-teal-700",
+  },
+  Stock: {
+    badge: "bg-rose-50 text-rose-700 ring-rose-200",
+    icono: Gauge,
+    tarjeta: "bg-rose-50 text-rose-700",
   },
   Otros: { badge: "bg-slate-100 text-slate-700 ring-slate-200", icono: FileText, tarjeta: "bg-slate-100 text-slate-700" },
 };
@@ -249,17 +275,6 @@ export default function Acciones() {
   };
   const hayAcciones = Boolean(catalogo?.Total);
   const consulta = useAdministradorConsultado(parametros);
-  const ciCompleto = (filtros.Ci ?? "").length >= LONGITUD_MINIMA_CI;
-
-  const reporteAdministrador = (a) => (
-    <div className="flex justify-end">
-      <BotonDescargaFila
-        icono={FileUser}
-        ayuda={`Reporte de acciones del CI ${a.Ci} en el período`}
-        descargar={() => descargarReporteUsuarioHistorialAdmin({ ...parametros, Ci: a.Ci })}
-      />
-    </div>
-  );
 
   return (
     <TooltipProvider>
@@ -283,31 +298,15 @@ export default function Acciones() {
                 Boolean(reporte.textos.Busqueda),
             }}
             informe={
-              <>
-                <BotonInforme
-                  texto="Reporte del administrador"
-                  disponible={rangoCompleto && ciCompleto && Boolean(consulta?.Acciones.length)}
-                  ayuda={`PDF con las acciones del CI ${filtros.Ci} en el período`}
-                  ayudaNoDisponible={
-                    !rangoCompleto
-                      ? undefined
-                      : ciCompleto
-                        ? "Ese CI no tiene acciones en el período y los filtros elegidos"
-                        : `Escribe un CI de al menos ${LONGITUD_MINIMA_CI} dígitos`
-                  }
-                  exito="Reporte de acciones del administrador descargado"
-                  descargar={() => descargarReporteUsuarioHistorialAdmin(parametros)}
-                />
-                <BotonInforme
-                  disponible={rangoCompleto && hayAcciones}
-                  ayuda="PDF con el resumen por módulo y el detalle de acciones del período y los filtros elegidos"
-                  ayudaNoDisponible={
-                    rangoCompleto ? "No hay acciones en el período y los filtros elegidos" : undefined
-                  }
-                  exito="Reporte de acciones de administrador descargado"
-                  descargar={() => descargarReporteHistorialAdmin(parametros)}
-                />
-              </>
+              <BotonInforme
+                disponible={rangoCompleto && hayAcciones}
+                ayuda="PDF con el resumen por módulo y el detalle de acciones del período y los filtros elegidos"
+                ayudaNoDisponible={
+                  rangoCompleto ? "No hay acciones en el período y los filtros elegidos" : undefined
+                }
+                exito="Reporte de acciones de administrador descargado"
+                descargar={() => descargarReporteHistorialAdmin(parametros)}
+              />
             }
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -362,7 +361,6 @@ export default function Acciones() {
               clave={(a) => a.IdHistorialAdmin}
               nombres={["acción", "acciones"]}
               columnas={COLUMNAS}
-              accion={reporteAdministrador}
               tarjeta={(a) => (
                 <TarjetaReporte
                   titulo={a.Accion}
@@ -373,7 +371,7 @@ export default function Acciones() {
                     <BadgeModulo modulo={a.Modulo} />
                     {a.Detalle && <span>{a.Detalle}</span>}
                   </div>
-                  <PieTarjeta accion={reporteAdministrador(a)}>
+                  <PieTarjeta>
                     <Dato etiqueta="Por">{nombreAdministrador(a)}</Dato>
                     <Dato etiqueta="CI">{a.Ci}</Dato>
                   </PieTarjeta>

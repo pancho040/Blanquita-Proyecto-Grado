@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import (
     InventarioBolsaJava,
@@ -18,7 +19,7 @@ class BolsaJavaRepository:
         self.db = db
         self.caller = DbCaller(db)
 
-    def VerInventario(self) -> list[dict]:
+    def VerInventario(self, incluir_inactivos: bool = False) -> list[dict]:
         consulta = (
             select(
                 InventarioBolsaJava.IdInventarioBolsaJava,
@@ -26,6 +27,10 @@ class BolsaJavaRepository:
                 InventarioBolsaJava.CantidadActual,
                 TipoBolsaJava.NombreBolsaJava,
                 TipoBolsaJava.DescripcionBolsaJava,
+                TipoBolsaJava.Activo,
+                InventarioBolsaJava.StockMinimo,
+                InventarioBolsaJava.StockPreventivo,
+                nivel_stock(InventarioBolsaJava.CantidadActual, InventarioBolsaJava.StockMinimo, InventarioBolsaJava.StockPreventivo).label("NivelStock"),
             )
             .join(
                 TipoBolsaJava,
@@ -33,6 +38,8 @@ class BolsaJavaRepository:
             )
             .order_by(TipoBolsaJava.NombreBolsaJava)
         )
+        if not incluir_inactivos:
+            consulta = consulta.where(visible_en_inventario(TipoBolsaJava.Activo, InventarioBolsaJava.CantidadActual))
         return self.caller.Consultar(consulta)
 
     def ObtenerProveedor(self, id_proveedor: int) -> dict | None:
@@ -40,7 +47,7 @@ class BolsaJavaRepository:
             select(
                 Proveedor.IdProveedor,
                 Proveedor.NombreProveedor,
-                Proveedor.IdEstadoProveedor,
+                Proveedor.Activo,
             ).where(Proveedor.IdProveedor == id_proveedor)
         )
         return filas[0] if filas else None

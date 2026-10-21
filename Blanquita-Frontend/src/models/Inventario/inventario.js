@@ -105,6 +105,10 @@ export const VerInventarioProductoTerminadoResponse = ({
   CantidadRollosUnidades,
   CantidadPorUnidadTerminada,
   CantidadActual,
+  Activo,
+  StockMinimo = null,
+  StockPreventivo = null,
+  NivelStock = null,
 }) => ({
   IdPresentacion,
   CodigoPresentacion,
@@ -113,12 +117,25 @@ export const VerInventarioProductoTerminadoResponse = ({
   CantidadRollosUnidades,
   CantidadPorUnidadTerminada,
   CantidadActual,
+  Activo,
+  StockMinimo,
+  StockPreventivo,
+  NivelStock,
 });
 
 export const VerInventarioProductoTerminadoResponseList = (jsonList) =>
   (jsonList ?? []).map((item) => VerInventarioProductoTerminadoResponse(item));
 
-export const ProductoResponse = ({ IdProducto, NombreProducto }) => ({
+export const ProductoResponse = ({
   IdProducto,
   NombreProducto,
+  IdTipoBobina,
+  IdTipoBobinaServilleta,
+  Activo,
+}) => ({
+  IdProducto,
+  NombreProducto,
+  IdTipoBobina,
+  IdTipoBobinaServilleta,
+  Activo,
 });

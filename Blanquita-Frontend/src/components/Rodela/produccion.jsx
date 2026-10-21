@@ -23,7 +23,7 @@ import { ObservacionesRodela } from "@/constants/OperadorConfig";
 import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
 import { dateFormatter } from "@/utils/dates";
 import { alternarMotivoEnTexto } from "@/utils/handlers";
-import { extraerMensajeError, limpiarObservacion } from "@/utils/validators";
+import { extraerMensajeError, limpiarObservacion, EsGerente } from "@/utils/validators";
 import Header from "@/components/layout/Header";
 
 const INTERVALO_REFRESCO_MS = 30_000;
@@ -65,25 +65,28 @@ function TarjetaRodela({ r, restante, procesando, onReingresar }) {
         </span>
       </div>
 
-      <Button
-        onClick={() => onReingresar(r)}
-        disabled={procesando || restante <= 0}
-        className="h-11 gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
-      >
-        {procesando ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <>
-            <Undo2 size={16} strokeWidth={2.75} />
-            Reingresar al almacén
-          </>
-        )}
-      </Button>
+      {onReingresar && (
+        <Button
+          onClick={() => onReingresar(r)}
+          disabled={procesando || restante <= 0}
+          className="h-11 gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
+        >
+          {procesando ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <>
+              <Undo2 size={16} strokeWidth={2.75} />
+              Reingresar al almacén
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 }
 
 export default function ProduccionRodela({ usuario }) {
+  const soloLectura = EsGerente(usuario?.IdRol);
   const [rodelas, setRodelas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -226,7 +229,7 @@ export default function ProduccionRodela({ usuario }) {
                 r={r}
                 restante={restanteDe(r)}
                 procesando={procesandoId === r.IdRodela}
-                onReingresar={abrirDialog}
+                onReingresar={soloLectura ? undefined : abrirDialog}
               />
             ))}
           </div>

@@ -1,5 +1,15 @@
-import { Plus, Package } from "lucide-react";
+import { useState } from "react";
+import { Plus, Package, Loader2, ArrowRight, History } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableHeader,
@@ -26,6 +36,8 @@ import {
   EstadoCatalogo,
   PanelDetalle,
   BuscadorCodigo,
+  BuscadorNombre,
+  SinCoincidencias,
   ContenidoLista,
   CasillaSeleccion,
   BarraSeleccion,
@@ -34,7 +46,67 @@ import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { descargarReporteInventarioEmpaque } from "@/services/Empaque/Reporte";
-import { Roles } from "@/constants/Values";
+import { MINUTOS_REINGRESO_EMPAQUE_BOBINA } from "@/constants/Values";
+import { VeComoLider, EsGerente, rutaDeRol } from "@/utils/validators";
+
+function DialogoConfirmarTraslado({ abierto, codigos, enviando, onCancelar, onConfirmar }) {
+  const varios = codigos.length > 1;
+  return (
+    <Dialog open={abierto} onOpenChange={(open) => !open && !enviando && onCancelar()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-extrabold">Confirmar envío a producción</DialogTitle>
+          <DialogDescription>
+            {varios
+              ? `¿Estás seguro de enviar estas ${codigos.length} bobinas de empaque a producción?`
+              : "¿Estás seguro de enviar esta bobina de empaque a producción?"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap gap-2 rounded-xl bg-slate-50 px-3.5 py-3">
+          {codigos.map((codigo) => (
+            <span key={codigo} className="font-mono text-[15px] font-extrabold text-slate-900">
+              {codigo}
+            </span>
+          ))}
+        </div>
+
+        <p className="text-[12.5px] text-slate-500">
+          Saldrá del almacén. Si fue un error, podrás reingresarla en los próximos{" "}
+          {MINUTOS_REINGRESO_EMPAQUE_BOBINA} minutos.
+        </p>
+
+        <DialogFooter className="gap-2">
+          <Button
+            variant="ghost"
+            onClick={onCancelar}
+            disabled={enviando}
+            className="h-11 font-bold text-slate-500 hover:text-slate-900"
+          >
+            Volver
+          </Button>
+          <Button
+            onClick={onConfirmar}
+            disabled={enviando}
+            className="h-11 gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
+          >
+            {enviando ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                Sí, enviar
+                <ArrowRight size={16} strokeWidth={2.75} />
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
   return (
@@ -42,8 +114,8 @@ function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
       <Table className="min-w-[620px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Código</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Código</TableHead>
             <TableHead>Peso (kg)</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead className="pr-5">Proveedor</TableHead>
@@ -54,14 +126,16 @@ function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
             const on = marcados.includes(e.IdEmpaque);
             return (
               <TableRow key={e.IdEmpaque} className={cn(on && tipoSel.soft)}>
-                <TableCell className="pl-5">
-                  <CasillaSeleccion
-                    marcada={on}
-                    acento={tipoSel}
-                    onClick={() => onToggle(e.IdEmpaque)}
-                  />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion
+                      marcada={on}
+                      acento={tipoSel}
+                      onClick={() => onToggle(e.IdEmpaque)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   {e.CodigoEmpaque}
                 </TableCell>
                 <TableCell className="text-slate-600">{e.PesoKg}</TableCell>
@@ -86,6 +160,7 @@ function ListaMovilEmpaques({ empaques, tipoSel, marcados, onToggle }) {
         return (
           <button
             key={e.IdEmpaque}
+            disabled={!onToggle}
             onClick={() => onToggle(e.IdEmpaque)}
             className={cn(
               "flex flex-col gap-2.5 rounded-2xl border-2 p-3.5 text-left",
@@ -96,7 +171,7 @@ function ListaMovilEmpaques({ empaques, tipoSel, marcados, onToggle }) {
               <div className={cn("font-mono text-[15px] font-extrabold", tipoSel.text)}>
                 {e.CodigoEmpaque}
               </div>
-              <CasillaSeleccion marcada={on} acento={tipoSel} grande />
+              {onToggle && <CasillaSeleccion marcada={on} acento={tipoSel} grande />}
             </div>
             <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
               <span>
@@ -116,8 +191,11 @@ export default function EmpaqueBobinaInventario({ usuario }) {
   const resumen = useCatalogo(verResumenInventarioEmpaque);
   const detalle = useDetalleInventario(verDetalleInventarioEmpaque);
   const envio = useEjecutar();
+  const [busquedaTipo, setBusquedaTipo] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
 
   const tipos = conAcentos(resumen.datos, { cantidadDe: (t) => t.CantidadEmpaques });
+  const tiposFiltrados = tipos.filter((t) => coincide(busquedaTipo, t.NombreTipoEmpaque));
   const tipoSel = detalle.sel ? tipos.find((t) => t.IdTipoEmpaque === detalle.sel) : null;
   const { marcadas: marcados, setMarcadas: setMarcados } = detalle;
 
@@ -140,6 +218,11 @@ export default function EmpaqueBobinaInventario({ usuario }) {
     detalle.recargar();
   };
 
+  const codigosMarcados = marcados.map(
+    (idEmpaque) =>
+      detalle.datos.find((e) => e.IdEmpaque === idEmpaque)?.CodigoEmpaque ?? String(idEmpaque),
+  );
+
   const enviarProduccion = () => {
     if (marcados.length === 0) return;
 
@@ -149,13 +232,15 @@ export default function EmpaqueBobinaInventario({ usuario }) {
       (resultado) =>
         `${resultado.map((r) => r.CodigoEmpaque).join(", ")} → Trasladado a producción`,
       () => {
+        setConfirmando(false);
         setMarcados([]);
         refrescar();
       },
     );
   };
 
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   return (
     <TooltipProvider>
@@ -166,9 +251,9 @@ export default function EmpaqueBobinaInventario({ usuario }) {
         accion={
           esEncargado
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/empaque/bobina-ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "empaque/bobina-ingreso"),
               }
             : null
         }
@@ -195,18 +280,25 @@ export default function EmpaqueBobinaInventario({ usuario }) {
           mensajeVacio="No hay tipos de empaque registrados."
           altoSkeleton="h-44"
         >
+          <BuscadorNombre
+            valor={busquedaTipo}
+            onCambio={setBusquedaTipo}
+            placeholder="Buscar tipo de empaque por nombre..."
+          />
+          {tiposFiltrados.length === 0 && <SinCoincidencias busqueda={busquedaTipo} />}
           <div className={GRID_TARJETAS}>
-            {tipos.map((t) => (
+            {tiposFiltrados.map((t) => (
               <TarjetaTipo
                 key={t.IdTipoEmpaque}
                 acento={t}
                 activo={detalle.sel === t.IdTipoEmpaque}
+                inactivo={!t.Activo}
                 onClick={() => detalle.seleccionar(t.IdTipoEmpaque)}
                 icono={Package}
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
                 nombre={t.NombreTipoEmpaque}
-                etiqueta={t.badge}
+                stock={t.stock}
                 cantidad={t.CantidadEmpaques}
                 unidad="empaques en almacén"
                 textoVer="Ver empaques"
@@ -239,7 +331,7 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                   empaques={empaquesFiltrados}
                   tipoSel={tipoSel}
                   marcados={marcados}
-                  onToggle={toggleEmpaque}
+                  onToggle={soloLectura ? undefined : toggleEmpaque}
                 />
               </div>
               <div className="md:hidden">
@@ -247,23 +339,21 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                   empaques={empaquesFiltrados}
                   tipoSel={tipoSel}
                   marcados={marcados}
-                  onToggle={toggleEmpaque}
+                  onToggle={soloLectura ? undefined : toggleEmpaque}
                 />
               </div>
             </ContenidoLista>
 
             {marcados.length > 0 && (
               <BarraSeleccion
-                chips={marcados.map((idEmpaque) => ({
+                chips={marcados.map((idEmpaque, i) => ({
                   clave: idEmpaque,
-                  texto:
-                    detalle.datos.find((e) => e.IdEmpaque === idEmpaque)?.CodigoEmpaque ??
-                    idEmpaque,
+                  texto: codigosMarcados[i],
                   onQuitar: () => quitarChip(idEmpaque),
                 }))}
                 estado={`${marcados.length} ${marcados.length === 1 ? "empaque" : "empaques"} seleccionados`}
                 enviando={envio.enProceso === "envio"}
-                onEnviar={enviarProduccion}
+                onEnviar={() => setConfirmando(true)}
                 textoAccion="Trasladar a producción"
                 textoEnviando="Trasladando..."
               />
@@ -271,6 +361,14 @@ export default function EmpaqueBobinaInventario({ usuario }) {
           </PanelDetalle>
         )}
       </main>
+
+      <DialogoConfirmarTraslado
+        abierto={confirmando && marcados.length > 0}
+        codigos={codigosMarcados}
+        enviando={envio.enProceso === "envio"}
+        onCancelar={() => setConfirmando(false)}
+        onConfirmar={enviarProduccion}
+      />
     </div>
     </TooltipProvider>
   );

@@ -1,6 +1,6 @@
 from datetime import datetime, time
 
-from sqlalchemy import DateTime, Text, Time
+from sqlalchemy import DateTime, Text, Time, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -45,7 +45,7 @@ class CancelacionProduccionBobinaTubo(Base):
     IdCancelacionProduccionBobinaTubo: Mapped[int] = mapped_column(primary_key=True)
     IdProduccionBobinaTubo: Mapped[int]
     IdUsuario: Mapped[int]
-    FechaHoraCancelacion: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    FechaHoraCancelacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     MotivoCancelacion: Mapped[str | None] = mapped_column(Text)
 
 
@@ -65,7 +65,7 @@ class MovimientoOperadorLogs(Base):
     IdTipoMovimientoOperadorLogs: Mapped[int]
     IdUsuario: Mapped[int]
     CantidadLogs: Mapped[int]
-    FechaMovimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    FechaMovimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     Observacion: Mapped[str | None] = mapped_column(Text)
 
 
@@ -90,6 +90,7 @@ class PausaProduccionServilleta(Base):
     FechaHoraPausa: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     MotivoPausaProduccion: Mapped[str | None] = mapped_column(Text)
     FechaHoraReanudacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoReanudacion: Mapped[str | None] = mapped_column(Text)
 
 
 class CancelacionProduccionServilleta(Base):
@@ -98,7 +99,7 @@ class CancelacionProduccionServilleta(Base):
     IdCancelacionProduccionServilleta: Mapped[int] = mapped_column(primary_key=True)
     IdProduccionServilleta: Mapped[int]
     IdUsuario: Mapped[int]
-    FechaHoraCancelacion: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    FechaHoraCancelacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     MotivoCancelacion: Mapped[str | None] = mapped_column(Text)
 
 
@@ -111,3 +112,4 @@ class PausaProduccionBobinaTubo(Base):
     FechaHoraPausa: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     MotivoPausaProduccion: Mapped[str | None] = mapped_column(Text)
     FechaHoraReanudacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoReanudacion: Mapped[str | None] = mapped_column(Text)

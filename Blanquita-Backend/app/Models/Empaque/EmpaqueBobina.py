@@ -2,6 +2,8 @@ from datetime import date
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
+
 
 
 class EmpaqueItem(BaseModel):
@@ -39,9 +41,10 @@ class TrasladarEmpaquesProduccionResponseItem(BaseModel):
     FechaMovimiento: datetime
 
 
-class ResumenInventarioEmpaqueResponse(BaseModel):
+class ResumenInventarioEmpaqueResponse(NivelStockResponse):
     IdTipoEmpaque: int
     NombreTipoEmpaque: str
+    Activo: bool
     CantidadEmpaques: int
 
 
@@ -60,3 +63,24 @@ class DetalleInventarioEmpaqueResponse(BaseModel):
 class TipoEmpaque(BaseModel):
     IdTipoEmpaque: int
     NombreTipoEmpaque: str
+    Activo: bool
+
+
+class EmpaqueReingresableResponse(BaseModel):
+    IdEmpaque: int
+    CodigoEmpaque: str
+    IdTipoEmpaque: int
+    NombreTipoEmpaque: str
+    PesoKg: float
+    FechaRecepcion: date
+    NombreProveedor: str
+    FechaTraslado: datetime
+    MinutosRestantes: int
+
+
+class ReingresarEmpaqueRequest(BaseModel):
+    IdEmpaque: int
+    Observacion: str
+
+
+ReingresarEmpaqueResponse = TrasladarEmpaquesProduccionResponseItem

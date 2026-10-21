@@ -7,7 +7,7 @@ from app.Services.Qr.ProductoTerminado import CartelesProductoTerminado
 from app.Services.Qr.Insumo import CartelesInsumo
 from app.Services.Qr.Rodela import CartelesRodela
 from app.Services.Qr.Empaque import CartelesEmpaque
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 
 qrRouter = APIRouter(
     prefix="/qr",
@@ -18,7 +18,7 @@ CONFIGURACION_PDF = {
     "status_code": 200,
     "response_class": Response,
     "responses": {200: {"content": {"application/pdf": {}}}},
-    "dependencies": [Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    "dependencies": [Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 }
 
 

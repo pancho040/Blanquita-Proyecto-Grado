@@ -24,7 +24,7 @@ const ESTADOS_PROVEEDOR = {
   Inactivo: "border-amber-300 bg-amber-50 text-amber-700",
 };
 
-const FILTROS_INICIALES = { Busqueda: "", IdEstadoProveedor: "" };
+const FILTROS_INICIALES = { Busqueda: "", Activo: "" };
 
 const COLUMNAS = [
   {
@@ -126,7 +126,7 @@ export default function Proveedores() {
               />
               <SelectFiltro
                 reporte={reporte}
-                campo="IdEstadoProveedor"
+                campo="Activo"
                 etiqueta="Estado"
                 opciones={EstadosProveedor}
                 campoEtiqueta="NombreEstadoProveedor"

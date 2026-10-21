@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, Text
+from sqlalchemy import Date, DateTime, Numeric, Text, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.Config.supabase import Base
@@ -16,6 +16,18 @@ class TipoBobinaServilleta(Base):
     CrepadoPorcentaje: Mapped[Decimal] = mapped_column(Numeric)
     ResistenciaKgf: Mapped[Decimal] = mapped_column(Numeric)
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    CantidadUnidades: Mapped[int] = mapped_column(server_default=text("1"))
+    Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
+
+
+class FormatoSubBobina(Base):
+    __tablename__ = "FormatoSubBobina"
+
+    IdFormatoSubBobina: Mapped[int] = mapped_column(primary_key=True)
+    DescripcionFormato: Mapped[str] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
 
 
 class TipoMedidaSubBobina(Base):
@@ -24,6 +36,26 @@ class TipoMedidaSubBobina(Base):
     IdTipoMedidaSubBobina: Mapped[int] = mapped_column(primary_key=True)
     MedidaMm: Mapped[int]
     Descripcion: Mapped[str | None] = mapped_column(Text)
+    Activo: Mapped[bool] = mapped_column(server_default=true())
+    StockMinimo: Mapped[int | None]
+    StockPreventivo: Mapped[int | None]
+
+
+class FormatoSubBobinaDetalle(Base):
+    __tablename__ = "FormatoSubBobinaDetalle"
+
+    IdFormatoSubBobinaDetalle: Mapped[int] = mapped_column(primary_key=True)
+    IdFormatoSubBobina: Mapped[int]
+    IdTipoMedidaSubBobina: Mapped[int]
+    Cantidad: Mapped[int]
+
+
+class TipoBobinaServilletaFormato(Base):
+    __tablename__ = "TipoBobinaServilletaFormato"
+
+    IdTipoBobinaServilletaFormato: Mapped[int] = mapped_column(primary_key=True)
+    IdTipoBobinaServilleta: Mapped[int]
+    IdFormatoSubBobina: Mapped[int]
 
 
 class LoteBobinaServilleta(Base):
@@ -62,3 +94,29 @@ class SubBobinaServilleta(Base):
     IdUnidadBobinaServilleta: Mapped[int]
     IdTipoMedidaSubBobina: Mapped[int]
     IdEstadoMateriaPrima: Mapped[int]
+
+
+class MovimientoBobinaServilleta(Base):
+    __tablename__ = "MovimientoBobinaServilleta"
+
+    IdMovimientoBobinaServilleta: Mapped[int] = mapped_column(primary_key=True)
+    IdBobinaServilleta: Mapped[int]
+    IdTipoMovimiento: Mapped[int]
+    IdUsuario: Mapped[int]
+    FechaMovimiento: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    Observacion: Mapped[str | None] = mapped_column(Text)
+
+
+class MovimientoSubBobina(Base):
+    __tablename__ = "MovimientoSubBobina"
+
+    IdMovimientoSubBobina: Mapped[int] = mapped_column(primary_key=True)
+    IdSubBobinaServilleta: Mapped[int]
+    IdTipoMovimiento: Mapped[int]
+    IdUsuario: Mapped[int]
+    FechaMovimiento: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    Observacion: Mapped[str | None] = mapped_column(Text)

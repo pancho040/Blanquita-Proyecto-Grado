@@ -1,15 +1,22 @@
-import { ArrowRight } from "lucide-react";
+import { Icon, ArrowRight } from "lucide-react";
 import { RutasAdmin } from "@/constants/NavBarRoutes";
 
+function IconoRuta({ item, size = 20, className }) {
+  if (item.esIconoLab) {
+    return <Icon iconNode={item.icono} size={size} className={className} />;
+  }
+  const Comp = item.icono;
+  return <Comp size={size} className={className} />;
+}
+
 function TileAdmin({ item }) {
-  const Icono = item.icono;
   return (
     <a
       href={`/admin/${item.ruta}`}
       className="group flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-c4/10">
-        <Icono size={20} className="text-c3" />
+        <IconoRuta item={item} size={20} className="text-c3" />
       </div>
 
       <div className="min-w-0">

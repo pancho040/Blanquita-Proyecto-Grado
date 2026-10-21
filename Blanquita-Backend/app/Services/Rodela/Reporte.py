@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
@@ -82,22 +84,12 @@ class ReporteRodelaService:
                 detail="No hay rodelas en almacén para el informe solicitado",
             )
 
-        primera = filas[0]
-
-        resumen: dict[int, ReporteInventarioResumenTipoRodelaResponse] = {}
+        por_tipo: dict[int, list[dict]] = {}
         rodelas: list[ReporteInventarioRodelaDetalleResponse] = []
 
         for fila in filas:
             id_tipo = fila["IdTipoRodela"]
-
-            if id_tipo not in resumen:
-                resumen[id_tipo] = ReporteInventarioResumenTipoRodelaResponse(
-                    IdTipoRodela=id_tipo,
-                    NombreTipoRodela=fila["NombreTipoRodela"],
-                    CantidadRodelas=fila["CantidadRodelasTipo"],
-                    RecepcionMasAntigua=fila["RecepcionMasAntiguaTipo"],
-                    RecepcionMasReciente=fila["RecepcionMasRecienteTipo"],
-                )
+            por_tipo.setdefault(id_tipo, []).append(fila)
 
             rodelas.append(
                 ReporteInventarioRodelaDetalleResponse(
@@ -111,10 +103,21 @@ class ReporteRodelaService:
                 )
             )
 
+        resumen = [
+            ReporteInventarioResumenTipoRodelaResponse(
+                IdTipoRodela=id_tipo,
+                NombreTipoRodela=filas_tipo[0]["NombreTipoRodela"],
+                CantidadRodelas=len(filas_tipo),
+                RecepcionMasAntigua=min(fila["FechaRecepcion"] for fila in filas_tipo),
+                RecepcionMasReciente=max(fila["FechaRecepcion"] for fila in filas_tipo),
+            )
+            for id_tipo, filas_tipo in por_tipo.items()
+        ]
+
         return ReporteInventarioRodelaResponse(
-            FechaGeneracion=primera["FechaGeneracion"],
-            TotalRodelas=primera["TotalRodelasInforme"],
-            Resumen=list(resumen.values()),
+            FechaGeneracion=datetime.now(timezone.utc),
+            TotalRodelas=len(filas),
+            Resumen=resumen,
             Rodelas=rodelas,
         )
 

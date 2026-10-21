@@ -17,14 +17,23 @@ const COLUMNAS = [
       </div>
     ),
   },
-  { titulo: "Unidad origen", clase: "font-mono text-[12.5px]", valor: (p) => p.CodigoBobina },
+  {
+    titulo: "Unidad origen",
+    valor: (p) => (
+      <div className="flex flex-col">
+        <span className="font-mono text-[12.5px] text-slate-900">{p.CodigoBobina}</span>
+        <span className="text-[12px] text-slate-500">Formato {p.DescripcionFormato}</span>
+      </div>
+    ),
+  },
   { titulo: "Turno", valor: (p) => p.NombreTurno },
   { titulo: "Operador", valor: (p) => p.Operador },
 ];
 
 const TARJETA = {
   titulo: (p) => `Sub-bobina #${p.IdSubBobinaServilleta} · ${p.CodigoBobina}`,
-  subtitulo: (p) => `${p.DescripcionMedida} · ${p.NombreTurno} · ${p.Operador}`,
+  subtitulo: (p) =>
+    `${p.DescripcionFormato} · ${p.DescripcionMedida} · ${p.NombreTurno} · ${p.Operador}`,
 };
 
 export default function ConcluidasServilleta({ onTotal }) {

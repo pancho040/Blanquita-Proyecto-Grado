@@ -5,13 +5,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.Constants.Cantidades import LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION
-from app.Constants.Estados import ESTADO_PROVEEDOR_ACTIVO
 from app.Models.Proveedor.Proveedor import (
     CambiarEstadoProveedorRequest,
     CambiarEstadoProveedorResponse,
     CrearProveedorRequest,
     EditarProveedorRequest,
-    EstadoProveedorItem,
     ListarProveedoresRequest,
     ListarProveedoresResponse,
     ProveedorForm,
@@ -24,7 +22,6 @@ from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 PATRON_NOMBRE_PROVEEDOR = r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,&-]+$"
 
-# El nombre no aparece: queda fijo desde el registro.
 ETIQUETAS_CAMPOS = {
     "CelularProveedor": "celular",
     "CorreoProveedor": "correo",
@@ -37,6 +34,10 @@ def _limpiar(texto: str) -> str:
 
 def _mostrar(valor: str | None) -> str:
     return valor if valor else "sin dato"
+
+
+def _estado(activo: bool) -> str:
+    return "Activo" if activo else "Inactivo"
 
 
 class ProveedorService:
@@ -56,9 +57,6 @@ class ProveedorService:
             Proveedores=[ProveedorItem(**fila) for fila in filas],
         )
 
-    def ListarEstados(self) -> List[EstadoProveedorItem]:
-        return [EstadoProveedorItem(**fila) for fila in self.repository.ListarEstados()]
-
     def _ValidarNombre(self, nombre: str) -> str:
         nombre = _limpiar(nombre)
 
@@ -76,14 +74,12 @@ class ProveedorService:
         return nombre
 
     def _Respuesta(self, proveedor: Proveedor) -> ProveedorResponse:
-        estados = self.repository.NombresEstados()
         return ProveedorResponse(
             IdProveedor=proveedor.IdProveedor,
             NombreProveedor=proveedor.NombreProveedor,
             CelularProveedor=proveedor.CelularProveedor,
             CorreoProveedor=proveedor.CorreoProveedor,
-            IdEstadoProveedor=proveedor.IdEstadoProveedor,
-            NombreEstadoProveedor=estados.get(proveedor.IdEstadoProveedor, ""),
+            Activo=proveedor.Activo,
         )
 
     def CrearProveedor(self, datos: CrearProveedorRequest, id_admin: int) -> ProveedorResponse:
@@ -95,7 +91,7 @@ class ProveedorService:
                 NombreProveedor=nombre,
                 CelularProveedor=datos.CelularProveedor,
                 CorreoProveedor=correo,
-                IdEstadoProveedor=ESTADO_PROVEEDOR_ACTIVO,
+                Activo=True,
             ),
             lambda p: (
                 f"Crear proveedor · #{p.IdProveedor} {p.NombreProveedor} "
@@ -152,13 +148,6 @@ class ProveedorService:
                 ),
             )
 
-        estados = self.repository.NombresEstados()
-        if data.IdEstadoProveedor not in estados:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El estado indicado no existe",
-            )
-
         proveedor = self.repository.ObtenerProveedorBloqueado(data.IdProveedor)
         if proveedor is None:
             raise HTTPException(
@@ -166,25 +155,23 @@ class ProveedorService:
                 detail="El proveedor no existe",
             )
 
-        anterior = proveedor.IdEstadoProveedor
-        if anterior == data.IdEstadoProveedor:
+        anterior = proveedor.Activo
+        if anterior == data.Activo:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"El proveedor ya se encuentra {estados[anterior]}",
+                detail=f"El proveedor ya se encuentra {_estado(anterior)}",
             )
 
         observacion = (
             f"Cambio de estado · Proveedor #{proveedor.IdProveedor} ({proveedor.NombreProveedor}): "
-            f"{estados[anterior]} → {estados[data.IdEstadoProveedor]}. Motivo: {motivo}"
+            f"{_estado(anterior)} → {_estado(data.Activo)}. Motivo: {motivo}"
         )
 
-        self.repository.CambiarEstado(proveedor, data.IdEstadoProveedor, observacion, id_admin)
+        self.repository.CambiarEstado(proveedor, data.Activo, observacion, id_admin)
 
         return CambiarEstadoProveedorResponse(
             IdProveedor=proveedor.IdProveedor,
             NombreProveedor=proveedor.NombreProveedor,
-            IdEstadoAnterior=anterior,
-            NombreEstadoAnterior=estados[anterior],
-            IdEstadoProveedor=data.IdEstadoProveedor,
-            NombreEstadoProveedor=estados[data.IdEstadoProveedor],
+            ActivoAnterior=anterior,
+            Activo=data.Activo,
         )

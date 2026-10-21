@@ -13,16 +13,16 @@ INSERT INTO "EstadoUsuario" ("NombreEstadoUsuario", "DescripcionEstadoUsuario") 
 ('Suspendido', 'Usuario bloqueado por incumplimiento de políticas');
 
 
-INSERT INTO "EstadoProveedor" ("NombreEstadoProveedor", "DescripcionEstadoProveedor") VALUES
-('Activo', 'Proveedor habilitado para recepción de materia prima'),
-('Inactivo', 'Proveedor deshabilitado temporalmente');
 
 
 
-INSERT INTO "TipoBobina" ("NombreTipoBobina", "DiametroMm", "Formato", "TaraKg") VALUES
-('Higiénico', 1210, 2760, 38),
-('Toalla', 1210, 2760, 38),
-('Económico', 1210, 2760, 38);
+INSERT INTO "TipoBobina" ("NombreTipoBobina", "DiametroMm", "Formato", "TaraKg", "StockMinimo", "StockPreventivo") VALUES
+('Higiénico', 1210, 2760, 38, 6, 12),
+('Toalla', 1210, 2760, 38, 2, 4),
+('Económico', 1210, 2760, 38, 2, 4);
+
+INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf", "CantidadUnidades", "StockMinimo", "StockPreventivo") VALUES
+('G-18 CR-14%', 1210, 14, 1.35, 2, 2, 4);
 
 
 
@@ -35,13 +35,13 @@ INSERT INTO "EstadoMateriaPrima" ("TipoEstado") VALUES
 ('Abierta'),
 ('Terminada');
 
-INSERT INTO "TipoEmpaque" ("NombreTipoEmpaque") VALUES
-('Luxury 24'),
-('Luxury 12'),
-('Luxury 6'),
-('EcoPack 12'),
-('EcoPack 6'),
-('EcoPack 4');
+INSERT INTO "TipoEmpaque" ("NombreTipoEmpaque", "StockMinimo", "StockPreventivo") VALUES
+('Luxury 24', 1, 2),
+('Luxury 12', 1, 2),
+('Luxury 6', 1, 2),
+('EcoPack 12', 1, 2),
+('EcoPack 6', 1, 2),
+('EcoPack 4', 1, 2);
 
 INSERT INTO "TipoMovimientoMateriaPrima" ("NombreMovimiento", "AplicaA", "DescripcionTipoMovimientoMateriaPrima") VALUES
 ('Ingreso a almacén', 'Todos', 'Registro de ingreso inicial de materia prima al almacén'),
@@ -61,14 +61,14 @@ INSERT INTO "EstadoProduccion" ("NombreEstadoProduccion", "DescripcionEstadoProd
 ('Cancelada', 'Producción interrumpida de forma definitiva por falla; no se reanuda con el mismo par de bobinas'),
 ('Cambio de línea', 'Producción cerrada por cambio de producto; las bobinas continúan en producción en una nueva producción');
 
-INSERT INTO "Producto" ("NombreProducto", "SiglasProducto") VALUES
-('Luxury', 'LUX'),
-('EcoPack', 'ECO'),
-('Servilleta', 'SRV'),
-('Mega Rollo', 'MRO'),
-('Economico', 'ECN'),
-('Merma', 'MER'),
-('Toalla', 'TOA');
+INSERT INTO "Producto" ("NombreProducto", "SiglasProducto", "IdTipoBobina", "IdTipoBobinaServilleta") VALUES
+('Luxury', 'LUX', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('EcoPack', 'ECO', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('Servilleta', 'SRV', NULL, (SELECT "IdTipoBobinaServilleta" FROM "TipoBobinaServilleta" WHERE "NombreTipoBobinaServilleta" = 'G-18 CR-14%')),
+('Mega Rollo', 'MRO', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Higiénico'), NULL),
+('Economico', 'ECN', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Económico'), NULL),
+('Merma', 'MER', NULL, NULL),
+('Toalla', 'TOA', (SELECT "IdTipoBobina" FROM "TipoBobina" WHERE "NombreTipoBobina" = 'Toalla'), NULL);
 
 INSERT INTO "PresentacionProducto" ("IdProducto", "TipoContenedor", "CantidadRollosUnidades", "CantidadPorUnidadTerminada", "CodigoPresentacion") VALUES
 ((SELECT "IdProducto" FROM "Producto" WHERE "NombreProducto" = 'Luxury'), 'Jaba', 6, 6, 'LUX-J06'),
@@ -98,9 +98,24 @@ INSERT INTO "TipoMovimientoInventario" ("NombreTipoMovimientoInventario", "Descr
 ('Ajuste Positivo', 'Corrección manual que incrementa el saldo'),
 ('Ajuste Negativo', 'Corrección manual que reduce el saldo');
 
-INSERT INTO "InventarioProductoTerminado" ("IdPresentacion", "CantidadActual")
-SELECT "IdPresentacion", 0
-FROM "PresentacionProducto";
+INSERT INTO "InventarioProductoTerminado" ("IdPresentacion", "CantidadActual", "StockMinimo", "StockPreventivo")
+SELECT pp."IdPresentacion", 0, u."StockMinimo", u."StockPreventivo"
+FROM "PresentacionProducto" AS pp
+LEFT JOIN (VALUES
+  ('LUX-J06', 15, 30),
+  ('LUX-J12', 20, 40),
+  ('LUX-J24', 10, 20),
+  ('ECO-J04', 15, 30),
+  ('ECO-J06', 20, 40),
+  ('ECO-J12', 10, 20),
+  ('SRV-J50', 10, 20),
+  ('SRV-J200', 10, 20),
+  ('SRV-J500', 5, 10),
+  ('MRO-P12', 20, 40),
+  ('ECN-P20', 20, 40),
+  ('TOA-J06', 10, 20)
+) AS u("CodigoPresentacion", "StockMinimo", "StockPreventivo")
+  ON u."CodigoPresentacion" = pp."CodigoPresentacion";
 
 INSERT INTO "TipoMovimientoOperadorLogs" ("NombreMovimiento", "DescripcionTipoMovimientoOperadorLogs") VALUES
 ('Ingreso', 'Registro de logs producidos por el operador durante el turno'),
@@ -117,8 +132,8 @@ INSERT INTO "TipoEmpaqueBolsa" ("NombreEmpaqueBolsa", "DescripcionEmpaqueBolsa")
 ('Servilleta 200', 'Bolsa, servilleta 200 unidades'),
 ('Servilleta 500', 'Bolsa, servilleta 500 unidades');
 
-INSERT INTO "InventarioEmpaqueBolsa" ("IdTipoEmpaqueBolsa", "CantidadActual")
-SELECT "IdTipoEmpaqueBolsa", 0
+INSERT INTO "InventarioEmpaqueBolsa" ("IdTipoEmpaqueBolsa", "CantidadActual", "StockMinimo", "StockPreventivo")
+SELECT "IdTipoEmpaqueBolsa", 0, 10, 20
 FROM "TipoEmpaqueBolsa";
 
 INSERT INTO "TipoBolsaJava" ("NombreBolsaJava", "DescripcionBolsaJava") VALUES
@@ -135,8 +150,8 @@ INSERT INTO "TipoBolsaJava" ("NombreBolsaJava", "DescripcionBolsaJava") VALUES
 ('Papel Toalla', 'Ancho plegado 45 cm, fuelle 11 cm por lado, ancho total 67 cm, largo 75 cm, 40 g'),
 ('EcoPack 12', 'Ancho plegado 41 cm, fuelle 9 cm por lado, ancho total 59 cm, largo 82 cm, 40 g');
 
-INSERT INTO "InventarioBolsaJava" ("IdTipoBolsaJava", "CantidadActual")
-SELECT "IdTipoBolsaJava", 0
+INSERT INTO "InventarioBolsaJava" ("IdTipoBolsaJava", "CantidadActual", "StockMinimo", "StockPreventivo")
+SELECT "IdTipoBolsaJava", 0, 10, 20
 FROM "TipoBolsaJava";
 
 
@@ -150,25 +165,44 @@ INSERT INTO "TipoInsumo" ("NombreInsumo", "DescripcionInsumo") VALUES
 ('Talco', 'Consumible de uso ocasional'),
 ('Ligas', 'Ligas negras; llegan en bolsas grandes');
 
-INSERT INTO "InventarioInsumo" ("IdTipoInsumo", "CantidadActual")
-SELECT "IdTipoInsumo", 0
-FROM "TipoInsumo";
+INSERT INTO "InventarioInsumo" ("IdTipoInsumo", "CantidadActual", "StockMinimo", "StockPreventivo")
+SELECT ti."IdTipoInsumo", 0, u."StockMinimo", u."StockPreventivo"
+FROM "TipoInsumo" AS ti
+LEFT JOIN (VALUES
+  ('Pegamento de tubos', 1, 2),
+  ('Pegamento de laminado', 1, 2),
+  ('Pegamento de Turril', 1, 2),
+  ('Vaselina', 1, 2),
+  ('Maicena', 2, 4),
+  ('Talco', 2, 4),
+  ('Ligas', 1, 2)
+) AS u("NombreInsumo", "StockMinimo", "StockPreventivo")
+  ON u."NombreInsumo" = ti."NombreInsumo";
 
 
 
-INSERT INTO "TipoMedidaSubBobina" ("MedidaMm", "Descripcion") VALUES
-(435, 'Sub-bobina 435mm'),
-(220, 'Sub-bobina 220mm');
+INSERT INTO "TipoMedidaSubBobina" ("MedidaMm", "Descripcion", "StockMinimo", "StockPreventivo") VALUES
+(435, 'Sub-bobina 435mm', 4, 8),
+(220, 'Sub-bobina 220mm', 2, 4);
 
-INSERT INTO "TipoBobinaServilleta" ("NombreTipoBobinaServilleta", "DiametroMm", "CrepadoPorcentaje", "ResistenciaKgf") VALUES
-('G-18 CR-14%', 1210, 14, 1.35);
+INSERT INTO "FormatoSubBobina" ("DescripcionFormato") VALUES
+('435x3'),
+('435x2+220x1');
 
-INSERT INTO "FormatoSubBobina" ("DescripcionFormato", "CantidadBobina435", "CantidadBobina220") VALUES
-('435x3', 3, 0),
-('435x2+220x1', 2, 1);
+INSERT INTO "FormatoSubBobinaDetalle" ("IdFormatoSubBobina", "IdTipoMedidaSubBobina", "Cantidad") VALUES
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x3'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 435), 3),
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x2+220x1'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 435), 2),
+((SELECT "IdFormatoSubBobina" FROM "FormatoSubBobina" WHERE "DescripcionFormato" = '435x2+220x1'), (SELECT "IdTipoMedidaSubBobina" FROM "TipoMedidaSubBobina" WHERE "MedidaMm" = 220), 1);
+
+INSERT INTO "TipoBobinaServilletaFormato" ("IdTipoBobinaServilleta", "IdFormatoSubBobina")
+SELECT t."IdTipoBobinaServilleta", f."IdFormatoSubBobina"
+FROM "TipoBobinaServilleta" AS t
+CROSS JOIN "FormatoSubBobina" AS f
+WHERE t."NombreTipoBobinaServilleta" = 'G-18 CR-14%'
+  AND f."DescripcionFormato" IN ('435x3', '435x2+220x1');
 
 
 
 
-INSERT INTO "Proveedor" ("NombreProveedor", "CelularProveedor", "CorreoProveedor","IdEstadoProveedor") VALUES
-('Papelera del Sur S.R.L.', '70012345', 'ventas@papeleradelsur.com',1);
+INSERT INTO "Proveedor" ("NombreProveedor", "CelularProveedor", "CorreoProveedor", "Activo") VALUES
+('Papelera del Sur S.R.L.', '70012345', 'ventas@papeleradelsur.com', true);

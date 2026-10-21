@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { startOfMonth, startOfWeek } from "date-fns";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import DoubleDatePicker from "@/components/layout/dates/DoubleDatePicker";
 import {
@@ -15,6 +14,7 @@ import {
   ESTADOS_PRODUCCION,
   DERECHA,
 } from "@/components/Reportes/comunes";
+import { ATAJOS, atajoActivo as buscarAtajo } from "@/components/Reportes/Empaque/filtros";
 import { useReporte } from "@/hooks/useReporte";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { aFechaISO, dateFormatter, formatearDuracion } from "@/utils/dates";
@@ -22,19 +22,6 @@ import { aFechaISO, dateFormatter, formatearDuracion } from "@/utils/dates";
 const ID_FINALIZADO = 3;
 const ID_CANCELADA = 4;
 const ID_CAMBIO_LINEA = 5;
-
-const ATAJOS = [
-  { valor: "hoy", texto: "Hoy", rango: (hoy) => ({ from: hoy, to: hoy }) },
-  {
-    valor: "semana",
-    texto: "Esta semana",
-    rango: (hoy) => ({ from: startOfWeek(hoy, { weekStartsOn: 1 }), to: hoy }),
-  },
-  { valor: "mes", texto: "Este mes", rango: (hoy) => ({ from: startOfMonth(hoy), to: hoy }) },
-];
-
-const mismoRango = (rango, otro) =>
-  aFechaISO(rango?.from) === aFechaISO(otro.from) && aFechaISO(rango?.to) === aFechaISO(otro.to);
 
 const mismosIds = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
 
@@ -106,8 +93,7 @@ export default function ProduccionesConcluidas({
     if (catalogo) onTotal?.(catalogo.Total);
   }, [catalogo]);
 
-  const hoy = new Date();
-  const atajoActivo = ATAJOS.find((atajo) => mismoRango(Rango, atajo.rango(hoy)))?.valor;
+  const atajoActivo = buscarAtajo(Rango);
   const estadoActivo = FILTROS_ESTADO.find((f) =>
     mismosIds(f.ids, filtros.IdsEstadoProduccion),
   )?.valor;

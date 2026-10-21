@@ -1,25 +1,42 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException, status
+from datetime import datetime, timedelta, timezone
 
-from app.Repository.Rodela.InventarioRodela import InventarioRodelaRepository
-from app.utils.validators import ValidarTexto, REGLA_CARACTERES_OBSERVACION
-from app.Constants.Cantidades import OBSERVACION_RODELA_MIN, OBSERVACION_RODELA_MAX
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.Constants.Cantidades import (
+    MINUTOS_DESHACER_TRASLADO_RODELA,
+    OBSERVACION_RODELA_MAX,
+    OBSERVACION_RODELA_MIN,
+)
+from app.Constants.Estados import (
+    ESTADO_MATERIA_PRIMA_ABIERTA,
+    ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+    MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+    MOVIMIENTO_MATERIA_PRIMA_DEVOLUCION,
+    MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+    MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
+)
 from app.Models.Rodela.InventarioRodela import (
-    ResumenInventarioRodelaResponse,
-    DetalleInventarioRodelaRequest,
-    DetalleInventarioRodelaResponse,
-    RodelaEnAlmacenResponse,
-    TrasladarRodelaRequest,
-    TrasladarRodelaResponse,
     CorregirTrasladoRodelaRequest,
     CorregirTrasladoRodelaResponse,
     DeshacerTrasladoRodelaRequest,
     DeshacerTrasladoRodelaResponse,
+    DetalleInventarioRodelaRequest,
+    DetalleInventarioRodelaResponse,
     EditarRodelaRequest,
     EditarRodelaResponse,
+    ResumenInventarioRodelaResponse,
+    RodelaEnAlmacenResponse,
     RodelaReingresableResponse,
+    TrasladarRodelaRequest,
+    TrasladarRodelaResponse,
 )
+from app.Repository.Rodela.InventarioRodela import InventarioRodelaRepository
+from app.Schemas.Rodela import MovimientoRodela, Rodela
+from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+
+OBSERVACION_TRASLADO_RODELA = "Traslado a producción - apertura de paquete de rodelas"
+OBSERVACION_CORRECCION_TRASLADO_RODELA = "Corrección por error humano - reingreso a almacén"
 
 
 class InventarioRodelaService:
@@ -27,184 +44,128 @@ class InventarioRodelaService:
         self.repository = InventarioRodelaRepository(db)
 
     def VerResumenInventarioRodela(self) -> list[ResumenInventarioRodelaResponse]:
-        try:
-            resultado = self.repository.VerResumenInventarioRodela()
-        except SQLAlchemyError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo obtener el resumen de inventario de rodelas",
-            )
-
-        return [ResumenInventarioRodelaResponse(**fila) for fila in resultado]
+        return [
+            ResumenInventarioRodelaResponse(**fila)
+            for fila in self.repository.VerResumenInventarioRodela()
+        ]
 
     def VerDetalleInventarioRodela(
         self, data: DetalleInventarioRodelaRequest
     ) -> list[DetalleInventarioRodelaResponse]:
-        params = {
-            "p_IdTipoRodela": data.IdTipoRodela,
-        }
-
-        try:
-            resultado = self.repository.VerDetalleInventarioRodela(params)
-        except SQLAlchemyError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo obtener el detalle de inventario de rodelas",
-            )
-
-        return [DetalleInventarioRodelaResponse(**fila) for fila in resultado]
+        return [
+            DetalleInventarioRodelaResponse(**fila)
+            for fila in self.repository.VerDetalleInventarioRodela(data.IdTipoRodela)
+        ]
 
     def ListarRodelasEnAlmacen(self, id_tipo_rodela: int) -> list[RodelaEnAlmacenResponse]:
-        params = {
-            "p_IdTipoRodela": id_tipo_rodela,
-        }
+        return [
+            RodelaEnAlmacenResponse(**fila)
+            for fila in self.repository.ListarRodelasEnAlmacen(id_tipo_rodela)
+        ]
 
-        try:
-            resultado = self.repository.ListarRodelasEnAlmacen(params)
-        except SQLAlchemyError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo obtener el listado de rodelas en almacén",
-            )
-
-        return [RodelaEnAlmacenResponse(**fila) for fila in resultado]
+    def ListarRodelasReingresables(self) -> list[RodelaReingresableResponse]:
+        return [
+            RodelaReingresableResponse(**fila)
+            for fila in self.repository.ListarRodelasReingresables()
+        ]
 
     def TrasladarRodelaAProduccion(
         self, data: TrasladarRodelaRequest, id_usuario: int
     ) -> TrasladarRodelaResponse:
-        params = {
-            "p_IdRodela": data.IdRodela,
-            "p_IdUsuario": id_usuario,
-            "p_Observacion": data.Observacion,
-        }
+        rodela = self._ObtenerRodela(data.IdRodela)
 
-        try:
-            resultado = self.repository.TrasladarRodelaAProduccion(params)
-        except SQLAlchemyError as e:
-            mensaje = str(e.orig) if hasattr(e, "orig") else str(e)
-            if "es obligatorio" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="IdRodela es obligatorio para trasladar a producción",
-                )
-            if "No existe la rodela" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No existe la rodela con id {data.IdRodela}",
-                )
-            if "no está En almacén" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="La rodela indicada no está disponible en almacén",
-                )
+        if rodela.IdEstadoMateriaPrima != ESTADO_MATERIA_PRIMA_EN_ALMACEN:
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo trasladar la rodela a producción, verifica los datos ingresados",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La rodela indicada no está disponible en almacén",
             )
 
-        if not resultado:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo trasladar la rodela a producción",
-            )
+        movimiento = self.repository.RegistrarMovimiento(
+            rodela,
+            MovimientoRodela(
+                IdRodela=rodela.IdRodela,
+                IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
+                IdUsuario=id_usuario,
+                Observacion=data.Observacion or OBSERVACION_TRASLADO_RODELA,
+            ),
+            ESTADO_MATERIA_PRIMA_ABIERTA,
+        )
 
-        return TrasladarRodelaResponse(**resultado)
+        return TrasladarRodelaResponse(**self._Respuesta(rodela, movimiento))
 
     def CorregirTrasladoRodela(
         self, data: CorregirTrasladoRodelaRequest, id_usuario: int
     ) -> CorregirTrasladoRodelaResponse:
-        params = {
-            "p_IdRodela": data.IdRodela,
-            "p_IdUsuario": id_usuario,
-            "p_Observacion": data.Observacion,
-        }
+        rodela = self._ObtenerRodela(data.IdRodela)
 
-        try:
-            resultado = self.repository.CorregirTrasladoRodela(params)
-        except SQLAlchemyError as e:
-            mensaje = str(e.orig) if hasattr(e, "orig") else str(e)
-            if "No existe la rodela" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No existe la rodela con id {data.IdRodela}",
-                )
-            if "no está Abierta" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="La rodela indicada no está Abierta, no puede corregirse el traslado",
-                )
+        if rodela.IdEstadoMateriaPrima != ESTADO_MATERIA_PRIMA_ABIERTA:
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo corregir el traslado de la rodela, verifica los datos ingresados",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La rodela indicada no está Abierta, no puede corregirse el traslado",
             )
 
-        if not resultado:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo corregir el traslado de la rodela",
-            )
+        movimiento = self.repository.RegistrarMovimiento(
+            rodela,
+            MovimientoRodela(
+                IdRodela=rodela.IdRodela,
+                IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
+                IdUsuario=id_usuario,
+                Observacion=data.Observacion or OBSERVACION_CORRECCION_TRASLADO_RODELA,
+            ),
+            ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+        )
 
-        return CorregirTrasladoRodelaResponse(**resultado)
+        return CorregirTrasladoRodelaResponse(**self._Respuesta(rodela, movimiento))
 
     def DeshacerTrasladoRodela(
         self, data: DeshacerTrasladoRodelaRequest, id_usuario: int
     ) -> DeshacerTrasladoRodelaResponse:
-        observacion = (data.Observacion or "").strip()
-        if not ValidarTexto(OBSERVACION_RODELA_MIN, OBSERVACION_RODELA_MAX, observacion):
+        observacion = self._ValidarObservacion(
+            data.Observacion, "La observación es obligatoria"
+        )
+
+        rodela = self._ObtenerRodela(data.IdRodela)
+
+        if rodela.IdEstadoMateriaPrima != ESTADO_MATERIA_PRIMA_ABIERTA:
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=(
-                    "La observación es obligatoria, debe tener entre "
-                    f"{OBSERVACION_RODELA_MIN} y {OBSERVACION_RODELA_MAX} caracteres, {REGLA_CARACTERES_OBSERVACION}"
-                ),
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La rodela indicada no está Abierta, no puede deshacerse el traslado",
             )
 
-        params = {
-            "p_IdRodela": data.IdRodela,
-            "p_IdUsuario": id_usuario,
-            "p_Observacion": observacion,
-        }
-
-        try:
-            resultado = self.repository.DeshacerTrasladoRodela(params)
-        except SQLAlchemyError as e:
-            mensaje = str(e.orig) if hasattr(e, "orig") else str(e)
-            if "No existe la rodela" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No existe la rodela con id {data.IdRodela}",
-                )
-            if "no está Abierta" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="La rodela indicada no está Abierta, no puede deshacerse el traslado",
-                )
-            if "no tiene un traslado a producción registrado" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="La rodela indicada no tiene un traslado a producción registrado",
-                )
-            if "más de 30 minutos" in mensaje:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Pasaron más de 30 minutos desde el traslado; la rodela ya no puede reingresarse al almacén",
-                )
+        fecha_traslado = self.repository.UltimoTraslado(rodela.IdRodela)
+        if fecha_traslado is None:
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo deshacer el traslado de la rodela, verifica los datos ingresados",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La rodela indicada no tiene un traslado a producción registrado",
             )
 
-        if not resultado:
+        if datetime.now(timezone.utc) - fecha_traslado > timedelta(
+            minutes=MINUTOS_DESHACER_TRASLADO_RODELA
+        ):
+            self.repository.Revertir()
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo deshacer el traslado de la rodela",
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Pasaron más de {MINUTOS_DESHACER_TRASLADO_RODELA} minutos desde el traslado; la rodela ya no puede reingresarse al almacén",
             )
 
-        return DeshacerTrasladoRodelaResponse(**resultado)
+        movimiento = self.repository.RegistrarMovimiento(
+            rodela,
+            MovimientoRodela(
+                IdRodela=rodela.IdRodela,
+                IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_DEVOLUCION,
+                IdUsuario=id_usuario,
+                Observacion=observacion,
+            ),
+            ESTADO_MATERIA_PRIMA_EN_ALMACEN,
+        )
 
-    def EditarRodela(
-        self, data: EditarRodelaRequest, id_usuario: int
-    ) -> EditarRodelaResponse:
+        return DeshacerTrasladoRodelaResponse(**self._Respuesta(rodela, movimiento))
+
+    def EditarRodela(self, data: EditarRodelaRequest, id_usuario: int) -> EditarRodelaResponse:
         codigo = data.CodigoRodela.strip()
         if not codigo:
             raise HTTPException(
@@ -212,40 +173,69 @@ class InventarioRodelaService:
                 detail="El código de la rodela es obligatorio",
             )
 
-        observacion = data.Observacion.strip()
+        observacion = self._ValidarObservacion(
+            data.Observacion, "El motivo de la corrección es obligatorio"
+        )
+
+        rodela = self._ObtenerRodela(data.IdRodela)
+        codigo_anterior = rodela.CodigoRodela
+
+        if codigo_anterior == codigo:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No hay cambios para guardar",
+            )
+
+        if self.repository.CodigoEnUso(codigo, rodela.IdRodela):
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existe una rodela registrada con el código {codigo}",
+            )
+
+        movimiento = self.repository.RegistrarMovimiento(
+            rodela,
+            MovimientoRodela(
+                IdRodela=rodela.IdRodela,
+                IdTipoMovimiento=MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
+                IdUsuario=id_usuario,
+                Observacion=f"Código: {codigo_anterior} → {codigo} · Motivo: {observacion}",
+            ),
+            codigo=codigo,
+        )
+
+        return EditarRodelaResponse(
+            CodigoAnterior=codigo_anterior,
+            **self._Respuesta(rodela, movimiento),
+        )
+
+    def _ObtenerRodela(self, id_rodela: int) -> Rodela:
+        rodela = self.repository.ObtenerRodelaBloqueada(id_rodela)
+        if rodela is None:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe la rodela con id {id_rodela}",
+            )
+        return rodela
+
+    def _ValidarObservacion(self, observacion: str | None, mensaje: str) -> str:
+        observacion = (observacion or "").strip()
         if not ValidarTexto(OBSERVACION_RODELA_MIN, OBSERVACION_RODELA_MAX, observacion):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=(
-                    "El motivo de la corrección es obligatorio, debe tener entre "
-                    f"{OBSERVACION_RODELA_MIN} y {OBSERVACION_RODELA_MAX} caracteres, {REGLA_CARACTERES_OBSERVACION}"
+                    f"{mensaje}, debe tener entre {OBSERVACION_RODELA_MIN} y "
+                    f"{OBSERVACION_RODELA_MAX} caracteres, {REGLA_CARACTERES_OBSERVACION}"
                 ),
             )
+        return observacion
 
-        params = {
-            "p_IdRodela": data.IdRodela,
-            "p_IdUsuario": id_usuario,
-            "p_CodigoRodela": codigo,
-            "p_Observacion": observacion,
+    def _Respuesta(self, rodela: Rodela, movimiento: MovimientoRodela) -> dict:
+        return {
+            "IdRodela": rodela.IdRodela,
+            "CodigoRodela": rodela.CodigoRodela,
+            "IdEstadoMateriaPrima": rodela.IdEstadoMateriaPrima,
+            "FechaMovimiento": movimiento.FechaMovimiento,
         }
-
-        resultado = self.repository.EditarRodela(params)
-
-        if not resultado:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo editar la rodela",
-            )
-
-        return EditarRodelaResponse(**resultado)
-
-    def ListarRodelasReingresables(self) -> list[RodelaReingresableResponse]:
-        try:
-            resultado = self.repository.ListarRodelasReingresables()
-        except SQLAlchemyError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo obtener el listado de rodelas por reingresar",
-            )
-
-        return [RodelaReingresableResponse(**fila) for fila in resultado]

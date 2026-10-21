@@ -5,7 +5,7 @@ from app.Config.supabase import get_db
 from app.Services.BobinaPapel.BobinaPapelService import BobinaPapelService
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from typing import List
 from app.Models.BobinaPapel.BobinaPapel import (
@@ -44,7 +44,7 @@ def CargarLoteBobinaPapel(
     status_code=200,
 )
 def ObtenerTiposBobina(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: BobinaPapelService = Depends(bobina_papel_service),
 ):
     return service.ObtenerTiposBobinaPapel()

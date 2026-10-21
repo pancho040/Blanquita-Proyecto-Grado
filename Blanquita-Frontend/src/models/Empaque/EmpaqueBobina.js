@@ -1,3 +1,5 @@
+import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
+
 export const EmpaqueItem = (codigoEmpaque, idTipoEmpaque, pesoKg) => ({
   CodigoEmpaque: codigoEmpaque,
   IdTipoEmpaque: idTipoEmpaque,
@@ -35,7 +37,9 @@ export const TrasladarEmpaquesProduccionResponseItem = (data) => ({
 export const ResumenInventarioEmpaqueResponse = (data) => ({
   IdTipoEmpaque: data.IdTipoEmpaque,
   NombreTipoEmpaque: data.NombreTipoEmpaque,
-  CantidadEmpaques: data.CantidadEmpaques
+  CantidadEmpaques: data.CantidadEmpaques,
+  Activo: data.Activo,
+  ...NivelStockResponse(data)
 });
 
 export const DetalleInventarioEmpaqueRequest = (idTipoEmpaque) => ({
@@ -52,5 +56,30 @@ export const DetalleInventarioEmpaqueResponse = (data) => ({
 
 export const TipoEmpaqueIngreso = (data) => ({
   IdTipoEmpaque: data.IdTipoEmpaque,
-  NombreTipoEmpaque: data.NombreTipoEmpaque
+  NombreTipoEmpaque: data.NombreTipoEmpaque,
+  Activo: data.Activo
+});
+
+export const EmpaqueReingresableResponse = (data) => ({
+  IdEmpaque: data.IdEmpaque,
+  CodigoEmpaque: data.CodigoEmpaque,
+  IdTipoEmpaque: data.IdTipoEmpaque,
+  NombreTipoEmpaque: data.NombreTipoEmpaque,
+  PesoKg: data.PesoKg,
+  FechaRecepcion: data.FechaRecepcion,
+  NombreProveedor: data.NombreProveedor,
+  FechaTraslado: data.FechaTraslado,
+  MinutosRestantes: data.MinutosRestantes
+});
+
+export const ReingresarEmpaqueRequest = (idEmpaque, observacion) => ({
+  IdEmpaque: idEmpaque,
+  Observacion: (observacion ?? "").trim()
+});
+
+export const ReingresarEmpaqueResponse = (data) => ({
+  IdEmpaque: data.IdEmpaque,
+  CodigoEmpaque: data.CodigoEmpaque,
+  IdEstadoMateriaPrima: data.IdEstadoMateriaPrima,
+  FechaMovimiento: data.FechaMovimiento
 });

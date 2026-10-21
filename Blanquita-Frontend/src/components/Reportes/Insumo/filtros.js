@@ -1,7 +1,7 @@
 import { verCatalogoInsumo } from "@/services/Insumo/Insumo";
 
 export const TIPO_INSUMO = {
-  cargar: verCatalogoInsumo,
+  cargar: () => verCatalogoInsumo(true),
   campo: "IdsTipoInsumo",
   campoValor: "IdTipoInsumo",
   campoEtiqueta: "NombreInsumo",

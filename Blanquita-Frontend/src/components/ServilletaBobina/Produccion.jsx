@@ -8,8 +8,8 @@ import {
   finalizarProduccionServilleta,
   cancelarProduccionServilleta,
 } from "../../services/BobinaServilleta/Produccion";
-import { ObservacionServilleta } from "@/constants/OperadorConfig";
-import { Roles } from "@/constants/Values";
+import { ObservacionServilleta, MotivosReanudacionProduccion } from "@/constants/OperadorConfig";
+import { VeComoLider, EsEncargado, EsGerente } from "@/utils/validators";
 import { useProduccion } from "@/hooks/useProduccion";
 import {
   TarjetaProduccion,
@@ -19,6 +19,7 @@ import {
 import ConcluidasServilleta from "./Concluidas";
 import {
   DialogoPausar,
+  DialogoReanudar,
   DialogoCancelar,
   AlertaFinalizar,
 } from "@/components/Produccion/Dialogos";
@@ -33,13 +34,21 @@ function EncabezadoSubBobina({ p }) {
         Sub-bobina #{p.IdSubBobina}
       </div>
       <div className="font-mono text-sm font-bold text-c3">{p.CodigoUnidadOrigen}</div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-slate-600">
+        <span className="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+          {p.MedidaMm} mm
+        </span>
+        <span>Formato {p.DescripcionFormato}</span>
+      </div>
     </>
   );
 }
 
 export default function ProduccionBobinaServilleta({ usuario }) {
   const [vista, setVista] = useState("activas");
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = EsEncargado(usuario?.IdRol);
+  const veConcluidas = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const [totalConcluidas, setTotalConcluidas] = useState(0);
 
   const {
@@ -48,6 +57,7 @@ export default function ProduccionBobinaServilleta({ usuario }) {
     pausa,
     cancelacion,
     finalizacion,
+    reanudacion,
     procesandoId,
     reanudar,
   } = useProduccion({
@@ -71,11 +81,11 @@ export default function ProduccionBobinaServilleta({ usuario }) {
           onCambio={setVista}
           totalActivas={activas.datos.length}
           totalPausadas={pausadas.datos.length}
-          mostrarConcluidas={esEncargado}
+          mostrarConcluidas={veConcluidas}
           totalConcluidas={totalConcluidas}
         />
 
-        {vista === "concluidas" && esEncargado && (
+        {vista === "concluidas" && veConcluidas && (
           <ConcluidasServilleta onTotal={setTotalConcluidas} />
         )}
 
@@ -89,9 +99,9 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                 key={p.IdProduccionServilleta}
                 produccion={p}
                 encabezado={<EncabezadoSubBobina p={p} />}
-                acciones={[
+                acciones={soloLectura ? [] : [
                   { tipo: "pausar", onClick: () => pausa.abrir(p) },
-                  { tipo: "finalizar", onClick: () => finalizacion.abrir(p) },
+                  ...(esEncargado ? [{ tipo: "finalizar", onClick: () => finalizacion.abrir(p) }] : []),
                 ]}
               />
             )}
@@ -111,9 +121,11 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                   produccion={p}
                   pausada
                   encabezado={<EncabezadoSubBobina p={p} />}
-                  acciones={[
+                  acciones={soloLectura ? [] : [
                     { tipo: "reanudar", onClick: () => reanudar(p), disabled: procesando, procesando },
-                    { tipo: "cancelar", onClick: () => cancelacion.abrir(p), disabled: procesando },
+                    ...(esEncargado
+                      ? [{ tipo: "cancelar", onClick: () => cancelacion.abrir(p), disabled: procesando }]
+                      : []),
                   ]}
                 />
               );
@@ -123,6 +135,12 @@ export default function ProduccionBobinaServilleta({ usuario }) {
       </main>
 
       <DialogoPausar dialogo={pausa} tituloDe={tituloDe} opciones={ObservacionServilleta} />
+
+      <DialogoReanudar
+        dialogo={reanudacion}
+        tituloDe={tituloDe}
+        opciones={MotivosReanudacionProduccion}
+      />
 
       <DialogoCancelar
         dialogo={cancelacion}

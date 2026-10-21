@@ -62,8 +62,8 @@ export async function pausarProduccion(idProduccionBobinaTubo, motivoPausaProduc
   return PausarProduccionBobinaTuboResponse(data);
 }
 
-export async function reanudarProduccion(idProduccionBobinaTubo) {
-  const payload = ReanudarProduccionBobinaTuboRequest(idProduccionBobinaTubo);
+export async function reanudarProduccion(idProduccionBobinaTubo, motivoReanudacion) {
+  const payload = ReanudarProduccionBobinaTuboRequest(idProduccionBobinaTubo, motivoReanudacion);
 
   const data = await pedirJson("/api/papelbobina/produccion/reanudar", {
     method: "POST",

@@ -1,5 +1,8 @@
-import { Roles } from "@/constants/Values";
+import { Roles, PREFIJO_POR_ROL } from "@/constants/Values";
 export const EsEncargado=(idRol)=> idRol===Roles.Encargado
+export const EsGerente=(idRol)=> idRol===Roles.Gerente
+export const VeComoLider=(idRol)=> EsEncargado(idRol) || EsGerente(idRol)
+export const rutaDeRol=(idRol, ruta)=> `/${PREFIJO_POR_ROL[idRol]}/${ruta}`
 
 export function extraerMensajeError(data, fallback = "Ocurrió un error inesperado") {
   const detail = data?.detail;

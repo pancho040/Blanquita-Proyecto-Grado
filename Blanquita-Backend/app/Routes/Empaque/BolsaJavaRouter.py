@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import require_role
 from app.Config.supabase import get_db
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 from app.Models.Empaque.BolsaJava import (
     IngresoBolsaJavaRequest,
     IngresoBolsaJavaResponse,
     InventarioBolsaJavaResponse,
+    ReingresoBolsaJavaRequest,
+    ReingresoBolsaJavaResponse,
     SalidaBolsaJavaRequest,
     SalidaBolsaJavaResponse,
 )
@@ -29,10 +31,11 @@ def bolsa_java_service(db: Session = Depends(get_db)) -> BolsaJavaService:
     status_code=200,
 )
 def VerInventarioBolsaJava(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    IncluirInactivos: bool = False,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: BolsaJavaService = Depends(bolsa_java_service),
 ):
-    return service.VerInventario()
+    return service.VerInventario(IncluirInactivos)
 
 
 @BolsaJavaRouter.post(
@@ -59,3 +62,16 @@ def SacarBolsaJava(
     service: BolsaJavaService = Depends(bolsa_java_service),
 ):
     return service.SacarBolsaJava(data, usuario_actual["IdUsuario"])
+
+
+@BolsaJavaRouter.post(
+    "/reingreso",
+    response_model=ReingresoBolsaJavaResponse,
+    status_code=201,
+)
+def ReingresarBolsaJava(
+    data: ReingresoBolsaJavaRequest,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    service: BolsaJavaService = Depends(bolsa_java_service),
+):
+    return service.ReingresarBolsaJava(data, usuario_actual["IdUsuario"])

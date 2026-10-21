@@ -4,10 +4,13 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.Models.AlertaStock.AlertaStock import NivelStockResponse
 
-class VerResumenInventarioBobinaPapelResponse(BaseModel):
+
+class VerResumenInventarioBobinaPapelResponse(NivelStockResponse):
     IdTipoBobina: int
     NombreTipoBobina: str
+    Activo: bool
     CantidadBobinas: int
     PesoNetoTotalKg: Decimal
     GramajePromedio: Decimal

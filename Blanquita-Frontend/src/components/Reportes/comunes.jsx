@@ -363,9 +363,11 @@ export function ResultadosReporte({
                       {columna.titulo}
                     </TableHead>
                   ))}
-                  <TableHead className={cn(anchoAccion, tituloAccion && "text-center")}>
-                    {tituloAccion}
-                  </TableHead>
+                  {accion && (
+                    <TableHead className={cn(anchoAccion, tituloAccion && "text-center")}>
+                      {tituloAccion}
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -376,7 +378,7 @@ export function ResultadosReporte({
                         {columna.valor(elemento)}
                       </TableCell>
                     ))}
-                    <TableCell>{accion(elemento)}</TableCell>
+                    {accion && <TableCell>{accion(elemento)}</TableCell>}
                   </TableRow>
                 ))}
               </TableBody>

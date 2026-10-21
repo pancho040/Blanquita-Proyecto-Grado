@@ -4,21 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { aEntero } from "@/utils/validators";
-
-const UMBRAL_BAJO = 10;
-
-export const estadoStock = (cantidad) => {
-  const valor = Number(cantidad || 0);
-  if (valor === 0) return "agotado";
-  if (valor < UMBRAL_BAJO) return "bajo";
-  return "disponible";
-};
-
-export const ESTILO_ESTADO = {
-  disponible: { texto: "Disponible", clase: "bg-emerald-50 text-emerald-700" },
-  bajo: { texto: "Stock bajo", clase: "bg-amber-50 text-amber-700" },
-  agotado: { texto: "Sin stock", clase: "bg-slate-100 text-slate-500" },
-};
+import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 
 export const descripcionContenido = (p) => {
   const partes = [];
@@ -45,18 +31,18 @@ const TONOS = {
   },
 };
 
-export function BadgeEstado({ cantidad, className }) {
-  const estado = estadoStock(cantidad);
+export function BadgeEstado({ cantidad, umbral, className }) {
+  const estado = estadoStock(cantidad, umbral);
   return (
     <Badge
       variant="outline"
       className={cn(
         "border-0 text-[11px] font-bold",
-        ESTILO_ESTADO[estado].clase,
+        ESTILO_STOCK[estado].clase,
         className,
       )}
     >
-      {ESTILO_ESTADO[estado].texto}
+      {ESTILO_STOCK[estado].texto}
     </Badge>
   );
 }

@@ -1,3 +1,5 @@
+import { UnidadServilletaResponse } from "./BobinaServilleta";
+
 export const ReporteInventarioBobinaServilletaRequest = (idsTipoBobinaServilleta) => ({
   IdsTipoBobinaServilleta: idsTipoBobinaServilleta ?? null
 });
@@ -19,16 +21,7 @@ export const BobinaServilletaCatalogoResponse = (data) => ({
   CodigoLote: data.CodigoLote,
   FechaRecepcion: data.FechaRecepcion,
   NombreProveedor: data.NombreProveedor,
-  IdUnidad1: data.IdUnidad1 ?? null,
-  CodigoUnidad1: data.CodigoUnidad1 ?? null,
-  DescripcionFormato1: data.DescripcionFormato1 ?? null,
-  PesoBrutoKg1: data.PesoBrutoKg1 ?? null,
-  GramajeGr1: data.GramajeGr1 ?? null,
-  IdUnidad2: data.IdUnidad2 ?? null,
-  CodigoUnidad2: data.CodigoUnidad2 ?? null,
-  DescripcionFormato2: data.DescripcionFormato2 ?? null,
-  PesoBrutoKg2: data.PesoBrutoKg2 ?? null,
-  GramajeGr2: data.GramajeGr2 ?? null
+  Unidades: (data.Unidades ?? []).map(UnidadServilletaResponse)
 });
 
 export const VerBobinasServilletaResponse = (data) => ({
@@ -84,6 +77,7 @@ export const ProduccionServilletaCatalogoResponse = (data) => ({
   NombreTipoBobinaServilleta: data.NombreTipoBobinaServilleta,
   CodigoBobina: data.CodigoBobina,
   DescripcionMedida: data.DescripcionMedida,
+  DescripcionFormato: data.DescripcionFormato,
   IdSubBobinaServilleta: data.IdSubBobinaServilleta,
   FechaInicioProduccion: data.FechaInicioProduccion,
   FechaFinProduccion: data.FechaFinProduccion ?? null,

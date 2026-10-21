@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, Database, Disc, Check, SquarePen } from "lucide-react";
+import { Plus, Loader2, Database, Disc, Check, SquarePen, History } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ import {
   extraerMensajeError,
   numeroONulo,
   limpiarObservacion,
+  VeComoLider,
+  EsGerente,
+  rutaDeRol,
 } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { useDetalleInventario } from "@/hooks/useDetalleInventario";
@@ -72,7 +75,6 @@ import {
 } from "@/components/Inventario/comunes";
 import Header from "@/components/layout/Header";
 import {
-  Roles,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
@@ -106,9 +108,8 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
             <TableHead className="pl-5">Bobina</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead>Proveedor</TableHead>
-            <TableHead>Unidad 1</TableHead>
-            <TableHead>Unidad 2</TableHead>
-            <TableHead className="pr-5 text-center">Acciones</TableHead>
+            <TableHead className={cn(!onAbrir && !onEditar && "pr-5")}>Unidades</TableHead>
+            {(onAbrir || onEditar) && <TableHead className="pr-5 text-center">Acciones</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -121,16 +122,19 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                 {dateFormatter(b.FechaRecepcion)}
               </TableCell>
               <TableCell className="text-slate-600">{b.NombreProveedor}</TableCell>
-              {[1, 2].map((n) => (
-                <TableCell key={n} className="text-slate-600">
-                  <span className="font-mono font-semibold text-slate-900">
-                    {b[`CodigoUnidad${n}`]}
-                  </span>
-                  <span className="block text-[11px] text-slate-400">
-                    {b[`DescripcionFormato${n}`]}
-                  </span>
-                </TableCell>
-              ))}
+              <TableCell className={cn("text-slate-600", !onAbrir && !onEditar && "pr-5")}>
+                <div className="flex flex-col gap-1">
+                  {b.Unidades.map((u) => (
+                    <span key={u.IdUnidadBobinaServilleta}>
+                      <span className="font-mono font-semibold text-slate-900">
+                        {u.CodigoBobina}
+                      </span>
+                      <span className="text-[11px] text-slate-400"> · {u.DescripcionFormato}</span>
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
+              {(onAbrir || onEditar) && (
               <TableCell className="pr-5">
                 <div className="flex items-center justify-center gap-2">
                   {onEditar && (
@@ -144,20 +148,23 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                       Editar
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    disabled={procesandoId === b.IdBobinaServilleta}
-                    onClick={() => onAbrir(b)}
-                    className="gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
-                  >
-                    {procesandoId === b.IdBobinaServilleta ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      "Abrir"
-                    )}
-                  </Button>
+                  {onAbrir && (
+                    <Button
+                      size="sm"
+                      disabled={procesandoId === b.IdBobinaServilleta}
+                      onClick={() => onAbrir(b)}
+                      className="gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
+                    >
+                      {procesandoId === b.IdBobinaServilleta ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        "Abrir"
+                      )}
+                    </Button>
+                  )}
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
@@ -184,13 +191,14 @@ function ListaMovilBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }
           </div>
           <div className="text-[12.5px] text-slate-600">{b.NombreProveedor}</div>
           <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
-            {[1, 2].map((n) => (
-              <span key={n}>
-                <strong className="font-mono text-slate-900">{b[`CodigoUnidad${n}`]}</strong> ·{" "}
-                {b[`DescripcionFormato${n}`]}
+            {b.Unidades.map((u) => (
+              <span key={u.IdUnidadBobinaServilleta}>
+                <strong className="font-mono text-slate-900">{u.CodigoBobina}</strong> ·{" "}
+                {u.DescripcionFormato}
               </span>
             ))}
           </div>
+          {(onAbrir || onEditar) && (
           <div className="flex gap-2">
             {onEditar && (
               <Button
@@ -202,18 +210,21 @@ function ListaMovilBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }
                 Editar
               </Button>
             )}
-            <Button
-              disabled={procesandoId === b.IdBobinaServilleta}
-              onClick={() => onAbrir(b)}
-              className="h-10 flex-1 gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
-            >
-              {procesandoId === b.IdBobinaServilleta ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                "Abrir bobina"
-              )}
-            </Button>
+            {onAbrir && (
+              <Button
+                disabled={procesandoId === b.IdBobinaServilleta}
+                onClick={() => onAbrir(b)}
+                className="h-10 flex-1 gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
+              >
+                {procesandoId === b.IdBobinaServilleta ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  "Abrir bobina"
+                )}
+              </Button>
+            )}
           </div>
+          )}
         </div>
       ))}
     </div>
@@ -226,8 +237,8 @@ function TablaSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
       <Table className="min-w-[460px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Sub-bobina</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Sub-bobina</TableHead>
             <TableHead className="pr-5">Unidad de origen</TableHead>
           </TableRow>
         </TableHeader>
@@ -236,14 +247,16 @@ function TablaSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
             const on = marcada === s.IdSubBobinaServilleta;
             return (
               <TableRow key={s.IdSubBobinaServilleta} className={cn(on && tipoSel.soft)}>
-                <TableCell className="pl-5">
-                  <CasillaSeleccion
-                    marcada={on}
-                    acento={tipoSel}
-                    onClick={() => onToggle(s.IdSubBobinaServilleta)}
-                  />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion
+                      marcada={on}
+                      acento={tipoSel}
+                      onClick={() => onToggle(s.IdSubBobinaServilleta)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   <div className="flex items-center gap-2">
                     #{s.IdSubBobinaServilleta}
                     {s.Reingresada && <BadgeReingresada fecha={s.FechaUltimoReingreso} />}
@@ -269,6 +282,7 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
         return (
           <button
             key={s.IdSubBobinaServilleta}
+            disabled={!onToggle}
             onClick={() => onToggle(s.IdSubBobinaServilleta)}
             className={cn(
               "flex items-center justify-between gap-2.5 rounded-2xl border-2 p-3.5 text-left",
@@ -291,7 +305,7 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
                 </div>
               )}
             </div>
-            <CasillaSeleccion marcada={on} acento={tipoSel} grande />
+            {onToggle && <CasillaSeleccion marcada={on} acento={tipoSel} grande />}
           </button>
         );
       })}
@@ -300,7 +314,8 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
 }
 
 export default function InventarioBobinaServilleta({ usuario }) {
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   const resumenBobinas = useCatalogo(verResumenInventarioBobinaServilleta);
   const resumenSubs = useCatalogo(verResumenInventarioSubBobinaServilleta);
@@ -323,9 +338,11 @@ export default function InventarioBobinaServilleta({ usuario }) {
 
   const tiposBobina = conAcentos(resumenBobinas.datos, {
     cantidadDe: (t) => t.CantidadBobinaServilleta,
-    umbral: 4,
   });
-  const tiposSub = conAcentos(resumenSubs.datos, { desplazamiento: 2 });
+  const tiposSub = conAcentos(resumenSubs.datos, {
+    cantidadDe: (t) => t.CantidadSubBobinas,
+    desplazamiento: 2,
+  });
 
   const { sel } = detalle;
   const tipoSel =
@@ -348,8 +365,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
       ? coincide(
           detalle.busqueda,
           d.IdBobinaServilleta,
-          d.CodigoUnidad1,
-          d.CodigoUnidad2,
+          ...d.Unidades.map((u) => u.CodigoBobina),
           d.NombreProveedor,
         )
       : coincide(detalle.busqueda, d.IdSubBobinaServilleta, d.CodigoUnidadOrigen),
@@ -390,7 +406,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
       () => abrirBobinaServilleta(bobina.IdBobinaServilleta),
       (res) =>
         `Bobina #${bobina.IdBobinaServilleta} abierta · ${res.CantidadSubBobinasTotal} sub-bobinas ` +
-        `(${res.CantidadSubBobinas435} de 435 · ${res.CantidadSubBobinas220} de 220)`,
+        `(${res.SubBobinas.map((s) => `${s.Cantidad} de ${s.MedidaMm}`).join(" · ")})`,
       refrescar,
     );
 
@@ -420,18 +436,18 @@ export default function InventarioBobinaServilleta({ usuario }) {
     setCargandoEditar(true);
     try {
       const { Bobinas } = await verBobinasServilletaReporte({
-        CodigoBobina: bobina.CodigoUnidad1,
+        CodigoBobina: bobina.Unidades[0]?.CodigoBobina,
         IdEstadoMateriaPrima: ESTADO_ALMACEN_ID,
       });
       const fila = Bobinas.find((b) => b.IdBobinaServilleta === bobina.IdBobinaServilleta);
       if (!fila) throw new Error("No se encontraron los datos de la bobina. Actualiza el inventario.");
 
-      const unidades = [1, 2].map((n) => ({
-        IdUnidadBobinaServilleta: fila[`IdUnidad${n}`],
-        CodigoBobina: aTexto(fila[`CodigoUnidad${n}`]),
-        DescripcionFormato: fila[`DescripcionFormato${n}`],
-        PesoBrutoKg: aTexto(fila[`PesoBrutoKg${n}`]),
-        GramajeGr: aTexto(fila[`GramajeGr${n}`]),
+      const unidades = fila.Unidades.map((u) => ({
+        IdUnidadBobinaServilleta: u.IdUnidadBobinaServilleta,
+        CodigoBobina: aTexto(u.CodigoBobina),
+        DescripcionFormato: u.DescripcionFormato,
+        PesoBrutoKg: aTexto(u.PesoBrutoKg),
+        GramajeGr: aTexto(u.GramajeGr),
       }));
       setUnidadesOriginales(unidades);
       setFormUnidades(unidades);
@@ -448,17 +464,19 @@ export default function InventarioBobinaServilleta({ usuario }) {
     );
   };
 
-  const errorUnidad = (u, otra) => {
+  const codigosEditados = formUnidades.map((u) => u.CodigoBobina.trim().toLowerCase());
+
+  const errorUnidad = (u) => {
     const codigo = u.CodigoBobina.trim();
     if (!codigo) return "Falta el código";
-    if (otra && codigo.toLowerCase() === otra.CodigoBobina.trim().toLowerCase())
+    if (codigosEditados.filter((c) => c === codigo.toLowerCase()).length > 1)
       return "Código repetido";
     if (valorInvalido(u.PesoBrutoKg)) return "Peso bruto inválido";
     if (valorInvalido(u.GramajeGr)) return "Gramaje inválido";
     return null;
   };
 
-  const erroresUnidades = formUnidades.map((u, i) => errorUnidad(u, formUnidades[1 - i]));
+  const erroresUnidades = formUnidades.map(errorUnidad);
 
   const huboCambios = formUnidades.some((u, i) => {
     const o = unidadesOriginales[i];
@@ -476,7 +494,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
     motivoLimpio.length <= MOTIVO_CORRECCION_MAX;
 
   const puedeGuardar =
-    formUnidades.length === 2 &&
+    formUnidades.length > 0 &&
     erroresUnidades.every((e) => !e) &&
     huboCambios &&
     motivoValido;
@@ -510,9 +528,9 @@ export default function InventarioBobinaServilleta({ usuario }) {
         accion={
           esEncargado
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/bobina-servilleta/ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "bobina-servilleta/ingreso"),
               }
             : null
         }
@@ -554,12 +572,13 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       key={t.IdTipoBobinaServilleta}
                       acento={t}
                       activo={sel?.clase === "bobina" && sel.id === t.IdTipoBobinaServilleta}
+                      inactivo={!t.Activo}
                       onClick={() =>
                         detalle.seleccionar({ clase: "bobina", id: t.IdTipoBobinaServilleta })
                       }
                       icono={Database}
                       nombre={t.NombreTipoBobinaServilleta}
-                      etiqueta={t.badge}
+                      stock={t.stock}
                       cantidad={t.CantidadBobinaServilleta}
                       unidad="bobinas en almacén"
                       textoVer="Ver bobinas"
@@ -579,13 +598,14 @@ export default function InventarioBobinaServilleta({ usuario }) {
                     key={t.IdTipoMedidaSubBobina}
                     acento={t}
                     activo={sel?.clase === "sub" && sel.id === t.IdTipoMedidaSubBobina}
+                    inactivo={!t.Activo}
                     onClick={() =>
                       detalle.seleccionar({ clase: "sub", id: t.IdTipoMedidaSubBobina })
                     }
                     icono={Disc}
                     claseIcono="h-7 w-7"
                     nombre={t.NombreTipoMedida}
-                    etiqueta="Sub-bobina"
+                    stock={t.stock}
                     cantidad={t.CantidadSubBobinas}
                     unidad="sub-bobinas en almacén"
                     textoVer="Ver sub-bobinas"
@@ -620,7 +640,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                 ? `${tipoSel.CantidadBobinaServilleta} en almacén`
                 : `${tipoSel.CantidadSubBobinas} en almacén`
             }
-            etiqueta={esBobina ? null : "Se traslada 1 sub-bobina"}
+            etiqueta={esBobina || soloLectura ? null : "Se traslada 1 sub-bobina"}
             onCerrar={detalle.cerrar}
           >
             <ContenidoLista
@@ -649,8 +669,8 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       bobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       procesandoId={apertura.enProceso}
-                      onAbrir={abrirBobina}
-                      onEditar={esEncargado ? abrirEditar : null}
+                      onAbrir={soloLectura ? null : abrirBobina}
+                      onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                     />
                   </div>
                   <div className="md:hidden">
@@ -658,8 +678,8 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       bobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       procesandoId={apertura.enProceso}
-                      onAbrir={abrirBobina}
-                      onEditar={esEncargado ? abrirEditar : null}
+                      onAbrir={soloLectura ? null : abrirBobina}
+                      onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                     />
                   </div>
                 </>
@@ -670,7 +690,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       subBobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       marcada={marcadaSub}
-                      onToggle={toggleSub}
+                      onToggle={soloLectura ? undefined : toggleSub}
                     />
                   </div>
                   <div className="md:hidden">
@@ -678,7 +698,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       subBobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       marcada={marcadaSub}
-                      onToggle={toggleSub}
+                      onToggle={soloLectura ? undefined : toggleSub}
                     />
                   </div>
                 </>
@@ -731,7 +751,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                     observacion={s.UltimaObservacion}
                     fechaMovimiento={s.FechaUltimoMovimiento}
                     procesando={accionesFuera.enProceso === s.IdSubBobinaServilleta}
-                    onReingresar={() => setPorReingresar(s)}
+                    onReingresar={soloLectura ? undefined : () => setPorReingresar(s)}
                   />
                 ))}
               </div>
@@ -782,7 +802,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
               </div>
             )}
 
-            {!cargandoEditar && formUnidades.length === 2 && (
+            {!cargandoEditar && formUnidades.length > 0 && (
               <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {formUnidades.map((u, i) => (
