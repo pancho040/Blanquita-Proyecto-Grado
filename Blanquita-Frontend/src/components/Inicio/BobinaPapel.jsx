@@ -8,7 +8,6 @@ import {
   EnlaceBloque,
   ErrorInicio,
   FueraInventario,
-  GraficoSemana,
   GrillaStock,
   PausasPorMotivo,
   ProduccionAhora,
@@ -30,12 +29,7 @@ const PESTANAS = {
   produccion: { texto: "Producción", icono: Factory },
 };
 
-const MEDIDAS = [
-  { valor: "Logs", texto: "Logs", descripcion: "Por día y producto · logs netos (ingresos − descuentos)" },
-  { valor: "Cargadas", texto: "Cargadas", descripcion: "Por día y producto · cargadas iniciadas, sin contar cambios de línea" },
-];
-
-const itemProduccion = (item) => ({
+export const itemProduccion = (item) => ({
   id: item.IdPausaProduccionBobinaTubo ?? item.IdProduccionBobinaTubo,
   titulo: item.NombreProducto,
   subtitulo: item.NombreTipoBobina,
@@ -48,8 +42,6 @@ const itemProduccion = (item) => ({
     ? [`Pausó ${item.Operador}`, `${numero(item.CantidadLogsActual)} logs`]
     : [`Turno ${item.NombreTurno}`, item.Operador],
 });
-
-const serie = (producto) => ({ ...producto, Id: producto.IdProducto, Nombre: producto.NombreProducto });
 
 function Inventario({ datos }) {
   const lote = datos.UltimoLote;
@@ -159,23 +151,6 @@ function Produccion({ datos }) {
           clase="bg-slate-100 text-slate-700"
         />
       </div>
-
-      <GraficoSemana
-        titulo="Producción de la semana"
-        medidas={MEDIDAS}
-        dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Productos.map(serie) }))}
-        series={datos.Productos.map(serie)}
-        resumenSerie={(producto) => (
-          <>
-            <span className="font-extrabold text-slate-900">{numero(producto.Logs)}</span> logs ·{" "}
-            <span className="font-extrabold text-slate-900">{numero(producto.Cargadas)}</span> carg.
-          </>
-        )}
-        vacio={{
-          titulo: "Sin producción esta semana",
-          descripcion: "Cuando se registren cargadas y logs aparecerán aquí por día.",
-        }}
-      />
 
       <PausasPorMotivo motivos={datos.MotivosPausa} total={indicadores.SegundosPausa} />
     </div>

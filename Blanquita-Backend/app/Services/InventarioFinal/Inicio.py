@@ -70,6 +70,69 @@ def _pendiente(presentacion: dict) -> PresentacionPendienteInicio:
     return PresentacionPendienteInicio(**presentacion)
 
 
+def signo_salida(fila: dict) -> int:
+    return 1
+
+
+def agrupar_lineas(filas: list[dict], signo, registros=None) -> list[LineaSemanaInicio]:
+    lineas: dict[int, dict] = {}
+    for fila in filas:
+        linea = lineas.setdefault(
+            fila["IdProducto"],
+            {
+                "IdProducto": fila["IdProducto"],
+                "NombreProducto": fila["NombreProducto"],
+                "Unidades": 0,
+                "Contenedores": 0,
+                "Registros": 0,
+            },
+        )
+        factor = signo(fila)
+        linea["Unidades"] += factor * _unidades_fila(fila)
+        linea["Contenedores"] += factor * int(fila["Cantidad"] or 0)
+        linea["Registros"] += 1
+    if registros:
+        for id_producto, cantidad in registros.items():
+            if id_producto in lineas:
+                lineas[id_producto]["Registros"] = cantidad
+    return sorted(
+        (LineaSemanaInicio(**linea) for linea in lineas.values()),
+        key=lambda linea: (-linea.Unidades, linea.NombreProducto),
+    )
+
+
+def filas_salida(resumen, presentaciones: dict[int, dict]) -> list[dict]:
+    filas = []
+    for m in resumen.Movimientos:
+        presentacion = presentaciones.get(m.IdPresentacion, {})
+        filas.append(
+            {
+                "IdProducto": m.IdProducto,
+                "NombreProducto": m.NombreProducto,
+                "IdPresentacion": m.IdPresentacion,
+                "CodigoPresentacion": m.CodigoPresentacion,
+                "TipoContenedor": presentacion.get("TipoContenedor", ""),
+                "CantidadRollosUnidades": presentacion.get("CantidadRollosUnidades"),
+                "CantidadPorUnidadTerminada": presentacion.get("CantidadPorUnidadTerminada"),
+                "Cantidad": m.Cantidad,
+                "FechaMovimiento": m.FechaMovimiento,
+                "Despacho": (m.FechaMovimiento, m.Ci),
+            }
+        )
+    return filas
+
+
+def despacho_inicio(despacho) -> DespachoInicio:
+    return DespachoInicio(
+        IdDespacho=despacho.IdDespacho,
+        FechaMovimiento=despacho.FechaMovimiento,
+        Usuario=f"{despacho.PrimerNombre} {despacho.ApellidoPaterno}",
+        Observacion=despacho.Observacion,
+        NumeroPresentaciones=despacho.NumeroPresentaciones,
+        CantidadTotal=despacho.CantidadTotal,
+    )
+
+
 class InicioProductoTerminadoService:
     def __init__(self, db: Session):
         self.repository = InicioProductoTerminadoRepository(db)
@@ -79,37 +142,11 @@ class InicioProductoTerminadoService:
     def _fecha(self, fila: dict):
         return fila["FechaMovimiento"].astimezone(self.zona).date()
 
-    def _lineas(self, filas: list[dict], signo, registros=None) -> list[LineaSemanaInicio]:
-        lineas: dict[int, dict] = {}
-        for fila in filas:
-            linea = lineas.setdefault(
-                fila["IdProducto"],
-                {
-                    "IdProducto": fila["IdProducto"],
-                    "NombreProducto": fila["NombreProducto"],
-                    "Unidades": 0,
-                    "Contenedores": 0,
-                    "Registros": 0,
-                },
-            )
-            factor = signo(fila)
-            linea["Unidades"] += factor * _unidades_fila(fila)
-            linea["Contenedores"] += factor * int(fila["Cantidad"] or 0)
-            linea["Registros"] += 1
-        if registros:
-            for id_producto, cantidad in registros.items():
-                if id_producto in lineas:
-                    lineas[id_producto]["Registros"] = cantidad
-        return sorted(
-            (LineaSemanaInicio(**linea) for linea in lineas.values()),
-            key=lambda linea: (-linea.Unidades, linea.NombreProducto),
-        )
-
     def _dias(self, semana, filas: list[dict], signo) -> list[DiaSemanaProductoTerminado]:
         dias = []
         for fecha in semana.dias():
             del_dia = [fila for fila in filas if self._fecha(fila) == fecha]
-            lineas = self._lineas(del_dia, signo)
+            lineas = agrupar_lineas(del_dia, signo)
             dias.append(
                 DiaSemanaProductoTerminado(
                     Fecha=fecha,
@@ -256,7 +293,7 @@ class InicioProductoTerminadoService:
                 DescuentosSemanaAnterior=_contar(anteriores, MOVIMIENTO_PT_DESCUENTO),
             ),
             Dias=self._dias(semana, movimientos, _signo_produccion),
-            Lineas=self._lineas(movimientos, _signo_produccion),
+            Lineas=agrupar_lineas(movimientos, _signo_produccion),
             Turnos=[TurnoProduccionProductoTerminado(**turno) for turno in turnos.values()],
             UltimosIngresos=[
                 _reciente(fila)
@@ -264,39 +301,9 @@ class InicioProductoTerminadoService:
             ],
         )
 
-    def _despacho(self, despacho) -> DespachoInicio:
-        return DespachoInicio(
-            IdDespacho=despacho.IdDespacho,
-            FechaMovimiento=despacho.FechaMovimiento,
-            Usuario=f"{despacho.PrimerNombre} {despacho.ApellidoPaterno}",
-            Observacion=despacho.Observacion,
-            NumeroPresentaciones=despacho.NumeroPresentaciones,
-            CantidadTotal=despacho.CantidadTotal,
-        )
-
     def VerSalidas(self) -> InicioSalidasProductoTerminadoResponse:
         semana = semana_inicio()
         presentaciones = {fila["IdPresentacion"]: fila for fila in self.repository.Presentaciones()}
-
-        def filas_salida(resumen) -> list[dict]:
-            filas = []
-            for m in resumen.Movimientos:
-                presentacion = presentaciones.get(m.IdPresentacion, {})
-                filas.append(
-                    {
-                        "IdProducto": m.IdProducto,
-                        "NombreProducto": m.NombreProducto,
-                        "IdPresentacion": m.IdPresentacion,
-                        "CodigoPresentacion": m.CodigoPresentacion,
-                        "TipoContenedor": presentacion.get("TipoContenedor", ""),
-                        "CantidadRollosUnidades": presentacion.get("CantidadRollosUnidades"),
-                        "CantidadPorUnidadTerminada": presentacion.get("CantidadPorUnidadTerminada"),
-                        "Cantidad": m.Cantidad,
-                        "FechaMovimiento": m.FechaMovimiento,
-                        "Despacho": (m.FechaMovimiento, m.Ci),
-                    }
-                )
-            return filas
 
         actual = self.reporte.ResumenSalidas(
             ReporteSalidasProductoTerminadoRequest(FechaInicio=semana.lunes, FechaFin=semana.hoy)
@@ -306,8 +313,8 @@ class InicioProductoTerminadoService:
                 FechaInicio=semana.lunes_anterior, FechaFin=semana.hoy_anterior
             )
         )
-        filas = filas_salida(actual)
-        filas_anteriores = filas_salida(anterior)
+        filas = filas_salida(actual, presentaciones)
+        filas_anteriores = filas_salida(anterior, presentaciones)
 
         despachos_por_linea: dict[int, set] = {}
         for fila in filas:
@@ -331,7 +338,7 @@ class InicioProductoTerminadoService:
             registro["Unidades"] += _unidades_fila(fila)
 
         id_ultima = self.repository.UltimaSalida()
-        ultimo = self._despacho(self.reporte.ReporteDespacho(id_ultima)) if id_ultima else None
+        ultimo = despacho_inicio(self.reporte.ReporteDespacho(id_ultima)) if id_ultima else None
 
         return InicioSalidasProductoTerminadoResponse(
             FechaInicio=semana.lunes,
@@ -345,16 +352,16 @@ class InicioProductoTerminadoService:
                 ContenedoresSemanaAnterior=sum(int(fila["Cantidad"] or 0) for fila in filas_anteriores),
                 Presentaciones=len(destacadas),
             ),
-            Dias=self._dias(semana, filas, lambda fila: 1),
-            Lineas=self._lineas(
+            Dias=self._dias(semana, filas, signo_salida),
+            Lineas=agrupar_lineas(
                 filas,
-                lambda fila: 1,
+                signo_salida,
                 {id_producto: len(grupo) for id_producto, grupo in despachos_por_linea.items()},
             ),
             PresentacionesDestacadas=sorted(
                 (PresentacionDespachadaInicio(**registro) for registro in destacadas.values()),
                 key=lambda p: (-p.Unidades, p.CodigoPresentacion),
             )[:PRESENTACIONES_DESTACADAS_INICIO],
-            Despachos=[self._despacho(despacho) for despacho in actual.Despachos[:MOVIMIENTOS_RECIENTES_INICIO]],
+            Despachos=[despacho_inicio(despacho) for despacho in actual.Despachos[:MOVIMIENTOS_RECIENTES_INICIO]],
             UltimoDespacho=ultimo,
         )

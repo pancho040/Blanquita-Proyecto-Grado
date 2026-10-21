@@ -8,7 +8,6 @@ import {
   EnlaceBloque,
   ErrorInicio,
   FueraInventario,
-  GraficoSemana,
   GrillaStock,
   PausasPorMotivo,
   ProduccionAhora,
@@ -30,14 +29,9 @@ const PESTANAS = {
   produccion: { texto: "Producción", icono: Factory },
 };
 
-const MEDIDAS = [
-  { valor: "Iniciadas", texto: "Iniciadas", descripcion: "Sub-bobinas puestas en máquina por día y medida" },
-  { valor: "Finalizadas", texto: "Finalizadas", descripcion: "Sub-bobinas terminadas por día y medida" },
-];
-
 const medidaMm = (mm) => `${numero(mm)} mm`;
 
-const itemProduccion = (item) => ({
+export const itemProduccion = (item) => ({
   id: item.IdPausaProduccionServilleta ?? item.IdProduccionServilleta,
   titulo: `Sub-bobina ${medidaMm(item.MedidaMm)}`,
   subtitulo: item.NombreTipoBobinaServilleta,
@@ -47,8 +41,6 @@ const itemProduccion = (item) => ({
   atrasada: item.Atrasada,
   detalles: item.FechaHoraPausa ? [`Pausó ${item.Operador}`] : [`Turno ${item.NombreTurno}`, item.Operador],
 });
-
-const serie = (medida) => ({ ...medida, Id: medida.IdTipoMedidaSubBobina, Nombre: medidaMm(medida.MedidaMm) });
 
 function Inventario({ datos }) {
   const lote = datos.UltimoLote;
@@ -179,23 +171,6 @@ function Produccion({ datos }) {
         />
         <TarjetaPausas indicadores={indicadores} />
       </div>
-
-      <GraficoSemana
-        titulo="Producción de la semana"
-        medidas={MEDIDAS}
-        dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Medidas.map(serie) }))}
-        series={datos.Medidas.map(serie)}
-        resumenSerie={(medida) => (
-          <>
-            <span className="font-extrabold text-slate-900">{numero(medida.Iniciadas)}</span> inic. ·{" "}
-            <span className="font-extrabold text-slate-900">{numero(medida.Finalizadas)}</span> fin.
-          </>
-        )}
-        vacio={{
-          titulo: "Sin producción esta semana",
-          descripcion: "Cuando se pongan sub-bobinas en máquina aparecerán aquí por día.",
-        }}
-      />
 
       <PausasPorMotivo motivos={datos.MotivosPausa} total={indicadores.SegundosPausa} />
     </div>

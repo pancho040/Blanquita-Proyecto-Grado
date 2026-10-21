@@ -14,7 +14,7 @@ const PresentacionStockResponse = (data) => ({
   ...NivelStockResponse(data),
 });
 
-const LineaStockResponse = (data) => ({
+export const LineaStockResponse = (data) => ({
   IdProducto: data.IdProducto,
   NombreProducto: data.NombreProducto,
   Activo: Boolean(data.Activo),
@@ -51,7 +51,7 @@ const MovimientoRecienteResponse = (data) => ({
   Observacion: data.Observacion ?? null,
 });
 
-const LineaSemanaResponse = (data) => ({
+export const LineaSemanaResponse = (data) => ({
   IdProducto: data.IdProducto,
   NombreProducto: data.NombreProducto,
   Unidades: Number(data.Unidades ?? 0),
@@ -66,7 +66,7 @@ const DiaSemanaResponse = (data) => ({
   Lineas: (data.Lineas ?? []).map(LineaSemanaResponse),
 });
 
-const DespachoResponse = (data) =>
+export const DespachoResponse = (data) =>
   data
     ? {
         IdDespacho: data.IdDespacho,
@@ -78,7 +78,7 @@ const DespachoResponse = (data) =>
       }
     : null;
 
-const numeros = (data = {}) => Object.fromEntries(Object.entries(data).map(([clave, valor]) => [clave, Number(valor ?? 0)]));
+export const numeros = (data = {}) => Object.fromEntries(Object.entries(data).map(([clave, valor]) => [clave, Number(valor ?? 0)]));
 
 export const InicioInventarioProductoTerminadoResponse = (data) => ({
   FechaInicio: data.FechaInicio,

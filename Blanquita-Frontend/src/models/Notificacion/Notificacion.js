@@ -1,6 +1,6 @@
 import { UmbralStockItem } from "@/models/AlertaStock/AlertaStock";
 
-const ProduccionBobinaPapelResponse = (data) => ({
+export const ProduccionBobinaPapelResponse = (data) => ({
   IdProduccionBobinaTubo: data.IdProduccionBobinaTubo,
   IdPausaProduccionBobinaTubo: data.IdPausaProduccionBobinaTubo ?? null,
   NombreTipoBobina: data.NombreTipoBobina,
@@ -16,7 +16,7 @@ const ProduccionBobinaPapelResponse = (data) => ({
   Atrasada: Boolean(data.Atrasada),
 });
 
-const ProduccionBobinaServilletaResponse = (data) => ({
+export const ProduccionBobinaServilletaResponse = (data) => ({
   IdProduccionServilleta: data.IdProduccionServilleta,
   IdPausaProduccionServilleta: data.IdPausaProduccionServilleta ?? null,
   MedidaMm: Number(data.MedidaMm ?? 0),
@@ -30,7 +30,7 @@ const ProduccionBobinaServilletaResponse = (data) => ({
   Atrasada: Boolean(data.Atrasada),
 });
 
-const ProduccionResponse = (data, mapear) => ({
+export const ProduccionResponse = (data, mapear) => ({
   Activas: (data?.Activas ?? []).map(mapear),
   Pausadas: (data?.Pausadas ?? []).map(mapear),
 });

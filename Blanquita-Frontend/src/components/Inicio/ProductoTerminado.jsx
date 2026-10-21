@@ -36,7 +36,6 @@ import {
   EncabezadoSemana,
   EnlaceBloque,
   ErrorInicio,
-  GraficoSemana,
   SelectorPestanas,
   SinDatos,
   TarjetaIndicador,
@@ -67,17 +66,10 @@ const TONO_MOVIMIENTO = {
 
 const ORDEN_STOCK = { critico: 0, agotado: 1, bajo: 2, disponible: 3 };
 
-const MEDIDAS = (texto) => [
-  { valor: "Unidades", texto: "Unidades", descripcion: `${texto} en unidades por día y línea` },
-  { valor: "Contenedores", texto: "Jabas y planchas", descripcion: `${texto} en jabas y planchas por día y línea` },
-];
-
 const contenedor = (tipo, cantidad) => {
   const nombre = (tipo || "unidad").toLowerCase();
   return cantidad === 1 ? nombre : `${nombre}s`;
 };
-
-const serie = (linea) => ({ ...linea, Id: linea.IdProducto, Nombre: linea.NombreProducto });
 
 const movimiento = (m) => ({
   id: m.IdMovimientoProductoTerminado,
@@ -86,15 +78,7 @@ const movimiento = (m) => ({
   titulo: `${numero(m.Cantidad)} ${contenedor(m.TipoContenedor, m.Cantidad)} · ${m.CodigoPresentacion}`,
   fecha: m.FechaMovimiento,
   usuario: m.Usuario,
-  observacion: m.Observacion,
 });
-
-const resumenLinea = (linea) => (
-  <>
-    <span className="font-extrabold text-slate-900">{numero(linea.Unidades)}</span> u. ·{" "}
-    <span className="font-extrabold text-slate-900">{numero(linea.Contenedores)}</span> jab./pl.
-  </>
-);
 
 function Pestana({ cargar, children }) {
   const { datos, error, recargar } = useInicio(cargar);
@@ -103,7 +87,7 @@ function Pestana({ cargar, children }) {
   return children(datos);
 }
 
-function LineaStock({ linea }) {
+export function LineaStock({ linea }) {
   const visibles = linea.Presentaciones.filter((p) => p.Activo || p.CantidadActual > 0);
   return (
     <div className="flex flex-col gap-2 rounded-xl p-3 ring-1 ring-slate-200">
@@ -146,7 +130,7 @@ function LineaStock({ linea }) {
   );
 }
 
-function prioridadLinea(linea) {
+export function prioridadLinea(linea) {
   return Math.min(
     ...linea.Presentaciones.filter((p) => p.Activo).map((p) => ORDEN_STOCK[estadoStock(p.CantidadActual, p)]),
     ORDEN_STOCK.disponible,
@@ -369,18 +353,6 @@ function ProduccionPT() {
             />
           </div>
 
-          <GraficoSemana
-            titulo="Ingresos de la semana"
-            medidas={MEDIDAS("Entradas menos correcciones")}
-            dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Lineas.map(serie) }))}
-            series={datos.Lineas.map(serie)}
-            resumenSerie={resumenLinea}
-            vacio={{
-              titulo: "Sin ingresos esta semana",
-              descripcion: "Cuando se registre producto terminado aparecerá aquí por día.",
-            }}
-          />
-
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <PorTurno turnos={datos.Turnos} />
             <UltimosMovimientos
@@ -404,7 +376,7 @@ function BotonComprobante({ idDespacho }) {
   );
 }
 
-function FilaDespacho({ despacho }) {
+export function FilaDespacho({ despacho }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
       <span className="min-w-0">
@@ -479,22 +451,6 @@ function SalidasPT() {
               clase="bg-slate-100 text-slate-700"
             />
           </div>
-
-          <GraficoSemana
-            titulo="Salidas de la semana"
-            medidas={MEDIDAS("Despachado")}
-            dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Lineas.map(serie) }))}
-            series={datos.Lineas.map(serie)}
-            resumenSerie={(linea) => (
-              <>
-                {resumenLinea(linea)} · {linea.Registros} desp.
-              </>
-            )}
-            vacio={{
-              titulo: "Sin salidas esta semana",
-              descripcion: "Cuando se registren despachos aparecerán aquí por día.",
-            }}
-          />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Bloque titulo="Más despachadas" descripcion="Presentaciones con más unidades en la semana" icono={Trophy}>

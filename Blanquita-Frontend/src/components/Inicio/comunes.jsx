@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  CalendarDays,
-  ChartColumn,
   CirclePause,
   Factory,
   Minus,
@@ -21,18 +19,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { ESTILO_STOCK, estadoStock } from "@/utils/stock";
-import { dateFormatter, dateOnlyFormatter, diaSemanaCorto, formatearSegundos, segundosDesde } from "@/utils/dates";
-
-export const COLORES_SERIES = ["#1C96C5", "#10b981", "#f59e0b", "#8b5cf6", "#f43f5e", "#64748b"];
-
-export const colorSerie = (indice) => COLORES_SERIES[indice % COLORES_SERIES.length];
+import { dateFormatter, dateOnlyFormatter, formatearSegundos, segundosDesde } from "@/utils/dates";
 
 export const numero = (valor) => Number(valor || 0).toLocaleString("es-BO");
+
+export const COLORES_SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
+
+export const colorSerie = (indice) => COLORES_SERIES[Math.min(indice, COLORES_SERIES.length - 1)];
 
 const ORDEN_STOCK = { critico: 0, agotado: 1, bajo: 2, disponible: 3 };
 
@@ -307,7 +303,15 @@ function ItemProduccion({ href, titulo, subtitulo, codigos, valor, motivo, detal
   );
 }
 
-export function ProduccionAhora({ href, activas, pausadas, horasAlerta, descripcionActivas, aItem }) {
+export function ProduccionAhora({
+  href,
+  activas,
+  pausadas,
+  horasAlerta,
+  descripcionActivas,
+  descripcionPausas = "Recuerda reanudarlas para no inflar las duraciones",
+  aItem,
+}) {
   const ahora = useAhora();
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -325,7 +329,7 @@ export function ProduccionAhora({ href, activas, pausadas, horasAlerta, descripc
                 <ItemProduccion
                   key={datos.id}
                   {...datos}
-                  href={href}
+                  href={datos.href ?? href}
                   ahora={ahora}
                   aviso="Abierta desde otro día"
                 />
@@ -339,7 +343,7 @@ export function ProduccionAhora({ href, activas, pausadas, horasAlerta, descripc
 
       <Bloque
         titulo={`Pausas abiertas (${pausadas.length})`}
-        descripcion="Recuerda reanudarlas para no inflar las duraciones"
+        descripcion={descripcionPausas}
         icono={CirclePause}
         accion={<EnlaceBloque href={href} />}
       >
@@ -351,7 +355,7 @@ export function ProduccionAhora({ href, activas, pausadas, horasAlerta, descripc
                 <ItemProduccion
                   key={datos.id}
                   {...datos}
-                  href={href}
+                  href={datos.href ?? href}
                   ahora={ahora}
                   pausa
                   aviso={`Pausa de más de ${horasAlerta} h`}
@@ -432,87 +436,16 @@ export function EncabezadoSemana({ datos }) {
   );
 }
 
-export function GraficoSemana({ titulo, medidas, dias, series, resumenSerie, vacio }) {
-  const [medida, setMedida] = useState(medidas[0].valor);
-  const actual = medidas.find((m) => m.valor === medida) ?? medidas[0];
-
-  const config = useMemo(
-    () => Object.fromEntries(series.map((serie, indice) => [`s${serie.Id}`, { label: serie.Nombre, color: colorSerie(indice) }])),
-    [series],
-  );
-
-  const datos = useMemo(
-    () =>
-      dias.map((dia) => ({
-        Dia: diaSemanaCorto(dia.Fecha),
-        ...Object.fromEntries(series.map((serie) => [`s${serie.Id}`, 0])),
-        ...Object.fromEntries(dia.Series.map((serie) => [`s${serie.Id}`, serie[medida]])),
-      })),
-    [dias, series, medida],
-  );
-
-  const total = series.reduce((suma, serie) => suma + serie[medida], 0);
-
-  return (
-    <Bloque
-      titulo={titulo}
-      descripcion={actual.descripcion}
-      icono={CalendarDays}
-      accion={
-        <ToggleGroup value={[medida]} className="flex gap-1.5">
-          {medidas.map((m) => (
-            <ToggleGroupItem key={m.valor} value={m.valor} onClick={() => setMedida(m.valor)} className={cn(PILDORA_FILTRO, "px-3 py-1.5")}>
-              {m.texto}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      }
-    >
-      {total > 0 ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_240px]">
-          <ChartContainer config={config} className="aspect-auto h-64 w-full">
-            <BarChart data={datos} margin={{ left: -16, right: 4, top: 8 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="Dia" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={44} />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-              <ChartLegend content={<ChartLegendContent className="flex-wrap" />} />
-              {series.map((serie, indice) => (
-                <Bar
-                  key={serie.Id}
-                  dataKey={`s${serie.Id}`}
-                  stackId="semana"
-                  fill={`var(--color-s${serie.Id})`}
-                  radius={indice === series.length - 1 ? [4, 4, 0, 0] : 0}
-                />
-              ))}
-            </BarChart>
-          </ChartContainer>
-
-          <div className="flex flex-col gap-2">
-            <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Resumen</div>
-            {series.map((serie, indice) => (
-              <div key={serie.Id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold text-slate-700">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: colorSerie(indice) }} />
-                  <span className="truncate">{serie.Nombre}</span>
-                </span>
-                <span className="text-right text-[12px] tabular-nums text-slate-500">{resumenSerie(serie)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <SinDatos icono={ChartColumn} titulo={vacio.titulo} descripcion={vacio.descripcion} />
-      )}
-    </Bloque>
-  );
-}
-
-export function PausasPorMotivo({ motivos, total }) {
+export function PausasPorMotivo({
+  motivos,
+  total,
+  titulo = "Tiempo en pausa por motivo",
+  descripcion = "Pausas iniciadas esta semana",
+  vacio = "Sin pausas esta semana",
+}) {
   const maximo = Math.max(...motivos.map((m) => m.Segundos), 1);
   return (
-    <Bloque titulo="Tiempo en pausa por motivo" descripcion="Pausas iniciadas esta semana" icono={Timer}>
+    <Bloque titulo={titulo} descripcion={descripcion} icono={Timer}>
       {motivos.length ? (
         <div className="flex flex-col gap-3">
           {motivos.map((motivo) => (
@@ -534,7 +467,88 @@ export function PausasPorMotivo({ motivos, total }) {
           </div>
         </div>
       ) : (
-        <SinDatos icono={Timer} titulo="Sin pausas esta semana" />
+        <SinDatos icono={Timer} titulo={vacio} />
+      )}
+    </Bloque>
+  );
+}
+
+export function GraficoBarras({ titulo, descripcion, icono, accion, series, datos, unidad, resumenSerie, vacio }) {
+  const config = Object.fromEntries(
+    series.map((serie) => [`s${serie.Id}`, { label: serie.Nombre, color: serie.Color }]),
+  );
+  const total = datos.reduce(
+    (suma, tramo) => suma + series.reduce((parcial, serie) => parcial + (tramo[`s${serie.Id}`] ?? 0), 0),
+    0,
+  );
+
+  return (
+    <Bloque titulo={titulo} descripcion={descripcion} icono={icono} accion={accion}>
+      {total !== 0 ? (
+        <div className="flex flex-col gap-4">
+          <ChartContainer config={config} className="aspect-auto h-72 w-full">
+            <BarChart data={datos} margin={{ left: 8, right: 8, top: 8 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="Etiqueta" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                width={72}
+                tickFormatter={(valor) => numero(valor)}
+              />
+              <ChartTooltip
+                cursor={{ fill: "var(--color-slate-100, #f1f5f9)" }}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, carga) => carga?.[0]?.payload?.Detalle}
+                    formatter={(valor, nombre, item) => (
+                      <div className="flex w-full items-center justify-between gap-3">
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: item.color }} />
+                          {config[nombre]?.label}
+                        </span>
+                        <span className="font-bold tabular-nums text-slate-900">
+                          {numero(valor)} {unidad}
+                        </span>
+                      </div>
+                    )}
+                  />
+                }
+              />
+              <ChartLegend content={<ChartLegendContent className="flex-wrap" />} />
+              {series.map((serie, indice) => (
+                <Bar
+                  key={serie.Id}
+                  dataKey={`s${serie.Id}`}
+                  stackId="periodo"
+                  fill={`var(--color-s${serie.Id})`}
+                  stroke="#fff"
+                  strokeWidth={2}
+                  maxBarSize={56}
+                  radius={indice === series.length - 1 ? [4, 4, 0, 0] : 0}
+                />
+              ))}
+            </BarChart>
+          </ChartContainer>
+
+          <div className="flex flex-col gap-2">
+            <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">Resumen por línea</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {series.map((serie) => (
+                <div key={serie.Id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold text-slate-700">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: serie.Color }} />
+                    <span className="truncate">{serie.Nombre}</span>
+                  </span>
+                  <span className="text-right text-[12px] tabular-nums text-slate-500">{resumenSerie(serie)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <SinDatos icono={icono} titulo={vacio.titulo} descripcion={vacio.descripcion} />
       )}
     </Bloque>
   );

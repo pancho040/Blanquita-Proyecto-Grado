@@ -54,6 +54,8 @@ from app.Routes.AlertaStock.AlertaStock import AlertaStockRouter
 
 from app.Routes.Notificacion.NotificacionRouter import NotificacionRouter
 
+from app.Routes.Inicio.GerenteRouter import InicioGerenteRouter
+
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
@@ -160,3 +162,6 @@ app.include_router(AlertaStockRouter)
 
 #ROUTERS NOTIFICACIONES
 app.include_router(NotificacionRouter)
+
+#ROUTERS INICIO GERENTE
+app.include_router(InicioGerenteRouter)

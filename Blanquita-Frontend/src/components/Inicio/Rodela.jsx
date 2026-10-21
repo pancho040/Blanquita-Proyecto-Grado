@@ -8,7 +8,6 @@ import {
   EncabezadoSemana,
   EnlaceBloque,
   ErrorInicio,
-  GraficoSemana,
   GrillaStock,
   Reingresables,
   SinDatos,
@@ -27,13 +26,6 @@ const ACCESOS = [
   { texto: "Ingresar lote", href: `${RUTA}/ingreso`, icono: PackagePlus },
   { texto: "Reportes", href: "/encargado/reportes/rodela/inventario", icono: FileChartColumn },
 ];
-
-const MEDIDAS = [
-  { valor: "Enviadas", texto: "Enviadas", descripcion: "Pallets trasladados a producción por día y tipo" },
-  { valor: "Recibidas", texto: "Recibidas", descripcion: "Pallets ingresados por lote por día y tipo" },
-];
-
-const serie = (tipo) => ({ ...tipo, Id: tipo.IdTipoRodela, Nombre: tipo.NombreTipoRodela });
 
 function EnProduccion({ enProduccion }) {
   return (
@@ -149,23 +141,6 @@ export default function InicioRodela() {
       <EncabezadoSemana datos={datos} />
 
       <Indicadores indicadores={datos.Indicadores} />
-
-      <GraficoSemana
-        titulo="Movimientos de la semana"
-        medidas={MEDIDAS}
-        dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Tipos.map(serie) }))}
-        series={datos.Tipos.map(serie)}
-        resumenSerie={(tipo) => (
-          <>
-            <span className="font-extrabold text-slate-900">{numero(tipo.Enviadas)}</span> env. ·{" "}
-            <span className="font-extrabold text-slate-900">{numero(tipo.Recibidas)}</span> rec.
-          </>
-        )}
-        vacio={{
-          titulo: "Sin movimientos esta semana",
-          descripcion: "Cuando se envíen o reciban pallets aparecerán aquí por día.",
-        }}
-      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <UltimosMovimientos

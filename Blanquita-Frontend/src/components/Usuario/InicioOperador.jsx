@@ -11,6 +11,7 @@ import {
   rutaAcceso,
 } from "@/utils/areaTrabajo";
 import { EsEncargado } from "@/utils/validators";
+import { useNombreUsuario } from "@/hooks/useNombreUsuario";
 
 const DIAS = [
   "domingo",
@@ -115,6 +116,7 @@ function TileAcceso({ subruta, href, destacado }) {
 export default function InicioOperador({ usuario, paneles = {} }) {
   const [areaId, setAreaId] = useState(idAreaPorDefecto);
   const [ahora, setAhora] = useState(null);
+  const nombre = useNombreUsuario();
 
   useEffect(() => {
     setAreaId(areaInicial().id);
@@ -142,7 +144,7 @@ export default function InicioOperador({ usuario, paneles = {} }) {
               : " "}
           </div>
           <div className="mt-0.5 text-xl font-extrabold">
-            {EsEncargado(idRol) ? "Hola, encargado" : "Hola, operador"}
+            {nombre ? `Hola, ${nombre}` : "Hola"}
           </div>
         </div>
       </header>

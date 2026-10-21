@@ -7,7 +7,6 @@ import {
   EncabezadoSemana,
   EnlaceBloque,
   ErrorInicio,
-  GraficoSemana,
   GrillaStock,
   Reingresables,
   SelectorPestanas,
@@ -71,8 +70,6 @@ const ACCESOS_REPORTES = [
   { texto: "Reporte de lotes", href: `${RUTA_REPORTES}/lotes`, icono: FileChartColumn },
 ];
 
-const serie = (tipo) => ({ ...tipo, Id: tipo.IdTipo, Nombre: tipo.NombreTipo });
-
 function contenidoLote(lote, config) {
   const partes = [`${numero(lote.Cantidad)} ${config.unidad}`];
   if (lote.Tipos) partes.push(lote.Tipos);
@@ -128,11 +125,6 @@ function ResumenClase({ clase }) {
   if (!datos) return <CargandoInicio />;
 
   const lote = datos.UltimoLote;
-  const medidas = [
-    { valor: "Salidas", texto: config.salida, descripcion: `${config.unidad} que salieron del almacén por día y tipo` },
-    { valor: "Ingresos", texto: "Ingresos", descripcion: `${config.unidad} ingresados por lote por día y tipo` },
-  ];
-
   return (
     <div className="flex flex-col gap-4">
       <AccesosRapidos accesos={[...config.accesos, ...ACCESOS_REPORTES]} />
@@ -175,23 +167,6 @@ function ResumenClase({ clase }) {
       <EncabezadoSemana datos={datos} />
 
       <Indicadores indicadores={datos.Indicadores} config={config} />
-
-      <GraficoSemana
-        titulo="Movimientos de la semana"
-        medidas={medidas}
-        dias={datos.Dias.map((dia) => ({ ...dia, Series: dia.Tipos.map(serie) }))}
-        series={datos.Tipos.map(serie)}
-        resumenSerie={(tipo) => (
-          <>
-            <span className="font-extrabold text-slate-900">{numero(tipo.Salidas)}</span> sal. ·{" "}
-            <span className="font-extrabold text-slate-900">{numero(tipo.Ingresos)}</span> ing.
-          </>
-        )}
-        vacio={{
-          titulo: "Sin movimientos esta semana",
-          descripcion: `Cuando entren o salgan ${config.unidad} aparecerán aquí por día.`,
-        }}
-      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <UltimosMovimientos

@@ -21,7 +21,7 @@ from app.Repository.AlertaStock.AlertaStock import AlertaStockRepository
 from app.Repository.BobinaPapel.Inicio import InicioBobinaPapelRepository
 from app.Repository.BobinaServilleta.Inicio import InicioBobinaServilletaRepository
 from app.Services.AlertaStock.AlertaStock import _item
-from app.utils.inicio import semana_inicio
+from app.utils.inicio import SemanaInicio, semana_inicio
 
 
 class NotificacionService:
@@ -42,9 +42,9 @@ class NotificacionService:
             Criticos=[alerta for alerta in criticos if alerta.CantidadActual > 0],
         )
 
-    def VerNotificaciones(self, id_rol: int) -> NotificacionesResponse:
-        semana = semana_inicio()
-
+    def Producciones(
+        self, semana: SemanaInicio
+    ) -> tuple[ProduccionBobinaPapelNotificaciones, ProduccionBobinaServilletaNotificaciones]:
         bobina_papel = ProduccionBobinaPapelNotificaciones(
             Activas=[
                 ProduccionActivaInicioBobinaPapel(
@@ -71,6 +71,11 @@ class NotificacionService:
                 for fila in self.bobina_servilleta.PausasAbiertas()
             ],
         )
+        return bobina_papel, bobina_servilleta
+
+    def VerNotificaciones(self, id_rol: int) -> NotificacionesResponse:
+        semana = semana_inicio()
+        bobina_papel, bobina_servilleta = self.Producciones(semana)
         stock = self._Stock() if id_rol in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL) else None
 
         producciones = [
