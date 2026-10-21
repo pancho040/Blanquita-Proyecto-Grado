@@ -5,7 +5,7 @@ from app.Config.supabase import get_db
 from app.Services.BobinaServilleta.InventarioBobinaServilletaService import InventarioBobinaServilletaService
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaServilleta.InventarioBobinaServilleta import(
     ReingresarSubBobinaInventarioRequest,
@@ -49,7 +49,7 @@ def ReingresarSubBobina(
     status_code=200
 )
 def VerResumenInventario(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioBobinaServilletaService = Depends(inventario_bobina_servilleta_service)
 ):
     return service.VerResumenInventarioBobinaServilleta()
@@ -61,7 +61,7 @@ def VerResumenInventario(
 )
 def VerDetalleBobinaServilleta(
     IdTipoBobinaServilleta: int,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioBobinaServilletaService = Depends(inventario_bobina_servilleta_service)
 ):
     data = DetalleInventarioBobinaServilletaRequest(IdTipoBobinaServilleta=IdTipoBobinaServilleta)
@@ -73,7 +73,7 @@ def VerDetalleBobinaServilleta(
     status_code=200
 )
 def VerResumenInventarioSubBobina(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioBobinaServilletaService = Depends(inventario_bobina_servilleta_service)
 ):
     return service.VerResumenInventarioSubBobinaServilleta()
@@ -85,7 +85,7 @@ def VerResumenInventarioSubBobina(
 )
 def VerDetalleSubBobina(
     IdTipoMedidaSubBobina: int,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioBobinaServilletaService = Depends(inventario_bobina_servilleta_service)
 ):
     data = DetalleInventarioSubBobinaServilletaRequest(IdTipoMedidaSubBobina=IdTipoMedidaSubBobina)
@@ -97,7 +97,7 @@ def VerDetalleSubBobina(
     status_code=200
 )
 def VerSubBobinaFueraInventario(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL])),
     service: InventarioBobinaServilletaService = Depends(inventario_bobina_servilleta_service)
 ):
     return service.VerSubBobinasServilletaFueraInventario()

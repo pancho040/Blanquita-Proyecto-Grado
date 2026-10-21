@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, Database, Disc, Check, SquarePen } from "lucide-react";
+import { Plus, Loader2, Database, Disc, Check, SquarePen, History } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ import {
   extraerMensajeError,
   numeroONulo,
   limpiarObservacion,
+  VeComoLider,
+  EsGerente,
+  rutaDeRol,
 } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { useDetalleInventario } from "@/hooks/useDetalleInventario";
@@ -72,7 +75,6 @@ import {
 } from "@/components/Inventario/comunes";
 import Header from "@/components/layout/Header";
 import {
-  Roles,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
@@ -106,8 +108,8 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
             <TableHead className="pl-5">Bobina</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead>Proveedor</TableHead>
-            <TableHead>Unidades</TableHead>
-            <TableHead className="pr-5 text-center">Acciones</TableHead>
+            <TableHead className={cn(!onAbrir && !onEditar && "pr-5")}>Unidades</TableHead>
+            {(onAbrir || onEditar) && <TableHead className="pr-5 text-center">Acciones</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -120,7 +122,7 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                 {dateFormatter(b.FechaRecepcion)}
               </TableCell>
               <TableCell className="text-slate-600">{b.NombreProveedor}</TableCell>
-              <TableCell className="text-slate-600">
+              <TableCell className={cn("text-slate-600", !onAbrir && !onEditar && "pr-5")}>
                 <div className="flex flex-col gap-1">
                   {b.Unidades.map((u) => (
                     <span key={u.IdUnidadBobinaServilleta}>
@@ -132,6 +134,7 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                   ))}
                 </div>
               </TableCell>
+              {(onAbrir || onEditar) && (
               <TableCell className="pr-5">
                 <div className="flex items-center justify-center gap-2">
                   {onEditar && (
@@ -145,20 +148,23 @@ function TablaBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }) {
                       Editar
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    disabled={procesandoId === b.IdBobinaServilleta}
-                    onClick={() => onAbrir(b)}
-                    className="gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
-                  >
-                    {procesandoId === b.IdBobinaServilleta ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      "Abrir"
-                    )}
-                  </Button>
+                  {onAbrir && (
+                    <Button
+                      size="sm"
+                      disabled={procesandoId === b.IdBobinaServilleta}
+                      onClick={() => onAbrir(b)}
+                      className="gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
+                    >
+                      {procesandoId === b.IdBobinaServilleta ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        "Abrir"
+                      )}
+                    </Button>
+                  )}
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
@@ -192,6 +198,7 @@ function ListaMovilBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }
               </span>
             ))}
           </div>
+          {(onAbrir || onEditar) && (
           <div className="flex gap-2">
             {onEditar && (
               <Button
@@ -203,18 +210,21 @@ function ListaMovilBobinas({ bobinas, tipoSel, procesandoId, onAbrir, onEditar }
                 Editar
               </Button>
             )}
-            <Button
-              disabled={procesandoId === b.IdBobinaServilleta}
-              onClick={() => onAbrir(b)}
-              className="h-10 flex-1 gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
-            >
-              {procesandoId === b.IdBobinaServilleta ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                "Abrir bobina"
-              )}
-            </Button>
+            {onAbrir && (
+              <Button
+                disabled={procesandoId === b.IdBobinaServilleta}
+                onClick={() => onAbrir(b)}
+                className="h-10 flex-1 gap-1.5 bg-gradient-to-r from-c3 to-c4 font-bold text-white hover:opacity-90"
+              >
+                {procesandoId === b.IdBobinaServilleta ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  "Abrir bobina"
+                )}
+              </Button>
+            )}
           </div>
+          )}
         </div>
       ))}
     </div>
@@ -227,8 +237,8 @@ function TablaSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
       <Table className="min-w-[460px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Sub-bobina</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Sub-bobina</TableHead>
             <TableHead className="pr-5">Unidad de origen</TableHead>
           </TableRow>
         </TableHeader>
@@ -237,14 +247,16 @@ function TablaSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
             const on = marcada === s.IdSubBobinaServilleta;
             return (
               <TableRow key={s.IdSubBobinaServilleta} className={cn(on && tipoSel.soft)}>
-                <TableCell className="pl-5">
-                  <CasillaSeleccion
-                    marcada={on}
-                    acento={tipoSel}
-                    onClick={() => onToggle(s.IdSubBobinaServilleta)}
-                  />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion
+                      marcada={on}
+                      acento={tipoSel}
+                      onClick={() => onToggle(s.IdSubBobinaServilleta)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   <div className="flex items-center gap-2">
                     #{s.IdSubBobinaServilleta}
                     {s.Reingresada && <BadgeReingresada fecha={s.FechaUltimoReingreso} />}
@@ -270,6 +282,7 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
         return (
           <button
             key={s.IdSubBobinaServilleta}
+            disabled={!onToggle}
             onClick={() => onToggle(s.IdSubBobinaServilleta)}
             className={cn(
               "flex items-center justify-between gap-2.5 rounded-2xl border-2 p-3.5 text-left",
@@ -292,7 +305,7 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
                 </div>
               )}
             </div>
-            <CasillaSeleccion marcada={on} acento={tipoSel} grande />
+            {onToggle && <CasillaSeleccion marcada={on} acento={tipoSel} grande />}
           </button>
         );
       })}
@@ -301,7 +314,8 @@ function ListaMovilSubBobinas({ subBobinas, tipoSel, marcada, onToggle }) {
 }
 
 export default function InventarioBobinaServilleta({ usuario }) {
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   const resumenBobinas = useCatalogo(verResumenInventarioBobinaServilleta);
   const resumenSubs = useCatalogo(verResumenInventarioSubBobinaServilleta);
@@ -514,9 +528,9 @@ export default function InventarioBobinaServilleta({ usuario }) {
         accion={
           esEncargado
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/bobina-servilleta/ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "bobina-servilleta/ingreso"),
               }
             : null
         }
@@ -626,7 +640,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                 ? `${tipoSel.CantidadBobinaServilleta} en almacén`
                 : `${tipoSel.CantidadSubBobinas} en almacén`
             }
-            etiqueta={esBobina ? null : "Se traslada 1 sub-bobina"}
+            etiqueta={esBobina || soloLectura ? null : "Se traslada 1 sub-bobina"}
             onCerrar={detalle.cerrar}
           >
             <ContenidoLista
@@ -655,8 +669,8 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       bobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       procesandoId={apertura.enProceso}
-                      onAbrir={abrirBobina}
-                      onEditar={esEncargado ? abrirEditar : null}
+                      onAbrir={soloLectura ? null : abrirBobina}
+                      onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                     />
                   </div>
                   <div className="md:hidden">
@@ -664,8 +678,8 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       bobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       procesandoId={apertura.enProceso}
-                      onAbrir={abrirBobina}
-                      onEditar={esEncargado ? abrirEditar : null}
+                      onAbrir={soloLectura ? null : abrirBobina}
+                      onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                     />
                   </div>
                 </>
@@ -676,7 +690,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       subBobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       marcada={marcadaSub}
-                      onToggle={toggleSub}
+                      onToggle={soloLectura ? undefined : toggleSub}
                     />
                   </div>
                   <div className="md:hidden">
@@ -684,7 +698,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       subBobinas={detalleFiltrado}
                       tipoSel={tipoSel}
                       marcada={marcadaSub}
-                      onToggle={toggleSub}
+                      onToggle={soloLectura ? undefined : toggleSub}
                     />
                   </div>
                 </>
@@ -737,7 +751,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                     observacion={s.UltimaObservacion}
                     fechaMovimiento={s.FechaUltimoMovimiento}
                     procesando={accionesFuera.enProceso === s.IdSubBobinaServilleta}
-                    onReingresar={() => setPorReingresar(s)}
+                    onReingresar={soloLectura ? undefined : () => setPorReingresar(s)}
                   />
                 ))}
               </div>

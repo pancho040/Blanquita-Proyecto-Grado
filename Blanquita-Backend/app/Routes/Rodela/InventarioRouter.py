@@ -7,7 +7,7 @@ from app.Services.Rodela.InventarioRodelaService import InventarioRodelaService
 
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 
 from app.Models.Rodela.InventarioRodela import (
@@ -41,7 +41,7 @@ InventarioRodelaRouter = APIRouter(
     status_code=200
 )
 def VerResumenInventarioRodela(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioRodelaService = Depends(inventario_rodela_service)
 ):
     return service.VerResumenInventarioRodela()
@@ -54,7 +54,7 @@ def VerResumenInventarioRodela(
 )
 def VerDetalleInventarioRodela(
     IdTipoRodela: int,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioRodelaService = Depends(inventario_rodela_service)
 ):
     data = DetalleInventarioRodelaRequest(IdTipoRodela=IdTipoRodela)
@@ -68,7 +68,7 @@ def VerDetalleInventarioRodela(
 )
 def ListarRodelasEnAlmacen(
     IdTipoRodela: int,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioRodelaService = Depends(inventario_rodela_service)
 ):
     return service.ListarRodelasEnAlmacen(IdTipoRodela)
@@ -106,7 +106,7 @@ def CorregirTrasladoRodela(
     status_code=200
 )
 def ListarRodelasReingresables(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: InventarioRodelaService = Depends(inventario_rodela_service)
 ):
     return service.ListarRodelasReingresables()

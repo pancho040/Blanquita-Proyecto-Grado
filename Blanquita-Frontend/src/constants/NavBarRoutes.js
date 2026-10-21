@@ -21,7 +21,7 @@ import {
   Bell
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
-import { Roles } from "@/constants/Values";
+import { VeComoLider } from "@/utils/validators";
 
 export function rutaDeItem(item, basePath, prefijo) {
   if (item.absoluta) return item.ruta;
@@ -32,7 +32,7 @@ export function rutaDeItem(item, basePath, prefijo) {
 export function rutasVisibles(rutas, idRol, esAdmin) {
   return rutas.filter(
     (item) =>
-      (!item.isLider || idRol === Roles.Encargado) &&
+      (!item.isLider || VeComoLider(idRol)) &&
       (!item.soloAdmin || esAdmin),
   );
 }

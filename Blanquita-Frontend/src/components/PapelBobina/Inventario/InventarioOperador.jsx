@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Cylinder } from "lucide-react";
+import { Plus, Cylinder, History } from "lucide-react";
 import { toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -42,13 +42,14 @@ import { ListaMovilBobinas } from "./ListaMovilBobinas";
 import ModalEditarBobina from "./ModalEditarBobina";
 import DialogoIniciarProduccion from "./DialogoIniciarProduccion";
 import Header from "@/components/layout/Header";
-import { Roles } from "@/constants/Values";
+import { VeComoLider, EsGerente, rutaDeRol } from "@/utils/validators";
 import { productosActivosDelTipo } from "@/utils/catalogo";
 
 const sinDatos = async () => [];
 
 export default function InventarioBobinasPapel({ usuario }) {
-  const esLider = usuario?.IdRol === Roles.Encargado;
+  const esLider = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   const resumen = useCatalogo(verResumenInventarioBobinaPapel);
   const fuera = useCatalogo(esLider ? verBobinasPapelFueraInventario : sinDatos);
@@ -182,9 +183,9 @@ export default function InventarioBobinasPapel({ usuario }) {
         accion={
           esLider
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/bobina-papel/ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "bobina-papel/ingreso"),
               }
             : null
         }
@@ -249,7 +250,7 @@ export default function InventarioBobinasPapel({ usuario }) {
             icono={Cylinder}
             titulo={`Bobinas · ${tipoSel.NombreTipoBobina}`}
             subtitulo={`${tipoSel.CantidadBobinas} en almacén`}
-            etiqueta={esServilleta ? "Se envía 1 bobina" : "Se envían de a 2 bobinas"}
+            etiqueta={soloLectura ? null : esServilleta ? "Se envía 1 bobina" : "Se envían de a 2 bobinas"}
             onCerrar={detalle.cerrar}
           >
             <ContenidoLista
@@ -266,8 +267,8 @@ export default function InventarioBobinasPapel({ usuario }) {
                   bobinas={bobinasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleBobina}
-                  onEditar={esLider ? abrirEditar : undefined}
+                  onToggle={soloLectura ? undefined : toggleBobina}
+                  onEditar={esLider && !soloLectura ? abrirEditar : undefined}
                 />
               </div>
               <div className="md:hidden">
@@ -275,8 +276,8 @@ export default function InventarioBobinasPapel({ usuario }) {
                   bobinas={bobinasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleBobina}
-                  onEditar={esLider ? abrirEditar : undefined}
+                  onToggle={soloLectura ? undefined : toggleBobina}
+                  onEditar={esLider && !soloLectura ? abrirEditar : undefined}
                 />
               </div>
             </ContenidoLista>
@@ -360,7 +361,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                     observacion={b.UltimaObservacion}
                     fechaMovimiento={b.FechaUltimoMovimiento}
                     procesando={accionesFuera.enProceso === b.IdBobinaPapel}
-                    onReingresar={() => setPorReingresar(b)}
+                    onReingresar={soloLectura ? undefined : () => setPorReingresar(b)}
                   />
                 ))}
               </div>

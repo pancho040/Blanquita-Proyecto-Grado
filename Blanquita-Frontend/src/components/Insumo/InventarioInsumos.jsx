@@ -37,7 +37,7 @@ import {
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
-import { EsEncargado, aEntero, limpiarObservacion } from "@/utils/validators";
+import { VeComoLider, EsGerente, aEntero, limpiarObservacion } from "@/utils/validators";
 
 const MOVIMIENTOS = {
   ingreso: {
@@ -326,7 +326,8 @@ function FormularioMovimiento({ insumo, onRegistrado }) {
 }
 
 export default function InventarioInsumos({ usuario }) {
-  const esEncargado = EsEncargado(usuario?.IdRol);
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const catalogo = useCatalogo(verCatalogoInsumo);
   const [sel, setSel] = useState(null);
   const [busqueda, setBusqueda] = useState("");
@@ -386,7 +387,7 @@ export default function InventarioInsumos({ usuario }) {
                 acento={i}
                 activo={sel === i.IdTipoInsumo}
                 inactivo={!i.Activo}
-                onClick={() => seleccionar(i.IdTipoInsumo)}
+                onClick={soloLectura ? undefined : () => seleccionar(i.IdTipoInsumo)}
                 icono={Package}
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
@@ -394,7 +395,7 @@ export default function InventarioInsumos({ usuario }) {
                 stock={i.stock}
                 cantidad={Number(i.CantidadActual || 0)}
                 unidad="en almacén"
-                textoVer="Registrar movimiento"
+                textoVer={soloLectura ? null : "Registrar movimiento"}
               >
                 {i.DescripcionInsumo && (
                   <DatoTarjeta etiqueta="Descripción">{i.DescripcionInsumo}</DatoTarjeta>

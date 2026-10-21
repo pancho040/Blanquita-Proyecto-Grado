@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.Config.supabase import get_db
 
 from app.Auth.Dependencies import require_role, get_generado_por
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaServilleta.Reporte import (
     ReporteInventarioBobinaServilletaRequest,
@@ -70,7 +70,7 @@ def reporte_bobina_servilleta_service(
 )
 def ReporteInventarioCompletoServilleta(
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -99,7 +99,7 @@ def ReporteInventarioBobinasServilleta(
         description="IDs de TipoBobinaServilleta a incluir. Vacío = todos los tipos.",
     ),
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -131,7 +131,7 @@ def CatalogoBobinasServilleta(
     Pagina: int = 1,
     TamanoPagina: int = 50,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
 ):
@@ -154,7 +154,7 @@ def CatalogoBobinasServilleta(
 )
 def ReporteInventarioSubBobinasServilleta(
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -188,7 +188,7 @@ def subBobinaCatalogo(
     Pagina: int = 1,
     TamanoPagina: int = 50,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
 ):
@@ -214,7 +214,7 @@ def subBobinaCatalogo(
 def ReporteHistorialMovimientosUnidadServilleta(
     id_unidad_bobina_servilleta: int,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -244,7 +244,7 @@ def ReporteHistorialMovimientosUnidadServilleta(
 def ReporteDetalleBobinaServilletaRoute(
     id_bobina_servilleta: int,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -276,7 +276,7 @@ def CatalogoLotesBobinaServilleta(
     Pagina: int = 1,
     TamanoPagina: int = 50,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
 ):
@@ -301,7 +301,7 @@ def CatalogoLotesBobinaServilleta(
 def ReporteLoteServilletaDetalle(
     id_lote_bobina_servilleta: int,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -332,7 +332,7 @@ def ReporteLotesServilletaPorPeriodo(
     FechaInicio: date,
     FechaFin: date,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -370,7 +370,7 @@ def CatalogoProduccionServilleta(
     Pagina: int = 1,
     TamanoPagina: int = 50,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
 ):
@@ -400,7 +400,7 @@ def ObtenerDetalleProduccionServilleta(
     id_produccion: int,
     VerPausas: bool = False,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -431,7 +431,7 @@ def ObtenerDetalleProduccionServilleta(
 def ReporteProduccionServilletaCancelada(
     id_produccion: int,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),
@@ -461,7 +461,7 @@ def ReporteProduccionServilletaPorPeriodo(
     FechaFin: date,
     VerCancelaciones: bool = False,
     usuario_actual: dict = Depends(
-        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])
+        require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])
     ),
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteBobinaServilletaService = Depends(reporte_bobina_servilleta_service),

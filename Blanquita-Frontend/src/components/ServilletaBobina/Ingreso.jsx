@@ -22,6 +22,7 @@ import {
   erroresPorFila,
 } from "@/hooks/useIngresoLote";
 import {
+  PestanasIngreso,
   ResultadoLote,
   DatosLote,
   SelectorProveedor,
@@ -33,6 +34,7 @@ import {
   BarraGuardarLote,
   DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
+import LoteReporteServilleta from "@/components/Reportes/BobinaServilleta/Lote";
 
 const COLORES_UNIDAD = ["border-c3 text-c3", "border-serv3 text-serv3"];
 
@@ -247,112 +249,114 @@ export default function IngresoBobinasServilleta({ usuario }) {
       />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
-        {envio.resultado && (
-          <ResultadoLote
-            descripcion={
-              <>
-                {envio.resultado.CantidadBobinasServilleta} bobinas ·{" "}
-                {envio.resultado.CantidadUnidades} unidades · Recepción{" "}
-                {dateFormatter(envio.resultado.FechaRecepcion)}
-              </>
-            }
-            onCerrar={() => envio.setResultado(null)}
-          />
-        )}
+        <PestanasIngreso lotes={<LoteReporteServilleta />}>
+          {envio.resultado && (
+            <ResultadoLote
+              descripcion={
+                <>
+                  {envio.resultado.CantidadBobinasServilleta} bobinas ·{" "}
+                  {envio.resultado.CantidadUnidades} unidades · Recepción{" "}
+                  {dateFormatter(envio.resultado.FechaRecepcion)}
+                </>
+              }
+              onCerrar={() => envio.setResultado(null)}
+            />
+          )}
 
-        <DatosLote descripcion="Se aplican a todas las bobinas que registres abajo">
-          <SelectorProveedor
-            catalogo={proveedores}
-            valor={idProveedor}
-            onCambio={setIdProveedor}
-            invalido={tocado && !idProveedor}
-          />
-          <SelectorTipo
-            catalogo={tipos}
-            valor={idTipoBobinaServilleta}
-            onCambio={setIdTipoBobinaServilleta}
-            campoValor="IdTipoBobinaServilleta"
-            campoEtiqueta="NombreTipoBobinaServilleta"
-            etiqueta="Tipo de bobina"
-            mensajeVacio="No hay tipos de bobina servilleta registrados."
-            cantidadSkeleton={2}
-          />
-        </DatosLote>
+          <DatosLote descripcion="Se aplican a todas las bobinas que registres abajo">
+            <SelectorProveedor
+              catalogo={proveedores}
+              valor={idProveedor}
+              onCambio={setIdProveedor}
+              invalido={tocado && !idProveedor}
+            />
+            <SelectorTipo
+              catalogo={tipos}
+              valor={idTipoBobinaServilleta}
+              onCambio={setIdTipoBobinaServilleta}
+              campoValor="IdTipoBobinaServilleta"
+              campoEtiqueta="NombreTipoBobinaServilleta"
+              etiqueta="Tipo de bobina"
+              mensajeVacio="No hay tipos de bobina servilleta registrados."
+              cantidadSkeleton={2}
+            />
+          </DatosLote>
 
-        {sinFormatos && (
-          <ErrorEnvio mensaje="Este tipo de bobina no tiene formatos activos. Pide al administrador que los configure." />
-        )}
+          {sinFormatos && (
+            <ErrorEnvio mensaje="Este tipo de bobina no tiene formatos activos. Pide al administrador que los configure." />
+          )}
 
-        <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-          <EncabezadoFilas
-            titulo="Bobinas del lote"
-            tipo={tipoActual?.NombreTipoBobinaServilleta}
-            nota={
-              cantidadUnidades === 1
-                ? "Cada bobina lleva 1 unidad"
-                : `Cada bobina lleva ${cantidadUnidades} unidades, en orden de arriba hacia abajo`
-            }
-            textoAgregar="Agregar bobina"
-            onAgregar={agregarFila}
-          />
+          <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <EncabezadoFilas
+              titulo="Bobinas del lote"
+              tipo={tipoActual?.NombreTipoBobinaServilleta}
+              nota={
+                cantidadUnidades === 1
+                  ? "Cada bobina lleva 1 unidad"
+                  : `Cada bobina lleva ${cantidadUnidades} unidades, en orden de arriba hacia abajo`
+              }
+              textoAgregar="Agregar bobina"
+              onAgregar={agregarFila}
+            />
 
-          <div className="flex flex-col gap-4 p-5">
-            {filas.map((f, i) => {
-              const err = tocado ? erroresFilas[f.id] : null;
-              const ultimaUnidad = f.Unidades.length - 1;
-              return (
-                <div
-                  key={f.id}
-                  className={cn(
-                    "flex flex-col gap-3 rounded-xl border-2 p-4",
-                    err ? "border-red-300 bg-red-50/50" : "border-slate-200 bg-slate-50",
-                  )}
-                >
-                  <CabeceraFila
-                    titulo={`Bobina ${i + 1}`}
-                    onQuitar={() => quitarFila(f.id)}
-                    deshabilitado={filas.length === 1}
-                  />
-
-                  {f.Unidades.map((unidad, posicion) => (
-                    <BloqueUnidad
-                      key={posicion}
-                      numero={posicion + 1}
-                      unidad={unidad}
-                      formatos={formatos}
-                      conError={!!err}
-                      onCampo={(campo, valor) => cambiarUnidad(f, posicion, campo, valor)}
-                      inputRef={posicion === 0 ? registrarRef(f.id) : undefined}
-                      onKeyDown={
-                        posicion === ultimaUnidad
-                          ? (e) => {
-                              if (e.key === "Enter" && i === filas.length - 1) agregarFila();
-                            }
-                          : undefined
-                      }
+            <div className="flex flex-col gap-4 p-5">
+              {filas.map((f, i) => {
+                const err = tocado ? erroresFilas[f.id] : null;
+                const ultimaUnidad = f.Unidades.length - 1;
+                return (
+                  <div
+                    key={f.id}
+                    className={cn(
+                      "flex flex-col gap-3 rounded-xl border-2 p-4",
+                      err ? "border-red-300 bg-red-50/50" : "border-slate-200 bg-slate-50",
+                    )}
+                  >
+                    <CabeceraFila
+                      titulo={`Bobina ${i + 1}`}
+                      onQuitar={() => quitarFila(f.id)}
+                      deshabilitado={filas.length === 1}
                     />
-                  ))}
 
-                  {err && <ErrorFila mensaje={err} />}
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                    {f.Unidades.map((unidad, posicion) => (
+                      <BloqueUnidad
+                        key={posicion}
+                        numero={posicion + 1}
+                        unidad={unidad}
+                        formatos={formatos}
+                        conError={!!err}
+                        onCampo={(campo, valor) => cambiarUnidad(f, posicion, campo, valor)}
+                        inputRef={posicion === 0 ? registrarRef(f.id) : undefined}
+                        onKeyDown={
+                          posicion === ultimaUnidad
+                            ? (e) => {
+                                if (e.key === "Enter" && i === filas.length - 1) agregarFila();
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
 
-        {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
+                    {err && <ErrorFila mensaje={err} />}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
-          <span className="font-extrabold text-white">
-            {filas.length} {filas.length === 1 ? "bobina" : "bobinas"}
-          </span>
-          <span className="text-slate-400">
-            <strong className="text-slate-200">
-              {filas.reduce((total, f) => total + f.Unidades.length, 0)}
-            </strong>{" "}
-            unidades
-          </span>
-        </BarraGuardarLote>
+          {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
+
+          <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
+            <span className="font-extrabold text-white">
+              {filas.length} {filas.length === 1 ? "bobina" : "bobinas"}
+            </span>
+            <span className="text-slate-400">
+              <strong className="text-slate-200">
+                {filas.reduce((total, f) => total + f.Unidades.length, 0)}
+              </strong>{" "}
+              unidades
+            </span>
+          </BarraGuardarLote>
+        </PestanasIngreso>
       </main>
 
       <DialogoConfirmarLote

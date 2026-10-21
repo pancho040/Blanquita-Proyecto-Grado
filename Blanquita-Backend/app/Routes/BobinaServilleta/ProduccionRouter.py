@@ -5,7 +5,7 @@ from app.Config.supabase import get_db
 from app.Services.BobinaServilleta.ProduccionBobinaServilletaService import ProduccionBobinaServilletaService
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaServilleta.ProduccionBobinaServilleta import (
     AbrirBobinaServilletaRequest,
@@ -112,7 +112,7 @@ def CancelarProduccionServilleta(
 )
 def VerProduccionServilletaActivas(
     IdTipoMedidaSubBobina: int | None = None,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: ProduccionBobinaServilletaService = Depends(produccion_bobina_servilleta_service)
 ):
     data = VerProduccionServilletaActivasRequest(IdTipoMedidaSubBobina=IdTipoMedidaSubBobina)
@@ -124,7 +124,7 @@ def VerProduccionServilletaActivas(
     status_code=200
 )
 def VerPausasProduccionServilletaActivas(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: ProduccionBobinaServilletaService = Depends(produccion_bobina_servilleta_service)
 ):
     return service.VerPausasProduccionServilletaActivas()

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import require_role
 from app.Config.supabase import get_db
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 from app.Models.Empaque.EmpaqueBolsa import (
     IngresoEmpaqueBolsaRequest,
     IngresoEmpaqueBolsaResponse,
@@ -32,7 +32,7 @@ def empaque_bolsa_service(db: Session = Depends(get_db)) -> EmpaqueBolsaService:
 )
 def VerInventarioEmpaqueBolsa(
     IncluirInactivos: bool = False,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: EmpaqueBolsaService = Depends(empaque_bolsa_service),
 ):
     return service.VerInventario(IncluirInactivos)

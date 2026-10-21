@@ -7,7 +7,7 @@ from app.Services.BobinaPapel.ProduccionBobinaPapelService import (
 )
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaPapel.ProduccionBobinaPapel import (
     IniciarProduccionBobinaTuboRequest,
@@ -142,7 +142,7 @@ def InsertarMovimientoLog(
     response_model=list[VerProduccionBobinaTuboResponse],
     status_code=200,
     dependencies=[
-        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR]))
+        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL]))
     ],
 )
 def VerProduccionBobinaTubo(
@@ -160,7 +160,7 @@ def VerProduccionBobinaTubo(
     response_model=list[VerPausasProduccionBobinaTuboActivasResponse],
     status_code=200,
     dependencies=[
-        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR]))
+        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL]))
     ],
 )
 def VerPausasProduccionBobinaTuboActivas(

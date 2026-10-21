@@ -5,15 +5,15 @@ import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { aFechaISO } from "@/utils/dates";
 import { ATAJOS, CLASES_EMPAQUE, atajoActivo, claseEmpaque, tipoEmpaque } from "./filtros";
 
-export const filtrosIniciales = (conMovimiento = false) => ({
-  Clase: CLASES_EMPAQUE[0].valor,
+export const filtrosIniciales = (conMovimiento = false, clase = CLASES_EMPAQUE[0].valor) => ({
+  Clase: clase,
   Rango: ATAJOS[0].rango(new Date()),
   IdsTipo: [],
   ...(conMovimiento ? { IdTipoMovimiento: "" } : {}),
 });
 
-export const hayFiltrosEmpaque = (filtros) =>
-  filtros.Clase !== CLASES_EMPAQUE[0].valor ||
+export const hayFiltrosEmpaque = (filtros, claseFija = false) =>
+  (!claseFija && filtros.Clase !== CLASES_EMPAQUE[0].valor) ||
   atajoActivo(filtros.Rango) !== "hoy" ||
   filtros.IdsTipo.length > 0 ||
   Boolean(filtros.IdTipoMovimiento);
@@ -53,7 +53,15 @@ const MOVIMIENTOS = [
   { valor: 6, texto: "Reingresos" },
 ];
 
-export function FiltrosEmpaque({ reporte, idRango, etiquetaRango, conMovimiento = false }) {
+export function FiltrosEmpaque({
+  reporte,
+  idRango,
+  etiquetaRango,
+  conMovimiento = false,
+  claseFija = false,
+  diasDestacados,
+  onRangoVisibleChange,
+}) {
   const { filtros } = reporte;
   const clase = claseEmpaque(filtros.Clase);
   const atajo = atajoActivo(filtros.Rango);
@@ -66,19 +74,24 @@ export function FiltrosEmpaque({ reporte, idRango, etiquetaRango, conMovimiento 
 
   return (
     <>
-      <Pildoras
-        etiqueta="Empaque"
-        opciones={CLASES_EMPAQUE}
-        valor={filtros.Clase}
-        onCambio={cambiarClase}
-      />
+      {!claseFija && (
+        <Pildoras
+          etiqueta="Empaque"
+          opciones={CLASES_EMPAQUE}
+          valor={filtros.Clase}
+          onCambio={cambiarClase}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <DoubleDatePicker
+          key={clase.valor}
           id={idRango}
           label={etiquetaRango}
           value={filtros.Rango}
           onChange={(valor) => reporte.cambiar("Rango", valor)}
+          diasDestacados={diasDestacados}
+          onRangoVisibleChange={onRangoVisibleChange}
         />
         <CampoFiltro etiqueta="Atajos">
           <ToggleGroup

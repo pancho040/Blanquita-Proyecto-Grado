@@ -15,7 +15,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { verInventarioProductoTerminado } from "../../services/Inventario/Inventario";
 import { descargarReporteInventarioProducto } from "@/services/Inventario/Reportes";
-import { Roles } from "@/constants/Values";
+import { VeComoLider } from "@/utils/validators";
 import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
 import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
@@ -49,7 +49,7 @@ function TarjetaResumen({ icono: Icono, valor, etiqueta, tono }) {
 }
 
 export default function InventarioProductoTerminado({ usuario }) {
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
   const [inventario, setInventario] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

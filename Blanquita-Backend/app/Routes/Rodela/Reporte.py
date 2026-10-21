@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.Config.supabase import get_db
 
 from app.Auth.Dependencies import require_role, get_generado_por
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 
 from app.Models.Rodela.Reporte import (
     VerRodelasRequest,
@@ -45,7 +45,7 @@ RodelaReporteRouter = APIRouter(
     "/inventario/catalogo",
     response_model=VerRodelasResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def CatalogoRodelas(
     CodigoRodela: str | None = None,
@@ -75,7 +75,7 @@ def CatalogoRodelas(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteInventarioRodelas(
     tipos: list[int] | None = Query(
@@ -104,7 +104,7 @@ def ReporteInventarioRodelas(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteRodelaMovimientos(
     id_rodela: int,
@@ -129,7 +129,7 @@ def ReporteRodelaMovimientos(
     "/lote/catalogo",
     response_model=VerLotesRodelaResponse,
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ObtenerLoteRodelaCatalogo(
     FechaInicio: date | None = None,
@@ -157,7 +157,7 @@ def ObtenerLoteRodelaCatalogo(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def CrearReporteLoteRodela(
     id_lote_rodela: int,
@@ -183,7 +183,7 @@ def CrearReporteLoteRodela(
     status_code=200,
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def ReporteLotesRodelaPorPeriodo(
     FechaInicio: date,

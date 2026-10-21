@@ -93,7 +93,7 @@ function tarjetaProduccion(linea) {
   );
 }
 
-export default function ProduccionReporteProducto({ usuario }) {
+export default function ProduccionReporteProducto({ usuario, contenedor: Contenedor = PaginaReporte }) {
   const reporte = useReporte(consultarResumen, {
     Rango: ATAJOS[0].rango(new Date()),
     [LINEA_PRODUCTO.campo]: [],
@@ -110,7 +110,7 @@ export default function ProduccionReporteProducto({ usuario }) {
   const atajoActivo = ATAJOS.find((atajo) => mismoRango(Rango, atajo.rango(hoy)))?.valor;
 
   return (
-    <PaginaReporte
+    <Contenedor
       usuario={usuario}
       titulo="Reportes · Productos"
       subtitulo="Producción diaria"
@@ -199,6 +199,6 @@ export default function ProduccionReporteProducto({ usuario }) {
         }
         mensajeVacio="Elegí una fecha de inicio y una de fin para ver la producción."
       />
-    </PaginaReporte>
+    </Contenedor>
   );
 }

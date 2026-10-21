@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SelectEntidad } from "@/components/layout/Selectentidad";
 import { CasillaConfirmacion } from "@/components/Admin/CasillaConfirmacion";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +27,27 @@ import {
 } from "@/components/ui/dialog";
 
 const ETIQUETA = "text-xs font-bold uppercase tracking-wide text-slate-600";
+
+const PESTANA = "flex-1 font-bold sm:flex-none sm:px-6";
+
+export function PestanasIngreso({ lotes, children }) {
+  return (
+    <Tabs defaultValue="ingresar">
+      <TabsList className="mb-5 h-11 w-full sm:w-auto">
+        <TabsTrigger value="ingresar" className={PESTANA}>
+          Ingresar lote
+        </TabsTrigger>
+        <TabsTrigger value="lotes" className={PESTANA}>
+          Ver lotes
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="ingresar">{children}</TabsContent>
+      <TabsContent value="lotes">
+        <TooltipProvider>{lotes}</TooltipProvider>
+      </TabsContent>
+    </Tabs>
+  );
+}
 
 export function ResultadoLote({ descripcion, children, onCerrar }) {
   return (

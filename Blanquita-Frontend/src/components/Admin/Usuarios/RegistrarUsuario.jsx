@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import Header from "@/components/layout/Header";
 import InputForModal from "@/components/layout/InputForModal";
 import { SelectEntidad } from "@/components/layout/Selectentidad";
-import { Roles, RolesUsuario } from "@/constants/Values";
+import { RolesUsuario } from "@/constants/Values";
+import { VeComoLider } from "@/utils/validators";
 import { crearUsuario } from "@/services/Usuario/Admin";
 import {
   CamposClave,
@@ -105,13 +106,13 @@ export default function RegistrarUsuario() {
 
   const cambiar = (campo) => (valor) => setDatos((previos) => ({ ...previos, [campo]: valor }));
 
-  const puedeSerAdmin = Number(datos.IdRol) === Roles.Encargado;
+  const puedeSerAdmin = VeComoLider(Number(datos.IdRol));
 
   const cambiarRol = (valor) =>
     setDatos((previos) => ({
       ...previos,
       IdRol: valor,
-      IsAdmin: Number(valor) === Roles.Encargado ? previos.IsAdmin : false,
+      IsAdmin: VeComoLider(Number(valor)) ? previos.IsAdmin : false,
     }));
 
   const errores = erroresRegistro(datos);

@@ -14,7 +14,7 @@ export function ListaMovilBobinas({ bobinas, tipoSel, marcadas, onToggle, onEdit
         return (
           <div
             key={b.IdBobinaPapel}
-            onClick={() => onToggle(b.CodigoBobina)}
+            onClick={onToggle && (() => onToggle(b.CodigoBobina))}
             className={cn(
               "flex flex-col gap-2.5 rounded-2xl border-2 p-3.5",
               on ? tipoSel.soft : "border-slate-200 bg-white",
@@ -28,7 +28,7 @@ export function ListaMovilBobinas({ bobinas, tipoSel, marcadas, onToggle, onEdit
                 </div>
                 {b.Reingresada && <BadgeReingresada fecha={b.FechaUltimoReingreso} />}
               </div>
-              <CasillaSeleccion marcada={on} acento={tipoSel} grande />
+              {onToggle && <CasillaSeleccion marcada={on} acento={tipoSel} grande />}
             </div>
             <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
               <span>

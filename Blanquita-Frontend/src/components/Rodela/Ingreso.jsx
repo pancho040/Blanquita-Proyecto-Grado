@@ -20,6 +20,7 @@ import {
   erroresPorFila,
 } from "@/hooks/useIngresoLote";
 import {
+  PestanasIngreso,
   ResultadoLote,
   DatosLote,
   SelectorProveedor,
@@ -33,6 +34,7 @@ import {
   BarraGuardarLote,
   DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
+import IngresoReporteRodela from "@/components/Reportes/Rodela/Ingreso";
 
 const filaVacia = () => ({ CodigoRodela: "" });
 
@@ -100,150 +102,152 @@ export default function IngresoRodelas({ usuario }) {
       />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
-        {envio.resultado && (
-          <ResultadoLote
-            descripcion={
-              <>
-                {envio.resultado.CantidadRodelas} rodelas · Recepción{" "}
-                {dateFormatter(envio.resultado.FechaRecepcion)}
-              </>
-            }
-            onCerrar={() => envio.setResultado(null)}
-          />
-        )}
-
-        <DatosLote descripcion="Se aplican a todas las rodelas que registres abajo">
-          <SelectorProveedor
-            catalogo={proveedores}
-            valor={idProveedor}
-            onCambio={setIdProveedor}
-            invalido={tocado && !idProveedor}
-          />
-          <SelectorTipo
-            catalogo={tipos}
-            valor={idTipoRodela}
-            onCambio={setIdTipoRodela}
-            campoValor="IdTipoRodela"
-            campoEtiqueta="NombreTipoRodela"
-            campoDescripcion="Descripcion"
-            etiqueta="Tipo de rodela"
-            mensajeVacio="No hay tipos de rodela registrados."
-          />
-        </DatosLote>
-
-        <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-          <EncabezadoFilas
-            titulo="Rodelas del lote"
-            tipo={tipoActual?.NombreTipoRodela}
-            textoAgregar="Agregar rodela"
-            onAgregar={agregarFila}
-          />
-
-          <div className="hidden md:block">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  <th className="w-12 px-5 py-3">#</th>
-                  <th className="px-3 py-3">Código de rodela</th>
-                  <th className="w-14 px-3 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((f, i) => {
-                  const err = tocado ? erroresFilas[f.id] : null;
-                  return (
-                    <tr
-                      key={f.id}
-                      className={cn(
-                        "border-b border-slate-100 last:border-0",
-                        err && "bg-red-50/60",
-                      )}
-                    >
-                      <td className="px-5 py-2.5 text-sm font-bold text-slate-400">
-                        {i + 1}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Input
-                          ref={registrarRef(f.id)}
-                          value={f.CodigoRodela}
-                          onChange={(e) =>
-                            actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && i === filas.length - 1) agregarFila();
-                          }}
-                          placeholder="Ej. RDL-2026-0148"
-                          className={cn(
-                            "h-10 font-mono",
-                            err && "border-red-300 focus-visible:ring-red-300",
-                          )}
-                        />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <BotonQuitarFila
-                          onClick={() => quitarFila(f.id)}
-                          disabled={filas.length === 1}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {tocado && hayErrores && <ErroresFilas filas={filas} errores={erroresFilas} />}
-          </div>
-
-          <div className="flex flex-col gap-3 p-5 md:hidden">
-            {filas.map((f, i) => {
-              const err = tocado ? erroresFilas[f.id] : null;
-              return (
-                <div
-                  key={f.id}
-                  className={cn(
-                    "flex flex-col gap-3 rounded-xl border p-4",
-                    err ? "border-red-300 bg-red-50/60" : "border-slate-200 bg-slate-50",
-                  )}
-                >
-                  <CabeceraFila
-                    titulo={`Rodela ${i + 1}`}
-                    onQuitar={() => quitarFila(f.id)}
-                    deshabilitado={filas.length === 1}
-                  />
-
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
-                      Código
-                    </Label>
-                    <Input
-                      value={f.CodigoRodela}
-                      onChange={(e) =>
-                        actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
-                      }
-                      placeholder="Ej. RDL-2026-0148"
-                      className="h-11 bg-white font-mono"
-                    />
-                  </div>
-
-                  {err && <ErrorFila mensaje={err} />}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
-
-        <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
-          <span className="font-extrabold text-white">
-            {filas.length} {filas.length === 1 ? "rodela" : "rodelas"}
-          </span>
-          {tipoActual && (
-            <span className="text-slate-400">
-              Tipo{" "}
-              <strong className="text-slate-200">{tipoActual.NombreTipoRodela}</strong>
-            </span>
+        <PestanasIngreso lotes={<IngresoReporteRodela />}>
+          {envio.resultado && (
+            <ResultadoLote
+              descripcion={
+                <>
+                  {envio.resultado.CantidadRodelas} rodelas · Recepción{" "}
+                  {dateFormatter(envio.resultado.FechaRecepcion)}
+                </>
+              }
+              onCerrar={() => envio.setResultado(null)}
+            />
           )}
-        </BarraGuardarLote>
+
+          <DatosLote descripcion="Se aplican a todas las rodelas que registres abajo">
+            <SelectorProveedor
+              catalogo={proveedores}
+              valor={idProveedor}
+              onCambio={setIdProveedor}
+              invalido={tocado && !idProveedor}
+            />
+            <SelectorTipo
+              catalogo={tipos}
+              valor={idTipoRodela}
+              onCambio={setIdTipoRodela}
+              campoValor="IdTipoRodela"
+              campoEtiqueta="NombreTipoRodela"
+              campoDescripcion="Descripcion"
+              etiqueta="Tipo de rodela"
+              mensajeVacio="No hay tipos de rodela registrados."
+            />
+          </DatosLote>
+
+          <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <EncabezadoFilas
+              titulo="Rodelas del lote"
+              tipo={tipoActual?.NombreTipoRodela}
+              textoAgregar="Agregar rodela"
+              onAgregar={agregarFila}
+            />
+
+            <div className="hidden md:block">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    <th className="w-12 px-5 py-3">#</th>
+                    <th className="px-3 py-3">Código de rodela</th>
+                    <th className="w-14 px-3 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map((f, i) => {
+                    const err = tocado ? erroresFilas[f.id] : null;
+                    return (
+                      <tr
+                        key={f.id}
+                        className={cn(
+                          "border-b border-slate-100 last:border-0",
+                          err && "bg-red-50/60",
+                        )}
+                      >
+                        <td className="px-5 py-2.5 text-sm font-bold text-slate-400">
+                          {i + 1}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Input
+                            ref={registrarRef(f.id)}
+                            value={f.CodigoRodela}
+                            onChange={(e) =>
+                              actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && i === filas.length - 1) agregarFila();
+                            }}
+                            placeholder="Ej. RDL-2026-0148"
+                            className={cn(
+                              "h-10 font-mono",
+                              err && "border-red-300 focus-visible:ring-red-300",
+                            )}
+                          />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <BotonQuitarFila
+                            onClick={() => quitarFila(f.id)}
+                            disabled={filas.length === 1}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {tocado && hayErrores && <ErroresFilas filas={filas} errores={erroresFilas} />}
+            </div>
+
+            <div className="flex flex-col gap-3 p-5 md:hidden">
+              {filas.map((f, i) => {
+                const err = tocado ? erroresFilas[f.id] : null;
+                return (
+                  <div
+                    key={f.id}
+                    className={cn(
+                      "flex flex-col gap-3 rounded-xl border p-4",
+                      err ? "border-red-300 bg-red-50/60" : "border-slate-200 bg-slate-50",
+                    )}
+                  >
+                    <CabeceraFila
+                      titulo={`Rodela ${i + 1}`}
+                      onQuitar={() => quitarFila(f.id)}
+                      deshabilitado={filas.length === 1}
+                    />
+
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                        Código
+                      </Label>
+                      <Input
+                        value={f.CodigoRodela}
+                        onChange={(e) =>
+                          actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
+                        }
+                        placeholder="Ej. RDL-2026-0148"
+                        className="h-11 bg-white font-mono"
+                      />
+                    </div>
+
+                    {err && <ErrorFila mensaje={err} />}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
+
+          <BarraGuardarLote listo={listo} enviando={envio.enviando} onGuardar={() => envio.pedirConfirmacion(validarLote)}>
+            <span className="font-extrabold text-white">
+              {filas.length} {filas.length === 1 ? "rodela" : "rodelas"}
+            </span>
+            {tipoActual && (
+              <span className="text-slate-400">
+                Tipo{" "}
+                <strong className="text-slate-200">{tipoActual.NombreTipoRodela}</strong>
+              </span>
+            )}
+          </BarraGuardarLote>
+        </PestanasIngreso>
       </main>
 
       <DialogoConfirmarLote

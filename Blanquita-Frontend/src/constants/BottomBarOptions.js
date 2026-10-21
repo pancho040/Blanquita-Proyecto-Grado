@@ -115,6 +115,21 @@ export const BottomBarOpciones = [
         ruta: "jaba-ingreso",
       }
     ],
+  },
+  {
+    id: 8,
+    opciones: [
+      {
+        titulo: "Inventario",
+        icono: Boxes,
+        ruta: "bobina-inventario",
+      },
+      {
+        titulo: "Ingreso",
+        icono: PackagePlus,
+        ruta: "bobina-ingreso",
+      },
+    ],
   }
 ];
 

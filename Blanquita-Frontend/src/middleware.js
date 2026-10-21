@@ -2,7 +2,7 @@ import { defineMiddleware } from "astro/middleware";
 import { resolverSesion, limpiarSesion } from "./lib/auth-server";
 import { PREFIJO_POR_ROL, RUTA_POR_ROL } from "./constants/Values";
 
-const RUTAS_PROTEGIDAS = ["/operador", "/encargado", "/admin"];
+const RUTAS_PROTEGIDAS = ["/operador", "/encargado", "/gerente", "/admin"];
 const RUTAS_SIN_PREFIJO_ROL = ["/admin"];
 const RUTAS_SOLO_ADMIN = ["/admin"];
 const RUTAS_PUBLICAS_AUTH = ["/"];

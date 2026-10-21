@@ -81,7 +81,8 @@ export function TarjetaProduccion({
   children,
   acciones,
 }) {
-  const ancho = acciones.length >= 3 ? "basis-[30%]" : "basis-[45%]";
+  const disponibles = acciones.filter((accion) => accion.onClick);
+  const ancho = disponibles.length >= 3 ? "basis-[30%]" : "basis-[45%]";
 
   return (
     <div
@@ -121,29 +122,31 @@ export function TarjetaProduccion({
 
       {children}
 
-      <div className="flex flex-wrap items-center justify-around gap-2">
-        {acciones.map(({ tipo, onClick, disabled = false, procesando = false }) => {
-          const { texto, icono: Icono, variant, clase } = ACCIONES[tipo];
-          return (
-            <Button
-              key={tipo}
-              onClick={onClick}
-              disabled={disabled}
-              variant={variant}
-              className={cn("h-11 min-w-[100px] flex-1 justify-center gap-1.5", ancho, clase)}
-            >
-              {procesando ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <>
-                  <Icono size={15} strokeWidth={2.75} />
-                  {texto}
-                </>
-              )}
-            </Button>
-          );
-        })}
-      </div>
+      {disponibles.length > 0 && (
+        <div className="flex flex-wrap items-center justify-around gap-2">
+          {disponibles.map(({ tipo, onClick, disabled = false, procesando = false }) => {
+            const { texto, icono: Icono, variant, clase } = ACCIONES[tipo];
+            return (
+              <Button
+                key={tipo}
+                onClick={onClick}
+                disabled={disabled}
+                variant={variant}
+                className={cn("h-11 min-w-[100px] flex-1 justify-center gap-1.5", ancho, clase)}
+              >
+                {procesando ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <>
+                    <Icono size={15} strokeWidth={2.75} />
+                    {texto}
+                  </>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

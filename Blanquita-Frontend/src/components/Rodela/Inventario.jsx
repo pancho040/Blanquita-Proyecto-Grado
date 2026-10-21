@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, Disc, Pencil, SquarePen } from "lucide-react";
+import { Plus, Loader2, Disc, Pencil, SquarePen, History } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,13 @@ import {
 import { descargarReporteInventarioRodela } from "@/services/Rodela/Reportes";
 import { dateFormatter } from "@/utils/dates";
 import { aCodigo } from "@/utils/handlers";
-import { extraerMensajeError, limpiarObservacion } from "@/utils/validators";
+import {
+  extraerMensajeError,
+  limpiarObservacion,
+  VeComoLider,
+  EsGerente,
+  rutaDeRol,
+} from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { useDetalleInventario } from "@/hooks/useDetalleInventario";
 import { useEjecutar } from "@/hooks/useEjecutar";
@@ -52,7 +58,6 @@ import {
 } from "@/components/Inventario/comunes";
 import Header from "@/components/layout/Header";
 import {
-  Roles,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
 } from "@/constants/Values";
@@ -91,8 +96,8 @@ function TablaRodelas({ rodelas, tipoSel, marcadas, onToggle, onEditar }) {
       <Table className="min-w-[560px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Código</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Código</TableHead>
             <TableHead>Lote</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead className={cn(!onEditar && "pr-5")}>Proveedor</TableHead>
@@ -104,14 +109,16 @@ function TablaRodelas({ rodelas, tipoSel, marcadas, onToggle, onEditar }) {
             const on = marcadas.includes(r.CodigoRodela);
             return (
               <TableRow key={r.IdRodela} className={cn(on && tipoSel.soft)}>
-                <TableCell className="pl-5">
-                  <CasillaSeleccion
-                    marcada={on}
-                    acento={tipoSel}
-                    onClick={() => onToggle(r.CodigoRodela)}
-                  />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion
+                      marcada={on}
+                      acento={tipoSel}
+                      onClick={() => onToggle(r.CodigoRodela)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   {r.CodigoRodela}
                 </TableCell>
                 <TableCell className="text-slate-600">{r.CodigoLote}</TableCell>
@@ -154,12 +161,14 @@ function ListaMovilRodelas({ rodelas, tipoSel, marcadas, onToggle, onEditar }) {
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {onEditar && <BotonEditar rodela={r} onEditar={onEditar} />}
-                <CasillaSeleccion
-                  marcada={on}
-                  acento={tipoSel}
-                  grande
-                  onClick={() => onToggle(r.CodigoRodela)}
-                />
+                {onToggle && (
+                  <CasillaSeleccion
+                    marcada={on}
+                    acento={tipoSel}
+                    grande
+                    onClick={() => onToggle(r.CodigoRodela)}
+                  />
+                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
@@ -177,7 +186,8 @@ function ListaMovilRodelas({ rodelas, tipoSel, marcadas, onToggle, onEditar }) {
 }
 
 export default function InventarioRodelas({ usuario }) {
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   const resumen = useCatalogo(verResumenInventarioRodela);
   const detalle = useDetalleInventario(cargarRodelasEnAlmacen);
@@ -273,9 +283,9 @@ export default function InventarioRodelas({ usuario }) {
         accion={
           esEncargado
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/rodela/ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "rodela/ingreso"),
               }
             : null
         }
@@ -334,7 +344,7 @@ export default function InventarioRodelas({ usuario }) {
             icono={Disc}
             titulo={`Rodelas · ${tipoSel.NombreTipoRodela}`}
             subtitulo={`${tipoSel.CantidadEnAlmacen} en almacén · ${tipoSel.CantidadAbiertas} abiertas`}
-            etiqueta="Se traslada 1 rodela"
+            etiqueta={soloLectura ? null : "Se traslada 1 rodela"}
             onCerrar={detalle.cerrar}
           >
             <ContenidoLista
@@ -351,8 +361,8 @@ export default function InventarioRodelas({ usuario }) {
                   rodelas={rodelasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleRodela}
-                  onEditar={esEncargado ? abrirEditar : null}
+                  onToggle={soloLectura ? undefined : toggleRodela}
+                  onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                 />
               </div>
               <div className="md:hidden">
@@ -360,8 +370,8 @@ export default function InventarioRodelas({ usuario }) {
                   rodelas={rodelasFiltradas}
                   tipoSel={tipoSel}
                   marcadas={marcadas}
-                  onToggle={toggleRodela}
-                  onEditar={esEncargado ? abrirEditar : null}
+                  onToggle={soloLectura ? undefined : toggleRodela}
+                  onEditar={esEncargado && !soloLectura ? abrirEditar : null}
                 />
               </div>
             </ContenidoLista>

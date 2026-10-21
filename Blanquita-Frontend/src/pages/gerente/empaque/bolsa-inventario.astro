@@ -1,0 +1,19 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import NavBar from '@/components/layout/NavBar';
+import SideBar from '@/components/layout/SideBar';
+import InventarioBolsas from '@/components/Empaque/Bolsas/InventarioBolsas';
+import BottomBar from '@/components/layout/Qr/BottomBar';
+---
+
+<Layout>
+	<div class="md:hidden">
+		<NavBar client:media="(max-width: 767.98px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} />
+	</div>
+	<div class="hidden md:block">
+		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} />
+	</div>
+	<InventarioBolsas client:load tipo="bolsa" usuario={usuario}/>
+	<BottomBar idRol={usuario.IdRol} subRuta={"empaque"} idOpcionSelect={6} client:load/>
+</Layout>

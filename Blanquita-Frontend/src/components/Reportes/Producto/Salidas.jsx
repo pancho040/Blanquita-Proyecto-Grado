@@ -23,9 +23,11 @@ import {
 import { LINEA_PRODUCTO } from "@/components/Reportes/Producto/filtros";
 import { useReporte } from "@/hooks/useReporte";
 import { useDescarga } from "@/hooks/useDescarga";
+import { useDiasDestacados } from "@/hooks/useDiasDestacados";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { aFechaISO, dateFormatter } from "@/utils/dates";
 import { formatearNumero } from "@/utils/numeros";
+import { rutaDeRol } from "@/utils/validators";
 import {
   verResumenSalidas,
   descargarReporteSalidas,
@@ -244,12 +246,12 @@ function ResultadosSalidas({ reporte }) {
   );
 }
 
-function PaginaProducto({ subtitulo, contador, children }) {
+function PaginaProducto({ usuario, subtitulo, contador, children }) {
   return (
     <TooltipProvider>
       <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
         <Header
-          volver="/encargado/producto/movimientos"
+          volver={rutaDeRol(usuario?.IdRol, "producto/movimientos")}
           titulo="Producto terminado"
           subtitulo={subtitulo}
           contador={contador}
@@ -260,7 +262,7 @@ function PaginaProducto({ subtitulo, contador, children }) {
   );
 }
 
-export default function SalidasReporteProducto({ usuario, origen = "reportes" }) {
+export default function SalidasReporteProducto({ usuario, origen = "reportes", contenedor }) {
   const reporte = useReporte(consultarResumen, {
     Rango: ATAJOS[0].rango(new Date()),
     [LINEA_PRODUCTO.campo]: [],
@@ -268,6 +270,14 @@ export default function SalidasReporteProducto({ usuario, origen = "reportes" })
   const { filtros, catalogo: resumen } = reporte;
   const { Rango } = filtros;
   const lineas = filtros[LINEA_PRODUCTO.campo];
+  const destacados = useDiasDestacados(
+    (FechaInicio, FechaFin) =>
+      verResumenSalidas({ FechaInicio, FechaFin }).then((r) => r.Despachos),
+    (despacho) => ({
+      fecha: despacho.FechaMovimiento,
+      texto: `Salida N° ${despacho.IdDespacho} · ${entero(despacho.CantidadTotal)}`,
+    }),
+  );
 
   const rangoCompleto = Boolean(Rango?.from && Rango?.to);
   const haySalidas = rangoCompleto && Boolean(resumen?.Movimientos.length);
@@ -284,7 +294,7 @@ export default function SalidasReporteProducto({ usuario, origen = "reportes" })
     ? { valor: resumen.NumeroSalidas, singular: "salida", plural: "salidas" }
     : null;
 
-  const Contenedor = origen === "producto" ? PaginaProducto : PaginaReporte;
+  const Contenedor = contenedor ?? (origen === "producto" ? PaginaProducto : PaginaReporte);
 
   return (
     <Contenedor
@@ -320,6 +330,8 @@ export default function SalidasReporteProducto({ usuario, origen = "reportes" })
             label="Fecha de salida"
             value={Rango}
             onChange={(valor) => reporte.cambiar("Rango", valor)}
+            diasDestacados={destacados.dias}
+            onRangoVisibleChange={destacados.cargar}
           />
           <CampoFiltro etiqueta="Atajos">
             <ToggleGroup

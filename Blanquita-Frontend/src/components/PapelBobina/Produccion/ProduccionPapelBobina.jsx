@@ -32,13 +32,16 @@ import {
   ObservacionesInsertarLogs,
   MotivosReanudacionProduccion,
 } from "../../../constants/OperadorConfig";
-import {
-  Roles,
-  CANTIDAD_MAXIMA_LOGS,
-} from "@/constants/Values";
+import { CANTIDAD_MAXIMA_LOGS } from "@/constants/Values";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
 import { alternarMotivoEnTexto } from "@/utils/handlers";
-import { extraerMensajeError, limpiarObservacion } from "@/utils/validators";
+import {
+  extraerMensajeError,
+  limpiarObservacion,
+  VeComoLider,
+  EsEncargado,
+  EsGerente,
+} from "@/utils/validators";
 import { useProduccion } from "@/hooks/useProduccion";
 import {
   ResumenProduccion,
@@ -115,7 +118,9 @@ export default function ProduccionBobinaTubo({ usuario }) {
     dependencias: [filtroTipo, filtroProducto],
   });
 
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = EsEncargado(usuario?.IdRol);
+  const veConcluidas = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const [totalConcluidas, setTotalConcluidas] = useState(0);
 
   const [cambioLinea, setCambioLinea] = useState(null);
@@ -285,11 +290,11 @@ export default function ProduccionBobinaTubo({ usuario }) {
           onCambio={setVista}
           totalActivas={activasFiltradas.length}
           totalPausadas={pausadasFiltradas.length}
-          mostrarConcluidas={esEncargado}
+          mostrarConcluidas={veConcluidas}
           totalConcluidas={totalConcluidas}
         />
 
-        {vista === "concluidas" && esEncargado && (
+        {vista === "concluidas" && veConcluidas && (
           <ProduccionesConcluidas onTotal={setTotalConcluidas} />
         )}
 
@@ -399,8 +404,8 @@ export default function ProduccionBobinaTubo({ usuario }) {
               <CardActiva
                 key={p.IdProduccionBobinaTubo}
                 p={p}
-                onInsertar={() => abrirInsertar(p)}
-                onPausar={() => pausa.abrir(p)}
+                onInsertar={soloLectura ? undefined : () => abrirInsertar(p)}
+                onPausar={soloLectura ? undefined : () => pausa.abrir(p)}
                 onFinalizar={esEncargado ? () => finalizacion.abrir(p) : undefined}
                 onCambiarLinea={
                   esEncargado && permiteCambioLinea(p)
@@ -424,8 +429,8 @@ export default function ProduccionBobinaTubo({ usuario }) {
                 key={p.IdPausaProduccionBobinaTubo}
                 p={p}
                 procesando={procesandoId === p.IdProduccionBobinaTubo}
-                onInsertar={() => abrirInsertar(p)}
-                onReanudar={() => reanudar(p)}
+                onInsertar={soloLectura ? undefined : () => abrirInsertar(p)}
+                onReanudar={soloLectura ? undefined : () => reanudar(p)}
                 onCancelar={esEncargado ? () => cancelacion.abrir(p) : undefined}
               />
             )}

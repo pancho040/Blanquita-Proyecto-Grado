@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.Auth.Dependencies import require_role
 from app.Config.supabase import get_db
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 from app.Models.Notificacion.Notificacion import NotificacionesResponse
 from app.Services.Notificacion.Notificacion import NotificacionService
 
@@ -21,7 +21,7 @@ NotificacionRouter = APIRouter(prefix="/notificaciones", tags=["Notificaciones"]
     status_code=200,
 )
 def VerNotificaciones(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: NotificacionService = Depends(notificacion_service),
 ):
     return service.VerNotificaciones(usuario_actual["IdRol"])

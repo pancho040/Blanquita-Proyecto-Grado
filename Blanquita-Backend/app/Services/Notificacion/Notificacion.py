@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.Constants.AlertaStock import DOMINIOS_STOCK_NOTIFICACION, NIVEL_STOCK_CRITICO
 from app.Constants.Cantidades import HORAS_ALERTA_PAUSA_ABIERTA
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Models.BobinaPapel.Inicio import (
     PausaAbiertaInicioBobinaPapel,
     ProduccionActivaInicioBobinaPapel,
@@ -71,7 +71,7 @@ class NotificacionService:
                 for fila in self.bobina_servilleta.PausasAbiertas()
             ],
         )
-        stock = self._Stock() if id_rol == ROL_LIDER_INVENTARIO_PRODUCCION else None
+        stock = self._Stock() if id_rol in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL) else None
 
         producciones = [
             *bobina_papel.Activas,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PackageMinus, PackagePlus, Undo2, Loader2 } from "lucide-react";
+import { PackageMinus, PackagePlus, Undo2, Loader2, History } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,9 +35,8 @@ import {
   CANTIDAD_MAXIMA_REINGRESO_EMPAQUE,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
-  PREFIJO_POR_ROL,
 } from "@/constants/Values";
-import { EsEncargado, aEntero, limpiarObservacion } from "@/utils/validators";
+import { VeComoLider, EsGerente, rutaDeRol, aEntero, limpiarObservacion } from "@/utils/validators";
 import { CONFIG_BOLSAS } from "./config";
 
 const MODOS = {
@@ -350,13 +349,14 @@ export default function InventarioBolsas({ tipo, usuario }) {
     );
   };
 
-  const esEncargado = EsEncargado(usuario.IdRol);
+  const esEncargado = VeComoLider(usuario.IdRol);
+  const soloLectura = EsGerente(usuario.IdRol);
 
   const accion = esEncargado
     ? {
-        texto: "Registrar ingreso",
-        icono: PackagePlus,
-        href: `/${PREFIJO_POR_ROL[usuario.IdRol]}/empaque/${config.rutaIngreso}`,
+        texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+        icono: soloLectura ? History : PackagePlus,
+        href: rutaDeRol(usuario.IdRol, `empaque/${config.rutaIngreso}`),
       }
     : null;
 
@@ -400,7 +400,7 @@ export default function InventarioBolsas({ tipo, usuario }) {
                 acento={i}
                 activo={sel === i[config.campoId]}
                 inactivo={!i.Activo}
-                onClick={() => seleccionar(i[config.campoId])}
+                onClick={soloLectura ? undefined : () => seleccionar(i[config.campoId])}
                 icono={config.icono}
                 claseIcono="h-7 w-7"
                 grosorIcono={2.25}
@@ -408,7 +408,7 @@ export default function InventarioBolsas({ tipo, usuario }) {
                 stock={i.stock}
                 cantidad={Number(i.CantidadActual || 0)}
                 unidad="paquetes en almacén"
-                textoVer="Registrar movimiento"
+                textoVer={soloLectura ? null : "Registrar movimiento"}
               >
                 {i[config.campoDescripcion] && (
                   <DatoTarjeta etiqueta="Descripción">{i[config.campoDescripcion]}</DatoTarjeta>

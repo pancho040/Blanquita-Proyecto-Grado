@@ -1,0 +1,17 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import NavBar from '@/components/layout/NavBar';
+import SideBar from '@/components/layout/SideBar';
+import LotesReporteEmpaque from '@/components/Reportes/Empaque/Lotes';
+---
+
+<Layout>
+	<div class="md:hidden">
+		<NavBar client:media="(max-width: 767.98px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} seccion="reportes" />
+	</div>
+	<div class="hidden md:block">
+		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} seccion="reportes" />
+	</div>
+	<LotesReporteEmpaque client:load usuario={usuario} />
+</Layout>

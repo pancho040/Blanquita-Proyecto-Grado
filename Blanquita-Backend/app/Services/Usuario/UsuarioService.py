@@ -28,7 +28,7 @@ from app.utils.validators import (
 )
 from app.Auth.Security import ValidarClaveNueva
 from app.Constants.Cantidades import LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION,ROL_GERENTE_GENERAL
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Constants.Estados import (
     ESTADO_USUARIO_ACTIVO,
     ESTADO_USUARIO_SUSPENDIDO,

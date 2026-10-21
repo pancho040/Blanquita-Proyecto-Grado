@@ -4,6 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Header from "@/components/layout/Header";
 import { PREFIJO_POR_ROL } from "@/constants/Values";
 
+export function SinContenedor({ children }) {
+  return children;
+}
+
 export function PaginaReporte({ usuario, titulo, subtitulo, contador, children }) {
   const prefijo = PREFIJO_POR_ROL[usuario?.IdRol] ?? "encargado";
 

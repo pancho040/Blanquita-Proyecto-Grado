@@ -24,7 +24,7 @@ import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 export const GRID_TARJETAS = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 const TARJETA =
-  "flex flex-col gap-3.5 rounded-2xl border-2 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md";
+  "flex flex-col gap-3.5 rounded-2xl border-2 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:hover:translate-y-0 disabled:hover:shadow-sm";
 
 const MENSAJE = "p-8 text-center text-sm text-slate-400";
 
@@ -69,7 +69,11 @@ export function TarjetaTipo({
 }) {
   const estilo = stock ? ESTILO_STOCK[stock] : null;
   return (
-    <button onClick={onClick} className={cn(TARJETA, activo ? acento.border : "border-slate-200")}>
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(TARJETA, activo ? acento.border : "border-slate-200")}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Icono className={cn(claseIcono, "shrink-0", acento.text)} strokeWidth={grosorIcono} />
@@ -91,10 +95,12 @@ export function TarjetaTipo({
 
       {children}
 
-      <div className={cn("flex items-center justify-end gap-1.5 text-xs font-bold", acento.text)}>
-        {textoVer}
-        <ArrowRight size={14} strokeWidth={2.75} />
-      </div>
+      {textoVer && (
+        <div className={cn("flex items-center justify-end gap-1.5 text-xs font-bold", acento.text)}>
+          {textoVer}
+          <ArrowRight size={14} strokeWidth={2.75} />
+        </div>
+      )}
     </button>
   );
 }
@@ -461,13 +467,15 @@ export function ItemFueraInventario({
           </div>
         )}
       </div>
-      <Button
-        onClick={onReingresar}
-        disabled={procesando}
-        className="h-10 gap-2 self-start bg-emerald-600 font-bold text-white hover:bg-emerald-700 sm:self-auto"
-      >
-        {procesando ? <Loader2 size={15} className="animate-spin" /> : contenidoReingresar}
-      </Button>
+      {onReingresar && (
+        <Button
+          onClick={onReingresar}
+          disabled={procesando}
+          className="h-10 gap-2 self-start bg-emerald-600 font-bold text-white hover:bg-emerald-700 sm:self-auto"
+        >
+          {procesando ? <Loader2 size={15} className="animate-spin" /> : contenidoReingresar}
+        </Button>
+      )}
     </div>
   );
 }

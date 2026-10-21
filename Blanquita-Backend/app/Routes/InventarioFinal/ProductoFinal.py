@@ -16,7 +16,7 @@ from app.Models.InventarioFinal.ProductoFinal import(
 )
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 
 def producto_terminado_service(db: Session = Depends(get_db)) -> ProductoFinalService:
@@ -108,7 +108,7 @@ def AumentarInventarioProductoTerminado(
 )
 def VerInventarioProductoTerminado(
     IdProducto: int | None = None,
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: ProductoFinalService = Depends(producto_terminado_service)
 ):
     return service.VerInventarioProductoTerminado(IdProducto)
@@ -119,7 +119,7 @@ def VerInventarioProductoTerminado(
     status_code=200
 )
 def ObtenerProductos(
-    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service: ProductoFinalService = Depends(producto_terminado_service)
 ):
     return service.ObtenerProductos()

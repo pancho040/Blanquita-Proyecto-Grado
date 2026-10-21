@@ -7,7 +7,7 @@ from app.Services.BobinaPapel.InventarioBobinaPapelService import (
 )
 
 from app.Auth.Dependencies import require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from app.Models.BobinaPapel.InventarioBobinaPapel import (
     VerResumenInventarioBobinaPapelResponse,
@@ -35,7 +35,7 @@ InventarioBobinaPapelRouter = APIRouter(
     response_model=list[VerResumenInventarioBobinaPapelResponse],
     status_code=200,
     dependencies=[
-        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR]))
+        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL]))
     ],
 )
 def VerInventarioBobinaPapel(
@@ -49,7 +49,7 @@ def VerInventarioBobinaPapel(
     response_model=list[VerDetalleInventarioBobinaPapelResponse],
     status_code=200,
     dependencies=[
-        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR]))
+        Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL]))
     ],
 )
 def VerDetalleInventarioBobinaPapel(
@@ -78,7 +78,7 @@ def ReingresarInventarioBobinaPapel(
     "/fuera",
     response_model=list[VerBobinasPapelFueraInventarioResponse],
     status_code=200,
-    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION]))],
+    dependencies=[Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL]))],
 )
 def VerBobinasPapelFueraInventario(
     service: InventarioBobinaPapelService = Depends(inventario_bobina_papel_service),

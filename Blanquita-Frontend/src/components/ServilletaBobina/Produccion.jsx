@@ -9,7 +9,7 @@ import {
   cancelarProduccionServilleta,
 } from "../../services/BobinaServilleta/Produccion";
 import { ObservacionServilleta, MotivosReanudacionProduccion } from "@/constants/OperadorConfig";
-import { Roles } from "@/constants/Values";
+import { VeComoLider, EsEncargado, EsGerente } from "@/utils/validators";
 import { useProduccion } from "@/hooks/useProduccion";
 import {
   TarjetaProduccion,
@@ -46,7 +46,9 @@ function EncabezadoSubBobina({ p }) {
 
 export default function ProduccionBobinaServilleta({ usuario }) {
   const [vista, setVista] = useState("activas");
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = EsEncargado(usuario?.IdRol);
+  const veConcluidas = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
   const [totalConcluidas, setTotalConcluidas] = useState(0);
 
   const {
@@ -79,11 +81,11 @@ export default function ProduccionBobinaServilleta({ usuario }) {
           onCambio={setVista}
           totalActivas={activas.datos.length}
           totalPausadas={pausadas.datos.length}
-          mostrarConcluidas={esEncargado}
+          mostrarConcluidas={veConcluidas}
           totalConcluidas={totalConcluidas}
         />
 
-        {vista === "concluidas" && esEncargado && (
+        {vista === "concluidas" && veConcluidas && (
           <ConcluidasServilleta onTotal={setTotalConcluidas} />
         )}
 
@@ -97,7 +99,7 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                 key={p.IdProduccionServilleta}
                 produccion={p}
                 encabezado={<EncabezadoSubBobina p={p} />}
-                acciones={[
+                acciones={soloLectura ? [] : [
                   { tipo: "pausar", onClick: () => pausa.abrir(p) },
                   ...(esEncargado ? [{ tipo: "finalizar", onClick: () => finalizacion.abrir(p) }] : []),
                 ]}
@@ -119,7 +121,7 @@ export default function ProduccionBobinaServilleta({ usuario }) {
                   produccion={p}
                   pausada
                   encabezado={<EncabezadoSubBobina p={p} />}
-                  acciones={[
+                  acciones={soloLectura ? [] : [
                     { tipo: "reanudar", onClick: () => reanudar(p), disabled: procesando, procesando },
                     ...(esEncargado
                       ? [{ tipo: "cancelar", onClick: () => cancelacion.abrir(p), disabled: procesando }]

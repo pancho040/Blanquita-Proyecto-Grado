@@ -4,7 +4,7 @@ from app.Config.supabase import get_db
 
 from app.Services.Proveedor.Proveedor import ProveedorService
 from app.Auth.Dependencies import require_admin_db, require_role
-from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL
 
 from typing import List
 
@@ -33,7 +33,7 @@ ProveedorRouter=APIRouter(
     status_code=200
 )
 def ObtenerProveedoresForm(
-    usuario_actual:dict=Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
+    usuario_actual:dict=Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
     service:ProveedorService=Depends(proveedor_service)
 ): return service.ObtenerProveedoresForm()
 

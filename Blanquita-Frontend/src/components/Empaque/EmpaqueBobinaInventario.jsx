@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Package, Loader2, ArrowRight } from "lucide-react";
+import { Plus, Package, Loader2, ArrowRight, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,8 @@ import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { descargarReporteInventarioEmpaque } from "@/services/Empaque/Reporte";
-import { Roles, MINUTOS_REINGRESO_EMPAQUE_BOBINA } from "@/constants/Values";
+import { MINUTOS_REINGRESO_EMPAQUE_BOBINA } from "@/constants/Values";
+import { VeComoLider, EsGerente, rutaDeRol } from "@/utils/validators";
 
 function DialogoConfirmarTraslado({ abierto, codigos, enviando, onCancelar, onConfirmar }) {
   const varios = codigos.length > 1;
@@ -113,8 +114,8 @@ function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
       <Table className="min-w-[620px]">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-11 pl-5" />
-            <TableHead>Código</TableHead>
+            {onToggle && <TableHead className="w-11 pl-5" />}
+            <TableHead className={cn(!onToggle && "pl-5")}>Código</TableHead>
             <TableHead>Peso (kg)</TableHead>
             <TableHead>Recepción</TableHead>
             <TableHead className="pr-5">Proveedor</TableHead>
@@ -125,14 +126,16 @@ function TablaEmpaques({ empaques, tipoSel, marcados, onToggle }) {
             const on = marcados.includes(e.IdEmpaque);
             return (
               <TableRow key={e.IdEmpaque} className={cn(on && tipoSel.soft)}>
-                <TableCell className="pl-5">
-                  <CasillaSeleccion
-                    marcada={on}
-                    acento={tipoSel}
-                    onClick={() => onToggle(e.IdEmpaque)}
-                  />
-                </TableCell>
-                <TableCell className={cn("font-mono font-bold", tipoSel.text)}>
+                {onToggle && (
+                  <TableCell className="pl-5">
+                    <CasillaSeleccion
+                      marcada={on}
+                      acento={tipoSel}
+                      onClick={() => onToggle(e.IdEmpaque)}
+                    />
+                  </TableCell>
+                )}
+                <TableCell className={cn("font-mono font-bold", tipoSel.text, !onToggle && "pl-5")}>
                   {e.CodigoEmpaque}
                 </TableCell>
                 <TableCell className="text-slate-600">{e.PesoKg}</TableCell>
@@ -157,6 +160,7 @@ function ListaMovilEmpaques({ empaques, tipoSel, marcados, onToggle }) {
         return (
           <button
             key={e.IdEmpaque}
+            disabled={!onToggle}
             onClick={() => onToggle(e.IdEmpaque)}
             className={cn(
               "flex flex-col gap-2.5 rounded-2xl border-2 p-3.5 text-left",
@@ -167,7 +171,7 @@ function ListaMovilEmpaques({ empaques, tipoSel, marcados, onToggle }) {
               <div className={cn("font-mono text-[15px] font-extrabold", tipoSel.text)}>
                 {e.CodigoEmpaque}
               </div>
-              <CasillaSeleccion marcada={on} acento={tipoSel} grande />
+              {onToggle && <CasillaSeleccion marcada={on} acento={tipoSel} grande />}
             </div>
             <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-slate-600">
               <span>
@@ -235,7 +239,8 @@ export default function EmpaqueBobinaInventario({ usuario }) {
     );
   };
 
-  const esEncargado = usuario?.IdRol === Roles.Encargado;
+  const esEncargado = VeComoLider(usuario?.IdRol);
+  const soloLectura = EsGerente(usuario?.IdRol);
 
   return (
     <TooltipProvider>
@@ -246,9 +251,9 @@ export default function EmpaqueBobinaInventario({ usuario }) {
         accion={
           esEncargado
             ? {
-                texto: "Registrar ingreso",
-                icono: Plus,
-                href: "/encargado/empaque/bobina-ingreso",
+                texto: soloLectura ? "Ver ingresos" : "Registrar ingreso",
+                icono: soloLectura ? History : Plus,
+                href: rutaDeRol(usuario.IdRol, "empaque/bobina-ingreso"),
               }
             : null
         }
@@ -326,7 +331,7 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                   empaques={empaquesFiltrados}
                   tipoSel={tipoSel}
                   marcados={marcados}
-                  onToggle={toggleEmpaque}
+                  onToggle={soloLectura ? undefined : toggleEmpaque}
                 />
               </div>
               <div className="md:hidden">
@@ -334,7 +339,7 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                   empaques={empaquesFiltrados}
                   tipoSel={tipoSel}
                   marcados={marcados}
-                  onToggle={toggleEmpaque}
+                  onToggle={soloLectura ? undefined : toggleEmpaque}
                 />
               </div>
             </ContenidoLista>
