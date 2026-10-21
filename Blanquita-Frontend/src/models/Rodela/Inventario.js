@@ -6,6 +6,7 @@ export const ResumenInventarioRodelaResponse = (data) => ({
   Descripcion: data.Descripcion ?? null,
   CantidadEnAlmacen: data.CantidadEnAlmacen,
   CantidadAbiertas: data.CantidadAbiertas,
+  Activo: data.Activo,
   ...NivelStockResponse(data)
 });
 

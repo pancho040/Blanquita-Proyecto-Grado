@@ -18,7 +18,7 @@ from app.Constants.AlertaStock import (
     NIVELES_STOCK_ALERTA,
 )
 from app.Constants.Estados import ESTADO_MATERIA_PRIMA_EN_ALMACEN
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaPapel import BobinaPapel, TipoBobina
 from app.Schemas.BobinaServilleta import (
@@ -286,6 +286,7 @@ class AlertaStockRepository:
         dominio: str | None = None,
         id_item: int | None = None,
         solo_alertas: bool = False,
+        solo_visibles: bool = False,
     ) -> list[dict]:
         dominios = [dominio] if dominio else list(DOMINIOS_STOCK)
         consultas = [CONSULTAS_STOCK[d]() for d in dominios]
@@ -305,6 +306,9 @@ class AlertaStockRepository:
 
         if id_item is not None:
             consulta = consulta.where(stock.c.Id == id_item)
+
+        if solo_visibles:
+            consulta = consulta.where(visible_en_inventario(stock.c.Activo, stock.c.CantidadActual))
 
         orden_dominio = case(
             {d: posicion for posicion, d in enumerate(DOMINIOS_STOCK)}, value=stock.c.Dominio

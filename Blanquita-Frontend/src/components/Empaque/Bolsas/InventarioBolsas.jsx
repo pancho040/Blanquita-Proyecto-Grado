@@ -399,6 +399,7 @@ export default function InventarioBolsas({ tipo, usuario }) {
                 key={i[config.campoId]}
                 acento={i}
                 activo={sel === i[config.campoId]}
+                inactivo={!i.Activo}
                 onClick={() => seleccionar(i[config.campoId])}
                 icono={config.icono}
                 claseIcono="h-7 w-7"

@@ -10,6 +10,10 @@ from app.Constants.Cantidades import (
     LONGITUD_MINIMA_DESCRIPCION,
     LONGITUD_MINIMA_DESCRIPCION_INSUMO,
 )
+from app.Models.MateriaPrima.TipoMateriaPrima import (
+    CambiarEstadoTipoRequest,
+    CambiarEstadoTipoResponse,
+)
 from app.Models.Insumo.Insumo import (
     CatalogoInsumoResponse,
     CrearInsumoRequest,
@@ -22,8 +26,10 @@ from app.Models.Insumo.Insumo import (
     MovimientoInsumoResponse,
 )
 from app.Repository.Insumo.Insumo import InsumoRepository
+from app.Repository.MateriaPrima.TipoMateriaPrima import TipoMateriaPrimaRepository
 from app.Schemas.Insumo import MovimientoInsumo, TipoInsumo
 from app.Services.AlertaStock.AlertaStock import mostrar_umbral, validar_umbral_stock
+from app.Services.MateriaPrima.TipoMateriaPrima import cambiar_estado
 from app.utils.validators import EsCantidadValida, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 ID_TIPO_MOVIMIENTO_INGRESO = 1
@@ -48,9 +54,15 @@ def _mostrar(valor: str | None) -> str:
 class InsumoService:
     def __init__(self, db: Session):
         self.repository = InsumoRepository(db)
+        self.repository_tipo = TipoMateriaPrimaRepository(
+            db, TipoInsumo, TipoInsumo.IdTipoInsumo, TipoInsumo.NombreInsumo
+        )
 
-    def VerCatalogoInsumo(self) -> list[CatalogoInsumoResponse]:
-        return [CatalogoInsumoResponse(**fila) for fila in self.repository.VerCatalogoInsumo()]
+    def VerCatalogoInsumo(self, incluir_inactivos: bool = False) -> list[CatalogoInsumoResponse]:
+        return [
+            CatalogoInsumoResponse(**fila)
+            for fila in self.repository.VerCatalogoInsumo(incluir_inactivos)
+        ]
 
     def IngresarInsumo(self, data: MovimientoInsumoRequest, id_usuario: int) -> MovimientoInsumoResponse:
         return self._RegistrarMovimiento(data, id_usuario, ID_TIPO_MOVIMIENTO_INGRESO)
@@ -134,6 +146,9 @@ class InsumoService:
         )
 
         return InsumoResponse(**self.repository.ObtenerInsumo(datos.IdTipoInsumo))
+
+    def CambiarEstado(self, data: CambiarEstadoTipoRequest, id_admin: int) -> CambiarEstadoTipoResponse:
+        return cambiar_estado(self.repository_tipo, data, id_admin, "insumo", "NombreInsumo")
 
     def _ValidarNombre(self, nombre: str) -> str:
         nombre = _limpiar(nombre)

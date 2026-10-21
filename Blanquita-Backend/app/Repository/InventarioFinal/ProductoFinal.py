@@ -3,7 +3,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
     InventarioProductoTerminado,
@@ -116,6 +116,12 @@ class ProductoFinalRepository:
                 PresentacionProducto.IdPresentacion == InventarioProductoTerminado.IdPresentacion,
             )
             .join(Producto, Producto.IdProducto == PresentacionProducto.IdProducto)
+            .where(
+                visible_en_inventario(
+                    and_(Producto.Activo, PresentacionProducto.Activo),
+                    InventarioProductoTerminado.CantidadActual,
+                )
+            )
             .order_by(Producto.NombreProducto, PresentacionProducto.CodigoPresentacion)
         )
         if id_producto is not None:

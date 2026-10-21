@@ -1,3 +1,4 @@
+import { nombreEstadoCatalogo } from "@/constants/Estados";
 import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
 import { numeroONulo } from "@/utils/validators";
 
@@ -32,10 +33,13 @@ export const InsumoItem = (data) => ({
   NombreInsumo: data.NombreInsumo,
   DescripcionInsumo: data.DescripcionInsumo ?? null,
   CantidadActual: data.CantidadActual,
+  Activo: data.Activo,
+  NombreEstado: nombreEstadoCatalogo(data.Activo),
   ...NivelStockResponse(data)
 });
 
 export const ListarInsumosRequest = (filtros = {}) => ({
+  Activo: filtros.Activo ?? null,
   Busqueda: filtros.Busqueda ?? null,
   Pagina: filtros.Pagina ?? 1,
   TamanoPagina: filtros.TamanoPagina ?? 20

@@ -8,11 +8,14 @@ import {
   ReingresoBolsaJavaResponse
 } from "../../models/Empaque/BolsaJava";
 import { pedirJson } from "@/utils/api";
+import { conQueryParams } from "@/utils/params";
 
 const BASE_URL = "/api/bolsajava";
 
-export async function verInventarioBolsaJava() {
-  const data = await pedirJson(`${BASE_URL}/inventario`);
+export async function verInventarioBolsaJava(incluirInactivos = false) {
+  const data = await pedirJson(
+    conQueryParams(`${BASE_URL}/inventario`, { IncluirInactivos: incluirInactivos || null })
+  );
 
   return data.map(InventarioBolsaJavaResponse);
 }

@@ -111,7 +111,7 @@ class InicioEmpaqueService:
                 StockPreventivo=fila["StockPreventivo"],
                 NivelStock=fila["NivelStock"],
             )
-            for fila in self.alertas.ListarStock(DOMINIO_POR_CLASE[clase])
+            for fila in self.alertas.ListarStock(DOMINIO_POR_CLASE[clase], solo_visibles=True)
         ]
 
         indicadores = IndicadoresSemanaEmpaque(

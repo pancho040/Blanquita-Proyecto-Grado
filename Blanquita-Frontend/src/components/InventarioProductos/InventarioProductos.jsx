@@ -19,6 +19,7 @@ import { Roles } from "@/constants/Values";
 import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
 import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
+import { BadgeInactivo } from "@/components/Inventario/comunes";
 import { descripcionContenido } from "./comunes";
 
 const FILTROS = [
@@ -261,7 +262,10 @@ export default function InventarioProductoTerminado({ usuario }) {
                       return (
                         <TableRow key={p.IdPresentacion} className="hover:bg-slate-50">
                           <TableCell className="pl-5 font-mono font-bold text-c3">
-                            {p.CodigoPresentacion}
+                            <div className="flex items-center gap-2">
+                              {p.CodigoPresentacion}
+                              {!p.Activo && <BadgeInactivo className="font-sans" />}
+                            </div>
                           </TableCell>
                           <TableCell className="font-semibold text-slate-900">
                             {p.NombreProducto}
@@ -308,8 +312,9 @@ export default function InventarioProductoTerminado({ usuario }) {
                     >
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex flex-col gap-1">
-                          <div className="font-mono text-[15px] font-extrabold text-c3">
+                          <div className="flex items-center gap-2 font-mono text-[15px] font-extrabold text-c3">
                             {p.CodigoPresentacion}
+                            {!p.Activo && <BadgeInactivo className="font-sans" />}
                           </div>
                           <div className="text-[13px] font-semibold text-slate-900">
                             {p.NombreProducto}

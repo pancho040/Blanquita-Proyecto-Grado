@@ -8,6 +8,7 @@ from app.Repository.Consultas import turno_actual
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
+    FormatoSubBobina,
     FormatoSubBobinaDetalle,
     SubBobinaServilleta,
     TipoMedidaSubBobina,
@@ -139,6 +140,8 @@ class ProduccionBobinaServilletaRepository:
                 SubBobinaServilleta.IdSubBobinaServilleta.label("IdSubBobina"),
                 UnidadBobinaServilleta.CodigoBobina.label("CodigoUnidadOrigen"),
                 SubBobinaServilleta.IdTipoMedidaSubBobina,
+                TipoMedidaSubBobina.MedidaMm,
+                FormatoSubBobina.DescripcionFormato,
                 Turno.NombreTurno,
                 ProduccionServilleta.FechaInicioProduccion,
             )
@@ -155,6 +158,14 @@ class ProduccionBobinaServilletaRepository:
                 UnidadBobinaServilleta.IdUnidadBobinaServilleta
                 == SubBobinaServilleta.IdUnidadBobinaServilleta,
             )
+            .join(
+                TipoMedidaSubBobina,
+                TipoMedidaSubBobina.IdTipoMedidaSubBobina == SubBobinaServilleta.IdTipoMedidaSubBobina,
+            )
+            .join(
+                FormatoSubBobina,
+                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
+            )
             .join(Turno, Turno.IdTurno == ProduccionServilleta.IdTurno)
             .where(ProduccionServilleta.IdEstadoProduccion == ESTADO_PRODUCCION_EN_PRODUCCION)
             .order_by(ProduccionServilleta.FechaInicioProduccion.desc())
@@ -170,6 +181,9 @@ class ProduccionBobinaServilletaRepository:
                 PausaProduccionServilleta.IdProduccionServilleta,
                 SubBobinaServilleta.IdSubBobinaServilleta.label("IdSubBobina"),
                 UnidadBobinaServilleta.CodigoBobina.label("CodigoUnidadOrigen"),
+                SubBobinaServilleta.IdTipoMedidaSubBobina,
+                TipoMedidaSubBobina.MedidaMm,
+                FormatoSubBobina.DescripcionFormato,
                 PausaProduccionServilleta.FechaHoraPausa,
                 EstadoProduccion.NombreEstadoProduccion,
             )
@@ -190,6 +204,14 @@ class ProduccionBobinaServilletaRepository:
                 UnidadBobinaServilleta,
                 UnidadBobinaServilleta.IdUnidadBobinaServilleta
                 == SubBobinaServilleta.IdUnidadBobinaServilleta,
+            )
+            .join(
+                TipoMedidaSubBobina,
+                TipoMedidaSubBobina.IdTipoMedidaSubBobina == SubBobinaServilleta.IdTipoMedidaSubBobina,
+            )
+            .join(
+                FormatoSubBobina,
+                FormatoSubBobina.IdFormatoSubBobina == UnidadBobinaServilleta.IdFormatoSubBobina,
             )
             .where(
                 ProduccionServilleta.IdEstadoProduccion == ESTADO_PRODUCCION_PAUSA,

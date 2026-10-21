@@ -34,6 +34,12 @@ function EncabezadoSubBobina({ p }) {
         Sub-bobina #{p.IdSubBobina}
       </div>
       <div className="font-mono text-sm font-bold text-c3">{p.CodigoUnidadOrigen}</div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-slate-600">
+        <span className="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+          {p.MedidaMm} mm
+        </span>
+        <span>Formato {p.DescripcionFormato}</span>
+      </div>
     </>
   );
 }

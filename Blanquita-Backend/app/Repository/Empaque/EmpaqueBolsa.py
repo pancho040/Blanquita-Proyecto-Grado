@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import (
     InventarioEmpaqueBolsa,
@@ -19,7 +19,7 @@ class EmpaqueBolsaRepository:
         self.db = db
         self.caller = DbCaller(db)
 
-    def VerInventario(self) -> list[dict]:
+    def VerInventario(self, incluir_inactivos: bool = False) -> list[dict]:
         consulta = (
             select(
                 InventarioEmpaqueBolsa.IdInventarioEmpaqueBolsa,
@@ -38,6 +38,8 @@ class EmpaqueBolsaRepository:
             )
             .order_by(TipoEmpaqueBolsa.NombreEmpaqueBolsa)
         )
+        if not incluir_inactivos:
+            consulta = consulta.where(visible_en_inventario(TipoEmpaqueBolsa.Activo, InventarioEmpaqueBolsa.CantidadActual))
         return self.caller.Consultar(consulta)
 
     def ObtenerProveedor(self, id_proveedor: int) -> dict | None:

@@ -287,6 +287,7 @@ export default function EmpaqueBobinaInventario({ usuario }) {
                 key={t.IdTipoEmpaque}
                 acento={t}
                 activo={detalle.sel === t.IdTipoEmpaque}
+                inactivo={!t.Activo}
                 onClick={() => detalle.seleccionar(t.IdTipoEmpaque)}
                 icono={Package}
                 claseIcono="h-7 w-7"

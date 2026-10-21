@@ -60,7 +60,7 @@ const ID_TIPO_DESCUENTO = 2;
 
 const MOTIVOS_PAUSA = [
   "Falta de pegamento",
-  "Falta de personal para continuar la producción",
+  "Falta de personal",
 ];
 
 const codigosDe = (p) => `${p.CodigoBobina1} + ${p.CodigoBobina2}`;

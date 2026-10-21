@@ -558,6 +558,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                       key={t.IdTipoBobinaServilleta}
                       acento={t}
                       activo={sel?.clase === "bobina" && sel.id === t.IdTipoBobinaServilleta}
+                      inactivo={!t.Activo}
                       onClick={() =>
                         detalle.seleccionar({ clase: "bobina", id: t.IdTipoBobinaServilleta })
                       }
@@ -583,6 +584,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                     key={t.IdTipoMedidaSubBobina}
                     acento={t}
                     activo={sel?.clase === "sub" && sel.id === t.IdTipoMedidaSubBobina}
+                    inactivo={!t.Activo}
                     onClick={() =>
                       detalle.seleccionar({ clase: "sub", id: t.IdTipoMedidaSubBobina })
                     }

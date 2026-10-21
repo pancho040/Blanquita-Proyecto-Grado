@@ -20,14 +20,14 @@ export const CLASES_EMPAQUE = [
     texto: "Empaque en bolsa",
     unidad: "paquetes",
     cargarTipos: () =>
-      verInventarioEmpaqueBolsa().then(normalizar("IdTipoEmpaqueBolsa", "NombreEmpaqueBolsa")),
+      verInventarioEmpaqueBolsa(true).then(normalizar("IdTipoEmpaqueBolsa", "NombreEmpaqueBolsa")),
   },
   {
     valor: "jaba",
     texto: "Bolsas de jaba",
     unidad: "paquetes",
     cargarTipos: () =>
-      verInventarioBolsaJava().then(normalizar("IdTipoBolsaJava", "NombreBolsaJava")),
+      verInventarioBolsaJava(true).then(normalizar("IdTipoBolsaJava", "NombreBolsaJava")),
   },
 ];
 

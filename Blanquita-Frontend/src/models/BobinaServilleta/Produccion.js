@@ -88,6 +88,8 @@ export const VerProduccionServilletaActivasResponse = (data) => ({
   IdSubBobina: data.IdSubBobina,
   CodigoUnidadOrigen: data.CodigoUnidadOrigen,
   IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
+  MedidaMm: data.MedidaMm,
+  DescripcionFormato: data.DescripcionFormato,
   NombreTurno: data.NombreTurno,
   FechaInicioProduccion: data.FechaInicioProduccion
 });
@@ -97,6 +99,9 @@ export const VerPausasProduccionServilletaActivasResponse = (data) => ({
   IdProduccionServilleta: data.IdProduccionServilleta,
   IdSubBobina: data.IdSubBobina,
   CodigoUnidadOrigen: data.CodigoUnidadOrigen,
+  IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
+  MedidaMm: data.MedidaMm,
+  DescripcionFormato: data.DescripcionFormato,
   FechaHoraPausa: data.FechaHoraPausa,
   NombreEstadoProduccion: data.NombreEstadoProduccion
 });

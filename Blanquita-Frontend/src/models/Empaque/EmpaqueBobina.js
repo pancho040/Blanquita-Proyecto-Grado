@@ -38,6 +38,7 @@ export const ResumenInventarioEmpaqueResponse = (data) => ({
   IdTipoEmpaque: data.IdTipoEmpaque,
   NombreTipoEmpaque: data.NombreTipoEmpaque,
   CantidadEmpaques: data.CantidadEmpaques,
+  Activo: data.Activo,
   ...NivelStockResponse(data)
 });
 

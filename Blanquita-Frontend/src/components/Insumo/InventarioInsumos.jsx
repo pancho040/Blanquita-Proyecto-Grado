@@ -385,6 +385,7 @@ export default function InventarioInsumos({ usuario }) {
                 key={i.IdTipoInsumo}
                 acento={i}
                 activo={sel === i.IdTipoInsumo}
+                inactivo={!i.Activo}
                 onClick={() => seleccionar(i.IdTipoInsumo)}
                 icono={Package}
                 claseIcono="h-7 w-7"

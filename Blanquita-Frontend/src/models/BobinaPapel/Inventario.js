@@ -6,6 +6,7 @@ export const VerResumenInventarioBobinaPapelResponse = (data) => ({
   CantidadBobinas: data.CantidadBobinas,
   PesoNetoTotalKg: data.PesoNetoTotalKg,
   GramajePromedio: data.GramajePromedio,
+  Activo: data.Activo,
   ...NivelStockResponse(data)
 });
 

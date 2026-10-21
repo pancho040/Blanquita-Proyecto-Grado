@@ -8,7 +8,7 @@ from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_FUERA_INVENTARIO,
     MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
 )
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina, TipoBobina
 from app.Schemas.Proveedor import Proveedor
@@ -47,6 +47,7 @@ class InventarioBobinaPapelRepository:
                 TipoBobina.StockMinimo,
                 TipoBobina.StockPreventivo,
             )
+            .having(visible_en_inventario(TipoBobina.Activo, cantidad))
             .order_by(TipoBobina.IdTipoBobina)
         )
         return self.caller.Consultar(consulta)

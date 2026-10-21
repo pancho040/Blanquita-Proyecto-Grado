@@ -212,6 +212,7 @@ export default function InventarioBobinasPapel({ usuario }) {
                 key={t.IdTipoBobina}
                 acento={t}
                 activo={detalle.sel === t.IdTipoBobina}
+                inactivo={!t.Activo}
                 onClick={() => detalle.seleccionar(t.IdTipoBobina)}
                 icono={Cylinder}
                 nombre={t.NombreTipoBobina}

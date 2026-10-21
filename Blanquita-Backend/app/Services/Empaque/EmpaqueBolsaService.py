@@ -38,8 +38,8 @@ class EmpaqueBolsaService:
     def __init__(self, db: Session):
         self.repository = EmpaqueBolsaRepository(db)
 
-    def VerInventario(self) -> list[InventarioEmpaqueBolsaResponse]:
-        return [InventarioEmpaqueBolsaResponse(**fila) for fila in self.repository.VerInventario()]
+    def VerInventario(self, incluir_inactivos: bool = False) -> list[InventarioEmpaqueBolsaResponse]:
+        return [InventarioEmpaqueBolsaResponse(**fila) for fila in self.repository.VerInventario(incluir_inactivos)]
 
     def InsertarEmpaqueBolsa(
         self, data: IngresoEmpaqueBolsaRequest, id_usuario: int

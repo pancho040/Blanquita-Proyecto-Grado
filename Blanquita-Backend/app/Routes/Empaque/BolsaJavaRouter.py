@@ -31,10 +31,11 @@ def bolsa_java_service(db: Session = Depends(get_db)) -> BolsaJavaService:
     status_code=200,
 )
 def VerInventarioBolsaJava(
+    IncluirInactivos: bool = False,
     usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
     service: BolsaJavaService = Depends(bolsa_java_service),
 ):
-    return service.VerInventario()
+    return service.VerInventario(IncluirInactivos)
 
 
 @BolsaJavaRouter.post(

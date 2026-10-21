@@ -12,7 +12,7 @@ from app.Constants.Estados import (
     MOVIMIENTO_MATERIA_PRIMA_INGRESO,
     MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
 )
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque, TipoEmpaque
 from app.Schemas.Proveedor import Proveedor
@@ -51,6 +51,7 @@ class EmpaqueBobinaRepository:
                 TipoEmpaque.StockMinimo,
                 TipoEmpaque.StockPreventivo,
             )
+            .having(visible_en_inventario(TipoEmpaque.Activo, cantidad))
             .order_by(TipoEmpaque.IdTipoEmpaque)
         )
         return self.caller.Consultar(consulta)

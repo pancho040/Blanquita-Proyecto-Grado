@@ -9,7 +9,7 @@ from app.Constants.Estados import (
     MOVIMIENTO_MATERIA_PRIMA_REINGRESO,
 )
 from app.Repository.BobinaServilleta.Unidades import con_unidades, unidades_de_bobinas
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.BobinaServilleta import (
     BobinaServilleta,
@@ -55,6 +55,7 @@ class InventarioBobinaServilletaRepository:
                 TipoBobinaServilleta.StockMinimo,
                 TipoBobinaServilleta.StockPreventivo,
             )
+            .having(visible_en_inventario(TipoBobinaServilleta.Activo, cantidad))
             .order_by(TipoBobinaServilleta.IdTipoBobinaServilleta)
         )
         return self.caller.Consultar(consulta)
@@ -111,6 +112,7 @@ class InventarioBobinaServilletaRepository:
                 TipoMedidaSubBobina.StockMinimo,
                 TipoMedidaSubBobina.StockPreventivo,
             )
+            .having(visible_en_inventario(TipoMedidaSubBobina.Activo, cantidad))
             .order_by(TipoMedidaSubBobina.IdTipoMedidaSubBobina)
         )
         return self.caller.Consultar(consulta)

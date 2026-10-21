@@ -105,66 +105,70 @@ function DialogoMotivoProduccion({
 
   return (
     <Dialog open={dialogo.abierto} onOpenChange={(open) => !open && dialogo.cerrar()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          {dialogo.produccion && (
-            <ResumenProduccion
-              titulo={tituloDe(dialogo.produccion)}
-              produccion={dialogo.produccion}
-            />
-          )}
+        <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+          <div className="flex flex-col gap-4">
+            {dialogo.produccion && (
+              <ResumenProduccion
+                titulo={tituloDe(dialogo.produccion)}
+                produccion={dialogo.produccion}
+              />
+            )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label className={ETIQUETA}>Motivos frecuentes</Label>
-            <ToggleGroup
-              type="multiple"
-              value={seleccionados}
-              className="flex flex-wrap justify-start gap-2"
-            >
-              {opciones.map((motivo) => (
-                <ToggleGroupItem
-                  key={motivo}
-                  value={motivo}
-                  onClick={() =>
-                    dialogo.setMotivo((actual) => alternarMotivoEnTexto(motivo, actual))
-                  }
-                  className="h-auto whitespace-normal rounded-full border-2 border-slate-200 px-3.5 py-2 text-left text-[12.5px] font-bold text-slate-600 bg-white hover:border-slate-300 hover:bg-white hover:text-slate-600 aria-pressed:border-slate-900 aria-pressed:bg-slate-900 aria-pressed:text-white aria-pressed:hover:border-slate-900 aria-pressed:hover:bg-slate-900 aria-pressed:hover:text-white"
-                >
-                  {motivo}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            <div className="flex flex-col gap-1.5">
+              <Label className={ETIQUETA}>Motivos frecuentes</Label>
+              <ToggleGroup
+                type="multiple"
+                value={seleccionados}
+                className="flex flex-wrap justify-start gap-2"
+              >
+                {opciones.map((motivo) => (
+                  <ToggleGroupItem
+                    key={motivo}
+                    value={motivo}
+                    onClick={() =>
+                      dialogo.setMotivo((actual) => alternarMotivoEnTexto(motivo, actual))
+                    }
+                    className="h-auto whitespace-normal rounded-full border-2 border-slate-200 px-3.5 py-2 text-left text-[12.5px] font-bold text-slate-600 bg-white hover:border-slate-300 hover:bg-white hover:text-slate-600 aria-pressed:border-slate-900 aria-pressed:bg-slate-900 aria-pressed:text-white aria-pressed:hover:border-slate-900 aria-pressed:hover:bg-slate-900 aria-pressed:hover:text-white"
+                  >
+                    {motivo}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={id} className={ETIQUETA}>
-              {etiqueta}
-            </Label>
-            <Textarea
-              id={id}
-              value={dialogo.motivo}
-              onChange={(e) => dialogo.setMotivo(limpiarObservacion(e.target.value))}
-              placeholder={placeholder}
-              className="min-h-20"
-              maxLength={MOTIVO_CANCELACION_MAX}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={id} className={ETIQUETA}>
+                {etiqueta}
+              </Label>
+              <Textarea
+                id={id}
+                value={dialogo.motivo}
+                onChange={(e) => dialogo.setMotivo(limpiarObservacion(e.target.value))}
+                placeholder={placeholder}
+                className="min-h-20 lg:min-h-28"
+                maxLength={MOTIVO_CANCELACION_MAX}
+              />
+              <ContadorMotivo motivo={dialogo.motivo} />
+            </div>
+
+            <CasillaIrreversible
+              id={`confirmar-${id}`}
+              accion={accion}
+              detalle={detalle}
+              confirmado={confirmado}
+              setConfirmado={setConfirmado}
+              deshabilitado={dialogo.enviando}
             />
-            <ContadorMotivo motivo={dialogo.motivo} />
+
+            {dialogo.error && <ErrorDialogo mensaje={dialogo.error} />}
           </div>
-
-          <CasillaIrreversible
-            id={`confirmar-${id}`}
-            accion={accion}
-            detalle={detalle}
-            confirmado={confirmado}
-            setConfirmado={setConfirmado}
-            deshabilitado={dialogo.enviando}
-          />
-
-          {dialogo.error && <ErrorDialogo mensaje={dialogo.error} />}
         </div>
 
         <DialogFooter>

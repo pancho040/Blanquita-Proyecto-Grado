@@ -98,6 +98,8 @@ class VerProduccionServilletaActivasResponse(BaseModel):
     IdSubBobina: int
     CodigoUnidadOrigen: str
     IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    DescripcionFormato: str
     NombreTurno: str
     FechaInicioProduccion: datetime
 
@@ -107,5 +109,8 @@ class VerPausasProduccionServilletaActivasResponse(BaseModel):
     IdProduccionServilleta: int
     IdSubBobina: int
     CodigoUnidadOrigen: str
+    IdTipoMedidaSubBobina: int
+    MedidaMm: int
+    DescripcionFormato: str
     FechaHoraPausa: datetime
     NombreEstadoProduccion: str

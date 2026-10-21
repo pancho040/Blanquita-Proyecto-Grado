@@ -11,7 +11,7 @@ from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_EN_ALMACEN,
     MOVIMIENTO_MATERIA_PRIMA_TRASLADO,
 )
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.MateriaPrima import EstadoMateriaPrima
 from app.Schemas.Proveedor import Proveedor
@@ -60,6 +60,7 @@ class InventarioRodelaRepository:
                 TipoRodela.StockMinimo,
                 TipoRodela.StockPreventivo,
             )
+            .having(visible_en_inventario(TipoRodela.Activo, func.count(Rodela.IdRodela)))
             .order_by(TipoRodela.IdTipoRodela)
         )
         return self.caller.Consultar(consulta)

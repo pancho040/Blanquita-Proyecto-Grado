@@ -8,11 +8,14 @@ import {
   ReingresoEmpaqueBolsaResponse
 } from "../../models/Empaque/EmpaqueBolsa";
 import { pedirJson } from "@/utils/api";
+import { conQueryParams } from "@/utils/params";
 
 const BASE_URL = "/api/empaquebolsa";
 
-export async function verInventarioEmpaqueBolsa() {
-  const data = await pedirJson(`${BASE_URL}/inventario`);
+export async function verInventarioEmpaqueBolsa(incluirInactivos = false) {
+  const data = await pedirJson(
+    conQueryParams(`${BASE_URL}/inventario`, { IncluirInactivos: incluirInactivos || null })
+  );
 
   return data.map(InventarioEmpaqueBolsaResponse);
 }

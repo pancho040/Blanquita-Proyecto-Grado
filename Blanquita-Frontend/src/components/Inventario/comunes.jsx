@@ -40,9 +40,21 @@ export const coincide = (busqueda, ...valores) => {
   return !q || valores.some((v) => String(v ?? "").toLowerCase().includes(q));
 };
 
+export function BadgeInactivo({ className }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("border-amber-300 bg-amber-50 font-bold text-amber-700", className)}
+    >
+      Inactivo
+    </Badge>
+  );
+}
+
 export function TarjetaTipo({
   acento,
   activo,
+  inactivo = false,
   onClick,
   icono: Icono,
   claseIcono = "h-8 w-8",
@@ -62,6 +74,7 @@ export function TarjetaTipo({
         <div className="flex items-center gap-2.5">
           <Icono className={cn(claseIcono, "shrink-0", acento.text)} strokeWidth={grosorIcono} />
           <div className="text-[17px] font-extrabold text-slate-900">{nombre}</div>
+          {inactivo && <BadgeInactivo />}
         </div>
         <Badge
           variant="outline"

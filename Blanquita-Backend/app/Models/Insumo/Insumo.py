@@ -35,6 +35,7 @@ class MovimientoInsumoResponse(BaseModel):
 
 
 class ListarInsumosRequest(BaseModel):
+    Activo: bool | None = None
     Busqueda: str | None = Field(default=None, max_length=50)
     Pagina: int = Field(default=1, ge=1)
     TamanoPagina: int = Field(default=20, ge=1, le=100)
@@ -45,6 +46,7 @@ class InsumoItem(NivelStockResponse):
     NombreInsumo: str
     DescripcionInsumo: str | None = None
     CantidadActual: int
+    Activo: bool
 
 
 class ListarInsumosResponse(BaseModel):

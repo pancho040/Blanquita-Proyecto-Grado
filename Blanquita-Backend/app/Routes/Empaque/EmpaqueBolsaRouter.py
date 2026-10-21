@@ -31,10 +31,11 @@ def empaque_bolsa_service(db: Session = Depends(get_db)) -> EmpaqueBolsaService:
     status_code=200,
 )
 def VerInventarioEmpaqueBolsa(
+    IncluirInactivos: bool = False,
     usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
     service: EmpaqueBolsaService = Depends(empaque_bolsa_service),
 ):
-    return service.VerInventario()
+    return service.VerInventario(IncluirInactivos)
 
 
 @EmpaqueBolsaRouter.post(

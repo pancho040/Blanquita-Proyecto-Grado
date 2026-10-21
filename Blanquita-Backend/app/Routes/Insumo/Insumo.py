@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from app.Auth.Dependencies import require_admin_db, require_role
 from app.Config.supabase import get_db
 from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR
+from app.Models.MateriaPrima.TipoMateriaPrima import (
+    CambiarEstadoTipoRequest,
+    CambiarEstadoTipoResponse,
+)
 from app.Models.Insumo.Insumo import (
     CatalogoInsumoResponse,
     CrearInsumoRequest,
@@ -30,10 +34,11 @@ InsumoRouter = APIRouter(prefix="/insumo", tags=["Insumo - Ingreso - Salida - In
     status_code=200,
 )
 def VerCatalogoInsumo(
+    IncluirInactivos: bool = False,
     usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR])),
     service: InsumoService = Depends(insumo_service),
 ):
-    return service.VerCatalogoInsumo()
+    return service.VerCatalogoInsumo(IncluirInactivos)
 
 
 @InsumoRouter.post(
@@ -68,6 +73,7 @@ def SacarInsumo(
     status_code=200,
 )
 def ListarInsumos(
+    Activo: bool | None = None,
     Busqueda: str | None = Query(default=None, max_length=50),
     Pagina: int = Query(default=1, ge=1),
     TamanoPagina: int = Query(default=20, ge=1, le=100),
@@ -76,6 +82,7 @@ def ListarInsumos(
 ):
     return service.ListarInsumos(
         ListarInsumosRequest(
+            Activo=Activo,
             Busqueda=Busqueda,
             Pagina=Pagina,
             TamanoPagina=TamanoPagina,
@@ -120,3 +127,16 @@ def EditarInsumo(
     service: InsumoService = Depends(insumo_service),
 ):
     return service.EditarInsumo(data, usuario_actual["IdUsuario"])
+
+
+@InsumoRouter.patch(
+    "/estado",
+    response_model=CambiarEstadoTipoResponse,
+    status_code=200,
+)
+def CambiarEstadoInsumo(
+    data: CambiarEstadoTipoRequest,
+    usuario_actual: dict = Depends(require_admin_db),
+    service: InsumoService = Depends(insumo_service),
+):
+    return service.CambiarEstado(data, usuario_actual["IdUsuario"])

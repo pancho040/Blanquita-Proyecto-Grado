@@ -78,7 +78,7 @@ class InicioInsumoService:
                 NivelStock=fila["NivelStock"],
                 FechaUltimoMovimiento=ultimos.get(fila["Id"]),
             )
-            for fila in self.alertas.ListarStock(DOMINIO_STOCK_INSUMO)
+            for fila in self.alertas.ListarStock(DOMINIO_STOCK_INSUMO, solo_visibles=True)
         ]
 
         limite = semana.ahora - timedelta(days=DIAS_SIN_MOVIMIENTO_PRODUCTO)

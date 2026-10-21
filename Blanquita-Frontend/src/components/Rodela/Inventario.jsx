@@ -308,6 +308,7 @@ export default function InventarioRodelas({ usuario }) {
                 key={t.IdTipoRodela}
                 acento={t}
                 activo={detalle.sel === t.IdTipoRodela}
+                inactivo={!t.Activo}
                 onClick={() => detalle.seleccionar(t.IdTipoRodela)}
                 icono={Disc}
                 nombre={t.NombreTipoRodela}

@@ -17,6 +17,7 @@ export const ResumenInventarioBobinaServilletaResponse = (data) => ({
   IdTipoBobinaServilleta: data.IdTipoBobinaServilleta,
   NombreTipoBobinaServilleta: data.NombreTipoBobinaServilleta,
   CantidadBobinaServilleta: data.CantidadBobinaServilleta,
+  Activo: data.Activo,
   ...NivelStockResponse(data)
 });
 
@@ -35,6 +36,7 @@ export const ResumenInventarioSubBobinaServilletaResponse = (data) => ({
   IdTipoMedidaSubBobina: data.IdTipoMedidaSubBobina,
   NombreTipoMedida: data.NombreTipoMedida,
   CantidadSubBobinas: data.CantidadSubBobinas,
+  Activo: data.Activo,
   ...NivelStockResponse(data)
 });
 

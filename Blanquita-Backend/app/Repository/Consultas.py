@@ -1,7 +1,7 @@
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, literal, null, select
+from sqlalchemy import case, func, literal, null, or_, select
 
 from app.Constants.AlertaStock import NIVEL_STOCK_BAJO, NIVEL_STOCK_CRITICO, NIVEL_STOCK_NORMAL
 from app.Schemas.Produccion import Turno
@@ -31,6 +31,10 @@ def nivel_stock(cantidad, minimo, preventivo):
         (cantidad <= preventivo, literal(NIVEL_STOCK_BAJO)),
         else_=literal(NIVEL_STOCK_NORMAL),
     )
+
+
+def visible_en_inventario(activo, cantidad):
+    return or_(activo, cantidad > 0)
 
 
 def _turno_cubre_hora(turno: dict, hora: time) -> bool:

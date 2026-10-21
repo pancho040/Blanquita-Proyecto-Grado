@@ -38,8 +38,8 @@ class BolsaJavaService:
     def __init__(self, db: Session):
         self.repository = BolsaJavaRepository(db)
 
-    def VerInventario(self) -> list[InventarioBolsaJavaResponse]:
-        return [InventarioBolsaJavaResponse(**fila) for fila in self.repository.VerInventario()]
+    def VerInventario(self, incluir_inactivos: bool = False) -> list[InventarioBolsaJavaResponse]:
+        return [InventarioBolsaJavaResponse(**fila) for fila in self.repository.VerInventario(incluir_inactivos)]
 
     def InsertarBolsaJava(
         self, data: IngresoBolsaJavaRequest, id_usuario: int

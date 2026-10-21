@@ -21,6 +21,7 @@ PREFIJOS_MODULO_HISTORIAL_ADMIN = {
     MODULO_INSUMOS: (
         "Crear insumo ·",
         "Editar insumo ·",
+        "Cambio de estado · Insumo",
     ),
     MODULO_STOCK: (
         "Umbral de stock ·",

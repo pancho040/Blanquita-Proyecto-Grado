@@ -3,7 +3,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import nivel_stock
+from app.Repository.Consultas import nivel_stock, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.HistorialAdmin import HistorialAdmin
 from app.Schemas.Insumo import InventarioInsumo, MovimientoInsumo, TipoInsumo
@@ -14,7 +14,7 @@ class InsumoRepository:
         self.db = db
         self.caller = DbCaller(db)
 
-    def VerCatalogoInsumo(self) -> list[dict]:
+    def VerCatalogoInsumo(self, incluir_inactivos: bool = False) -> list[dict]:
         consulta = (
             select(
                 InventarioInsumo.IdInventarioInsumo,
@@ -30,6 +30,8 @@ class InsumoRepository:
             .join(TipoInsumo, InventarioInsumo.IdTipoInsumo == TipoInsumo.IdTipoInsumo)
             .order_by(TipoInsumo.NombreInsumo)
         )
+        if not incluir_inactivos:
+            consulta = consulta.where(visible_en_inventario(TipoInsumo.Activo, InventarioInsumo.CantidadActual))
         return self.caller.Consultar(consulta)
 
     def ObtenerInventarioBloqueado(self, id_tipo_insumo: int) -> tuple[InventarioInsumo, TipoInsumo] | None:
@@ -74,6 +76,7 @@ class InsumoRepository:
             TipoInsumo.NombreInsumo,
             TipoInsumo.DescripcionInsumo,
             cantidad.label("CantidadActual"),
+            TipoInsumo.Activo,
             InventarioInsumo.StockMinimo,
             InventarioInsumo.StockPreventivo,
             nivel_stock(
@@ -83,6 +86,9 @@ class InsumoRepository:
 
     def ListarInsumos(self, params: dict) -> tuple[int, list[dict]]:
         consulta = self._ConsultaInsumos()
+
+        if params.get("Activo") is not None:
+            consulta = consulta.where(TipoInsumo.Activo == params["Activo"])
 
         busqueda = (params.get("Busqueda") or "").strip()
         if busqueda:
