@@ -1,16 +1,19 @@
 export const PREFIJO_POR_ROL = {
   1: "operador",
   2: "encargado",
+  3:"gerente"
 };
 
 export const RUTA_POR_ROL = {
   1: "/operador/inicio",
   2: "/encargado/inicio",
+  3:"/gerente/incio"
 };
 
 export const Roles = {
   Operador: 1,
   Encargado: 2,
+  Gerente:3
 };
 
 
@@ -55,6 +58,7 @@ export const CANTIDAD_MAXIMA_SALIDA_PRODUCTO_TERMINADO = 5000;
 export const RolesUsuario = [
   { IdRol: 1, NombreRol: "Operador" },
   { IdRol: 2, NombreRol: "Líder de Inventario y Producción" },
+  {IdRol:3,NombreRol:"Gerente General"}
 ];
 
 export const CLAVE_MIN = 8;
