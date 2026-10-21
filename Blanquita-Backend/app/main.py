@@ -52,6 +52,8 @@ from app.Routes.Insumo.InicioRouter import InicioInsumoRouter
 
 from app.Routes.AlertaStock.AlertaStock import AlertaStockRouter
 
+from app.Routes.Notificacion.NotificacionRouter import NotificacionRouter
+
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
@@ -155,3 +157,6 @@ app.include_router(InicioInsumoRouter)
 
 #ROUTERS ALERTAS DE STOCK
 app.include_router(AlertaStockRouter)
+
+#ROUTERS NOTIFICACIONES
+app.include_router(NotificacionRouter)

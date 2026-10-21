@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Icon, ChevronDown, ChevronLeft, LogOut } from "lucide-react";
+import { Icon, ChevronDown, ChevronLeft, LogOut, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   basePathSeccion,
@@ -9,6 +9,7 @@ import {
 } from "@/constants/NavBarRoutes";
 import { PREFIJO_POR_ROL } from "@/constants/Values";
 import { cerrarSesion } from "@/lib/logout-client";
+import Notificaciones, { textoContador } from "@/components/layout/Notificaciones";
 import {
   SidebarProvider,
   Sidebar,
@@ -159,12 +160,35 @@ export default function SideBar({ idRol, esAdmin = false, seccion }) {
           boxShadow: "0 4px 20px #1c96c533",
         }}
       >
-        <SidebarHeader className="h-16 items-center justify-center border-b-2 border-sidebar-border md:h-20">
+        <SidebarHeader className="relative h-16 items-center justify-center border-b-2 border-sidebar-border md:h-20">
           <img
             src="/LogoBlanquita.webp"
             alt="Papel Blanquita"
             className="h-10 w-auto md:h-12"
             style={{ filter: "drop-shadow(0 4px 12px rgba(255,255,255,.3))" }}
+          />
+          <Notificaciones
+            idRol={idRol}
+            renderBoton={({ abrir, total, urgente }) => (
+              <button
+                type="button"
+                onClick={abrir}
+                aria-label="Abrir notificaciones"
+                className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center justify-center rounded-lg p-2 text-sidebar-foreground hover:bg-sidebar-accent focus-visible:bg-sidebar-accent focus-visible:outline-none"
+              >
+                <Bell size={22} />
+                {total > 0 && (
+                  <span
+                    className={cn(
+                      "absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-extrabold tabular-nums ring-2 ring-sidebar",
+                      urgente ? "bg-red-600 text-white" : "bg-white text-[#1C96C5]"
+                    )}
+                  >
+                    {textoContador(total)}
+                  </span>
+                )}
+              </button>
+            )}
           />
         </SidebarHeader>
 
