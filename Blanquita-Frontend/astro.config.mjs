@@ -54,9 +54,10 @@ export default defineConfig({
       ],
     },
     resolve: {
-      alias: {
-        '@': path.resolve('./src'),
-      },
+      alias: [
+        { find: '@', replacement: path.resolve('./src') },
+        { find: /^pdfjs-dist$/, replacement: 'pdfjs-dist/legacy/build/pdf.mjs' },
+      ],
     },
   },
 });

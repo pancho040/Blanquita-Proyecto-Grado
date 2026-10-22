@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import workerSrc from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { Download, Loader2, Minus, Plus, Printer, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
