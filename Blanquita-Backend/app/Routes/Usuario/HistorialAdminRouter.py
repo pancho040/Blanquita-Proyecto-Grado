@@ -11,6 +11,8 @@ from app.Models.Usuario.HistorialAdmin import (
     FiltroHistorialAdminRequest,
     ListarHistorialAdminRequest,
     ListarHistorialAdminResponse,
+    ListarUsuarioHistorialAdminRequest,
+    ListarUsuarioHistorialAdminResponse,
     ReporteUsuarioHistorialAdminRequest,
     ReporteUsuarioHistorialAdminResponse,
 )
@@ -100,14 +102,42 @@ def ReporteHistorialAdmin(
 
 
 @HistorialAdminRouter.get(
+    "/usuario/listar",
+    response_model=ListarUsuarioHistorialAdminResponse,
+    status_code=200,
+)
+def ListarUsuarioHistorialAdmin(
+    Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
+    Modulo: str | None = Query(default=None, description=DESCRIPCION_MODULO),
+    Busqueda: str | None = Query(default=None, max_length=LONGITUD_MAXIMA_BUSQUEDA_HISTORIAL_ADMIN),
+    Pagina: int = Query(default=1, ge=1),
+    TamanoPagina: int = Query(default=20, ge=1, le=100),
+    service: HistorialAdminService = Depends(historial_admin_service),
+):
+    return service.ListarUsuario(
+        ListarUsuarioHistorialAdminRequest(
+            Ci=Ci,
+            FechaInicio=FechaInicio,
+            FechaFin=FechaFin,
+            Modulo=Modulo,
+            Busqueda=Busqueda,
+            Pagina=Pagina,
+            TamanoPagina=TamanoPagina,
+        )
+    )
+
+
+@HistorialAdminRouter.get(
     "/usuario/resumen",
     response_model=ReporteUsuarioHistorialAdminResponse,
     status_code=200,
 )
 def ResumenUsuarioHistorialAdmin(
     Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
-    FechaInicio: date = Query(...),
-    FechaFin: date = Query(...),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
     Modulo: str | None = Query(default=None, description=DESCRIPCION_MODULO),
     Busqueda: str | None = Query(default=None, max_length=LONGITUD_MAXIMA_BUSQUEDA_HISTORIAL_ADMIN),
     service: HistorialAdminService = Depends(historial_admin_service),
@@ -131,8 +161,8 @@ def ResumenUsuarioHistorialAdmin(
 )
 def ReporteUsuarioHistorialAdmin(
     Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
-    FechaInicio: date = Query(...),
-    FechaFin: date = Query(...),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
     Modulo: str | None = Query(default=None, description=DESCRIPCION_MODULO),
     Busqueda: str | None = Query(default=None, max_length=LONGITUD_MAXIMA_BUSQUEDA_HISTORIAL_ADMIN),
     generado_por: str | None = Depends(get_generado_por),

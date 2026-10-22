@@ -10,6 +10,8 @@ from app.Models.Usuario.RegistroIngreso import (
     FiltroRegistroIngresoRequest,
     ListarRegistroIngresoRequest,
     ListarRegistroIngresoResponse,
+    ListarUsuarioRegistroIngresoRequest,
+    ListarUsuarioRegistroIngresoResponse,
     ReporteUsuarioRegistroIngresoRequest,
     ReporteUsuarioRegistroIngresoResponse,
 )
@@ -93,14 +95,40 @@ def ReporteRegistroIngreso(
 
 
 @RegistroIngresoRouter.get(
+    "/usuario/listar",
+    response_model=ListarUsuarioRegistroIngresoResponse,
+    status_code=200,
+)
+def ListarUsuarioRegistroIngreso(
+    Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
+    Registro: str | None = Query(default=None, description="Ingreso, Salida o Intento fallido"),
+    Pagina: int = Query(default=1, ge=1),
+    TamanoPagina: int = Query(default=20, ge=1, le=100),
+    service: RegistroIngresoService = Depends(registro_ingreso_service),
+):
+    return service.ListarUsuario(
+        ListarUsuarioRegistroIngresoRequest(
+            Ci=Ci,
+            FechaInicio=FechaInicio,
+            FechaFin=FechaFin,
+            Registro=Registro,
+            Pagina=Pagina,
+            TamanoPagina=TamanoPagina,
+        )
+    )
+
+
+@RegistroIngresoRouter.get(
     "/usuario/resumen",
     response_model=ReporteUsuarioRegistroIngresoResponse,
     status_code=200,
 )
 def ResumenUsuarioRegistroIngreso(
     Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
-    FechaInicio: date = Query(...),
-    FechaFin: date = Query(...),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
     Registro: str | None = Query(default=None, description="Ingreso, Salida o Intento fallido"),
     service: RegistroIngresoService = Depends(registro_ingreso_service),
 ):
@@ -122,8 +150,8 @@ def ResumenUsuarioRegistroIngreso(
 )
 def ReporteUsuarioRegistroIngreso(
     Ci: str = Query(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA),
-    FechaInicio: date = Query(...),
-    FechaFin: date = Query(...),
+    FechaInicio: date | None = None,
+    FechaFin: date | None = None,
     Registro: str | None = Query(default=None, description="Ingreso, Salida o Intento fallido"),
     generado_por: str | None = Depends(get_generado_por),
     service: RegistroIngresoService = Depends(registro_ingreso_service),

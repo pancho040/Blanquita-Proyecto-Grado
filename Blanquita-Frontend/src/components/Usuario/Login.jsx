@@ -17,7 +17,7 @@ export default function Login() {
   };
 
   const handleCi = (e) => {
-    setCi(e.target.value.replace(/\D/g, ''));
+    setCi(e.target.value.replace(/\D/g, '').slice(0, 15));
   };
 
   const handleClave = (e) => {
@@ -90,6 +90,7 @@ export default function Login() {
               onChange={handleCi}
               onKeyDown={handleTecla}
               inputMode="numeric"
+              maxLength={15}
               autoComplete="username"
               placeholder="Ej. 8456123"
               disabled={cargando}

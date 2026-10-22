@@ -24,11 +24,16 @@ class ListarHistorialAdminRequest(FiltroHistorialAdminRequest):
 
 
 class ReporteUsuarioHistorialAdminRequest(BaseModel):
-    FechaInicio: date
-    FechaFin: date
+    FechaInicio: Optional[date] = None
+    FechaFin: Optional[date] = None
     Ci: str = Field(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA)
     Modulo: Optional[str] = None
     Busqueda: Optional[str] = Field(default=None, max_length=LONGITUD_MAXIMA_BUSQUEDA_HISTORIAL_ADMIN)
+
+
+class ListarUsuarioHistorialAdminRequest(ReporteUsuarioHistorialAdminRequest):
+    Pagina: int = Field(default=1, ge=1)
+    TamanoPagina: int = Field(default=20, ge=1, le=100)
 
 
 class HistorialAdminItem(BaseModel):
@@ -76,11 +81,22 @@ class ReporteHistorialAdminResponse(BaseModel):
 
 
 class ReporteUsuarioHistorialAdminResponse(BaseModel):
-    PeriodoInicio: date
-    PeriodoFin: date
+    PeriodoInicio: Optional[date] = None
+    PeriodoFin: Optional[date] = None
     Ci: str
     Modulo: Optional[str] = None
     Busqueda: Optional[str] = None
+    Usuario: Optional[UsuarioRegistroIngresoResponse] = None
+    Resumen: ResumenHistorialAdminResponse
+    UltimaAccion: Optional[datetime] = None
+    Acciones: list[HistorialAdminItem]
+
+
+class ListarUsuarioHistorialAdminResponse(BaseModel):
+    Total: int
+    Pagina: int
+    TamanoPagina: int
+    Ci: str
     Usuario: Optional[UsuarioRegistroIngresoResponse] = None
     Resumen: ResumenHistorialAdminResponse
     UltimaAccion: Optional[datetime] = None

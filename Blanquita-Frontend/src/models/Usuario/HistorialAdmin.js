@@ -59,3 +59,14 @@ export const ReporteUsuarioHistorialAdminResponse = (data) => ({
   UltimaAccion: data.UltimaAccion ?? null,
   Acciones: (data.Acciones ?? []).map(HistorialAdminItem),
 });
+
+export const ListarUsuarioHistorialAdminResponse = (data) => ({
+  Total: data.Total,
+  Pagina: data.Pagina,
+  TamanoPagina: data.TamanoPagina,
+  Ci: data.Ci,
+  Usuario: data.Usuario ? UsuarioRegistroIngresoResponse(data.Usuario) : null,
+  Resumen: ResumenHistorialAdminResponse(data.Resumen),
+  UltimaAccion: data.UltimaAccion ?? null,
+  Acciones: (data.Acciones ?? []).map(HistorialAdminItem),
+});

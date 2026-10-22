@@ -10,7 +10,9 @@ from app.Reportes.reporte import Reporte
 from app.utils.dates import ZONA_BOLIVIA, date_formatter
 
 
-def _texto_periodo(inicio: date, fin: date) -> str:
+def _texto_periodo(inicio: date | None, fin: date | None) -> str:
+    if inicio is None or fin is None:
+        return "Todo el historial"
     if inicio == fin:
         return f"Día {inicio.strftime('%d/%m/%Y')}"
     return f"Del {inicio.strftime('%d/%m/%Y')} al {fin.strftime('%d/%m/%Y')}"
@@ -107,7 +109,7 @@ def construir_reporte_usuario_historial_admin(
 
     _tabla_resumen(reporte, data.Resumen)
     reporte.parrafo(
-        f"Última acción en el período: {date_formatter(data.UltimaAccion) if data.UltimaAccion else '-'}"
+        f"Última acción: {date_formatter(data.UltimaAccion) if data.UltimaAccion else '-'}"
     )
 
     reporte.titulo_seccion(f"Historial de acciones ({len(data.Acciones)})")
@@ -124,9 +126,9 @@ def construir_reporte_usuario_historial_admin(
     return reporte.a_pdf()
 
 
-def nombre_archivo_usuario_historial_admin(ci: str, fecha_inicio: date, fecha_fin: date) -> str:
+def nombre_archivo_usuario_historial_admin(
+    ci: str, fecha_inicio: date | None, fecha_fin: date | None
+) -> str:
     ahora = datetime.now(ZONA_BOLIVIA)
-    return (
-        f"acciones-administrador-ci-{ci}-{fecha_inicio:%Y%m%d}-{fecha_fin:%Y%m%d}"
-        f"-{ahora:%Y%m%d-%H%M}.pdf"
-    )
+    periodo = f"{fecha_inicio:%Y%m%d}-{fecha_fin:%Y%m%d}" if fecha_inicio and fecha_fin else "todo"
+    return f"acciones-administrador-ci-{ci}-{periodo}-{ahora:%Y%m%d-%H%M}.pdf"

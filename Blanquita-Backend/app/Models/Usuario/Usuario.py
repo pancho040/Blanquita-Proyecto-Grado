@@ -106,6 +106,53 @@ class EditarUsuarioResponse(BaseModel):
     NombreCompleto: str
 
 
+class CambiarRolUsuarioRequest(BaseModel):
+    IdUsuario: int = Field(..., gt=0)
+    IdRol: int = Field(..., gt=0)
+    Motivo: str
+
+
+class CambiarRolUsuarioResponse(BaseModel):
+    IdUsuario: int
+    Ci: str
+    NombreCompleto: str
+    NombreRolAnterior: str
+    IdRol: int
+    NombreRol: str
+
+
+class CambiarAdminUsuarioRequest(BaseModel):
+    IdUsuario: int = Field(..., gt=0)
+    IsAdmin: bool
+    Motivo: str
+
+
+class CambiarAdminUsuarioResponse(BaseModel):
+    IdUsuario: int
+    Ci: str
+    NombreCompleto: str
+    IsAdmin: bool
+
+
+class UsuarioDetalle(BaseModel):
+    IdUsuario: int
+    Ci: str
+    PrimerNombre: str
+    SegundoNombre: str | None = None
+    ApellidoPaterno: str
+    ApellidoMaterno: str | None = None
+    NombreCompleto: str
+    Celular: str | None = None
+    IdRol: int
+    NombreRol: str
+    IdEstadoUsuario: int
+    NombreEstadoUsuario: str
+    IsAdmin: bool
+    FechaRegistro: datetime
+    AccionesAdmin: int
+    FueAdmin: bool
+
+
 class UsuarioPerfil(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

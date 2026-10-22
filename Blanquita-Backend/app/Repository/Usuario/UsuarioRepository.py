@@ -104,6 +104,42 @@ class UsuarioRepository:
         )
         return filas[0] if filas else None
 
+    def ObtenerDetalle(self, id_usuario: int) -> dict | None:
+        acciones = (
+            select(func.count(HistorialAdmin.IdHistorialAdmin))
+            .where(HistorialAdmin.IdUsuario == Usuario.IdUsuario)
+            .scalar_subquery()
+        )
+        filas = self.caller.Consultar(
+            select(
+                Usuario.IdUsuario,
+                Usuario.Ci,
+                Usuario.PrimerNombre,
+                Usuario.SegundoNombre,
+                Usuario.ApellidoPaterno,
+                Usuario.ApellidoMaterno,
+                func.concat_ws(
+                    " ",
+                    Usuario.PrimerNombre,
+                    Usuario.SegundoNombre,
+                    Usuario.ApellidoPaterno,
+                    Usuario.ApellidoMaterno,
+                ).label("NombreCompleto"),
+                Usuario.Celular,
+                Usuario.IdRol,
+                Rol.NombreRol,
+                Usuario.IdEstadoUsuario,
+                EstadoUsuario.NombreEstadoUsuario,
+                Usuario.IsAdmin,
+                Usuario.FechaRegistro,
+                acciones.label("AccionesAdmin"),
+            )
+            .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .join(EstadoUsuario, EstadoUsuario.IdEstadoUsuario == Usuario.IdEstadoUsuario)
+            .where(Usuario.IdUsuario == id_usuario)
+        )
+        return filas[0] if filas else None
+
     def ObtenerUsuarioBloqueado(self, id_usuario: int) -> Usuario | None:
         try:
             return self.db.execute(

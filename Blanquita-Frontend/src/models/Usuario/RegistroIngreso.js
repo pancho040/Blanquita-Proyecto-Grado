@@ -69,3 +69,15 @@ export const ReporteUsuarioRegistroIngresoResponse = (data) => ({
   UltimoIntentoFallido: data.UltimoIntentoFallido ?? null,
   Registros: (data.Registros ?? []).map(RegistroIngresoItem),
 });
+
+export const ListarUsuarioRegistroIngresoResponse = (data) => ({
+  Total: data.Total,
+  Pagina: data.Pagina,
+  TamanoPagina: data.TamanoPagina,
+  Ci: data.Ci,
+  Usuario: data.Usuario ? UsuarioRegistroIngresoResponse(data.Usuario) : null,
+  Resumen: ResumenRegistroIngresoResponse(data.Resumen),
+  UltimoIngreso: data.UltimoIngreso ?? null,
+  UltimoIntentoFallido: data.UltimoIntentoFallido ?? null,
+  Registros: (data.Registros ?? []).map(RegistroIngresoItem),
+});

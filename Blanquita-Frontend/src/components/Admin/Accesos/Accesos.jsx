@@ -29,7 +29,7 @@ import {
 const LONGITUD_MINIMA_CI = 6;
 const LONGITUD_MAXIMA_CI = 20;
 
-const REGISTROS = [
+export const REGISTROS = [
   { valor: "", texto: "Todos" },
   { valor: "Ingreso", texto: "Ingresos" },
   { valor: "Salida", texto: "Salidas" },
@@ -58,7 +58,7 @@ const nombreUsuario = (r) =>
 
 const textoFecha = (fecha) => (fecha ? dateFormatter(fecha) : "-");
 
-function BadgeRegistro({ registro }) {
+export function BadgeRegistro({ registro }) {
   return (
     <span
       className={cn(
@@ -85,7 +85,7 @@ function CeldaUsuario({ r }) {
   );
 }
 
-function CeldaEquipo({ r }) {
+export function CeldaEquipo({ r }) {
   return (
     <div className="flex flex-col" title={r.UserAgent ?? undefined}>
       <span className="font-mono text-slate-700">{r.DireccionIp ?? "-"}</span>
@@ -102,7 +102,7 @@ const COLUMNAS = [
   { titulo: "IP / Dispositivo", clase: "text-[12.5px]", valor: (r) => <CeldaEquipo r={r} /> },
 ];
 
-function TarjetaResumen({ icono: Icono, etiqueta, valor, clase }) {
+export function TarjetaResumen({ icono: Icono, etiqueta, valor, clase }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", clase)}>

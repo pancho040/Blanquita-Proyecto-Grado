@@ -1,6 +1,7 @@
 import {
   FiltroRegistroIngresoRequest,
   ListarRegistroIngresoRequest,
+  ListarUsuarioRegistroIngresoResponse,
   ListarRegistroIngresoResponse,
   ReporteUsuarioRegistroIngresoResponse,
 } from "../../models/Usuario/RegistroIngreso";
@@ -15,6 +16,13 @@ export async function listarRegistroIngreso(filtros) {
     conQueryParams(`${BASE_URL}/listar`, ListarRegistroIngresoRequest(filtros)),
   );
   return ListarRegistroIngresoResponse(data);
+}
+
+export async function listarAccesosUsuario(filtros) {
+  const data = await pedirJson(
+    conQueryParams(`${BASE_URL}/usuario/listar`, ListarRegistroIngresoRequest(filtros)),
+  );
+  return ListarUsuarioRegistroIngresoResponse(data);
 }
 
 export async function verResumenUsuarioRegistroIngreso(filtros) {
@@ -36,6 +44,6 @@ export async function descargarReporteUsuarioRegistroIngreso(filtros) {
   const params = FiltroRegistroIngresoRequest(filtros);
   await descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/usuario/reporte`, params),
-    `registro-accesos-ci-${params.Ci}-${params.FechaInicio}-${params.FechaFin}.pdf`,
+    `registro-accesos-ci-${params.Ci}-${params.FechaInicio ?? "todo"}-${params.FechaFin ?? "todo"}.pdf`,
   );
 }

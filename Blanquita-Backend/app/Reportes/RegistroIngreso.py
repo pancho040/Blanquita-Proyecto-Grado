@@ -10,7 +10,9 @@ from app.Reportes.reporte import Reporte
 from app.utils.dates import ZONA_BOLIVIA, date_formatter
 
 
-def _texto_periodo(inicio: date, fin: date) -> str:
+def _texto_periodo(inicio: date | None, fin: date | None) -> str:
+    if inicio is None or fin is None:
+        return "Todo el historial"
     if inicio == fin:
         return f"Día {inicio.strftime('%d/%m/%Y')}"
     return f"Del {inicio.strftime('%d/%m/%Y')} al {fin.strftime('%d/%m/%Y')}"
@@ -115,8 +117,8 @@ def construir_reporte_usuario_registro_ingreso(
     )
 
     _tabla_resumen(reporte, data.Resumen)
-    reporte.parrafo(f"Último ingreso en el período: {_texto_fecha(data.UltimoIngreso)}")
-    reporte.parrafo(f"Último intento fallido en el período: {_texto_fecha(data.UltimoIntentoFallido)}")
+    reporte.parrafo(f"Último ingreso: {_texto_fecha(data.UltimoIngreso)}")
+    reporte.parrafo(f"Último intento fallido: {_texto_fecha(data.UltimoIntentoFallido)}")
 
     reporte.titulo_seccion(f"Historial de accesos ({len(data.Registros)})")
     reporte.tabla(
@@ -133,9 +135,9 @@ def construir_reporte_usuario_registro_ingreso(
     return reporte.a_pdf()
 
 
-def nombre_archivo_usuario_registro_ingreso(ci: str, fecha_inicio: date, fecha_fin: date) -> str:
+def nombre_archivo_usuario_registro_ingreso(
+    ci: str, fecha_inicio: date | None, fecha_fin: date | None
+) -> str:
     ahora = datetime.now(ZONA_BOLIVIA)
-    return (
-        f"registro-accesos-ci-{ci}-{fecha_inicio:%Y%m%d}-{fecha_fin:%Y%m%d}"
-        f"-{ahora:%Y%m%d-%H%M}.pdf"
-    )
+    periodo = f"{fecha_inicio:%Y%m%d}-{fecha_fin:%Y%m%d}" if fecha_inicio and fecha_fin else "todo"
+    return f"registro-accesos-ci-{ci}-{periodo}-{ahora:%Y%m%d-%H%M}.pdf"

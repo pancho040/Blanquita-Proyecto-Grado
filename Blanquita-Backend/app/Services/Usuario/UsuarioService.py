@@ -6,8 +6,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.Models.Usuario.Usuario import (
+    CambiarAdminUsuarioRequest,
+    CambiarAdminUsuarioResponse,
     CambiarEstadoUsuarioRequest,
     CambiarEstadoUsuarioResponse,
+    CambiarRolUsuarioRequest,
+    CambiarRolUsuarioResponse,
     EditarUsuarioRequest,
     EditarUsuarioResponse,
     ListarUsuariosRequest,
@@ -15,6 +19,7 @@ from app.Models.Usuario.Usuario import (
     RestablecerClaveRequest,
     RestablecerClaveResponse,
     UsuarioCreate,
+    UsuarioDetalle,
     UsuarioListaItem,
     UsuarioPerfil,
     UsuarioResponse,
@@ -39,6 +44,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL").rstrip("/")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 TIMEOUT_ADMIN = 15.0
+ROLES_ADMINISTRADOR = (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL)
+MENSAJE_ROLES_ADMINISTRADOR = (
+    "Solo un Líder de Inventario y Producción o Gerente General puede tener acceso de administrador"
+)
 DOMINIO_SINTETICO = "papelblanquita.invalid"
 
 
@@ -100,10 +109,8 @@ class UsuarioService:
             Usuarios=[UsuarioListaItem(**fila) for fila in filas],
         )
 
-    def CambiarEstadoUsuario(
-        self, data: CambiarEstadoUsuarioRequest, id_admin: int
-    ) -> CambiarEstadoUsuarioResponse:
-        motivo = (data.Motivo or "").strip()
+    def _ValidarMotivo(self, valor: str | None) -> str:
+        motivo = (valor or "").strip()
         if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, motivo):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -113,6 +120,148 @@ class UsuarioService:
                     f"{REGLA_CARACTERES_OBSERVACION}"
                 ),
             )
+        return motivo
+
+    def _UsuarioModificable(self, id_usuario: int, accion: str) -> Usuario:
+        usuario = self.repository.ObtenerUsuarioBloqueado(id_usuario)
+        if usuario is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El usuario no existe",
+            )
+
+        if usuario.IdEstadoUsuario == ESTADO_USUARIO_SUSPENDIDO:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El usuario está Suspendido de forma definitiva, no se puede {accion}",
+            )
+
+        return usuario
+
+    def ObtenerDetalle(self, id_usuario: int) -> UsuarioDetalle:
+        fila = self.repository.ObtenerDetalle(id_usuario)
+        if fila is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El usuario no existe",
+            )
+
+        return UsuarioDetalle(**fila, FueAdmin=not fila["IsAdmin"] and fila["AccionesAdmin"] > 0)
+
+    def CambiarRolUsuario(
+        self, data: CambiarRolUsuarioRequest, id_admin: int
+    ) -> CambiarRolUsuarioResponse:
+        motivo = self._ValidarMotivo(data.Motivo)
+
+        if data.IdUsuario == id_admin:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No puede cambiar el rol de su propio usuario",
+            )
+
+        if data.IdRol == ROL_GERENTE_GENERAL:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="No se puede asignar el rol Gerente General desde un cambio de rol",
+            )
+
+        rol = self.repository.ObtenerRol(data.IdRol)
+        if rol is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="El rol indicado no existe",
+            )
+
+        usuario = self._UsuarioModificable(data.IdUsuario, "cambiar su rol")
+
+        if usuario.IdRol == ROL_GERENTE_GENERAL:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El rol de un Gerente General no se puede cambiar",
+            )
+
+        if usuario.IdRol == data.IdRol:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El usuario ya tiene el rol {rol['NombreRol']}",
+            )
+
+        if usuario.IsAdmin and data.IdRol not in ROLES_ADMINISTRADOR:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Retire primero el acceso de administrador. {MENSAJE_ROLES_ADMINISTRADOR}",
+            )
+
+        anterior = self.repository.ObtenerRol(usuario.IdRol)["NombreRol"]
+        nombre_completo = _nombre_completo(usuario)
+        observacion = (
+            f"Cambio de rol · Usuario CI {usuario.Ci} ({nombre_completo}): "
+            f"{anterior} → {rol['NombreRol']}. Motivo: {motivo}"
+        )
+        self.repository.EditarUsuario(usuario, {"IdRol": data.IdRol}, observacion, id_admin)
+
+        return CambiarRolUsuarioResponse(
+            IdUsuario=usuario.IdUsuario,
+            Ci=usuario.Ci,
+            NombreCompleto=nombre_completo,
+            NombreRolAnterior=anterior,
+            IdRol=data.IdRol,
+            NombreRol=rol["NombreRol"],
+        )
+
+    def CambiarAdminUsuario(
+        self, data: CambiarAdminUsuarioRequest, id_admin: int
+    ) -> CambiarAdminUsuarioResponse:
+        motivo = self._ValidarMotivo(data.Motivo)
+
+        if data.IdUsuario == id_admin:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No puede cambiar su propio acceso de administrador",
+            )
+
+        usuario = self._UsuarioModificable(data.IdUsuario, "cambiar su acceso de administrador")
+
+        if usuario.IsAdmin == data.IsAdmin:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "El usuario ya tiene acceso de administrador"
+                    if data.IsAdmin
+                    else "El usuario no tiene acceso de administrador"
+                ),
+            )
+
+        if data.IsAdmin and usuario.IdRol not in ROLES_ADMINISTRADOR:
+            self.repository.Revertir()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=MENSAJE_ROLES_ADMINISTRADOR,
+            )
+
+        nombre_completo = _nombre_completo(usuario)
+        observacion = (
+            f"Acceso de administrador · Usuario CI {usuario.Ci} ({nombre_completo}): "
+            f"{'otorgado' if data.IsAdmin else 'retirado'}. Motivo: {motivo}"
+        )
+        self.repository.EditarUsuario(usuario, {"IsAdmin": data.IsAdmin}, observacion, id_admin)
+
+        return CambiarAdminUsuarioResponse(
+            IdUsuario=usuario.IdUsuario,
+            Ci=usuario.Ci,
+            NombreCompleto=nombre_completo,
+            IsAdmin=data.IsAdmin,
+        )
+
+    def CambiarEstadoUsuario(
+        self, data: CambiarEstadoUsuarioRequest, id_admin: int
+    ) -> CambiarEstadoUsuarioResponse:
+        motivo = self._ValidarMotivo(data.Motivo)
 
         if data.IdUsuario == id_admin:
             raise HTTPException(
@@ -386,10 +535,10 @@ class UsuarioService:
                 detail="El rol indicado no existe",
             )
 
-        if datos.IsAdmin and datos.IdRol not in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL):
+        if datos.IsAdmin and datos.IdRol not in ROLES_ADMINISTRADOR:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Solo un Líder de Inventario y Producción o Gerente General puede tener acceso de administrador",
+                detail=MENSAJE_ROLES_ADMINISTRADOR,
             )
 
         if self.repository.ExisteCi(ci):

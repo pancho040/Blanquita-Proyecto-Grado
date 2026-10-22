@@ -9,6 +9,11 @@ import {
   EditarUsuarioResponse,
   RestablecerClaveRequest,
   RestablecerClaveResponse,
+  UsuarioDetalleResponse,
+  CambiarRolUsuarioRequest,
+  CambiarRolUsuarioResponse,
+  CambiarAdminUsuarioRequest,
+  CambiarAdminUsuarioResponse,
 } from "../../models/Usuario/Admin";
 import { pedirJson } from "@/utils/api";
 import { conQueryParams } from "@/utils/params";
@@ -50,4 +55,25 @@ export async function restablecerClave(idUsuario, claveNueva) {
     body: RestablecerClaveRequest(idUsuario, claveNueva),
   });
   return RestablecerClaveResponse(data);
+}
+
+export async function verDetalleUsuario(idUsuario) {
+  const data = await pedirJson(conQueryParams(`${BASE_URL}/detalle`, { IdUsuario: idUsuario }));
+  return UsuarioDetalleResponse(data);
+}
+
+export async function cambiarRolUsuario(idUsuario, idRol, motivo) {
+  const data = await pedirJson(`${BASE_URL}/rol`, {
+    method: "PATCH",
+    body: CambiarRolUsuarioRequest(idUsuario, idRol, motivo),
+  });
+  return CambiarRolUsuarioResponse(data);
+}
+
+export async function cambiarAdminUsuario(idUsuario, isAdmin, motivo) {
+  const data = await pedirJson(`${BASE_URL}/admin`, {
+    method: "PATCH",
+    body: CambiarAdminUsuarioRequest(idUsuario, isAdmin, motivo),
+  });
+  return CambiarAdminUsuarioResponse(data);
 }

@@ -8,6 +8,8 @@ from app.Models.Usuario.HistorialAdmin import (
     HistorialAdminItem,
     ListarHistorialAdminRequest,
     ListarHistorialAdminResponse,
+    ListarUsuarioHistorialAdminRequest,
+    ListarUsuarioHistorialAdminResponse,
     ReporteHistorialAdminResponse,
     ReporteUsuarioHistorialAdminRequest,
     ReporteUsuarioHistorialAdminResponse,
@@ -27,14 +29,22 @@ class HistorialAdminService:
     def _ValidarFiltro(
         self, data: FiltroHistorialAdminRequest | ReporteUsuarioHistorialAdminRequest
     ) -> None:
-        if data.FechaInicio > data.FechaFin:
+        if (data.FechaInicio is None) != (data.FechaFin is None):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Indique la fecha de inicio y la de fin, o ninguna para consultar todo el historial",
+            )
+
+        if data.FechaInicio is not None and data.FechaInicio > data.FechaFin:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="La fecha de inicio no puede ser posterior a la fecha de fin",
             )
 
-        dias_periodo = (data.FechaFin - data.FechaInicio).days + 1
-        if dias_periodo > DIAS_MAXIMOS_REPORTE_PRODUCCION:
+        if (
+            data.FechaInicio is not None
+            and (data.FechaFin - data.FechaInicio).days + 1 > DIAS_MAXIMOS_REPORTE_PRODUCCION
+        ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"El rango de fechas no puede superar los {DIAS_MAXIMOS_REPORTE_PRODUCCION} días",
@@ -108,6 +118,27 @@ class HistorialAdminService:
             Busqueda=params["p_Busqueda"],
             Resumen=self._Resumen(params),
             Acciones=acciones,
+        )
+
+    def ListarUsuario(
+        self, data: ListarUsuarioHistorialAdminRequest
+    ) -> ListarUsuarioHistorialAdminResponse:
+        self._ValidarFiltro(data)
+        params = self._Params(data, ci_exacto=True)
+        total, filas = self.repository.ListarAcciones(
+            {**params, "Pagina": data.Pagina, "TamanoPagina": data.TamanoPagina}
+        )
+        usuario = self.usuarios.ObtenerUsuarioPorCi(data.Ci)
+
+        return ListarUsuarioHistorialAdminResponse(
+            Total=total,
+            Pagina=data.Pagina,
+            TamanoPagina=data.TamanoPagina,
+            Ci=data.Ci,
+            Usuario=UsuarioRegistroIngresoResponse(**usuario) if usuario else None,
+            Resumen=self._Resumen(params),
+            UltimaAccion=self.repository.UltimaFecha(params),
+            Acciones=[self._Item(fila) for fila in filas],
         )
 
     def ResumenUsuario(

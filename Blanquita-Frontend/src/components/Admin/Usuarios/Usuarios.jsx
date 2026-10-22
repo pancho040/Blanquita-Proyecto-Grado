@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { History, KeyRound, Pencil, UserCog, UserPlus, UserShield } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { UserCog, UserPlus } from "lucide-react";
+import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Header from "@/components/layout/Header";
@@ -17,11 +16,9 @@ import {
 import { useReporte } from "@/hooks/useReporte";
 import { listarUsuarios } from "@/services/Usuario/Admin";
 import { RolesUsuario } from "@/constants/Values";
-import { EstadosUsuario, ID_ESTADO_USUARIO_SUSPENDIDO } from "@/constants/Estados";
+import { EstadosUsuario } from "@/constants/Estados";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { DialogoCambiarEstado, DialogoEditarUsuario, DialogoRestablecerClave } from "./Dialogos";
-import { DialogoReporteUsuario } from "./DialogoReporteUsuario";
 
 const ESTADOS_USUARIO = {
   Activo: "border-emerald-300 bg-emerald-50 text-emerald-700",
@@ -53,7 +50,7 @@ const COLUMNAS = [
   },
 ];
 
-function BotonAccion({ ayuda, icono: Icono, onClick }) {
+function BotonGestionar({ usuario }) {
   return (
     <Tooltip>
       <TooltipTrigger
@@ -61,85 +58,20 @@ function BotonAccion({ ayuda, icono: Icono, onClick }) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={onClick}
+            onClick={() => (window.location.href = `/admin/usuarios/${usuario.IdUsuario}`)}
             className="h-9 w-9 text-slate-400 hover:bg-c4/10 hover:text-c3"
           >
-            <Icono size={16} strokeWidth={2.25} />
+            <UserCog size={17} strokeWidth={2.25} />
           </Button>
         }
       />
-      <TooltipContent>{ayuda}</TooltipContent>
+      <TooltipContent>Gestionar usuario</TooltipContent>
     </Tooltip>
   );
 }
 
-export default function Usuarios({ usuario: sesion }) {
+export default function Usuarios() {
   const reporte = useReporte(listarUsuarios, FILTROS_INICIALES, ["Busqueda"]);
-  const [cambioEstado, setCambioEstado] = useState(null);
-  const [cambioClave, setCambioClave] = useState(null);
-  const [edicion, setEdicion] = useState(null);
-  const [consultaReporte, setConsultaReporte] = useState(null);
-
-  const acciones = (u) => {
-    const suspendido = u.IdEstadoUsuario === ID_ESTADO_USUARIO_SUSPENDIDO;
-    const propio = u.IdUsuario === sesion?.IdUsuario;
-    return (
-      <div className="flex flex-nowrap justify-center gap-1">
-        {!suspendido && (
-          <BotonAccion
-            ayuda="Editar datos"
-            icono={Pencil}
-            onClick={() => setEdicion(u)}
-          />
-        )}
-        {!suspendido && !propio && (
-          <BotonAccion
-            ayuda="Cambiar estado"
-            icono={UserCog}
-            onClick={() => setCambioEstado(u)}
-          />
-        )}
-        {!suspendido && (
-          <BotonAccion
-            ayuda="Restablecer clave"
-            icono={KeyRound}
-            onClick={() => setCambioClave(u)}
-          />
-        )}
-        <BotonAccion
-          ayuda="Reporte de accesos al sistema"
-          icono={History}
-          onClick={() => setConsultaReporte({ usuario: u, tipo: "accesos" })}
-        />
-        {u.IsAdmin && (
-          <BotonAccion
-            ayuda="Reporte de acciones de administrador"
-            icono={UserShield}
-            onClick={() => setConsultaReporte({ usuario: u, tipo: "acciones" })}
-          />
-        )}
-      </div>
-    );
-  };
-
-  const alCambiarEstado = (resultado) => {
-    setCambioEstado(null);
-    toast.success(
-      `${resultado.NombreCompleto}: ${resultado.NombreEstadoAnterior} → ${resultado.NombreEstadoUsuario}`,
-    );
-    reporte.recargar();
-  };
-
-  const alEditar = (resultado) => {
-    setEdicion(null);
-    toast.success(`Datos de ${resultado.NombreCompleto} actualizados`);
-    reporte.recargar();
-  };
-
-  const alRestablecer = (resultado) => {
-    setCambioClave(null);
-    toast.success(`Clave de ${resultado.NombreCompleto} restablecida`);
-  };
 
   return (
     <TooltipProvider>
@@ -192,9 +124,13 @@ export default function Usuarios({ usuario: sesion }) {
             clave={(u) => u.IdUsuario}
             nombres={["usuario", "usuarios"]}
             columnas={COLUMNAS}
-            anchoAccion="w-[216px]"
-            tituloAccion="Acciones"
-            accion={acciones}
+            tituloAccion="Gestionar"
+            anchoAccion="w-24"
+            accion={(u) => (
+              <div className="flex justify-center">
+                <BotonGestionar usuario={u} />
+              </div>
+            )}
             tarjeta={(u) => (
               <TarjetaReporte
                 titulo={u.NombreCompleto}
@@ -203,7 +139,7 @@ export default function Usuarios({ usuario: sesion }) {
                 estado={u.NombreEstadoUsuario}
                 estilos={ESTADOS_USUARIO}
               >
-                <PieTarjeta accion={acciones(u)}>
+                <PieTarjeta accion={<BotonGestionar usuario={u} />}>
                   <Dato etiqueta="Celular">{u.Celular ?? "-"}</Dato>
                   <Dato etiqueta="Registro">{fechaRegistro(u.FechaRegistro)}</Dato>
                 </PieTarjeta>
@@ -212,26 +148,6 @@ export default function Usuarios({ usuario: sesion }) {
           />
         </main>
       </div>
-
-      <DialogoCambiarEstado
-        usuario={cambioEstado}
-        onCerrar={() => setCambioEstado(null)}
-        onCambiado={alCambiarEstado}
-      />
-      <DialogoEditarUsuario
-        usuario={edicion}
-        onCerrar={() => setEdicion(null)}
-        onEditado={alEditar}
-      />
-      <DialogoRestablecerClave
-        usuario={cambioClave}
-        onCerrar={() => setCambioClave(null)}
-        onRestablecida={alRestablecer}
-      />
-      <DialogoReporteUsuario
-        consulta={consultaReporte}
-        onCerrar={() => setConsultaReporte(null)}
-      />
     </TooltipProvider>
   );
 }
