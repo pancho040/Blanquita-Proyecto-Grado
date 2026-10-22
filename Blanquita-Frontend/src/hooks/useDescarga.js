@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { ABIERTO_EN_VISTA_PREVIA } from "@/utils/vistaPreviaPDF";
 
 export function useDescarga(descargar, exito) {
   const [descargando, setDescargando] = useState(false);
@@ -7,8 +8,8 @@ export function useDescarga(descargar, exito) {
   const iniciar = async () => {
     setDescargando(true);
     try {
-      await descargar();
-      if (exito) toast.success(exito);
+      const resultado = await descargar();
+      if (exito && resultado !== ABIERTO_EN_VISTA_PREVIA) toast.success(exito);
     } catch (e) {
       toast.error(e.message);
     } finally {

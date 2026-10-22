@@ -1,4 +1,7 @@
 import { pedir } from "@/utils/api";
+import { ABIERTO_EN_VISTA_PREVIA, abrirVistaPrevia } from "@/utils/vistaPreviaPDF";
+
+const TIPO_PDF = "application/pdf";
 
 export function obtenerNombreArchivo(response, nombrePorDefecto) {
   const disposicion = response.headers.get("Content-Disposition");
@@ -6,6 +9,8 @@ export function obtenerNombreArchivo(response, nombrePorDefecto) {
 
   return coincidencia?.[1] ?? nombrePorDefecto;
 }
+
+const esPdf = (blob, nombre) => blob.type === TIPO_PDF || nombre.toLowerCase().endsWith(".pdf");
 
 export function descargarArchivo(blob, nombreArchivo) {
   const url = window.URL.createObjectURL(blob);
@@ -22,13 +27,14 @@ export function descargarArchivo(blob, nombreArchivo) {
 export async function descargarDesdeUrl(url, nombrePorDefecto) {
   const response = await pedir(url);
   const blob = await response.blob();
+  const nombre = obtenerNombreArchivo(response, nombrePorDefecto);
 
-  descargarArchivo(blob, obtenerNombreArchivo(response, nombrePorDefecto));
+  if (esPdf(blob, nombre) && abrirVistaPrevia({ blob, nombre })) return ABIERTO_EN_VISTA_PREVIA;
+
+  descargarArchivo(blob, nombre);
 }
 
-export async function imprimirPDF(url) {
-  const response = await pedir(url);
-  const blob = await response.blob();
+export async function imprimirArchivo(blob) {
   const { default: printJS } = await import("print-js");
   const urlLocal = window.URL.createObjectURL(blob);
 
@@ -44,4 +50,9 @@ export async function imprimirPDF(url) {
   } finally {
     window.URL.revokeObjectURL(urlLocal);
   }
+}
+
+export async function imprimirPDF(url) {
+  const response = await pedir(url);
+  await imprimirArchivo(await response.blob());
 }

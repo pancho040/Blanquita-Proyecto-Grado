@@ -13,7 +13,7 @@ import { descargarDesdeUrl } from "@/utils/downloadFile";
 const BASE_URL = "/api/papelbobina/reportes";
 
 export async function descargarReporteInventarioBobinaPapel(idsTipoBobina) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/inventario`, { tipos: idsTipoBobina }),
     "reporte-inventario-bobina-papel.pdf"
   );
@@ -34,14 +34,14 @@ export async function descargarReporteDetalleProduccion(idProduccion, verPausas,
     VerMovimientos: verMovimientos ?? false
   });
 
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/produccion/detalle/${idProduccion}?${params.toString()}`,
     `reporte-produccion-${idProduccion}.pdf`
   );
 }
 
 export async function descargarReporteProduccionCancelada(idProduccion) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/produccion/cancelada/${idProduccion}`,
     `reporte-produccion-cancelada-${idProduccion}.pdf`
   );
@@ -57,7 +57,7 @@ export async function verLotesBobinaPapel(filtros) {
 }
 
 export async function descargarReporteLoteDetalle(idLoteBobina) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/lote/detalle/${idLoteBobina}`,
     `reporte-lote-${idLoteBobina}.pdf`
   );
@@ -69,7 +69,7 @@ export async function descargarReporteLotesPorPeriodo(fechaInicio, fechaFin) {
     FechaFin: fechaFin
   });
 
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/lote/periodo?${params.toString()}`,
     `ingresos-lotes-periodo-${fechaInicio}-${fechaFin}.pdf`
   );
@@ -82,7 +82,7 @@ export async function descargarReporteProduccionPorPeriodo(fechaInicio, fechaFin
     VerCancelaciones: verCancelaciones ?? false
   });
 
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/produccion/periodo?${params.toString()}`,
     `reporte-produccion-periodo-${fechaInicio}-${fechaFin}.pdf`
   );
@@ -98,7 +98,7 @@ export async function verBobinasPapelReporte(filtros) {
 }
 
 export async function descargarReporteMovimientosBobina(idBobinaPapel) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/movimientos/reporte/${idBobinaPapel}`,
     `reporte-movimientos-bobina-${idBobinaPapel}.pdf`
   );

@@ -34,7 +34,7 @@ export async function verResumenUsuarioHistorialAdmin(filtros) {
 
 export async function descargarReporteHistorialAdmin(filtros) {
   const params = FiltroHistorialAdminRequest(filtros);
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/reporte`, params),
     `acciones-administrador-${params.FechaInicio}-${params.FechaFin}.pdf`,
   );
@@ -42,7 +42,7 @@ export async function descargarReporteHistorialAdmin(filtros) {
 
 export async function descargarReporteUsuarioHistorialAdmin(filtros) {
   const params = FiltroHistorialAdminRequest(filtros);
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/usuario/reporte`, params),
     `acciones-administrador-ci-${params.Ci}-${params.FechaInicio ?? "todo"}-${params.FechaFin ?? "todo"}.pdf`,
   );

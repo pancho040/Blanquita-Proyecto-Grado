@@ -10,7 +10,7 @@ import { descargarDesdeUrl } from "@/utils/downloadFile";
 const BASE_URL = "/api/empaque/reportes";
 
 export async function descargarReporteInventarioEmpaque(clase) {
-  await descargarDesdeUrl(`${BASE_URL}/${clase}/inventario`, `inventario-empaque-${clase}.pdf`);
+  return descargarDesdeUrl(`${BASE_URL}/${clase}/inventario`, `inventario-empaque-${clase}.pdf`);
 }
 
 export async function verResumenMovimientosEmpaque(clase, filtros) {
@@ -22,7 +22,7 @@ export async function verResumenMovimientosEmpaque(clase, filtros) {
 }
 
 export async function descargarReporteMovimientosEmpaque(clase, filtros) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/${clase}/movimientos`, ReporteEmpaqueRequest(filtros)),
     `movimientos-empaque-${clase}-${filtros.FechaInicio}-${filtros.FechaFin}.pdf`
   );
@@ -37,7 +37,7 @@ export async function verResumenLotesEmpaque(clase, filtros) {
 }
 
 export async function descargarReporteLotesEmpaque(clase, filtros) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/${clase}/lotes`, ReporteEmpaqueRequest(filtros)),
     `lotes-empaque-${clase}-${filtros.FechaInicio}-${filtros.FechaFin}.pdf`
   );

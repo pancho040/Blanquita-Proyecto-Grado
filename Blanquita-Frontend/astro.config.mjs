@@ -19,6 +19,7 @@ export default defineConfig({
     optimizeDeps: {
       include: [
         'print-js',
+        'react-pdf',
         'qr-scanner',
         'recharts',
         'sonner',
