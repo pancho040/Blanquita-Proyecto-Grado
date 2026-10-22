@@ -102,6 +102,14 @@ class RegistroIngresoRepository:
         )
         return self.caller.Consultar(self._Filtrar(consulta, params))[0]["Cantidad"]
 
+    def UltimaFecha(self, params: dict):
+        consulta = (
+            select(func.max(RegistroIngreso.FechaRegistro).label("Ultima"))
+            .select_from(RegistroIngreso)
+            .outerjoin(Usuario, RegistroIngreso.IdUsuario == Usuario.IdUsuario)
+        )
+        return self.caller.Consultar(self._Filtrar(consulta, params))[0]["Ultima"]
+
     def ObtenerUsuarioPorCi(self, ci: str) -> dict | None:
         consulta = (
             select(

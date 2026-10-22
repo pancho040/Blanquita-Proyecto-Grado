@@ -21,10 +21,15 @@ class ListarRegistroIngresoRequest(FiltroRegistroIngresoRequest):
 
 
 class ReporteUsuarioRegistroIngresoRequest(BaseModel):
-    FechaInicio: date
-    FechaFin: date
+    FechaInicio: Optional[date] = None
+    FechaFin: Optional[date] = None
     Ci: str = Field(..., max_length=LONGITUD_MAXIMA_CI_BUSQUEDA, pattern=PATRON_CI_BUSQUEDA)
     Registro: Optional[str] = None
+
+
+class ListarUsuarioRegistroIngresoRequest(ReporteUsuarioRegistroIngresoRequest):
+    Pagina: int = Field(default=1, ge=1)
+    TamanoPagina: int = Field(default=20, ge=1, le=100)
 
 
 class RegistroIngresoItem(BaseModel):
@@ -80,10 +85,22 @@ class UsuarioRegistroIngresoResponse(BaseModel):
 
 
 class ReporteUsuarioRegistroIngresoResponse(BaseModel):
-    PeriodoInicio: date
-    PeriodoFin: date
+    PeriodoInicio: Optional[date] = None
+    PeriodoFin: Optional[date] = None
     Ci: str
     Registro: Optional[str] = None
+    Usuario: Optional[UsuarioRegistroIngresoResponse] = None
+    Resumen: ResumenRegistroIngresoResponse
+    UltimoIngreso: Optional[datetime] = None
+    UltimoIntentoFallido: Optional[datetime] = None
+    Registros: list[RegistroIngresoItem]
+
+
+class ListarUsuarioRegistroIngresoResponse(BaseModel):
+    Total: int
+    Pagina: int
+    TamanoPagina: int
+    Ci: str
     Usuario: Optional[UsuarioRegistroIngresoResponse] = None
     Resumen: ResumenRegistroIngresoResponse
     UltimoIngreso: Optional[datetime] = None

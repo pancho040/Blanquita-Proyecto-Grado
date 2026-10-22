@@ -20,14 +20,14 @@ export async function verRodelasReporte(filtros) {
 }
 
 export async function descargarReporteInventarioRodela(idsTipoRodela) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/inventario`, { tipos: idsTipoRodela }),
     "reporte-inventario-rodela.pdf"
   );
 }
 
 export async function descargarReporteMovimientosRodela(idRodela) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/movimientos/reporte/${idRodela}`,
     `reporte-movimientos-rodela-${idRodela}.pdf`
   );
@@ -43,7 +43,7 @@ export async function verLotesRodela(filtros) {
 }
 
 export async function descargarReporteLoteRodelaDetalle(idLoteRodela) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/lote/detalle/${idLoteRodela}`,
     `reporte-lote-rodela-${idLoteRodela}.pdf`
   );
@@ -55,7 +55,7 @@ export async function descargarReporteLotesRodelaPorPeriodo(fechaInicio, fechaFi
     FechaFin: fechaFin
   });
 
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/lote/periodo?${params.toString()}`,
     `ingresos-lotes-rodela-periodo-${fechaInicio}-${fechaFin}.pdf`
   );

@@ -13,5 +13,5 @@ import Usuarios from '@/components/Admin/Usuarios/Usuarios';
 	<div class="hidden md:block">
 		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} seccion="admin" />
 	</div>
-	<Usuarios client:load usuario={usuario} />
+	<Usuarios client:load />
 </Layout>

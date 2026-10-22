@@ -12,6 +12,8 @@ PREFIJOS_MODULO_HISTORIAL_ADMIN = {
         "Editar usuario ·",
         "Restablecer clave ·",
         "Cambio de estado · Usuario",
+        "Cambio de rol · Usuario",
+        "Acceso de administrador · Usuario",
     ),
     MODULO_PROVEEDORES: (
         "Crear proveedor ·",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { QrCode, Printer, Download, Loader2 } from "lucide-react";
+import { QrCode, Printer, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imprimirCartelQr, descargarCartelQr } from "@/services/Qr/Carteles";
 
@@ -60,9 +60,9 @@ export function TarjetaQr({ titulo, descripcion, ruta }) {
           {enProceso === "descargar" ? (
             <Loader2 size={16} className="animate-spin" />
           ) : (
-            <Download size={16} strokeWidth={2.75} />
+            <Eye size={16} strokeWidth={2.75} />
           )}
-          Descargar
+          Ver
         </Button>
       </div>
     </div>

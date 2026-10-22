@@ -19,7 +19,7 @@ export async function verResumenInventarioInsumo(filtros) {
 }
 
 export async function descargarReporteInventarioInsumo(idsTipoInsumo) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/inventario`, { IdsTipoInsumo: idsTipoInsumo }),
     "reporte-inventario-insumos.pdf"
   );
@@ -34,7 +34,7 @@ export async function verResumenMovimientosInsumo(filtros) {
 }
 
 export async function descargarReporteMovimientosInsumo(fechaInicio, fechaFin, idsTipoInsumo) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/movimientos`, {
       FechaInicio: fechaInicio,
       FechaFin: fechaFin,

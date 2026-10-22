@@ -1,0 +1,19 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+const { usuario } = Astro.locals;
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/admin/usuarios');
+import NavBar from '@/components/layout/NavBar';
+import SideBar from '@/components/layout/SideBar';
+import DetalleUsuario from '@/components/Admin/Usuarios/DetalleUsuario';
+---
+
+<Layout>
+	<div class="md:hidden">
+		<NavBar client:media="(max-width: 767.98px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} seccion="admin" />
+	</div>
+	<div class="hidden md:block">
+		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} esAdmin={usuario.IsAdmin} seccion="admin" />
+	</div>
+	<DetalleUsuario client:load id={id} usuario={usuario} />
+</Layout>

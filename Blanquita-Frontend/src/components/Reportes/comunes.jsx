@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import {
   Search,
-  Download,
+  Eye,
   FileDown,
   Loader2,
   RefreshCcw,
@@ -219,7 +219,7 @@ export function BotonInforme({
   ayuda,
   disponible = true,
   ayudaNoDisponible = AYUDA_SIN_RANGO,
-  texto = "Descargar informe",
+  texto = "Ver informe",
 }) {
   const { descargando, iniciar } = useDescarga(descargar, exito);
 
@@ -236,7 +236,7 @@ export function BotonInforme({
               {descargando ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
-                <Download size={15} strokeWidth={2.5} />
+                <Eye size={15} strokeWidth={2.5} />
               )}
               {texto}
             </Button>

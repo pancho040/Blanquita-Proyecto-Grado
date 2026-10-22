@@ -40,7 +40,7 @@ import {
 const LONGITUD_MINIMA_CI = 6;
 const LONGITUD_MAXIMA_CI = 20;
 
-const MODULOS = [
+export const MODULOS = [
   { valor: "", texto: "Todos" },
   { valor: "Usuarios", texto: "Usuarios" },
   { valor: "Proveedores", texto: "Proveedores" },
@@ -94,9 +94,9 @@ const consultarAcciones = (parametros) =>
 
 const nombreAdministrador = (a) => `${a.PrimerNombre} ${a.ApellidoPaterno}`;
 
-const estiloModulo = (modulo) => ESTILOS_MODULO[modulo] ?? ESTILOS_MODULO.Otros;
+export const estiloModulo = (modulo) => ESTILOS_MODULO[modulo] ?? ESTILOS_MODULO.Otros;
 
-function BadgeModulo({ modulo }) {
+export function BadgeModulo({ modulo }) {
   return (
     <span
       className={cn(
@@ -127,9 +127,21 @@ const COLUMNAS = [
     valor: (a) => dateFormatter(a.FechaMovimiento),
   },
   { titulo: "Módulo", valor: (a) => <BadgeModulo modulo={a.Modulo} /> },
-  { titulo: "Acción", clase: "font-semibold text-slate-900", valor: (a) => a.Accion },
-  { titulo: "Detalle", clase: "text-[12.5px] text-slate-600", valor: (a) => a.Detalle ?? "-" },
-  { titulo: "Administrador", clase: "text-[12.5px]", valor: (a) => <CeldaAdministrador a={a} /> },
+  {
+    titulo: "Acción",
+    clase: "whitespace-normal wrap-anywhere font-semibold text-slate-900",
+    valor: (a) => a.Accion,
+  },
+  {
+    titulo: "Detalle",
+    clase: "w-2/5 whitespace-normal wrap-anywhere text-[12.5px] text-slate-600",
+    valor: (a) => a.Detalle ?? "-",
+  },
+  {
+    titulo: "Administrador",
+    clase: "whitespace-normal wrap-anywhere text-[12.5px]",
+    valor: (a) => <CeldaAdministrador a={a} />,
+  },
 ];
 
 function TarjetaResumen({ icono: Icono, etiqueta, valor, clase }) {

@@ -96,3 +96,49 @@ export const RestablecerClaveResponse = (data) => ({
   Ci: data.Ci,
   NombreCompleto: data.NombreCompleto,
 });
+
+export const UsuarioDetalleResponse = (data) => ({
+  IdUsuario: data.IdUsuario,
+  Ci: data.Ci,
+  PrimerNombre: data.PrimerNombre,
+  SegundoNombre: data.SegundoNombre ?? null,
+  ApellidoPaterno: data.ApellidoPaterno,
+  ApellidoMaterno: data.ApellidoMaterno ?? null,
+  NombreCompleto: data.NombreCompleto,
+  Celular: data.Celular ?? null,
+  IdRol: data.IdRol,
+  NombreRol: data.NombreRol,
+  IdEstadoUsuario: data.IdEstadoUsuario,
+  NombreEstadoUsuario: data.NombreEstadoUsuario,
+  IsAdmin: Boolean(data.IsAdmin),
+  FechaRegistro: data.FechaRegistro,
+  AccionesAdmin: data.AccionesAdmin ?? 0,
+  FueAdmin: Boolean(data.FueAdmin),
+});
+
+export const CambiarRolUsuarioRequest = (idUsuario, idRol, motivo) => ({
+  IdUsuario: idUsuario,
+  IdRol: Number(idRol),
+  Motivo: (motivo ?? "").trim(),
+});
+
+export const CambiarRolUsuarioResponse = (data) => ({
+  IdUsuario: data.IdUsuario,
+  Ci: data.Ci,
+  NombreCompleto: data.NombreCompleto,
+  NombreRolAnterior: data.NombreRolAnterior,
+  NombreRol: data.NombreRol,
+});
+
+export const CambiarAdminUsuarioRequest = (idUsuario, isAdmin, motivo) => ({
+  IdUsuario: idUsuario,
+  IsAdmin: Boolean(isAdmin),
+  Motivo: (motivo ?? "").trim(),
+});
+
+export const CambiarAdminUsuarioResponse = (data) => ({
+  IdUsuario: data.IdUsuario,
+  Ci: data.Ci,
+  NombreCompleto: data.NombreCompleto,
+  IsAdmin: Boolean(data.IsAdmin),
+});

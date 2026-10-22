@@ -7,5 +7,5 @@ export async function imprimirCartelQr(ruta) {
 }
 
 export async function descargarCartelQr(ruta) {
-  await descargarDesdeUrl(`${BASE_URL}/${ruta}`, "cartel-qr.pdf");
+  return descargarDesdeUrl(`${BASE_URL}/${ruta}`, "cartel-qr.pdf");
 }

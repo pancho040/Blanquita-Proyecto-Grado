@@ -4,8 +4,12 @@ from sqlalchemy.orm import Session
 from app.Auth.Dependencies import get_current_user, require_admin_db
 from app.Config.supabase import get_db
 from app.Models.Usuario.Usuario import (
+    CambiarAdminUsuarioRequest,
+    CambiarAdminUsuarioResponse,
     CambiarEstadoUsuarioRequest,
     CambiarEstadoUsuarioResponse,
+    CambiarRolUsuarioRequest,
+    CambiarRolUsuarioResponse,
     EditarUsuarioRequest,
     EditarUsuarioResponse,
     ListarUsuariosRequest,
@@ -13,6 +17,7 @@ from app.Models.Usuario.Usuario import (
     RestablecerClaveRequest,
     RestablecerClaveResponse,
     UsuarioCreate,
+    UsuarioDetalle,
     UsuarioPerfil,
     UsuarioResponse,
 )
@@ -60,6 +65,39 @@ def ListarUsuarios(
             TamanoPagina=TamanoPagina,
         )
     )
+
+@UsuarioRouter.get(
+    "/detalle",
+    response_model=UsuarioDetalle,
+)
+def DetalleUsuario(
+    IdUsuario: int = Query(..., gt=0),
+    service: UsuarioService = Depends(get_usuario_service),
+    usuario_actual: dict = Depends(require_admin_db),
+):
+    return service.ObtenerDetalle(IdUsuario)
+
+@UsuarioRouter.patch(
+    "/rol",
+    response_model=CambiarRolUsuarioResponse,
+)
+def CambiarRolUsuario(
+    datos: CambiarRolUsuarioRequest,
+    service: UsuarioService = Depends(get_usuario_service),
+    usuario_actual: dict = Depends(require_admin_db),
+):
+    return service.CambiarRolUsuario(datos, usuario_actual["IdUsuario"])
+
+@UsuarioRouter.patch(
+    "/admin",
+    response_model=CambiarAdminUsuarioResponse,
+)
+def CambiarAdminUsuario(
+    datos: CambiarAdminUsuarioRequest,
+    service: UsuarioService = Depends(get_usuario_service),
+    usuario_actual: dict = Depends(require_admin_db),
+):
+    return service.CambiarAdminUsuario(datos, usuario_actual["IdUsuario"])
 
 @UsuarioRouter.patch(
     "/estado",

@@ -29,7 +29,7 @@ export async function descargarReporteProduccionDiaria(fechaInicio, fechaFin, id
     VerMovimientos: verMovimientos ?? false
   });
 
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/produccion/diaria?${params.toString()}`,
     `produccion-diaria-${fechaInicio}-${fechaFin}.pdf`
   );
@@ -45,7 +45,7 @@ export async function verResumenInventario(filtros) {
 }
 
 export async function descargarReporteInventarioProducto(idsProducto) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/inventario`, { IdsProducto: idsProducto }),
     "reporte-inventario-producto-terminado.pdf"
   );
@@ -58,28 +58,28 @@ export async function verResumenSalidas(filtros) {
 }
 
 export async function descargarReporteSalidas(filtros) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/salidas`, ResumenSalidasRequest(filtros)),
     `salidas-producto-terminado-${filtros.FechaInicio}-${filtros.FechaFin}.pdf`
   );
 }
 
 export async function descargarExcelSalidas(filtros) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     conQueryParams(`${BASE_URL}/salidas/excel`, ResumenSalidasRequest(filtros)),
     `salidas-producto-terminado-${filtros.FechaInicio}-${filtros.FechaFin}.xlsx`
   );
 }
 
 export async function descargarReporteDespacho(idDespacho) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/salidas/despacho/${idDespacho}`,
     `salida-producto-terminado-${idDespacho}.pdf`
   );
 }
 
 export async function descargarExcelDespacho(idDespacho) {
-  await descargarDesdeUrl(
+  return descargarDesdeUrl(
     `${BASE_URL}/salidas/despacho/${idDespacho}/excel`,
     `salida-producto-terminado-${idDespacho}.xlsx`
   );

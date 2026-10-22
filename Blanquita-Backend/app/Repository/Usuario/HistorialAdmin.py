@@ -118,3 +118,11 @@ class HistorialAdminRepository:
             .join(Usuario, HistorialAdmin.IdUsuario == Usuario.IdUsuario)
         )
         return self.caller.Consultar(self._Filtrar(consulta, params))[0]["Cantidad"]
+
+    def UltimaFecha(self, params: dict):
+        consulta = (
+            select(func.max(HistorialAdmin.FechaMovimiento).label("Ultima"))
+            .select_from(HistorialAdmin)
+            .join(Usuario, HistorialAdmin.IdUsuario == Usuario.IdUsuario)
+        )
+        return self.caller.Consultar(self._Filtrar(consulta, params))[0]["Ultima"]
