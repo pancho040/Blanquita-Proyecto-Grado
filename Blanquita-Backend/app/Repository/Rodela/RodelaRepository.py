@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -45,7 +45,7 @@ class RodelaRepository:
 
     def CodigosRegistrados(self, codigos: list[str]) -> list[str]:
         filas = self.caller.Consultar(
-            select(Rodela.CodigoRodela).where(Rodela.CodigoRodela.in_(codigos))
+            select(Rodela.CodigoRodela).where(func.upper(Rodela.CodigoRodela).in_(codigos))
         )
         return [fila["CodigoRodela"] for fila in filas]
 

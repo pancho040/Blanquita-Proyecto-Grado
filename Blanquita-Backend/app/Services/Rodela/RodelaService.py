@@ -13,6 +13,7 @@ from app.Models.Rodela.Rodela import (
 from app.Repository.Rodela.RodelaRepository import RodelaRepository
 from app.Schemas.Rodela import LoteRodela, Rodela
 from app.utils.dates import ZONA_BOLIVIA
+from app.utils.validators import CodigoMateriaPrima
 
 OBSERVACION_INGRESO_RODELA = "Ingreso automático al almacén por registro de rodela"
 
@@ -28,12 +29,7 @@ class RodelaService:
                 detail="Debe enviar al menos una rodela para registrar",
             )
 
-        codigos = [rodela.CodigoRodela.strip() for rodela in data.Rodelas]
-        if any(not codigo for codigo in codigos):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El código de la rodela es obligatorio",
-            )
+        codigos = [CodigoMateriaPrima(rodela.CodigoRodela, "de la rodela") for rodela in data.Rodelas]
 
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:

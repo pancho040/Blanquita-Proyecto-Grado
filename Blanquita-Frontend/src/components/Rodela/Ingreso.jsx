@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Header from "@/components/layout/Header";
 import {
@@ -10,7 +9,9 @@ import {
 } from "../../services/Rodela/Rodela";
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
+import InputCodigo from "@/components/layout/InputCodigo";
+import { codigoFinal } from "@/utils/handlers";
+import { errorCodigo } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { soloActivos } from "@/utils/catalogo";
 import {
@@ -55,9 +56,10 @@ export default function IngresoRodelas({ usuario }) {
   const repetidos = codigosRepetidos(filas.map((f) => f.CodigoRodela));
 
   const erroresFilas = erroresPorFila(filas, (f) => {
-    const codigo = f.CodigoRodela.trim();
-    if (!codigo) return "Falta el código";
-    if (repetidos.has(codigo.toLowerCase())) return "Código repetido";
+    const codigo = codigoFinal(f.CodigoRodela);
+    const errorDeCodigo = errorCodigo(codigo);
+    if (errorDeCodigo) return errorDeCodigo;
+    if (repetidos.has(codigo)) return "Código repetido";
     return null;
   });
   const hayErrores = Object.keys(erroresFilas).length > 0;
@@ -78,7 +80,7 @@ export default function IngresoRodelas({ usuario }) {
         cargarLoteRodela(
           Number(idProveedor),
           Number(idTipoRodela),
-          filas.map((f) => f.CodigoRodela.trim()),
+          filas.map((f) => codigoFinal(f.CodigoRodela)),
         ),
       alGuardar: (data) => {
         reiniciar();
@@ -166,12 +168,10 @@ export default function IngresoRodelas({ usuario }) {
                           {i + 1}
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
+                          <InputCodigo
                             ref={registrarRef(f.id)}
-                            value={f.CodigoRodela}
-                            onChange={(e) =>
-                              actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
-                            }
+                            valor={f.CodigoRodela}
+                            onCambio={(valor) => actualizarFila(f.id, "CodigoRodela", valor)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && i === filas.length - 1) agregarFila();
                             }}
@@ -217,11 +217,9 @@ export default function IngresoRodelas({ usuario }) {
                       <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
                         Código
                       </Label>
-                      <Input
-                        value={f.CodigoRodela}
-                        onChange={(e) =>
-                          actualizarFila(f.id, "CodigoRodela", aCodigo(e.target.value))
-                        }
+                      <InputCodigo
+                        valor={f.CodigoRodela}
+                        onCambio={(valor) => actualizarFila(f.id, "CodigoRodela", valor)}
                         placeholder="Ej. RDL-2026-0148"
                         className="h-11 bg-white font-mono"
                       />
@@ -264,7 +262,7 @@ export default function IngresoRodelas({ usuario }) {
           },
           { etiqueta: "Tipo", valor: tipoActual?.NombreTipoRodela ?? "-" },
         ]}
-        codigos={filas.map((f) => f.CodigoRodela.trim())}
+        codigos={filas.map((f) => codigoFinal(f.CodigoRodela))}
         editable="el código de cada rodela"
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}

@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import InputCodigo from "@/components/layout/InputCodigo";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -99,7 +100,7 @@ export function CampoFiltro({ etiqueta, children }) {
   );
 }
 
-export function BuscadorFiltro({ reporte, campo, etiqueta, placeholder, mono = true }) {
+export function BuscadorFiltro({ reporte, campo, etiqueta, placeholder, mono = true, codigo = false }) {
   return (
     <CampoFiltro etiqueta={etiqueta}>
       <div className="relative">
@@ -107,12 +108,21 @@ export function BuscadorFiltro({ reporte, campo, etiqueta, placeholder, mono = t
           size={16}
           className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400"
         />
-        <Input
-          value={reporte.textos[campo]}
-          onChange={(e) => reporte.escribir(campo, e.target.value)}
-          placeholder={placeholder}
-          className={cn("h-11 pl-9", mono && "font-mono")}
-        />
+        {codigo ? (
+          <InputCodigo
+            valor={reporte.textos[campo]}
+            onCambio={(texto) => reporte.escribir(campo, texto)}
+            placeholder={placeholder}
+            className="h-11 pl-9"
+          />
+        ) : (
+          <Input
+            value={reporte.textos[campo]}
+            onChange={(e) => reporte.escribir(campo, e.target.value)}
+            placeholder={placeholder}
+            className={cn("h-11 pl-9", mono && "font-mono")}
+          />
+        )}
       </div>
     </CampoFiltro>
   );

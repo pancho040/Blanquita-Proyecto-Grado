@@ -15,8 +15,8 @@ import {
 import InputForModal from "@/components/layout/InputForModal";
 import { editarBobinaPapel } from "../../../services/BobinaPapel/BobinaPapel";
 import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
-import { aCodigo, codigoKeyDown } from "@/utils/handlers";
-import { limpiarObservacion } from "@/utils/validators";
+import { codigoFinal } from "@/utils/handlers";
+import { errorCodigo, limpiarObservacion } from "@/utils/validators";
 import { dateFormatter } from "@/utils/dates";
 import { fmt } from "./constantes";
 
@@ -39,7 +39,8 @@ function validar(form) {
   const neto = Number(form.PesoNetoKg);
   const motivo = form.Observacion.trim();
 
-  if (!form.CodigoBobina.trim()) errores.CodigoBobina = "El código es obligatorio";
+  const errorDeCodigo = errorCodigo(codigoFinal(form.CodigoBobina));
+  if (errorDeCodigo) errores.CodigoBobina = errorDeCodigo;
   if (form.PesoBrutoKg === "" || !(bruto > 0)) errores.PesoBrutoKg = "Peso bruto inválido";
   if (form.PesoNetoKg === "" || !(neto > 0)) errores.PesoNetoKg = "Peso neto inválido";
   else if (bruto > 0 && neto > bruto) errores.PesoNetoKg = "El neto supera al bruto";
@@ -53,7 +54,7 @@ function validar(form) {
 function calcularCambios(form, bobina) {
   if (!bobina) return [];
   const cambios = [];
-  const codigo = form.CodigoBobina.trim();
+  const codigo = codigoFinal(form.CodigoBobina);
 
   if (codigo !== bobina.CodigoBobina) {
     cambios.push({ campo: "Código", antes: bobina.CodigoBobina, despues: codigo });
@@ -176,8 +177,8 @@ export default function ModalEditarBobina({
             id="CodigoBobina"
             etiqueta="Código de bobina"
             valor={form.CodigoBobina}
-            onCambio={(valor) => actualizar("CodigoBobina")(aCodigo(valor))}
-            onKeyDown={(e) => codigoKeyDown(e, actualizar("CodigoBobina"))}
+            codigo
+            onCambio={actualizar("CodigoBobina")}
             error={errores.CodigoBobina}
             disabled={guardando}
             classNameInput="font-mono font-bold"

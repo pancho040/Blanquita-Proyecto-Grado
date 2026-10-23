@@ -42,6 +42,7 @@ from app.Models.BobinaPapel.Reportes import (
     ResumenProductoPeriodoResponse,
 )
 from app.Repository.BobinaPapel.Reportes import ReporteBobinaPapelRepository
+from app.utils.validators import CodigoBusqueda
 
 ESTADO_CANCELADA = "Cancelada"
 ESTADOS_CERRADOS_RESUMEN = {"Finalizado", "Cambio de línea"}
@@ -122,7 +123,7 @@ class ReporteBobinaPapelService:
             "p_FechaFin": data.FechaFin,
             "p_IdTurno": data.IdTurno,
             "p_IdsProducto": data.IdsProducto or None,
-            "p_CodigoBobina": data.CodigoBobina,
+            "p_CodigoBobina": CodigoBusqueda(data.CodigoBobina),
             "p_Operador": data.Operador,
             "p_IdEstadoProduccion": data.IdEstadoProduccion,
             "p_IdsEstadoProduccion": data.IdsEstadoProduccion or None,
@@ -565,7 +566,7 @@ class ReporteBobinaPapelService:
         self, data: VerBobinasPapelRequest
     ) -> VerBobinasPapelResponse:
         params = {
-            "p_CodigoBobina": data.CodigoBobina,
+            "p_CodigoBobina": CodigoBusqueda(data.CodigoBobina),
             "p_IdProveedor": data.IdProveedor,
             "p_IdsTipoBobina": data.IdsTipoBobina or None,
             "p_IdEstadoMateriaPrima": data.IdEstadoMateriaPrima,

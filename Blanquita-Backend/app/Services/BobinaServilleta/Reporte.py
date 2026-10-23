@@ -50,6 +50,7 @@ from app.Models.BobinaServilleta.Reporte import (
 )
 from app.Repository.BobinaServilleta.Reporte import ReporteBobinaServilletaRepository
 from app.utils.dates import ZONA_BOLIVIA
+from app.utils.validators import CodigoBusqueda
 
 
 def _peso_bobina(bobina) -> Decimal:
@@ -132,7 +133,7 @@ class ReporteBobinaServilletaService:
         self, data: VerBobinasServilletaRequest
     ) -> VerBobinasServilletaResponse:
         params = {
-            "p_CodigoBobina": data.CodigoBobina,
+            "p_CodigoBobina": CodigoBusqueda(data.CodigoBobina),
             "p_IdProveedor": data.IdProveedor,
             "p_IdTipoBobinaServilleta": data.IdTipoBobinaServilleta,
             "p_IdEstadoMateriaPrima": data.IdEstadoMateriaPrima,
@@ -165,7 +166,7 @@ class ReporteBobinaServilletaService:
         self, data: VerSubBobinasServilletaRequest
     ) -> VerSubBobinasServilletaResponse:
         params = {
-            "p_CodigoBobina": data.CodigoBobina,
+            "p_CodigoBobina": CodigoBusqueda(data.CodigoBobina),
             "p_IdProveedor": data.IdProveedor,
             "p_IdTipoBobinaServilleta": data.IdTipoBobinaServilleta,
             "p_IdsTipoMedidaSubBobina": data.IdsTipoMedidaSubBobina or None,
@@ -500,7 +501,7 @@ class ReporteBobinaServilletaService:
             "p_FechaFin": data.FechaFin,
             "p_IdTurno": data.IdTurno,
             "p_IdsTipoBobinaServilleta": data.IdsTipoBobinaServilleta or None,
-            "p_CodigoBobina": data.CodigoBobina,
+            "p_CodigoBobina": CodigoBusqueda(data.CodigoBobina),
             "p_Operador": data.Operador,
             "p_IdEstadoProduccion": data.IdEstadoProduccion,
             "p_IdsEstadoProduccion": data.IdsEstadoProduccion or None,

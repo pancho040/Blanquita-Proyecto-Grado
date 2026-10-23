@@ -27,7 +27,7 @@ from app.Repository.BobinaServilleta.InventarioBobinaServilleta import (
     InventarioBobinaServilletaRepository,
 )
 from app.Schemas.BobinaServilleta import MovimientoBobinaServilleta, MovimientoSubBobina
-from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 CAMPOS_CORRECCION_UNIDAD = {
     "CodigoBobina": "Código",
@@ -144,12 +144,7 @@ class InventarioBobinaServilletaService:
 
         nuevos = []
         for unidad in data.Unidades:
-            codigo = unidad.CodigoBobina.strip()
-            if not codigo:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="El código de cada unidad es obligatorio",
-                )
+            codigo = CodigoMateriaPrima(unidad.CodigoBobina, "de la unidad")
             nuevos.append(
                 {
                     "IdUnidadBobinaServilleta": unidad.IdUnidadBobinaServilleta,
@@ -166,7 +161,7 @@ class InventarioBobinaServilletaService:
                 detail="Las unidades deben ser distintas",
             )
 
-        codigos = [nuevo["CodigoBobina"].lower() for nuevo in nuevos]
+        codigos = [nuevo["CodigoBobina"] for nuevo in nuevos]
         if len(set(codigos)) != len(codigos):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

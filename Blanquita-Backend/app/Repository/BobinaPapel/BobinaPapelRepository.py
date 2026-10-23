@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -43,7 +43,7 @@ class BobinaPapelRepository:
         return filas[0] if filas else None
 
     def CodigosRegistrados(self, codigos: list[str], excluir_id: int | None = None) -> list[str]:
-        consulta = select(BobinaPapel.CodigoBobina).where(BobinaPapel.CodigoBobina.in_(codigos))
+        consulta = select(BobinaPapel.CodigoBobina).where(func.upper(BobinaPapel.CodigoBobina).in_(codigos))
         if excluir_id is not None:
             consulta = consulta.where(BobinaPapel.IdBobinaPapel != excluir_id)
         return [fila["CodigoBobina"] for fila in self.caller.Consultar(consulta)]

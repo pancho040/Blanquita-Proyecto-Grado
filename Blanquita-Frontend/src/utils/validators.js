@@ -1,4 +1,4 @@
-import { Roles, PREFIJO_POR_ROL } from "@/constants/Values";
+import { Roles, PREFIJO_POR_ROL, CODIGO_MIN, CODIGO_MAX } from "@/constants/Values";
 export const EsEncargado=(idRol)=> idRol===Roles.Encargado
 export const EsGerente=(idRol)=> idRol===Roles.Gerente
 export const VeComoLider=(idRol)=> EsEncargado(idRol) || EsGerente(idRol)
@@ -57,3 +57,13 @@ const NO_PERMITIDOS_OBSERVACION = /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,;:(
 
 export const limpiarObservacion = (texto) =>
   texto.replace(/\s/g, " ").replace(NO_PERMITIDOS_OBSERVACION, "");
+
+const PATRON_CODIGO = /^[A-ZÑ0-9]+(-[A-ZÑ0-9]+)*$/;
+
+export const errorCodigo = (codigo) => {
+  if (!codigo) return "Falta el código";
+  if (codigo.length < CODIGO_MIN || codigo.length > CODIGO_MAX || !PATRON_CODIGO.test(codigo)) {
+    return `Código inválido: ${CODIGO_MIN} a ${CODIGO_MAX} caracteres, solo letras, números y guiones`;
+  }
+  return "";
+};

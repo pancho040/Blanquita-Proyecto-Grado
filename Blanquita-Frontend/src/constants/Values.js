@@ -64,6 +64,9 @@ export const RolesUsuario = [
 export const CLAVE_MIN = 8;
 export const CLAVE_MAX = 12;
 
+export const CODIGO_MIN = 3;
+export const CODIGO_MAX = 40;
+
 export const NOMBRE_TIPO_MATERIA_PRIMA_MIN = 3;
 export const NOMBRE_TIPO_MATERIA_PRIMA_MAX = 40;
 export const DESCRIPCION_TIPO_MATERIA_PRIMA_MIN = 5;

@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { codigoFinal } from "@/utils/handlers";
 
 export const codigosRepetidos = (codigos) => {
   const cuenta = {};
   codigos.forEach((c) => {
-    const valor = c.trim().toLowerCase();
+    const valor = codigoFinal(c);
     if (valor) cuenta[valor] = (cuenta[valor] || 0) + 1;
   });
   return new Set(Object.keys(cuenta).filter((c) => cuenta[c] > 1));

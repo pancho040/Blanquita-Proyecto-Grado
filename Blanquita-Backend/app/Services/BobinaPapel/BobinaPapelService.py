@@ -20,7 +20,7 @@ from app.Models.BobinaPapel.BobinaPapel import (
 from app.Repository.BobinaPapel.BobinaPapelRepository import BobinaPapelRepository
 from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 OBSERVACION_INGRESO_BOBINA = "Ingreso automático al almacén por registro de bobina"
 
@@ -51,12 +51,7 @@ class BobinaPapelService:
                 detail="Debe enviar al menos una bobina para registrar",
             )
 
-        codigos = [bobina.CodigoBobina.strip() for bobina in data.Bobinas]
-        if any(not codigo for codigo in codigos):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El código de la bobina es obligatorio",
-            )
+        codigos = [CodigoMateriaPrima(bobina.CodigoBobina, "de la bobina") for bobina in data.Bobinas]
 
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:
@@ -135,12 +130,7 @@ class BobinaPapelService:
                 detail=f"El motivo de la corrección es obligatorio, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
             )
 
-        codigo = data.CodigoBobina.strip()
-        if not codigo:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El código de la bobina es obligatorio",
-            )
+        codigo = CodigoMateriaPrima(data.CodigoBobina, "de la bobina")
 
         bobina = self.repository.ObtenerBobinaBloqueada(data.IdBobinaPapel)
         if bobina is None:

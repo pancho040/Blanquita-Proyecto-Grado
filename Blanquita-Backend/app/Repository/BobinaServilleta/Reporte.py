@@ -84,7 +84,7 @@ class ReporteBobinaServilletaRepository:
                 select(UnidadBobinaServilleta.IdUnidadBobinaServilleta)
                 .where(
                     UnidadBobinaServilleta.IdBobinaServilleta == BobinaServilleta.IdBobinaServilleta,
-                    UnidadBobinaServilleta.CodigoBobina == params["p_CodigoBobina"],
+                    func.upper(UnidadBobinaServilleta.CodigoBobina) == params["p_CodigoBobina"],
                 )
                 .exists()
             )
@@ -176,7 +176,7 @@ class ReporteBobinaServilletaRepository:
         )
 
         if params.get("p_CodigoBobina") is not None:
-            consulta = consulta.where(UnidadBobinaServilleta.CodigoBobina == params["p_CodigoBobina"])
+            consulta = consulta.where(func.upper(UnidadBobinaServilleta.CodigoBobina) == params["p_CodigoBobina"])
         if params.get("p_IdProveedor") is not None:
             consulta = consulta.where(LoteBobinaServilleta.IdProveedor == params["p_IdProveedor"])
         if params.get("p_IdTipoBobinaServilleta") is not None:
@@ -439,7 +439,7 @@ class ReporteBobinaServilletaRepository:
             )
 
         if params.get("p_CodigoBobina"):
-            consulta = consulta.where(UnidadBobinaServilleta.CodigoBobina == params["p_CodigoBobina"])
+            consulta = consulta.where(func.upper(UnidadBobinaServilleta.CodigoBobina) == params["p_CodigoBobina"])
 
         operador = params.get("p_Operador")
         if operador:

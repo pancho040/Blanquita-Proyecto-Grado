@@ -1,17 +1,42 @@
-export const aCodigo = (valor) => valor.replace(/\s+/g, "-");
+import { CODIGO_MAX } from "@/constants/Values";
+
+const NO_PERMITIDOS_CODIGO = /[^A-ZÑ0-9-]/g;
+
+export const aCodigo = (valor) =>
+  valor
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/N\u0303/g, "Ñ")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(NO_PERMITIDOS_CODIGO, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-/, "")
+    .slice(0, CODIGO_MAX);
+
+export const codigoFinal = (valor) => aCodigo(valor).replace(/-$/, "");
+
+const colocarCursor = (input, posicion) => {
+  requestAnimationFrame(() => {
+    input.setSelectionRange(posicion, posicion);
+  });
+};
+
+export const codigoChange = (e, onCambio) => {
+  const input = e.target;
+  const inicio = input.selectionStart ?? input.value.length;
+  onCambio(aCodigo(input.value));
+  colocarCursor(input, aCodigo(input.value.slice(0, inicio)).length);
+};
+
 export const codigoKeyDown = (e, onCambio) => {
   if (e.key !== " ") return;
   e.preventDefault();
 
   const input = e.target;
-  const inicio = input.selectionStart;
-  const fin = input.selectionEnd;
-
-  onCambio(input.value.slice(0, inicio) + "-" + input.value.slice(fin));
-
-  requestAnimationFrame(() => {
-    input.setSelectionRange(inicio + 1, inicio + 1);
-  });
+  const antes = input.value.slice(0, input.selectionStart) + "-";
+  onCambio(aCodigo(antes + input.value.slice(input.selectionEnd)));
+  colocarCursor(input, aCodigo(antes).length);
 };
 
 

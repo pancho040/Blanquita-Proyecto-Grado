@@ -35,7 +35,7 @@ class ReporteRodelaRepository:
         )
 
         if params.get("p_CodigoRodela") is not None:
-            consulta = consulta.where(Rodela.CodigoRodela == params["p_CodigoRodela"])
+            consulta = consulta.where(func.upper(Rodela.CodigoRodela) == params["p_CodigoRodela"])
         if params.get("p_IdProveedor") is not None:
             consulta = consulta.where(LoteRodela.IdProveedor == params["p_IdProveedor"])
         if params.get("p_IdsTipoRodela"):

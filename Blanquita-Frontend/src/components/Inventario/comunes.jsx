@@ -3,6 +3,7 @@ import { X, ArrowRight, Loader2, Search, Check, PackageX, RotateCcw } from "luci
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import InputCodigo from "@/components/layout/InputCodigo";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
@@ -260,11 +261,11 @@ export function BuscadorCodigo({ valor, onCambio, placeholder = "Buscar por cód
           strokeWidth={2.5}
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
         />
-        <Input
-          value={valor}
-          onChange={(e) => onCambio(e.target.value)}
+        <InputCodigo
+          valor={valor}
+          onCambio={onCambio}
           placeholder={placeholder}
-          className="h-10 pl-9"
+          className="h-10 pl-9 font-sans"
         />
         {valor && (
           <button
