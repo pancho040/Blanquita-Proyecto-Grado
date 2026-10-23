@@ -157,9 +157,9 @@ export default function IngresoBobinasPapel({ usuario }) {
                   Tara por bobina (kg)
                 </Label>
                 <div className="flex gap-2">
-                  <InputCodigo
-                    valor={tara}
-                    onCambio={(valor) => setTara(e.target.value)}
+                  <Input
+                    value={tara}
+                    onChange={(e) => setTara(e.target.value)}
                     placeholder="0.0"
                     type="number"
                     step="0.01"
@@ -215,11 +215,10 @@ export default function IngresoBobinasPapel({ usuario }) {
                           {i + 1}
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
+                          <InputCodigo
                             ref={registrarRef(f.id)}
-                            value={f.CodigoBobina}
-                            onChange={(e) =>
-                              actualizarFila(f.id, "CodigoBobina", valor)}
+                            valor={f.CodigoBobina}
+                            onCambio={(valor) => actualizarFila(f.id, "CodigoBobina", valor)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && i === filas.length - 1) agregarFila();
                             }}
@@ -228,9 +227,9 @@ export default function IngresoBobinasPapel({ usuario }) {
                           />
                         </td>
                         <td className="px-3 py-2.5">
-                          <InputCodigo
-                            valor={f.PesoBrutoKg}
-                            onCambio={(valor) => actualizarFila(f.id, "PesoBrutoKg", e.target.value)}
+                          <Input
+                            value={f.PesoBrutoKg}
+                            onChange={(e) => actualizarFila(f.id, "PesoBrutoKg", e.target.value)}
                             placeholder="0.0"
                             type="number"
                             step="0.01"
@@ -290,10 +289,9 @@ export default function IngresoBobinasPapel({ usuario }) {
 
                     <div className="flex flex-col gap-1.5">
                       <Label className={ETIQUETA_MOVIL}>Código</Label>
-                      <Input
-                        value={f.CodigoBobina}
-                        onChange={(e) =>
-                          actualizarFila(f.id, "CodigoBobina", valor)}
+                      <InputCodigo
+                        valor={f.CodigoBobina}
+                        onCambio={(valor) => actualizarFila(f.id, "CodigoBobina", valor)}
                         placeholder="Ej. HIG-2026-0148"
                         className="h-11 bg-white font-mono"
                       />
