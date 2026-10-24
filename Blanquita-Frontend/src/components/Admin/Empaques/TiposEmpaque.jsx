@@ -23,7 +23,7 @@ export const CLASES_EMPAQUE = ["bobina", "bolsa", "jaba"];
 
 const DATOS_CLASE = {
   bobina: {
-    texto: "Empaque en bobina",
+    texto: "Bobina",
     icono: Container,
     subtitulo: "Tipos de empaque en bobina",
     singular: "tipo de empaque en bobina",
@@ -43,7 +43,7 @@ const DATOS_CLASE = {
     ),
   },
   bolsa: {
-    texto: "Empaque en bolsa",
+    texto: "Bolsa",
     icono: Package,
     subtitulo: "Tipos de empaque en bolsa",
     singular: "tipo de empaque en bolsa",
@@ -62,7 +62,7 @@ const DATOS_CLASE = {
     ),
   },
   jaba: {
-    texto: "Bolsas de jaba",
+    texto: "Jaba",
     icono: ShoppingBag,
     subtitulo: "Tipos de bolsa de jaba",
     singular: "tipo de bolsa de jaba",
