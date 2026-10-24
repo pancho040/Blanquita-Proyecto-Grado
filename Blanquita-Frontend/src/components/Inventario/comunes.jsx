@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, ArrowRight, Loader2, Search, Check, PackageX, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -204,6 +204,17 @@ function BotonCerrar({ onClick }) {
   );
 }
 
+const CLASE_PANEL =
+  "mt-7 scroll-mt-24 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 md:scroll-mt-6";
+
+function useDesplazarAlMostrar(clave) {
+  const ref = useRef(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [clave]);
+  return ref;
+}
+
 export function PanelDetalle({
   acento,
   icono: Icono,
@@ -215,8 +226,9 @@ export function PanelDetalle({
   onCerrar,
   children,
 }) {
+  const ref = useDesplazarAlMostrar(titulo);
   return (
-    <div className="mt-7 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+    <div ref={ref} className={CLASE_PANEL}>
       <div
         className={cn(
           "flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4",
@@ -241,8 +253,9 @@ export function PanelDetalle({
 }
 
 export function PanelFuera({ titulo, onCerrar, children }) {
+  const ref = useDesplazarAlMostrar(titulo);
   return (
-    <div className="mt-7 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+    <div ref={ref} className={CLASE_PANEL}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-amber-50 px-5 py-4">
         <div className="text-base font-extrabold text-amber-700">{titulo}</div>
         <BotonCerrar onClick={onCerrar} />
