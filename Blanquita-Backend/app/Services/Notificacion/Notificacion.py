@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.Constants.AlertaStock import DOMINIOS_STOCK_NOTIFICACION, NIVEL_STOCK_CRITICO
 from app.Constants.Cantidades import HORAS_ALERTA_PAUSA_ABIERTA
+from app.Constants.Horario import HORA_FIN_SOLO_CONSULTA, HORA_INICIO_SOLO_CONSULTA
 from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Models.BobinaPapel.Inicio import (
     PausaAbiertaInicioBobinaPapel,
@@ -12,6 +13,7 @@ from app.Models.BobinaServilleta.Inicio import (
     ProduccionActivaInicioBobinaServilleta,
 )
 from app.Models.Notificacion.Notificacion import (
+    ModoConsultaNotificaciones,
     NotificacionesResponse,
     ProduccionBobinaPapelNotificaciones,
     ProduccionBobinaServilletaNotificaciones,
@@ -23,6 +25,7 @@ from app.Repository.BobinaServilleta.Inicio import InicioBobinaServilletaReposit
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Services.AlertaStock.AlertaStock import _item
 from app.Services.InventarioFinal.ProductoFinal import estado_bloqueo
+from app.utils.horario import en_modo_consulta
 from app.utils.inicio import SemanaInicio, semana_inicio
 
 
@@ -91,13 +94,21 @@ class NotificacionService:
         ]
         total_stock = len(stock.SinStock) + len(stock.Criticos) if stock else 0
         total_bloqueo = 1 if bloqueo and bloqueo.Bloqueado else 0
+        modo_consulta = (
+            ModoConsultaNotificaciones(
+                HoraInicio=HORA_INICIO_SOLO_CONSULTA, HoraFin=HORA_FIN_SOLO_CONSULTA
+            )
+            if en_modo_consulta()
+            else None
+        )
 
         return NotificacionesResponse(
+            ModoConsulta=modo_consulta,
             Stock=stock,
             BloqueoProductoTerminado=bloqueo,
             BobinaPapel=bobina_papel,
             BobinaServilleta=bobina_servilleta,
             HorasAlertaPausa=HORAS_ALERTA_PAUSA_ABIERTA,
             Atrasadas=sum(1 for produccion in producciones if produccion.Atrasada),
-            Total=total_stock + total_bloqueo + len(producciones),
+            Total=(1 if modo_consulta else 0) + total_stock + total_bloqueo + len(producciones),
         )

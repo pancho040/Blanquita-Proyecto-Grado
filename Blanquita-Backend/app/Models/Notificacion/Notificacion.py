@@ -1,3 +1,5 @@
+from datetime import time
+
 from pydantic import BaseModel
 
 from app.Models.AlertaStock.AlertaStock import UmbralStockItem
@@ -27,7 +29,13 @@ class ProduccionBobinaServilletaNotificaciones(BaseModel):
     Pausadas: list[PausaAbiertaInicioBobinaServilleta]
 
 
+class ModoConsultaNotificaciones(BaseModel):
+    HoraInicio: time
+    HoraFin: time
+
+
 class NotificacionesResponse(BaseModel):
+    ModoConsulta: ModoConsultaNotificaciones | None
     Stock: StockNotificaciones | None
     BloqueoProductoTerminado: EstadoBloqueoProductoTerminadoResponse | None
     BobinaPapel: ProduccionBobinaPapelNotificaciones

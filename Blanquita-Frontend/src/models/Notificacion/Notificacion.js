@@ -37,6 +37,9 @@ export const ProduccionResponse = (data, mapear) => ({
 });
 
 export const NotificacionesResponse = (data) => ({
+  ModoConsulta: data.ModoConsulta
+    ? { HoraInicio: data.ModoConsulta.HoraInicio, HoraFin: data.ModoConsulta.HoraFin }
+    : null,
   Stock: data.Stock
     ? {
         SinStock: (data.Stock.SinStock ?? []).map(UmbralStockItem),

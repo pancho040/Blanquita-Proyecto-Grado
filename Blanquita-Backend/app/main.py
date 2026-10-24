@@ -60,6 +60,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
 from slowapi.middleware import SlowAPIMiddleware
+from app.Middleware.ModoConsulta import ModoConsultaMiddleware
 
 
 
@@ -71,11 +72,12 @@ app=FastAPI(debug=True
 origins=[
     "*"
 ]
+app.add_middleware(ModoConsultaMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.add_middleware(SlowAPIMiddleware)

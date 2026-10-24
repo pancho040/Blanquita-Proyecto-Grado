@@ -4,6 +4,7 @@ import {
   Bell,
   CircleCheck,
   CirclePause,
+  Eye,
   Factory,
   Lock,
   PackageX,
@@ -294,6 +295,25 @@ function SeccionStock({ stock, prefijo }) {
   );
 }
 
+const horaCorta = (hora) => (hora ?? "").slice(0, 5);
+
+function SeccionModoConsulta({ modo }) {
+  return (
+    <Seccion valor="modo-consulta" titulo="Modo consulta" icono={Eye} cantidad={1} urgente>
+      <div className="flex flex-col gap-1.5 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="text-[13.5px] font-extrabold text-slate-900">
+          Sistema en modo consulta de {horaCorta(modo.HoraInicio)} a {horaCorta(modo.HoraFin)}
+        </div>
+        <div className="text-[12.5px] text-slate-700">
+          Solo se puede ver stock, catálogos y descargar reportes. Los ingresos, salidas,
+          traslados, producción y acciones de administrador quedan bloqueados hasta las{" "}
+          {horaCorta(modo.HoraFin)}.
+        </div>
+      </div>
+    </Seccion>
+  );
+}
+
 function SeccionBloqueo({ bloqueo, prefijo, ahora }) {
   const href = `/${prefijo}/producto/${prefijo === "encargado" ? "ajustes" : "inventario"}`;
   return (
@@ -334,6 +354,10 @@ function Contenido({ datos, prefijo, ahora }) {
   }
 
   const secciones = [
+    datos.ModoConsulta && {
+      valor: "modo-consulta",
+      nodo: <SeccionModoConsulta modo={datos.ModoConsulta} />,
+    },
     datos.BloqueoProductoTerminado?.Bloqueado && {
       valor: "bloqueo",
       nodo: <SeccionBloqueo bloqueo={datos.BloqueoProductoTerminado} prefijo={prefijo} ahora={ahora} />,
@@ -407,7 +431,11 @@ export default function Notificaciones({ idRol, renderBoton }) {
 
   const alertasStock = datos?.Stock ? datos.Stock.SinStock.length + datos.Stock.Criticos.length : 0;
   const urgente = Boolean(
-    datos && (alertasStock > 0 || datos.Atrasadas > 0 || datos.BloqueoProductoTerminado?.Bloqueado),
+    datos &&
+      (alertasStock > 0 ||
+        datos.Atrasadas > 0 ||
+        datos.BloqueoProductoTerminado?.Bloqueado ||
+        datos.ModoConsulta),
   );
 
   const abrir = () => {

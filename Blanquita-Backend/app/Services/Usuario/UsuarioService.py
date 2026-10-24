@@ -33,6 +33,9 @@ from app.utils.validators import (
 )
 from app.Auth.Security import ValidarClaveNueva
 from app.Constants.Cantidades import LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION
+from app.Constants.Horario import MENSAJE_ACTIVAR_USUARIO_SOLO_CONSULTA
+from app.Middleware.ModoConsulta import HTTP_423_LOCKED
+from app.utils.horario import en_modo_consulta
 from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Constants.Estados import (
     ESTADO_USUARIO_ACTIVO,
@@ -261,6 +264,12 @@ class UsuarioService:
     def CambiarEstadoUsuario(
         self, data: CambiarEstadoUsuarioRequest, id_admin: int
     ) -> CambiarEstadoUsuarioResponse:
+        if data.IdEstadoUsuario == ESTADO_USUARIO_ACTIVO and en_modo_consulta():
+            raise HTTPException(
+                status_code=HTTP_423_LOCKED,
+                detail=MENSAJE_ACTIVAR_USUARIO_SOLO_CONSULTA,
+            )
+
         motivo = self._ValidarMotivo(data.Motivo)
 
         if data.IdUsuario == id_admin:
