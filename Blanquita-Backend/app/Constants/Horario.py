@@ -1,6 +1,6 @@
 from datetime import time
 
-HORA_INICIO_SOLO_CONSULTA = time(14, 0, 0)
+HORA_INICIO_SOLO_CONSULTA = time(0, 0, 0)
 HORA_FIN_SOLO_CONSULTA = time(5, 59, 59)
 
 METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
