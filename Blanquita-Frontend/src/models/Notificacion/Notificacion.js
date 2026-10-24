@@ -1,4 +1,5 @@
 import { UmbralStockItem } from "@/models/AlertaStock/AlertaStock";
+import { EstadoBloqueoProductoTerminadoResponse } from "@/models/Inventario/inventario";
 
 export const ProduccionBobinaPapelResponse = (data) => ({
   IdProduccionBobinaTubo: data.IdProduccionBobinaTubo,
@@ -41,6 +42,9 @@ export const NotificacionesResponse = (data) => ({
         SinStock: (data.Stock.SinStock ?? []).map(UmbralStockItem),
         Criticos: (data.Stock.Criticos ?? []).map(UmbralStockItem),
       }
+    : null,
+  BloqueoProductoTerminado: data.BloqueoProductoTerminado
+    ? EstadoBloqueoProductoTerminadoResponse(data.BloqueoProductoTerminado)
     : null,
   BobinaPapel: ProduccionResponse(data.BobinaPapel, ProduccionBobinaPapelResponse),
   BobinaServilleta: ProduccionResponse(data.BobinaServilleta, ProduccionBobinaServilletaResponse),

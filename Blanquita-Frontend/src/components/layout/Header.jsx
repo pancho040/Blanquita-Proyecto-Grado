@@ -14,7 +14,7 @@ export default function Header({
   contador = null, 
   children = null, 
 }) {
-  const IconoAccion = accion?.icono;
+  const acciones = [accion].flat().filter(Boolean);
 
   const manejarVolver = () => {
     if (window.history.length > 1) window.history.back();
@@ -28,28 +28,31 @@ export default function Header({
         ? `${contador.valor} ${contador.valor === 1 ? contador.singular : contador.plural}`
         : null;
 
-  let botonAccion = null;
-  if (accion) {
-    const contenido = (
-      <>
-        {IconoAccion && <IconoAccion size={16} strokeWidth={2.75} />}
-        {accion.texto}
-      </>
-    );
-    botonAccion = accion.href ? (
-      <Button
-        nativeButton={false}
-        render={<a href={accion.href} />}
-        className={`${CLASES_ACCION} whitespace-nowrap`}
-      >
-        {contenido}
-      </Button>
-    ) : (
-      <Button onClick={accion.onClick} className={CLASES_ACCION}>
-        {contenido}
-      </Button>
-    );
-  }
+  const botonAccion = acciones.length
+    ? acciones.map((item) => {
+        const IconoAccion = item.icono;
+        const contenido = (
+          <>
+            {IconoAccion && <IconoAccion size={16} strokeWidth={2.75} />}
+            {item.texto}
+          </>
+        );
+        return item.href ? (
+          <Button
+            key={item.texto}
+            nativeButton={false}
+            render={<a href={item.href} />}
+            className={`${CLASES_ACCION} whitespace-nowrap`}
+          >
+            {contenido}
+          </Button>
+        ) : (
+          <Button key={item.texto} onClick={item.onClick} className={CLASES_ACCION}>
+            {contenido}
+          </Button>
+        );
+      })
+    : null;
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-c3 to-c4 px-5 py-4 text-white sm:px-7">

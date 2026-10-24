@@ -6,17 +6,23 @@ import {
   ClipboardMinus,
   Truck,
   History,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { verInventarioProductoTerminado } from "../../services/Inventario/Inventario";
+import {
+  verInventarioProductoTerminado,
+  verBloqueoProductoTerminado,
+} from "../../services/Inventario/Inventario";
 import { Roles } from "@/constants/Values";
 import Header from "@/components/layout/Header";
 import IngresoProductoTerminado from "./IngresoProductos";
 import CorreccionProductoTerminado from "./CorreccionProductos";
 import SalidaProductoTerminado from "./SalidaProductos";
+import { vistaBloqueada as estaBloqueada } from "@/utils/bloqueoProducto";
+import { AvisoBloqueo } from "./comunes";
 
 const SUBTITULO_POR_VISTA = {
   ingreso: "Registrar ingreso",
@@ -32,6 +38,7 @@ export default function MovimientosProductoTerminado({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [vista, setVista] = useState("ingreso");
+  const [bloqueo, setBloqueo] = useState(null);
 
   useEffect(() => {
     cargarInventario();
@@ -41,8 +48,12 @@ export default function MovimientosProductoTerminado({ usuario }) {
     setLoading(true);
     setError("");
     try {
-      const data = await verInventarioProductoTerminado();
+      const [data, estadoBloqueo] = await Promise.all([
+        verInventarioProductoTerminado(),
+        verBloqueoProductoTerminado(),
+      ]);
       setInventario(data);
+      setBloqueo(estadoBloqueo);
     } catch (e) {
       setError(e.message);
       setInventario([]);
@@ -63,6 +74,13 @@ export default function MovimientosProductoTerminado({ usuario }) {
   };
 
   const claseTab = "gap-1.5 font-bold";
+  const vistaBloqueada = estaBloqueada(bloqueo, vista);
+  const iconoTab = (valor, Icono) =>
+    estaBloqueada(bloqueo, valor) ? (
+      <Lock size={15} strokeWidth={2.75} />
+    ) : (
+      <Icono size={15} strokeWidth={2.75} />
+    );
 
   return (
     <div className="contenido-con-sidebar flex min-h-screen flex-col bg-slate-50 pt-20 font-sans text-slate-900 md:pt-0">
@@ -72,7 +90,10 @@ export default function MovimientosProductoTerminado({ usuario }) {
         volver={`/${esEncargado ? "encargado" : "operador"}/producto/inventario`}
         accion={
           esEncargado
-            ? { texto: "Ver salidas", icono: History, href: "/encargado/producto/salidas" }
+            ? [
+                { texto: "Ajustes", icono: Lock, href: "/encargado/producto/ajustes" },
+                { texto: "Ver salidas", icono: History, href: "/encargado/producto/salidas" },
+              ]
             : null
         }
       />
@@ -88,11 +109,11 @@ export default function MovimientosProductoTerminado({ usuario }) {
             )}
           >
             <TabsTrigger value="ingreso" className={claseTab}>
-              <PackageCheck size={15} strokeWidth={2.75} />
+              {iconoTab("ingreso", PackageCheck)}
               Ingreso
             </TabsTrigger>
             <TabsTrigger value="correccion" className={claseTab}>
-              <PackageMinus size={15} strokeWidth={2.75} />
+              {iconoTab("correccion", PackageMinus)}
               Corrección
             </TabsTrigger>
             {esEncargado && (
@@ -106,7 +127,7 @@ export default function MovimientosProductoTerminado({ usuario }) {
                   Ajuste negativo
                 </TabsTrigger>
                 <TabsTrigger value="salida" className={claseTab}>
-                  <Truck size={15} strokeWidth={2.75} />
+                  {iconoTab("salida", Truck)}
                   Salida
                 </TabsTrigger>
               </>
@@ -132,8 +153,22 @@ export default function MovimientosProductoTerminado({ usuario }) {
           </div>
         )}
 
+        {!loading && !error && vistaBloqueada && (
+          <AvisoBloqueo
+            bloqueo={bloqueo}
+            texto={
+              esEncargado
+                ? "Desbloquea desde Ajustes al terminar el conteo. Los ajustes ± siguen disponibles."
+                : "Espera a que el líder de inventario termine el conteo para registrar."
+            }
+            accion={
+              esEncargado ? { texto: "Ir a ajustes", href: "/encargado/producto/ajustes" } : null
+            }
+          />
+        )}
+
         {!loading && !error && (
-          <>
+          <div hidden={vistaBloqueada}>
             <div hidden={vista !== "ingreso"}>
               <IngresoProductoTerminado
                 inventario={inventario}
@@ -171,7 +206,7 @@ export default function MovimientosProductoTerminado({ usuario }) {
                 </div>
               </>
             )}
-          </>
+          </div>
         )}
       </main>
     </div>

@@ -1,10 +1,12 @@
-import { Plus, Minus, Check, PackageOpen } from "lucide-react";
+import { Plus, Minus, Check, PackageOpen, Lock } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { aEntero } from "@/utils/validators";
 import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
+import { textoMovimientosBloqueados } from "@/utils/bloqueoProducto";
 
 export const descripcionContenido = (p) => {
   const partes = [];
@@ -15,6 +17,49 @@ export const descripcionContenido = (p) => {
     );
   return partes.length > 0 ? partes.join(" · ") : "-";
 };
+
+export const horaBloqueo = (bloqueo) =>
+  bloqueo?.FechaHoraBloqueo ? format(new Date(bloqueo.FechaHoraBloqueo), "dd/MM/yyyy HH:mm") : "";
+
+export function AvisoBloqueo({ bloqueo, texto, accion = null, className }) {
+  if (!bloqueo?.Bloqueado) return null;
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between",
+        className,
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+          <Lock size={19} strokeWidth={2.5} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[14px] font-extrabold text-amber-900">
+            {textoMovimientosBloqueados(bloqueo)} en producto terminado
+          </span>
+          <span className="text-[12.5px] text-amber-800">
+            {bloqueo.UsuarioBloqueo} · desde {horaBloqueo(bloqueo)}
+          </span>
+          <span className="break-words text-[12.5px] text-amber-800">
+            <span className="font-bold">Motivo: </span>
+            {bloqueo.MotivoBloqueo}
+          </span>
+          {texto && <span className="text-[12.5px] font-semibold text-amber-900">{texto}</span>}
+        </div>
+      </div>
+      {accion && (
+        <Button
+          nativeButton={false}
+          render={<a href={accion.href} />}
+          className="h-11 shrink-0 gap-2 bg-amber-600 font-extrabold text-white hover:bg-amber-700"
+        >
+          {accion.texto}
+        </Button>
+      )}
+    </div>
+  );
+}
 
 const TONOS = {
   ingreso: {

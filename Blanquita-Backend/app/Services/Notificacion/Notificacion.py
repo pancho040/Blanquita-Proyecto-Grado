@@ -20,7 +20,9 @@ from app.Models.Notificacion.Notificacion import (
 from app.Repository.AlertaStock.AlertaStock import AlertaStockRepository
 from app.Repository.BobinaPapel.Inicio import InicioBobinaPapelRepository
 from app.Repository.BobinaServilleta.Inicio import InicioBobinaServilletaRepository
+from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Services.AlertaStock.AlertaStock import _item
+from app.Services.InventarioFinal.ProductoFinal import estado_bloqueo
 from app.utils.inicio import SemanaInicio, semana_inicio
 
 
@@ -29,6 +31,7 @@ class NotificacionService:
         self.alertas = AlertaStockRepository(db)
         self.bobina_papel = InicioBobinaPapelRepository(db)
         self.bobina_servilleta = InicioBobinaServilletaRepository(db)
+        self.producto_final = ProductoFinalRepository(db)
 
     def _Stock(self) -> StockNotificaciones:
         criticos = [
@@ -76,7 +79,9 @@ class NotificacionService:
     def VerNotificaciones(self, id_rol: int) -> NotificacionesResponse:
         semana = semana_inicio()
         bobina_papel, bobina_servilleta = self.Producciones(semana)
-        stock = self._Stock() if id_rol in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL) else None
+        ve_alertas = id_rol in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL)
+        stock = self._Stock() if ve_alertas else None
+        bloqueo = estado_bloqueo(self.producto_final.ObtenerBloqueoActivo()) if ve_alertas else None
 
         producciones = [
             *bobina_papel.Activas,
@@ -85,12 +90,14 @@ class NotificacionService:
             *bobina_servilleta.Pausadas,
         ]
         total_stock = len(stock.SinStock) + len(stock.Criticos) if stock else 0
+        total_bloqueo = 1 if bloqueo and bloqueo.Bloqueado else 0
 
         return NotificacionesResponse(
             Stock=stock,
+            BloqueoProductoTerminado=bloqueo,
             BobinaPapel=bobina_papel,
             BobinaServilleta=bobina_servilleta,
             HorasAlertaPausa=HORAS_ALERTA_PAUSA_ABIERTA,
             Atrasadas=sum(1 for produccion in producciones if produccion.Atrasada),
-            Total=total_stock + len(producciones),
+            Total=total_stock + total_bloqueo + len(producciones),
         )

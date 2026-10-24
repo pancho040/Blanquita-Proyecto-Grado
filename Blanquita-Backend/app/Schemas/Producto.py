@@ -53,6 +53,22 @@ class MovimientoProductoTerminado(Base):
     Observacion: Mapped[str | None] = mapped_column(Text)
 
 
+class BloqueoProductoTerminado(Base):
+    __tablename__ = "BloqueoProductoTerminado"
+
+    IdBloqueoProductoTerminado: Mapped[int] = mapped_column(primary_key=True)
+    IdUsuarioBloqueo: Mapped[int]
+    FechaHoraBloqueo: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    MotivoBloqueo: Mapped[str] = mapped_column(Text)
+    IdUsuarioDesbloqueo: Mapped[int | None]
+    FechaHoraDesbloqueo: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    BloqueaIngreso: Mapped[bool] = mapped_column(server_default=true())
+    BloqueaCorreccion: Mapped[bool] = mapped_column(server_default=true())
+    BloqueaSalida: Mapped[bool] = mapped_column(server_default=true())
+
+
 class TipoMovimientoInventario(Base):
     __tablename__ = "TipoMovimientoInventario"
 

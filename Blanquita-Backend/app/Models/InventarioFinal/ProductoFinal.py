@@ -82,6 +82,24 @@ class VerInventarioProductoTerminadoResponse(NivelStockResponse):
     Activo: bool
 
 
+class BloqueoProductoTerminadoRequest(BaseModel):
+    Motivo: str
+    BloqueaIngreso: bool = False
+    BloqueaCorreccion: bool = False
+    BloqueaSalida: bool = False
+
+
+class EstadoBloqueoProductoTerminadoResponse(BaseModel):
+    Bloqueado: bool
+    IdBloqueoProductoTerminado: int | None = None
+    UsuarioBloqueo: str | None = None
+    FechaHoraBloqueo: datetime | None = None
+    MotivoBloqueo: str | None = None
+    BloqueaIngreso: bool = False
+    BloqueaCorreccion: bool = False
+    BloqueaSalida: bool = False
+
+
 class ProductoResponse(BaseModel):
     IdProducto: int
     NombreProducto: str

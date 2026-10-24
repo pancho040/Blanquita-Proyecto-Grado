@@ -1,17 +1,19 @@
 from fastapi import HTTPException, status
-from sqlalchemy import and_, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import nivel_stock, visible_en_inventario
+from app.Repository.Consultas import nivel_stock, nombre_operador, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
+    BloqueoProductoTerminado,
     InventarioProductoTerminado,
     MovimientoProductoTerminado,
     PresentacionProducto,
     Producto,
     TipoMovimientoInventario,
 )
+from app.Schemas.Usuario import Usuario
 
 
 class ProductoFinalRepository:
@@ -95,6 +97,76 @@ class ProductoFinalRepository:
 
     def Revertir(self) -> None:
         self.db.rollback()
+
+    def ObtenerBloqueoActivo(self) -> dict | None:
+        filas = self.caller.Consultar(
+            select(
+                BloqueoProductoTerminado.IdBloqueoProductoTerminado,
+                nombre_operador(Usuario).label("UsuarioBloqueo"),
+                BloqueoProductoTerminado.FechaHoraBloqueo,
+                BloqueoProductoTerminado.MotivoBloqueo,
+                BloqueoProductoTerminado.BloqueaIngreso,
+                BloqueoProductoTerminado.BloqueaCorreccion,
+                BloqueoProductoTerminado.BloqueaSalida,
+            )
+            .join(Usuario, Usuario.IdUsuario == BloqueoProductoTerminado.IdUsuarioBloqueo)
+            .where(BloqueoProductoTerminado.FechaHoraDesbloqueo.is_(None))
+        )
+        return filas[0] if filas else None
+
+    def RegistrarBloqueo(
+        self,
+        id_usuario: int,
+        motivo: str,
+        bloquea_ingreso: bool,
+        bloquea_correccion: bool,
+        bloquea_salida: bool,
+    ) -> None:
+        try:
+            self.db.add(
+                BloqueoProductoTerminado(
+                    IdUsuarioBloqueo=id_usuario,
+                    MotivoBloqueo=motivo,
+                    BloqueaIngreso=bloquea_ingreso,
+                    BloqueaCorreccion=bloquea_correccion,
+                    BloqueaSalida=bloquea_salida,
+                )
+            )
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya hay un bloqueo activo de movimientos de producto terminado",
+            )
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo bloquear los movimientos de producto terminado",
+            )
+
+    def CerrarBloqueoActivo(self, id_usuario: int) -> bool:
+        try:
+            bloqueo = self.db.execute(
+                select(BloqueoProductoTerminado)
+                .where(BloqueoProductoTerminado.FechaHoraDesbloqueo.is_(None))
+                .with_for_update()
+            ).scalar_one_or_none()
+            if bloqueo is None:
+                self.db.rollback()
+                return False
+
+            bloqueo.IdUsuarioDesbloqueo = id_usuario
+            bloqueo.FechaHoraDesbloqueo = func.now()
+            self.db.commit()
+            return True
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo desbloquear los movimientos de producto terminado",
+            )
 
     def VerInventarioProductoTerminado(self, id_producto: int | None) -> list[dict]:
         consulta = (

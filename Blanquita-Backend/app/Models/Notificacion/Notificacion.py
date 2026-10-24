@@ -9,6 +9,7 @@ from app.Models.BobinaServilleta.Inicio import (
     PausaAbiertaInicioBobinaServilleta,
     ProduccionActivaInicioBobinaServilleta,
 )
+from app.Models.InventarioFinal.ProductoFinal import EstadoBloqueoProductoTerminadoResponse
 
 
 class StockNotificaciones(BaseModel):
@@ -28,6 +29,7 @@ class ProduccionBobinaServilletaNotificaciones(BaseModel):
 
 class NotificacionesResponse(BaseModel):
     Stock: StockNotificaciones | None
+    BloqueoProductoTerminado: EstadoBloqueoProductoTerminadoResponse | None
     BobinaPapel: ProduccionBobinaPapelNotificaciones
     BobinaServilleta: ProduccionBobinaServilletaNotificaciones
     HorasAlertaPausa: int

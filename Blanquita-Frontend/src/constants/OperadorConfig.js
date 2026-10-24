@@ -220,6 +220,12 @@ export const MotivosSalidaProductoTerminado = [
   "Venta directa en planta",
 ];
 
+export const MotivosBloqueoProductoTerminado = [
+  "Conteo físico de producto terminado",
+  "Ajuste de inventario por diferencias",
+  "Revisión de stock antes de despacho grande",
+];
+
 export const MotivosAjusteNegativoProductoTerminado = [
   "Conteo físico menor al registrado",
   "Producto dañado en almacén",

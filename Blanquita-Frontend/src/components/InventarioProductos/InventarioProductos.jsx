@@ -13,14 +13,17 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { verInventarioProductoTerminado } from "../../services/Inventario/Inventario";
+import {
+  verInventarioProductoTerminado,
+  verBloqueoProductoTerminado,
+} from "../../services/Inventario/Inventario";
 import { descargarReporteInventarioProducto } from "@/services/Inventario/Reportes";
-import { VeComoLider } from "@/utils/validators";
+import { VeComoLider, EsEncargado } from "@/utils/validators";
 import Header from "@/components/layout/Header";
 import { BotonDescarga } from "@/components/layout/BotonDescarga";
 import { estadoStock, ESTILO_STOCK } from "@/utils/stock";
 import { BadgeInactivo } from "@/components/Inventario/comunes";
-import { descripcionContenido } from "./comunes";
+import { descripcionContenido, AvisoBloqueo } from "./comunes";
 
 const FILTROS = [
   { id: "todos", texto: "Todos" },
@@ -57,9 +60,13 @@ export default function InventarioProductoTerminado({ usuario }) {
   const [busqueda, setBusqueda] = useState("");
   const [productoFiltro, setProductoFiltro] = useState("todos");
   const [estadoFiltro, setEstadoFiltro] = useState("todos");
+  const [bloqueo, setBloqueo] = useState(null);
 
   useEffect(() => {
     cargarInventario();
+    verBloqueoProductoTerminado()
+      .then(setBloqueo)
+      .catch(() => setBloqueo(null));
   }, []);
 
   const cargarInventario = async () => {
@@ -125,6 +132,16 @@ export default function InventarioProductoTerminado({ usuario }) {
       </TooltipProvider>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 sm:px-6">
+        <AvisoBloqueo
+          bloqueo={bloqueo}
+          className="mb-6"
+          texto="No se pueden registrar estos movimientos hasta que se desbloquee."
+          accion={
+            EsEncargado(usuario?.IdRol)
+              ? { texto: "Ir a ajustes", href: "/encargado/producto/ajustes" }
+              : null
+          }
+        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <TarjetaResumen
             icono={Boxes}
