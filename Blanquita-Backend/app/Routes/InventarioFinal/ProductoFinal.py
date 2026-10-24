@@ -12,7 +12,9 @@ from app.Models.InventarioFinal.ProductoFinal import(
       CorreccionProductoTerminadoResponse,
       VerInventarioProductoTerminadoResponse,
       VerInventarioProductoTerminadoRequest,
-      ProductoResponse
+      ProductoResponse,
+      BloqueoProductoTerminadoRequest,
+      EstadoBloqueoProductoTerminadoResponse
 )
 
 from app.Auth.Dependencies import require_role
@@ -123,3 +125,37 @@ def ObtenerProductos(
     service: ProductoFinalService = Depends(producto_terminado_service)
 ):
     return service.ObtenerProductos()
+
+@ProductoFinalRouter.get(
+    "/bloqueo",
+    response_model=EstadoBloqueoProductoTerminadoResponse,
+    status_code=200
+)
+def VerBloqueoProductoTerminado(
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION, ROL_OPERADOR, ROL_GERENTE_GENERAL])),
+    service: ProductoFinalService = Depends(producto_terminado_service)
+):
+    return service.VerBloqueo()
+
+@ProductoFinalRouter.post(
+    "/bloqueo",
+    response_model=EstadoBloqueoProductoTerminadoResponse,
+    status_code=201
+)
+def BloquearMovimientosProductoTerminado(
+    data: BloqueoProductoTerminadoRequest,
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
+    service: ProductoFinalService = Depends(producto_terminado_service)
+):
+    return service.BloquearMovimientos(data, usuario_actual["IdUsuario"])
+
+@ProductoFinalRouter.post(
+    "/desbloqueo",
+    response_model=EstadoBloqueoProductoTerminadoResponse,
+    status_code=200
+)
+def DesbloquearMovimientosProductoTerminado(
+    usuario_actual: dict = Depends(require_role([ROL_LIDER_INVENTARIO_PRODUCCION])),
+    service: ProductoFinalService = Depends(producto_terminado_service)
+):
+    return service.DesbloquearMovimientos(usuario_actual["IdUsuario"])

@@ -10,7 +10,9 @@ import {
 } from "../../../services/BobinaPapel/BobinaPapel";
 import { ObtenerProveedoresForm } from "../../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
+import InputCodigo from "@/components/layout/InputCodigo";
+import { codigoFinal } from "@/utils/handlers";
+import { errorCodigo } from "@/utils/validators";
 import { formatearNumero } from "@/utils/numeros";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { soloActivos } from "@/utils/catalogo";
@@ -64,9 +66,10 @@ export default function IngresoBobinasPapel({ usuario }) {
   const repetidos = codigosRepetidos(filas.map((f) => f.CodigoBobina));
 
   const erroresFilas = erroresPorFila(filas, (f) => {
-    const codigo = f.CodigoBobina.trim();
-    if (!codigo) return "Falta el código";
-    if (repetidos.has(codigo.toLowerCase())) return "Código repetido";
+    const codigo = codigoFinal(f.CodigoBobina);
+    const errorDeCodigo = errorCodigo(codigo);
+    if (errorDeCodigo) return errorDeCodigo;
+    if (repetidos.has(codigo)) return "Código repetido";
     const bruto = Number(f.PesoBrutoKg);
     if (!f.PesoBrutoKg || bruto <= 0) return "Peso bruto inválido";
     const neto = Number(f.PesoNetoKg);
@@ -96,7 +99,7 @@ export default function IngresoBobinasPapel({ usuario }) {
           Number(idProveedor),
           Number(idTipoBobina),
           filas.map((f) => ({
-            CodigoBobina: f.CodigoBobina.trim(),
+            CodigoBobina: codigoFinal(f.CodigoBobina),
             PesoBrutoKg: Number(f.PesoBrutoKg),
             Gramaje: f.Gramaje === "" ? null : Number(f.Gramaje),
             PesoNetoKg: Number(f.PesoNetoKg),
@@ -212,12 +215,10 @@ export default function IngresoBobinasPapel({ usuario }) {
                           {i + 1}
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
+                          <InputCodigo
                             ref={registrarRef(f.id)}
-                            value={f.CodigoBobina}
-                            onChange={(e) =>
-                              actualizarFila(f.id, "CodigoBobina", aCodigo(e.target.value))
-                            }
+                            valor={f.CodigoBobina}
+                            onCambio={(valor) => actualizarFila(f.id, "CodigoBobina", valor)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && i === filas.length - 1) agregarFila();
                             }}
@@ -288,11 +289,9 @@ export default function IngresoBobinasPapel({ usuario }) {
 
                     <div className="flex flex-col gap-1.5">
                       <Label className={ETIQUETA_MOVIL}>Código</Label>
-                      <Input
-                        value={f.CodigoBobina}
-                        onChange={(e) =>
-                          actualizarFila(f.id, "CodigoBobina", aCodigo(e.target.value))
-                        }
+                      <InputCodigo
+                        valor={f.CodigoBobina}
+                        onCambio={(valor) => actualizarFila(f.id, "CodigoBobina", valor)}
                         placeholder="Ej. HIG-2026-0148"
                         className="h-11 bg-white font-mono"
                       />
@@ -376,7 +375,7 @@ export default function IngresoBobinasPapel({ usuario }) {
           { etiqueta: "Peso bruto", valor: `${formatearNumero(totalBruto)} kg` },
           { etiqueta: "Peso neto", valor: `${formatearNumero(totalNeto)} kg` },
         ]}
-        codigos={filas.map((f) => f.CodigoBobina.trim())}
+        codigos={filas.map((f) => codigoFinal(f.CodigoBobina))}
         editable="el código, los pesos y el gramaje de cada bobina"
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}

@@ -3,6 +3,7 @@ import { Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import InputCodigo from "@/components/layout/InputCodigo";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -371,11 +372,10 @@ export default function ProduccionBobinaTubo({ usuario }) {
               strokeWidth={2.5}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
-            <Input
-              value={buscarCodigoBobina}
-              onChange={(e) => setBuscarCodigoBobina(e.target.value)}
-              placeholder="Ej. 967 R20"
-              maxLength={15}
+            <InputCodigo
+              valor={buscarCodigoBobina}
+              onCambio={setBuscarCodigoBobina}
+              placeholder="Ej. 967-R20"
               className="pl-9 pr-9"
             />
             {buscarCodigoBobina && (

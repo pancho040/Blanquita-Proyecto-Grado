@@ -41,6 +41,7 @@ export const turnos=[
 
 
 export const CANTIDAD_MAXIMA_LOGS = 100;
+export const CANTIDAD_MINIMA_LOGS_CIERRE = 50;
 export const CANTIDAD_MAXIMA_INSUMO = 100;
 export const CANTIDAD_MAXIMA_EMPAQUE_BOLSA = 100;
 export const CANTIDAD_MAXIMA_REINGRESO_EMPAQUE = 5;
@@ -63,6 +64,9 @@ export const RolesUsuario = [
 
 export const CLAVE_MIN = 8;
 export const CLAVE_MAX = 12;
+
+export const CODIGO_MIN = 3;
+export const CODIGO_MAX = 40;
 
 export const NOMBRE_TIPO_MATERIA_PRIMA_MIN = 3;
 export const NOMBRE_TIPO_MATERIA_PRIMA_MAX = 40;

@@ -32,7 +32,7 @@ from app.Models.Empaque.EmpaqueBobina import (
 from app.Repository.Empaque.EmpaqueBobina import EmpaqueBobinaRepository
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 OBSERVACION_INGRESO_EMPAQUE = "Ingreso automático al almacén por registro de empaque"
 OBSERVACION_TRASLADO_EMPAQUE = "Empaque trasladado a producción"
@@ -49,7 +49,7 @@ class EmpaqueBobinaService:
                 detail="Debe enviar al menos un empaque para registrar",
             )
 
-        codigos = [empaque.CodigoEmpaque.strip() for empaque in data.Empaques]
+        codigos = [CodigoMateriaPrima(empaque.CodigoEmpaque, "del empaque") for empaque in data.Empaques]
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:
             raise HTTPException(

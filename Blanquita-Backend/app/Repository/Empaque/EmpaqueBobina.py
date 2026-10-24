@@ -105,7 +105,7 @@ class EmpaqueBobinaRepository:
 
     def CodigosRegistrados(self, codigos: list[str]) -> list[str]:
         filas = self.caller.Consultar(
-            select(Empaque.CodigoEmpaque).where(Empaque.CodigoEmpaque.in_(codigos))
+            select(Empaque.CodigoEmpaque).where(func.upper(Empaque.CodigoEmpaque).in_(codigos))
         )
         return [fila["CodigoEmpaque"] for fila in filas]
 

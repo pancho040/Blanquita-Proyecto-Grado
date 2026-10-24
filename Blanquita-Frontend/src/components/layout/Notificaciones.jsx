@@ -4,7 +4,9 @@ import {
   Bell,
   CircleCheck,
   CirclePause,
+  Eye,
   Factory,
+  Lock,
   PackageX,
   Icon,
   RefreshCw,
@@ -24,6 +26,7 @@ import { verNotificaciones } from "@/services/Notificacion/Notificacion";
 import { PREFIJO_POR_ROL } from "@/constants/Values";
 import { ESTILO_STOCK } from "@/utils/stock";
 import { formatearSegundos, segundosDesde } from "@/utils/dates";
+import { textoMovimientosBloqueados } from "@/utils/bloqueoProducto";
 
 const INTERVALO_ACTUALIZACION_MS = 120000;
 
@@ -292,6 +295,49 @@ function SeccionStock({ stock, prefijo }) {
   );
 }
 
+const horaCorta = (hora) => (hora ?? "").slice(0, 5);
+
+function SeccionModoConsulta({ modo }) {
+  return (
+    <Seccion valor="modo-consulta" titulo="Modo consulta" icono={Eye} cantidad={1} urgente>
+      <div className="flex flex-col gap-1.5 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="text-[13.5px] font-extrabold text-slate-900">
+          Sistema en modo consulta de {horaCorta(modo.HoraInicio)} a {horaCorta(modo.HoraFin)}
+        </div>
+        <div className="text-[12.5px] text-slate-700">
+          Solo se puede ver stock, catálogos y descargar reportes. Los ingresos, salidas,
+          traslados, producción y acciones de administrador quedan bloqueados hasta las{" "}
+          {horaCorta(modo.HoraFin)}.
+        </div>
+      </div>
+    </Seccion>
+  );
+}
+
+function SeccionBloqueo({ bloqueo, prefijo, ahora }) {
+  const href = `/${prefijo}/producto/${prefijo === "encargado" ? "ajustes" : "inventario"}`;
+  return (
+    <Seccion valor="bloqueo" titulo="Bloqueo producto terminado" icono={Lock} cantidad={1} urgente>
+      <a
+        href={href}
+        className="flex flex-col gap-1.5 rounded-xl bg-amber-50/60 p-3 ring-1 ring-amber-200 transition-colors hover:bg-amber-50"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[13.5px] font-extrabold text-slate-900">
+            {textoMovimientosBloqueados(bloqueo)}
+          </div>
+          <div className="flex shrink-0 items-center gap-1 text-[13px] font-extrabold tabular-nums text-amber-600">
+            <Lock size={14} />
+            {formatearSegundos(segundosDesde(bloqueo.FechaHoraBloqueo, ahora))}
+          </div>
+        </div>
+        <div className="text-[12.5px] text-slate-700">{bloqueo.MotivoBloqueo}</div>
+        <div className="text-[12px] text-slate-500">Bloqueó {bloqueo.UsuarioBloqueo}</div>
+      </a>
+    </Seccion>
+  );
+}
+
 function Contenido({ datos, prefijo, ahora }) {
   if (datos.Total === 0) {
     return (
@@ -308,6 +354,14 @@ function Contenido({ datos, prefijo, ahora }) {
   }
 
   const secciones = [
+    datos.ModoConsulta && {
+      valor: "modo-consulta",
+      nodo: <SeccionModoConsulta modo={datos.ModoConsulta} />,
+    },
+    datos.BloqueoProductoTerminado?.Bloqueado && {
+      valor: "bloqueo",
+      nodo: <SeccionBloqueo bloqueo={datos.BloqueoProductoTerminado} prefijo={prefijo} ahora={ahora} />,
+    },
     datos.Stock && {
       valor: "stock",
       nodo: <SeccionStock stock={datos.Stock} prefijo={prefijo} />,
@@ -376,7 +430,13 @@ export default function Notificaciones({ idRol, renderBoton }) {
   useBloqueoScroll(abierto);
 
   const alertasStock = datos?.Stock ? datos.Stock.SinStock.length + datos.Stock.Criticos.length : 0;
-  const urgente = Boolean(datos && (alertasStock > 0 || datos.Atrasadas > 0));
+  const urgente = Boolean(
+    datos &&
+      (alertasStock > 0 ||
+        datos.Atrasadas > 0 ||
+        datos.BloqueoProductoTerminado?.Bloqueado ||
+        datos.ModoConsulta),
+  );
 
   const abrir = () => {
     setAbierto(true);

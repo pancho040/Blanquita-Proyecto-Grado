@@ -172,6 +172,7 @@ export default function ReporteProduccion({
             campo="CodigoBobina"
             etiqueta={codigo.etiqueta}
             placeholder={codigo.placeholder}
+            codigo
           />
           <BuscadorFiltro
             reporte={reporte}

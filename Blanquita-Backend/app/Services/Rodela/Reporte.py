@@ -25,6 +25,7 @@ from app.Models.Rodela.Reporte import (
     ReporteLotesRodelaPorPeriodoResponse,
 )
 from app.Repository.Rodela.Reporte import ReporteRodelaRepository
+from app.utils.validators import CodigoBusqueda
 
 
 class ReporteRodelaService:
@@ -33,7 +34,7 @@ class ReporteRodelaService:
 
     def VerRodelas(self, data: VerRodelasRequest) -> VerRodelasResponse:
         params = {
-            "p_CodigoRodela": data.CodigoRodela,
+            "p_CodigoRodela": CodigoBusqueda(data.CodigoRodela),
             "p_IdProveedor": data.IdProveedor,
             "p_IdsTipoRodela": data.IdsTipoRodela or None,
             "p_IdEstadoMateriaPrima": data.IdEstadoMateriaPrima,

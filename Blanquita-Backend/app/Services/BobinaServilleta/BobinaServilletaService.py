@@ -17,6 +17,7 @@ from app.Schemas.BobinaServilleta import (
     UnidadBobinaServilleta,
 )
 from app.utils.dates import ZONA_BOLIVIA
+from app.utils.validators import CodigoMateriaPrima
 
 
 class BobinaServilletaService:
@@ -33,12 +34,9 @@ class BobinaServilletaService:
             )
 
         unidades = [unidad for bobina in data.Bobinas for unidad in bobina.Unidades]
-        codigos = [unidad.CodigoBobina.strip() for unidad in unidades]
-        if any(not codigo for codigo in codigos):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El código es obligatorio para cada unidad de bobina servilleta",
-            )
+        for unidad in unidades:
+            unidad.CodigoBobina = CodigoMateriaPrima(unidad.CodigoBobina, "de la unidad")
+        codigos = [unidad.CodigoBobina for unidad in unidades]
 
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:
@@ -128,7 +126,7 @@ class BobinaServilletaService:
                     [
                         UnidadBobinaServilleta(
                             IdFormatoSubBobina=unidad.IdFormatoSubBobina,
-                            CodigoBobina=unidad.CodigoBobina.strip(),
+                            CodigoBobina=unidad.CodigoBobina,
                             PesoBrutoKg=unidad.PesoBrutoKg,
                             GramajeGr=unidad.GramajeGr,
                         )

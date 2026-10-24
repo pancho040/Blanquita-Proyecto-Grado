@@ -1,3 +1,4 @@
+import { codigoFinal } from "@/utils/handlers";
 import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
 
 export const ResumenInventarioRodelaResponse = (data) => ({
@@ -66,7 +67,7 @@ export const DeshacerTrasladoRodelaResponse = (data) => ({
 
 export const EditarRodelaRequest = (idRodela, codigoRodela, observacion) => ({
   IdRodela: idRodela,
-  CodigoRodela: (codigoRodela ?? "").trim(),
+  CodigoRodela: codigoFinal(codigoRodela ?? ""),
   Observacion: (observacion ?? "").trim()
 });
 

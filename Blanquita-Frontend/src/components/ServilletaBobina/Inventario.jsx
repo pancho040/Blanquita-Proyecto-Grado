@@ -42,8 +42,9 @@ import {
   verBobinasServilletaReporte,
 } from "../../services/BobinaServilleta/Reportes";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
+import { codigoFinal } from "@/utils/handlers";
 import {
+  errorCodigo,
   extraerMensajeError,
   numeroONulo,
   limpiarObservacion,
@@ -464,12 +465,13 @@ export default function InventarioBobinaServilleta({ usuario }) {
     );
   };
 
-  const codigosEditados = formUnidades.map((u) => u.CodigoBobina.trim().toLowerCase());
+  const codigosEditados = formUnidades.map((u) => codigoFinal(u.CodigoBobina));
 
   const errorUnidad = (u) => {
-    const codigo = u.CodigoBobina.trim();
-    if (!codigo) return "Falta el código";
-    if (codigosEditados.filter((c) => c === codigo.toLowerCase()).length > 1)
+    const codigo = codigoFinal(u.CodigoBobina);
+    const errorDeCodigo = errorCodigo(codigo);
+    if (errorDeCodigo) return errorDeCodigo;
+    if (codigosEditados.filter((c) => c === codigo).length > 1)
       return "Código repetido";
     if (valorInvalido(u.PesoBrutoKg)) return "Peso bruto inválido";
     if (valorInvalido(u.GramajeGr)) return "Gramaje inválido";
@@ -482,7 +484,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
     const o = unidadesOriginales[i];
     if (!o) return false;
     return (
-      u.CodigoBobina.trim() !== o.CodigoBobina ||
+      codigoFinal(u.CodigoBobina) !== o.CodigoBobina ||
       numeroONulo(u.PesoBrutoKg) !== numeroONulo(o.PesoBrutoKg) ||
       numeroONulo(u.GramajeGr) !== numeroONulo(o.GramajeGr)
     );
@@ -829,7 +831,8 @@ export default function InventarioBobinaServilleta({ usuario }) {
                         id={`codigo-unidad-${i}`}
                         etiqueta="Código"
                         valor={u.CodigoBobina}
-                        onCambio={(valor) => actualizarUnidad(i, "CodigoBobina", aCodigo(valor))}
+                        codigo
+                        onCambio={(valor) => actualizarUnidad(i, "CodigoBobina", valor)}
                         classNameInput="font-mono font-bold"
                         autoComplete="off"
                       />

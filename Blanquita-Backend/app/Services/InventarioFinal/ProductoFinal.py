@@ -20,7 +20,9 @@ from app.Models.InventarioFinal.ProductoFinal import(
       CorreccionProductoTerminadoResponse,
       VerInventarioProductoTerminadoRequest,
       VerInventarioProductoTerminadoResponse,
-      ProductoResponse
+      ProductoResponse,
+      BloqueoProductoTerminadoRequest,
+      EstadoBloqueoProductoTerminadoResponse
 )
 
 from app.Schemas.Producto import InventarioProductoTerminado, MovimientoProductoTerminado
@@ -36,13 +38,66 @@ MOVIMIENTOS_QUE_RESTAN = {ID_TIPO_MOVIMIENTO_DESCUENTO, ID_TIPO_MOVIMIENTO_AJUST
 
 OBSERVACION_INGRESO_PRODUCTO = "Ingreso al inventario de producto terminado"
 
+BLOQUEO_INGRESO = ("BloqueaIngreso", "Los ingresos de producto terminado están bloqueados")
+BLOQUEO_CORRECCION = ("BloqueaCorreccion", "Las correcciones de producto terminado están bloqueadas")
+BLOQUEO_SALIDA = ("BloqueaSalida", "Las salidas de producto terminado están bloqueadas")
+
+
+def estado_bloqueo(fila: dict | None) -> EstadoBloqueoProductoTerminadoResponse:
+    if fila is None:
+        return EstadoBloqueoProductoTerminadoResponse(Bloqueado=False)
+    return EstadoBloqueoProductoTerminadoResponse(Bloqueado=True, **fila)
+
+
 class ProductoFinalService:
     def __init__(self, db: Session):
             self.repository = ProductoFinalRepository(db)
 
+    def _ValidarSinBloqueo(self, movimiento: tuple[str, str]) -> None:
+        campo, mensaje = movimiento
+        bloqueo = self.repository.ObtenerBloqueoActivo()
+        if bloqueo is not None and bloqueo[campo]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{mensaje} por {bloqueo['UsuarioBloqueo']}. Motivo: {bloqueo['MotivoBloqueo']}",
+            )
+
+    def VerBloqueo(self) -> EstadoBloqueoProductoTerminadoResponse:
+        return estado_bloqueo(self.repository.ObtenerBloqueoActivo())
+
+    def BloquearMovimientos(
+        self, data: BloqueoProductoTerminadoRequest, id_usuario: int
+    ) -> EstadoBloqueoProductoTerminadoResponse:
+        motivo = (data.Motivo or "").strip()
+        if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, motivo):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"El motivo es obligatorio, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
+            )
+        if not (data.BloqueaIngreso or data.BloqueaCorreccion or data.BloqueaSalida):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Debe seleccionar al menos un movimiento para bloquear",
+            )
+
+        self.repository.RegistrarBloqueo(
+            id_usuario, motivo, data.BloqueaIngreso, data.BloqueaCorreccion, data.BloqueaSalida
+        )
+        return self.VerBloqueo()
+
+    def DesbloquearMovimientos(self, id_usuario: int) -> EstadoBloqueoProductoTerminadoResponse:
+        if not self.repository.CerrarBloqueoActivo(id_usuario):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No hay un bloqueo activo de movimientos de producto terminado",
+            )
+        return self.VerBloqueo()
+
     def InsertarIngresoProductoTerminado(
         self, data: IngresoProductoTerminadoRequest, id_usuario: int
     ) -> list[IngresoProductoTerminadoResponse]:
+        self._ValidarSinBloqueo(BLOQUEO_INGRESO)
+
         if not data.Presentaciones:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -128,6 +183,8 @@ class ProductoFinalService:
     def InsertarSalidaProductoTerminado(
         self, data: SalidaProductoTerminadoRequest, id_usuario: int
     ) -> SalidaProductoTerminadoResponse:
+        self._ValidarSinBloqueo(BLOQUEO_SALIDA)
+
         observacion = (data.Observacion or "").strip()
         if not ValidarTexto(LONGITUD_MINIMA_DESCRIPCION, LONGITUD_MAXIMA_DESCRIPCION, observacion):
             raise HTTPException(
@@ -242,6 +299,7 @@ class ProductoFinalService:
     def CorregirInventarioProductoTerminado(
         self, data: CorreccionProductoTerminadoRequest, id_usuario: int
     ) -> CorreccionProductoTerminadoResponse:
+        self._ValidarSinBloqueo(BLOQUEO_CORRECCION)
         return self._RegistrarCorreccion(
             data, id_usuario, ID_TIPO_MOVIMIENTO_DESCUENTO, CANTIDAD_CORRECCION_PRODUCTO_TERMINADO
         )
@@ -249,6 +307,7 @@ class ProductoFinalService:
     def AumentarInventarioProductoTerminado(
         self, data: CorreccionProductoTerminadoRequest, id_usuario: int
     ) -> CorreccionProductoTerminadoResponse:
+        self._ValidarSinBloqueo(BLOQUEO_CORRECCION)
         return self._RegistrarCorreccion(
             data, id_usuario, ID_TIPO_MOVIMIENTO_AUMENTO, CANTIDAD_CORRECCION_PRODUCTO_TERMINADO
         )

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.Constants.Cantidades import (
     CANTIDAD_INGRESO_LOGS,
+    CANTIDAD_MINIMA_LOGS_CIERRE,
     LONGITUD_MAXIMA_DESCRIPCION,
     LONGITUD_MINIMA_DESCRIPCION,
 )
@@ -149,6 +150,8 @@ class ProduccionBobinaPapelService:
                 "La producción ya se encuentra en la línea indicada",
             )
 
+        self._ValidarLogsMinimos(anterior, "cambiar de línea")
+
         bobinas = self.repository.ObtenerBobinasBloqueadas(
             [anterior.IdBobina_1, anterior.IdBobina_2]
         )
@@ -220,6 +223,8 @@ class ProduccionBobinaPapelService:
                 status.HTTP_409_CONFLICT,
                 "La producción indicada no se encuentra En Producción, no puede finalizarse",
             )
+
+        self._ValidarLogsMinimos(produccion, "finalizarse")
 
         produccion.IdEstadoProduccion = ESTADO_PRODUCCION_FINALIZADO
         produccion.FechaFinProduccion = _ahora()
@@ -522,6 +527,14 @@ class ProduccionBobinaPapelService:
                 detail=f"{mensaje}, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
             )
         return texto
+
+    def _ValidarLogsMinimos(self, produccion: ProduccionBobinaTubo, accion: str) -> None:
+        if produccion.CantidadLogsActual < CANTIDAD_MINIMA_LOGS_CIERRE:
+            self._Revertir(
+                status.HTTP_409_CONFLICT,
+                f"La producción tiene {produccion.CantidadLogsActual} logs registrados; necesita al menos "
+                f"{CANTIDAD_MINIMA_LOGS_CIERRE} para {accion}. Si no se produjo, páusala y cancélala",
+            )
 
     def _Revertir(self, codigo: int, mensaje: str) -> None:
         self.repository.Revertir()

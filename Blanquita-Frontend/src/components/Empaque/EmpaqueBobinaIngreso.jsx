@@ -15,7 +15,9 @@ import {
 } from "../../services/Empaque/EmpaqueBobina";
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
+import InputCodigo from "@/components/layout/InputCodigo";
+import { codigoFinal } from "@/utils/handlers";
+import { errorCodigo } from "@/utils/validators";
 import { ACENTOS } from "@/constants/Acentos";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { soloActivos } from "@/utils/catalogo";
@@ -136,9 +138,10 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
   const repetidos = codigosRepetidos(filasPlanas.map((f) => f.CodigoEmpaque));
 
   const erroresFilas = erroresPorFila(filasPlanas, (f) => {
-    const codigo = f.CodigoEmpaque.trim();
-    if (!codigo) return "Falta el código";
-    if (repetidos.has(codigo.toLowerCase())) return "Código repetido";
+    const codigo = codigoFinal(f.CodigoEmpaque);
+    const errorDeCodigo = errorCodigo(codigo);
+    if (errorDeCodigo) return errorDeCodigo;
+    if (repetidos.has(codigo)) return "Código repetido";
     if (!f.PesoKg || Number(f.PesoKg) <= 0) return "Peso inválido";
     return null;
   });
@@ -175,7 +178,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
           Number(idProveedor),
           Number(cantidadToneladasPedida),
           filasPlanas.map((f) => ({
-            CodigoEmpaque: f.CodigoEmpaque.trim(),
+            CodigoEmpaque: codigoFinal(f.CodigoEmpaque),
             IdTipoEmpaque: Number(f.IdTipoEmpaque),
             PesoKg: Number(f.PesoKg),
           })),
@@ -374,14 +377,12 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
                                   {i + 1}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <Input
+                                  <InputCodigo
                                     ref={(el) => {
                                       refsCodigo.current[f.id] = el;
                                     }}
-                                    value={f.CodigoEmpaque}
-                                    onChange={(e) =>
-                                      actualizarFila(b.id, f.id, "CodigoEmpaque", aCodigo(e.target.value))
-                                    }
+                                    valor={f.CodigoEmpaque}
+                                    onCambio={(valor) => actualizarFila(b.id, f.id, "CodigoEmpaque", valor)}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter" && i === b.filas.length - 1)
                                         agregarFila(b.id);
@@ -437,11 +438,9 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
                               <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
                                 Código
                               </Label>
-                              <Input
-                                value={f.CodigoEmpaque}
-                                onChange={(e) =>
-                                  actualizarFila(b.id, f.id, "CodigoEmpaque", aCodigo(e.target.value))
-                                }
+                              <InputCodigo
+                                valor={f.CodigoEmpaque}
+                                onCambio={(valor) => actualizarFila(b.id, f.id, "CodigoEmpaque", valor)}
                                 placeholder="Ej. EMP-2026-0148"
                                 className="h-11 bg-white font-mono"
                               />
@@ -521,7 +520,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
           etiqueta: nombreTipo(b.IdTipoEmpaque) || "Sin tipo",
           valor: `${b.filas.length} ${b.filas.length === 1 ? "bobina" : "bobinas"}`,
         }))}
-        codigos={filasPlanas.map((f) => f.CodigoEmpaque.trim())}
+        codigos={filasPlanas.map((f) => codigoFinal(f.CodigoEmpaque))}
         aviso="Una vez registrado el lote ya no se podrán editar los códigos, los pesos, la cantidad, el tipo ni el proveedor."
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}

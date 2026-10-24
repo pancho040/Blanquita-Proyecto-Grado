@@ -1,4 +1,5 @@
 import { TarjetaProduccion } from "@/components/Produccion/comunes";
+import { CANTIDAD_MINIMA_LOGS_CIERRE } from "@/constants/Values";
 
 function EtiquetaProducto({ nombre }) {
   return (
@@ -20,6 +21,8 @@ function LogsRegistrados({ cantidad }) {
 }
 
 export function CardActiva({ p, onInsertar, onPausar, onFinalizar, onCambiarLinea }) {
+  const faltantes = CANTIDAD_MINIMA_LOGS_CIERRE - p.CantidadLogsActual;
+
   return (
     <TarjetaProduccion
       produccion={p}
@@ -37,11 +40,24 @@ export function CardActiva({ p, onInsertar, onPausar, onFinalizar, onCambiarLine
       acciones={[
         { tipo: "insertar", onClick: onInsertar },
         { tipo: "pausar", onClick: onPausar },
-        ...(onFinalizar ? [{ tipo: "finalizar", onClick: onFinalizar }] : []),
-        ...(onCambiarLinea ? [{ tipo: "cambiarLinea", onClick: onCambiarLinea }] : []),
+        ...(onFinalizar
+          ? [{ tipo: "finalizar", onClick: onFinalizar, disabled: faltantes > 0 }]
+          : []),
+        ...(onCambiarLinea
+          ? [{ tipo: "cambiarLinea", onClick: onCambiarLinea, disabled: faltantes > 0 }]
+          : []),
       ]}
     >
       <LogsRegistrados cantidad={p.CantidadLogsActual} />
+      {(onFinalizar || onCambiarLinea) && faltantes > 0 && (
+        <p className="text-[12.5px] font-semibold text-slate-500">
+          Faltan {faltantes} {faltantes === 1 ? "log" : "logs"} para poder{" "}
+          {[onFinalizar && "finalizar", onCambiarLinea && "cambiar de línea"]
+            .filter(Boolean)
+            .join(" o ")}{" "}
+          (mínimo {CANTIDAD_MINIMA_LOGS_CIERRE}).
+        </p>
+      )}
     </TarjetaProduccion>
   );
 }

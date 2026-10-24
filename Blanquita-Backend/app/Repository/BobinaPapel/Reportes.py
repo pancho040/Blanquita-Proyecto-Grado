@@ -130,7 +130,7 @@ class ReporteBobinaPapelRepository:
 
         codigo = params.get("p_CodigoBobina")
         if codigo:
-            consulta = consulta.where(or_(b1.CodigoBobina == codigo, b2.CodigoBobina == codigo))
+            consulta = consulta.where(or_(func.upper(b1.CodigoBobina) == codigo, func.upper(b2.CodigoBobina) == codigo))
 
         operador = params.get("p_Operador")
         if operador:
@@ -443,7 +443,7 @@ class ReporteBobinaPapelRepository:
         )
 
         if params.get("p_CodigoBobina") is not None:
-            consulta = consulta.where(BobinaPapel.CodigoBobina == params["p_CodigoBobina"])
+            consulta = consulta.where(func.upper(BobinaPapel.CodigoBobina) == params["p_CodigoBobina"])
         if params.get("p_IdProveedor") is not None:
             consulta = consulta.where(LoteBobina.IdProveedor == params["p_IdProveedor"])
         if params.get("p_IdsTipoBobina"):

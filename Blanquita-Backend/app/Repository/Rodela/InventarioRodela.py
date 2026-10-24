@@ -173,7 +173,7 @@ class InventarioRodelaRepository:
     def CodigoEnUso(self, codigo: str, id_rodela: int) -> bool:
         filas = self.caller.Consultar(
             select(Rodela.IdRodela).where(
-                Rodela.CodigoRodela == codigo, Rodela.IdRodela != id_rodela
+                func.upper(Rodela.CodigoRodela) == codigo, Rodela.IdRodela != id_rodela
             )
         )
         return bool(filas)

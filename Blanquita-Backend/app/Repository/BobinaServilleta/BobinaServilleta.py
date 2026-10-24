@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -63,7 +63,7 @@ class BobinaServilletaRepository:
     def CodigosRegistrados(self, codigos: list[str]) -> list[str]:
         filas = self.caller.Consultar(
             select(UnidadBobinaServilleta.CodigoBobina).where(
-                UnidadBobinaServilleta.CodigoBobina.in_(codigos)
+                func.upper(UnidadBobinaServilleta.CodigoBobina).in_(codigos)
             )
         )
         return [fila["CodigoBobina"] for fila in filas]

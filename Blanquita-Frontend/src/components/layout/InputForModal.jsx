@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import InputCodigo from "@/components/layout/InputCodigo";
 import { cn } from "@/lib/utils";
 
 export default function InputForModal({
@@ -9,6 +10,7 @@ export default function InputForModal({
   valor = "",
   onCambio,
   error = "",
+  codigo = false,
   className = "",
   classNameInput = "",
   ...props
@@ -29,14 +31,25 @@ export default function InputForModal({
         </Label>
       )}
 
-      <Input
-        id={id}
-        value={valor ?? ""}
-        onChange={(e) => onCambio(e.target.value)}
-        aria-invalid={Boolean(error)}
-        className={cn("h-11", classNameInput)}
-        {...props}
-      />
+      {codigo ? (
+        <InputCodigo
+          id={id}
+          valor={valor}
+          onCambio={onCambio}
+          aria-invalid={Boolean(error)}
+          className={cn("h-11", classNameInput)}
+          {...props}
+        />
+      ) : (
+        <Input
+          id={id}
+          value={valor ?? ""}
+          onChange={(e) => onCambio(e.target.value)}
+          aria-invalid={Boolean(error)}
+          className={cn("h-11", classNameInput)}
+          {...props}
+        />
+      )}
 
       {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
     </div>

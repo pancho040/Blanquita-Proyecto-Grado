@@ -126,6 +126,29 @@ export const VerInventarioProductoTerminadoResponse = ({
 export const VerInventarioProductoTerminadoResponseList = (jsonList) =>
   (jsonList ?? []).map((item) => VerInventarioProductoTerminadoResponse(item));
 
+export const BloqueoProductoTerminadoRequest = ({
+  Motivo,
+  BloqueaIngreso = false,
+  BloqueaCorreccion = false,
+  BloqueaSalida = false,
+}) => ({
+  Motivo,
+  BloqueaIngreso,
+  BloqueaCorreccion,
+  BloqueaSalida,
+});
+
+export const EstadoBloqueoProductoTerminadoResponse = (data) => ({
+  Bloqueado: Boolean(data?.Bloqueado),
+  IdBloqueoProductoTerminado: data?.IdBloqueoProductoTerminado ?? null,
+  UsuarioBloqueo: data?.UsuarioBloqueo ?? null,
+  FechaHoraBloqueo: data?.FechaHoraBloqueo ?? null,
+  MotivoBloqueo: data?.MotivoBloqueo ?? null,
+  BloqueaIngreso: Boolean(data?.BloqueaIngreso),
+  BloqueaCorreccion: Boolean(data?.BloqueaCorreccion),
+  BloqueaSalida: Boolean(data?.BloqueaSalida),
+});
+
 export const ProductoResponse = ({
   IdProducto,
   NombreProducto,

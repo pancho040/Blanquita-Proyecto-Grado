@@ -343,7 +343,7 @@ export function DialogoConfirmarLote({
 
   return (
     <Dialog open={abierto} onOpenChange={(open) => !open && !enviando && onCancelar()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md lg:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-extrabold">Confirmar ingreso del lote</DialogTitle>
           <DialogDescription>
@@ -355,7 +355,7 @@ export function DialogoConfirmarLote({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {detalles.map(({ etiqueta, valor }) => (
             <div key={etiqueta} className="rounded-lg bg-slate-50 px-3 py-2.5">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -385,15 +385,22 @@ export function DialogoConfirmarLote({
         {codigos.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <div className={ETIQUETA}>Códigos ({codigos.length})</div>
-            <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-slate-200 p-2.5">
-              {codigos.map((codigo) => (
-                <span
-                  key={codigo}
-                  className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[13px] font-bold text-slate-900"
-                >
-                  {codigo}
-                </span>
-              ))}
+            <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 p-2 [scrollbar-color:var(--color-slate-300)_transparent] [scrollbar-width:thin] lg:max-h-72">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                {codigos.map((codigo, i) => (
+                  <div
+                    key={`${i}-${codigo}`}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"
+                  >
+                    <span className="truncate font-mono text-[13.5px] font-extrabold text-c3">
+                      {codigo}
+                    </span>
+                    <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-slate-400">
+                      #{i + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

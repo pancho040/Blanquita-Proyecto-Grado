@@ -183,6 +183,7 @@ export default function ProduccionesConcluidas({
           campo="CodigoBobina"
           etiqueta={codigo.etiqueta}
           placeholder={codigo.placeholder}
+          codigo
         />
       </TarjetaFiltros>
 

@@ -6,7 +6,9 @@ import {
   CorreccionProductoTerminadoRequest,
   CorreccionProductoTerminadoResponse,
   VerInventarioProductoTerminadoResponseList,
-  ProductoResponse
+  ProductoResponse,
+  BloqueoProductoTerminadoRequest,
+  EstadoBloqueoProductoTerminadoResponse
 } from "../../models/Inventario/inventario";
 
 import { pedirJson } from "@/utils/api";
@@ -94,4 +96,25 @@ export async function obtenerProductos() {
   const data = await pedirJson("/api/productofinal/obtenerproductos");
 
   return data.map(ProductoResponse);
+}
+
+export async function verBloqueoProductoTerminado() {
+  const data = await pedirJson("/api/productofinal/bloqueo");
+
+  return EstadoBloqueoProductoTerminadoResponse(data);
+}
+
+export async function bloquearMovimientosProductoTerminado(motivo, movimientos) {
+  const data = await pedirJson("/api/productofinal/bloqueo", {
+    method: "POST",
+    body: BloqueoProductoTerminadoRequest({ Motivo: motivo, ...movimientos })
+  });
+
+  return EstadoBloqueoProductoTerminadoResponse(data);
+}
+
+export async function desbloquearMovimientosProductoTerminado() {
+  const data = await pedirJson("/api/productofinal/desbloqueo", { method: "POST" });
+
+  return EstadoBloqueoProductoTerminadoResponse(data);
 }

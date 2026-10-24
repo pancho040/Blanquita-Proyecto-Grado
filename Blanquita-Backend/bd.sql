@@ -402,6 +402,23 @@ CREATE TABLE "InventarioProductoTerminado" (
   CONSTRAINT "ck_invpt_umbrales_orden" CHECK ("StockPreventivo" IS NULL OR "StockPreventivo" > "StockMinimo")
 );
 
+CREATE TABLE "BloqueoProductoTerminado" (
+  "IdBloqueoProductoTerminado" SERIAL PRIMARY KEY,
+  "IdUsuarioBloqueo" INTEGER NOT NULL REFERENCES "Usuario"("IdUsuario") ON DELETE CASCADE,
+  "FechaHoraBloqueo" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "MotivoBloqueo" TEXT NOT NULL,
+  "IdUsuarioDesbloqueo" INTEGER REFERENCES "Usuario"("IdUsuario") ON DELETE CASCADE,
+  "FechaHoraDesbloqueo" TIMESTAMPTZ,
+  "BloqueaIngreso" BOOLEAN NOT NULL DEFAULT true,
+  "BloqueaCorreccion" BOOLEAN NOT NULL DEFAULT true,
+  "BloqueaSalida" BOOLEAN NOT NULL DEFAULT true,
+  CONSTRAINT "ck_bloqueopt_algun_movimiento" CHECK ("BloqueaIngreso" OR "BloqueaCorreccion" OR "BloqueaSalida"),
+  CONSTRAINT "ck_bloqueopt_desbloqueo_completo" CHECK (num_nonnulls("IdUsuarioDesbloqueo", "FechaHoraDesbloqueo") IN (0, 2)),
+  CONSTRAINT "ck_bloqueopt_orden" CHECK ("FechaHoraDesbloqueo" IS NULL OR "FechaHoraDesbloqueo" >= "FechaHoraBloqueo")
+);
+CREATE UNIQUE INDEX "uq_bloqueopt_activo" ON "BloqueoProductoTerminado"((true)) WHERE "FechaHoraDesbloqueo" IS NULL;
+CREATE INDEX "idx_bloqueopt_fecha" ON "BloqueoProductoTerminado"("FechaHoraBloqueo");
+
 CREATE TABLE "TipoInsumo" (
   "IdTipoInsumo" SERIAL PRIMARY KEY,
   "NombreInsumo" TEXT NOT NULL,

@@ -1,3 +1,4 @@
+import { codigoFinal } from "@/utils/handlers";
 import { UnidadServilletaResponse } from "./BobinaServilleta";
 import { numeroONulo } from "@/utils/validators";
 import { NivelStockResponse } from "@/models/AlertaStock/AlertaStock";
@@ -61,7 +62,7 @@ export const SubBobinaServilletaFueraInventarioResponse = (data) => ({
 
 export const EditarUnidadBobinaServilletaItem = (data) => ({
   IdUnidadBobinaServilleta: data.IdUnidadBobinaServilleta,
-  CodigoBobina: (data.CodigoBobina ?? "").trim(),
+  CodigoBobina: codigoFinal(data.CodigoBobina ?? ""),
   PesoBrutoKg: numeroONulo(data.PesoBrutoKg),
   GramajeGr: numeroONulo(data.GramajeGr)
 });

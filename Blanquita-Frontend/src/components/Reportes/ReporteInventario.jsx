@@ -64,6 +64,7 @@ export default function ReporteInventario({
             campo={codigo.campo}
             etiqueta={codigo.etiqueta}
             placeholder={codigo.placeholder}
+            codigo
           />
           <FiltroProveedor reporte={reporte} />
           <SelectFiltro

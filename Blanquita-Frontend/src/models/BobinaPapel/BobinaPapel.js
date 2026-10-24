@@ -1,3 +1,4 @@
+import { codigoFinal } from "@/utils/handlers";
 import { numeroONulo } from "@/utils/validators";
 
 export const BobinaPapel = (data) => ({
@@ -41,7 +42,7 @@ export const TipoBobinaPapelIngreso = (data) => ({
 
 export const EditarBobinaPapelRequest = (data) => ({
   IdBobinaPapel: data.IdBobinaPapel,
-  CodigoBobina: (data.CodigoBobina ?? "").trim(),
+  CodigoBobina: codigoFinal(data.CodigoBobina ?? ""),
   PesoBrutoKg: Number(data.PesoBrutoKg),
   PesoNetoKg: Number(data.PesoNetoKg),
   Gramaje: numeroONulo(data.Gramaje),

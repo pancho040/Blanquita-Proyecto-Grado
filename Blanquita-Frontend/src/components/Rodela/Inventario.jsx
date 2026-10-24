@@ -30,8 +30,9 @@ import {
 } from "../../services/Rodela/Inventario";
 import { descargarReporteInventarioRodela } from "@/services/Rodela/Reportes";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
+import { codigoFinal } from "@/utils/handlers";
 import {
+  errorCodigo,
   extraerMensajeError,
   limpiarObservacion,
   VeComoLider,
@@ -238,11 +239,13 @@ export default function InventarioRodelas({ usuario }) {
     );
   };
 
-  const codigoLimpio = formCodigo.trim();
+  const codigoLimpio = codigoFinal(formCodigo);
+  const errorDeCodigo = codigoLimpio ? errorCodigo(codigoLimpio) : "";
   const motivoLimpio = formMotivo.trim();
   const codigoCambio =
     !!dialogEditar.rodela &&
     codigoLimpio !== "" &&
+    !errorDeCodigo &&
     codigoLimpio !== dialogEditar.rodela.CodigoRodela;
   const motivoValido =
     motivoLimpio.length >= MOTIVO_CORRECCION_MIN &&
@@ -429,7 +432,9 @@ export default function InventarioRodelas({ usuario }) {
               id="codigo-rodela-editar"
               etiqueta="Nuevo código"
               valor={formCodigo}
-              onCambio={(valor) => setFormCodigo(aCodigo(valor))}
+              codigo
+              onCambio={setFormCodigo}
+              error={errorDeCodigo}
               classNameInput="font-mono font-bold"
               autoComplete="off"
             />

@@ -232,7 +232,7 @@ class InventarioBobinaServilletaRepository:
     def CodigosEnUso(self, codigos: list[str], ids_excluir: list[int]) -> list[str]:
         filas = self.caller.Consultar(
             select(UnidadBobinaServilleta.CodigoBobina).where(
-                func.lower(UnidadBobinaServilleta.CodigoBobina).in_([c.lower() for c in codigos]),
+                func.upper(UnidadBobinaServilleta.CodigoBobina).in_(codigos),
                 UnidadBobinaServilleta.IdUnidadBobinaServilleta.not_in(ids_excluir),
             )
         )

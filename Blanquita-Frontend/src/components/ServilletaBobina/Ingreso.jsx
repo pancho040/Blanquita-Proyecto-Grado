@@ -10,8 +10,9 @@ import {
 } from "../../services/BobinaServilleta/BobinaServilleta";
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
-import { aCodigo } from "@/utils/handlers";
-import { numeroONulo } from "@/utils/validators";
+import InputCodigo from "@/components/layout/InputCodigo";
+import { codigoFinal } from "@/utils/handlers";
+import { errorCodigo, numeroONulo } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { composicionFormato, soloActivos } from "@/utils/catalogo";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
@@ -59,7 +60,7 @@ const filaVaciaDe = (tipo) => () => {
 };
 
 const unidadDe = (unidad) => ({
-  CodigoBobina: unidad.Codigo.trim(),
+  CodigoBobina: codigoFinal(unidad.Codigo),
   IdFormatoSubBobina: unidad.IdFormato,
   PesoBrutoKg: numeroONulo(unidad.PesoBruto),
   GramajeGr: numeroONulo(unidad.Gramaje),
@@ -118,15 +119,15 @@ function BloqueUnidad({ numero, unidad, formatos, conError, onCampo, inputRef, o
         />
       </div>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[2fr_1fr_1fr]">
-        <Input
+        <InputCodigo
           ref={inputRef}
-          value={unidad.Codigo}
-          onChange={(e) => onCampo("Codigo", aCodigo(e.target.value))}
+          valor={unidad.Codigo}
+          onCambio={(valor) => onCampo("Codigo", valor)}
           onKeyDown={onKeyDown}
           placeholder={`Código de la unidad ${numero}`}
           className={cn(
             "h-10 font-mono",
-            conError && !unidad.Codigo.trim() && "border-red-300 focus-visible:ring-red-300",
+            conError && errorCodigo(codigoFinal(unidad.Codigo)) && "border-red-300 focus-visible:ring-red-300",
           )}
         />
         <Input
@@ -151,9 +152,10 @@ function BloqueUnidad({ numero, unidad, formatos, conError, onCampo, inputRef, o
 }
 
 const errorDeUnidad = (unidad, numero, repetidos) => {
-  const codigo = unidad.Codigo.trim();
-  if (!codigo) return `Falta el código de la unidad ${numero}`;
-  if (repetidos.has(codigo.toLowerCase())) return `Código de unidad ${numero} repetido`;
+  const codigo = codigoFinal(unidad.Codigo);
+  const errorDeCodigo = errorCodigo(codigo);
+  if (errorDeCodigo) return `Unidad ${numero}: ${errorDeCodigo}`;
+  if (repetidos.has(codigo)) return `Código de unidad ${numero} repetido`;
   if (!unidad.IdFormato) return `Selecciona el formato de la unidad ${numero}`;
   if (pesoInvalido(unidad.PesoBruto)) return `Peso bruto de unidad ${numero} inválido`;
   if (pesoInvalido(unidad.Gramaje)) return `Gramaje de unidad ${numero} inválido`;
@@ -377,7 +379,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
             valor: filas.reduce((total, f) => total + f.Unidades.length, 0),
           },
         ]}
-        codigos={filas.flatMap((f) => f.Unidades.map((u) => u.Codigo.trim()))}
+        codigos={filas.flatMap((f) => f.Unidades.map((u) => codigoFinal(u.Codigo)))}
         editable="el código, el peso y el gramaje de cada unidad"
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}

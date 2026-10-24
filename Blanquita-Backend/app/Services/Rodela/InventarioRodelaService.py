@@ -33,7 +33,7 @@ from app.Models.Rodela.InventarioRodela import (
 )
 from app.Repository.Rodela.InventarioRodela import InventarioRodelaRepository
 from app.Schemas.Rodela import MovimientoRodela, Rodela
-from app.utils.validators import REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
 
 OBSERVACION_TRASLADO_RODELA = "Traslado a producción - apertura de paquete de rodelas"
 OBSERVACION_CORRECCION_TRASLADO_RODELA = "Corrección por error humano - reingreso a almacén"
@@ -166,12 +166,7 @@ class InventarioRodelaService:
         return DeshacerTrasladoRodelaResponse(**self._Respuesta(rodela, movimiento))
 
     def EditarRodela(self, data: EditarRodelaRequest, id_usuario: int) -> EditarRodelaResponse:
-        codigo = data.CodigoRodela.strip()
-        if not codigo:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="El código de la rodela es obligatorio",
-            )
+        codigo = CodigoMateriaPrima(data.CodigoRodela, "de la rodela")
 
         observacion = self._ValidarObservacion(
             data.Observacion, "El motivo de la corrección es obligatorio"
