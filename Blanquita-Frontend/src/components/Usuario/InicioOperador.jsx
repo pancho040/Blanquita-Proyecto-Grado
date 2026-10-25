@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Icon, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -12,6 +12,7 @@ import {
 } from "@/utils/areaTrabajo";
 import { EsEncargado } from "@/utils/validators";
 import { useNombreUsuario } from "@/hooks/useNombreUsuario";
+import ResumenOperador, { tieneResumen } from "./ResumenOperador";
 
 const DIAS = [
   "domingo",
@@ -184,21 +185,23 @@ export default function InicioOperador({ usuario, paneles = {} }) {
         {Panel ? (
           <Panel key={area.id} />
         ) : (
-          <div
-            key={area.id}
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {area.subrutas
-              .filter((s) => !s.soloLider || EsEncargado(idRol))
-              .map((s, i) => (
-                <TileAcceso
-                  key={s.ruta}
-                  subruta={s}
-                  href={rutaAcceso(idRol, area, s)}
-                  destacado={i === 0}
-                />
-              ))}
-          </div>
+          <Fragment key={area.id}>
+            <div
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {area.subrutas
+                .filter((s) => !s.soloLider || EsEncargado(idRol))
+                .map((s, i) => (
+                  <TileAcceso
+                    key={s.ruta}
+                    subruta={s}
+                    href={rutaAcceso(idRol, area, s)}
+                    destacado={i === 0}
+                  />
+                ))}
+            </div>
+            {tieneResumen(area.id) && <ResumenOperador area={area} idRol={idRol} />}
+          </Fragment>
         )}
       </main>
     </div>

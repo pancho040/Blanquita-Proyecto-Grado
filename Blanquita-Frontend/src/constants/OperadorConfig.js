@@ -57,7 +57,7 @@ export const AREAS_TRABAJO = [
         titulo: "Inventario",
         descripcion: "Ver stock y enviar bobinas a producción",
         icono: Boxes,
-        ruta: "Inventario",
+        ruta: "inventario",
       },
       {
         titulo: "Producción",
