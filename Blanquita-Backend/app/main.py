@@ -38,6 +38,7 @@ from app.Routes.BobinaServilleta.FormatoSubBobinaRouter import FormatoSubBobinaR
 from app.Routes.BobinaServilleta.InicioRouter import InicioBobinaServilletaRouter
 
 from app.Routes.InventarioFinal.ProductoFinal import ProductoFinalRouter
+from app.Routes.InventarioFinal.Conteo import ConteoProductoTerminadoRouter
 from app.Routes.InventarioFinal.Reporte import ProductoFinalReporteRouter
 from app.Routes.InventarioFinal.LineaProductoRouter import LineaProductoRouter
 from app.Routes.InventarioFinal.InicioRouter import InicioProductoTerminadoRouter
@@ -144,6 +145,7 @@ app.include_router(InicioEmpaqueRouter)
 
 #ROUTERS INVENTARIO PRODUCTO FINAL
 app.include_router(ProductoFinalRouter)
+app.include_router(ConteoProductoTerminadoRouter)
 app.include_router(ProductoFinalReporteRouter)
 app.include_router(LineaProductoRouter)
 app.include_router(InicioProductoTerminadoRouter)

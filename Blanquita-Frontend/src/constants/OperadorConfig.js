@@ -57,7 +57,7 @@ export const AREAS_TRABAJO = [
         titulo: "Inventario",
         descripcion: "Ver stock y enviar bobinas a producción",
         icono: Boxes,
-        ruta: "Inventario",
+        ruta: "inventario",
       },
       {
         titulo: "Producción",
@@ -224,6 +224,19 @@ export const MotivosBloqueoProductoTerminado = [
   "Conteo físico de producto terminado",
   "Ajuste de inventario por diferencias",
   "Revisión de stock antes de despacho grande",
+];
+
+export const MotivosInicioConteoProductoTerminado = [
+  "Conteo mensual de producto terminado",
+  "Conteo semanal de producto terminado",
+  "Revisión por diferencias en el stock",
+];
+
+export const MotivosDiferenciaConteoProductoTerminado = [
+  "Producto dañado o roto",
+  "Ingreso sin registrar",
+  "Salida sin registrar",
+  "Error en un registro anterior",
 ];
 
 export const MotivosAjusteNegativoProductoTerminado = [

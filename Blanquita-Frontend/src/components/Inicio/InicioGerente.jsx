@@ -10,6 +10,8 @@ import {
   Combine,
   Factory,
   FileChartColumn,
+  Icon,
+  LayoutGrid,
   Layers,
   PackageCheck,
   PackageX,
@@ -20,6 +22,9 @@ import {
   Warehouse,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PILDORA_FILTRO } from "@/constants/Acentos";
+import { AREAS_TRABAJO } from "@/constants/OperadorConfig";
 import {
   AccesosRapidos,
   Bloque,
@@ -49,6 +54,7 @@ const RUTA = "/gerente";
 const RUTA_REPORTES = `${RUTA}/reportes`;
 const CLAVE_PERIODO = "gerente.inicio.periodo";
 const CLAVE_PESTANA = "gerente.inicio.pestana";
+const CLAVE_AREA = "gerente.inicio.area";
 const CONTENEDORES = "jab./pl.";
 
 const PERIODOS = {
@@ -124,6 +130,83 @@ const ACCESOS = {
     { texto: "Reporte de salidas", href: `${RUTA_REPORTES}/producto/salidas`, icono: FileChartColumn },
   ],
 };
+
+const DATOS_AREA = Object.fromEntries(
+  AREAS_TRABAJO.map(({ id, titulo, descripcion, icono, esIconoLab }) => [
+    id,
+    { titulo, descripcion, icono, esIconoLab },
+  ]),
+);
+
+const AREAS = {
+  todas: {
+    titulo: "Todas las áreas",
+    descripcion: "Resumen general de la planta",
+    icono: LayoutGrid,
+    conPestanas: true,
+    conPeriodo: true,
+  },
+  "bobina-papel": {
+    ...DATOS_AREA["bobina-papel"],
+    dominios: ["bobinapapel"],
+    produccion: "BobinaPapel",
+    conPeriodo: true,
+    accesos: [
+      { texto: "Inventario", href: `${RUTA}/bobina-papel/inventario`, icono: Boxes },
+      { texto: "Producción", href: `${RUTA}/bobina-papel/produccion`, icono: Factory },
+      { texto: "Reporte de producción", href: `${RUTA_REPORTES}/bobina-papel/produccion`, icono: FileChartColumn },
+    ],
+  },
+  "bobina-servilleta": {
+    ...DATOS_AREA["bobina-servilleta"],
+    dominios: ["bobinaservilleta", "subbobina"],
+    produccion: "BobinaServilleta",
+    conPeriodo: true,
+    accesos: [
+      { texto: "Inventario", href: `${RUTA}/bobina-servilleta/inventario`, icono: Boxes },
+      { texto: "Producción", href: `${RUTA}/bobina-servilleta/produccion`, icono: Factory },
+      { texto: "Reporte de producción", href: `${RUTA_REPORTES}/bobina-servilleta/produccion`, icono: FileChartColumn },
+    ],
+  },
+  rodela: {
+    ...DATOS_AREA.rodela,
+    dominios: ["rodela"],
+    accesos: [
+      { texto: "Inventario", href: `${RUTA}/rodela/inventario`, icono: Boxes },
+      { texto: "Reporte de inventario", href: `${RUTA_REPORTES}/rodela/inventario`, icono: FileChartColumn },
+    ],
+  },
+  empaque: {
+    ...DATOS_AREA.empaque,
+    dominios: ["empaquebobina", "empaquebolsa", "bolsajava"],
+    accesos: [
+      { texto: "Empaque en bobina", href: `${RUTA}/empaque/bobina-inventario`, icono: Boxes },
+      { texto: "Empaque en bolsa", href: `${RUTA}/empaque/bolsa-inventario`, icono: Boxes },
+      { texto: "Bolsas de jaba", href: `${RUTA}/empaque/jaba-inventario`, icono: Boxes },
+      { texto: "Reporte de movimientos", href: `${RUTA_REPORTES}/empaque/movimientos`, icono: FileChartColumn },
+    ],
+  },
+  producto: {
+    ...DATOS_AREA.producto,
+    conPestanas: true,
+    conPeriodo: true,
+  },
+  insumos: {
+    ...DATOS_AREA.insumos,
+    dominios: ["insumo"],
+    accesos: [
+      { texto: "Inventario", href: `${RUTA}/insumos/inventario`, icono: Boxes },
+      { texto: "Reporte de movimientos", href: `${RUTA_REPORTES}/insumos/movimientos`, icono: FileChartColumn },
+    ],
+  },
+};
+
+const PLANTA = [
+  { clave: "BobinaPapel", ruta: "bobina-papel", texto: "Bobina papel", aItem: itemBobinaPapel },
+  { clave: "BobinaServilleta", ruta: "bobina-servilleta", texto: "Bobina servilleta", aItem: itemBobinaServilleta },
+];
+
+const CLAVES_PLANTA = PLANTA.map((area) => area.clave);
 
 const capitalizar = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
 
@@ -252,8 +335,8 @@ function EstadoArea({ area }) {
   );
 }
 
-function MateriaPrima({ areas }) {
-  const ordenadas = ORDEN_MATERIA_PRIMA.map((dominio) => areas.find((area) => area.Dominio === dominio)).filter(Boolean);
+function MateriaPrima({ areas, dominios = ORDEN_MATERIA_PRIMA }) {
+  const ordenadas = dominios.map((dominio) => areas.find((area) => area.Dominio === dominio)).filter(Boolean);
   return (
     <div className="flex flex-col gap-3">
       {ordenadas.map((area) => {
@@ -302,35 +385,36 @@ function Inventario({ datos }) {
   );
 }
 
-function PlantaAhora({ planta }) {
-  const conRuta = (area, aItem) => (item) => {
-    const datos = aItem(item);
-    return { ...datos, id: `${area}-${datos.id}`, href: `${RUTA}/${area}/produccion` };
+function PlantaAhora({ planta, claves = CLAVES_PLANTA }) {
+  const areas = PLANTA.filter((area) => claves.includes(area.clave));
+  const conRuta = (area) => (item) => {
+    const datos = area.aItem(item);
+    return { ...datos, id: `${area.ruta}-${datos.id}`, href: `${RUTA}/${area.ruta}/produccion` };
   };
-  const papel = conRuta("bobina-papel", itemBobinaPapel);
-  const servilleta = conRuta("bobina-servilleta", itemBobinaServilleta);
 
   return (
     <ProduccionAhora
-      href={`${RUTA}/bobina-papel/produccion`}
-      activas={[...planta.BobinaPapel.Activas.map(papel), ...planta.BobinaServilleta.Activas.map(servilleta)]}
-      pausadas={[...planta.BobinaPapel.Pausadas.map(papel), ...planta.BobinaServilleta.Pausadas.map(servilleta)]}
+      href={`${RUTA}/${areas[0].ruta}/produccion`}
+      activas={areas.flatMap((area) => planta[area.clave].Activas.map(conRuta(area)))}
+      pausadas={areas.flatMap((area) => planta[area.clave].Pausadas.map(conRuta(area)))}
       horasAlerta={planta.HorasAlertaPausa}
-      descripcionActivas="Bobina papel y servilleta corriendo ahora"
+      descripcionActivas={
+        areas.length > 1 ? "Bobina papel y servilleta corriendo ahora" : `${areas[0].texto} corriendo ahora`
+      }
       descripcionPausas="Máquinas detenidas en este momento y su motivo"
       aItem={(item) => item}
     />
   );
 }
 
-function PausasPeriodo({ periodo, pausas }) {
+function PausasPeriodo({ periodo, pausas, claves = CLAVES_PLANTA }) {
   const texto = periodo === "semana" ? "esta semana" : "este mes";
-  const areas = [
-    { titulo: "Pausas · Bobina papel", datos: pausas.BobinaPapel },
-    { titulo: "Pausas · Bobina servilleta", datos: pausas.BobinaServilleta },
-  ];
+  const areas = PLANTA.filter((area) => claves.includes(area.clave)).map((area) => ({
+    titulo: `Pausas · ${area.texto}`,
+    datos: pausas[area.clave],
+  }));
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className={cn("grid grid-cols-1 gap-3", areas.length > 1 && "lg:grid-cols-2")}>
       {areas.map(({ titulo, datos }) => (
         <PausasPorMotivo
           key={titulo}
@@ -345,10 +429,55 @@ function PausasPeriodo({ periodo, pausas }) {
   );
 }
 
-function Produccion({ periodo, datos, colores }) {
+function ProductoProducido({ periodo, datos, colores }) {
   const { Produccion: produccion } = datos;
   const series = seriesGrafico(produccion.Lineas, colores);
 
+  return (
+    <Seccion titulo="Producto terminado producido" icono={PackageCheck}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <TarjetaIndicador
+          icono={Layers}
+          etiqueta="Jabas y planchas producidas"
+          valor={produccion.Contenedores}
+          detalle="Ingresos menos correcciones"
+        />
+        <TarjetaIndicador
+          icono={PackageCheck}
+          etiqueta="Registros de ingreso"
+          valor={produccion.Ingresos}
+          detalle="Ingresos a producto terminado"
+        />
+        <TarjetaIndicador
+          icono={CalendarDays}
+          etiqueta="Días con producción"
+          valor={produccion.DiasConProduccion}
+          detalle={`En ${numero(produccion.Tramos.length)} ${TRAMO[periodo].plural} del período`}
+        />
+      </div>
+      <GraficoBarras
+        titulo={`Producción ${TRAMO[periodo].titulo}`}
+        descripcion="Jabas y planchas ingresadas a producto terminado por línea (ingresos menos correcciones)"
+        icono={ChartColumn}
+        accion={<EnlaceBloque href={`${RUTA_REPORTES}/producto/produccion`}>Reporte</EnlaceBloque>}
+        series={series}
+        datos={datosGrafico(periodo, produccion.Tramos, series)}
+        unidad={CONTENEDORES}
+        resumenSerie={(serie) => (
+          <>
+            <span className="font-extrabold text-slate-900">{numero(serie.Contenedores)}</span> {CONTENEDORES}
+          </>
+        )}
+        vacio={{
+          titulo: "Sin producción en el período",
+          descripcion: "Cuando se registre producto terminado aparecerá aquí.",
+        }}
+      />
+    </Seccion>
+  );
+}
+
+function Produccion({ periodo, datos, colores }) {
   return (
     <div className="flex flex-col gap-6">
       <Seccion titulo="Ahora en planta" icono={Factory}>
@@ -357,49 +486,48 @@ function Produccion({ periodo, datos, colores }) {
 
       <EncabezadoPeriodo periodo={periodo} datos={datos} />
 
-      <Seccion titulo="Producto terminado producido" icono={PackageCheck}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <TarjetaIndicador
-            icono={Layers}
-            etiqueta="Jabas y planchas producidas"
-            valor={produccion.Contenedores}
-            detalle="Ingresos menos correcciones"
-          />
-          <TarjetaIndicador
-            icono={PackageCheck}
-            etiqueta="Registros de ingreso"
-            valor={produccion.Ingresos}
-            detalle="Ingresos a producto terminado"
-          />
-          <TarjetaIndicador
-            icono={CalendarDays}
-            etiqueta="Días con producción"
-            valor={produccion.DiasConProduccion}
-            detalle={`En ${numero(produccion.Tramos.length)} ${TRAMO[periodo].plural} del período`}
-          />
-        </div>
-        <GraficoBarras
-          titulo={`Producción ${TRAMO[periodo].titulo}`}
-          descripcion="Jabas y planchas ingresadas a producto terminado por línea (ingresos menos correcciones)"
-          icono={ChartColumn}
-          accion={<EnlaceBloque href={`${RUTA_REPORTES}/producto/produccion`}>Reporte</EnlaceBloque>}
-          series={series}
-          datos={datosGrafico(periodo, produccion.Tramos, series)}
-          unidad={CONTENEDORES}
-          resumenSerie={(serie) => (
-            <>
-              <span className="font-extrabold text-slate-900">{numero(serie.Contenedores)}</span> {CONTENEDORES}
-            </>
-          )}
-          vacio={{
-            titulo: "Sin producción en el período",
-            descripcion: "Cuando se registre producto terminado aparecerá aquí.",
-          }}
-        />
-      </Seccion>
+      <ProductoProducido periodo={periodo} datos={datos} colores={colores} />
 
       <Seccion titulo="Pausas de producción" icono={Timer}>
         <PausasPeriodo periodo={periodo} pausas={datos.Pausas} />
+      </Seccion>
+    </div>
+  );
+}
+
+function InventarioProducto({ datos }) {
+  return (
+    <Seccion titulo="Producto terminado" icono={Boxes}>
+      <StockProducto stock={datos.Stock} />
+    </Seccion>
+  );
+}
+
+function ProduccionProducto({ periodo, datos, colores }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <EncabezadoPeriodo periodo={periodo} datos={datos} />
+      <ProductoProducido periodo={periodo} datos={datos} colores={colores} />
+    </div>
+  );
+}
+
+function DetalleArea({ periodo, datos, area }) {
+  return (
+    <div className="flex flex-col gap-6">
+      {area.produccion && (
+        <>
+          <Seccion titulo="Ahora en planta" icono={Factory}>
+            <PlantaAhora planta={datos.Planta} claves={[area.produccion]} />
+          </Seccion>
+          <EncabezadoPeriodo periodo={periodo} datos={datos} />
+          <Seccion titulo="Pausas de producción" icono={Timer}>
+            <PausasPeriodo periodo={periodo} pausas={datos.Pausas} claves={[area.produccion]} />
+          </Seccion>
+        </>
+      )}
+      <Seccion titulo="Materia prima en almacén" icono={Warehouse}>
+        <MateriaPrima areas={datos.MateriaPrima} dominios={area.dominios} />
       </Seccion>
     </div>
   );
@@ -461,23 +589,65 @@ function Salidas({ periodo, datos, colores }) {
 }
 
 const CONTENIDO = { inventario: Inventario, produccion: Produccion, salidas: Salidas };
+const CONTENIDO_PRODUCTO = { inventario: InventarioProducto, produccion: ProduccionProducto, salidas: Salidas };
 
-function Resumen({ periodo, pestana }) {
+function Resumen({ periodo, area, pestana }) {
   const { datos, error, recargar } = useInicio(() => verInicioGerente(periodo));
   if (error && !datos) return <ErrorInicio mensaje={error} onReintentar={recargar} />;
   if (!datos) return <CargandoInicio />;
 
   const colores = new Map(datos.Stock.Lineas.map((linea, indice) => [linea.IdProducto, colorSerie(indice)]));
-  const Contenido = CONTENIDO[pestana];
 
-  return <Contenido periodo={periodo} datos={datos} colores={colores} />;
+  if (area === "todas" || area === "producto") {
+    const Contenido = (area === "todas" ? CONTENIDO : CONTENIDO_PRODUCTO)[pestana];
+    return <Contenido periodo={periodo} datos={datos} colores={colores} />;
+  }
+
+  return <DetalleArea periodo={periodo} datos={datos} area={AREAS[area]} />;
+}
+
+function IconoArea({ area, size = 15, className }) {
+  if (area.esIconoLab) return <Icon iconNode={area.icono} size={size} className={className} />;
+  const Icono = area.icono;
+  return <Icono size={size} className={className} />;
+}
+
+function SelectorAreas({ valor, onCambiar }) {
+  const area = AREAS[valor];
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="mb-2 text-sm font-bold text-slate-700">¿Qué área quieres revisar?</div>
+        <ToggleGroup value={[valor]} className="flex w-full flex-wrap justify-start gap-2">
+          {Object.entries(AREAS).map(([id, opcion]) => (
+            <ToggleGroupItem
+              key={id}
+              value={id}
+              onClick={() => id !== valor && onCambiar(id)}
+              className={cn(PILDORA_FILTRO, "gap-1.5")}
+            >
+              <IconoArea area={opcion} />
+              {opcion.titulo}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <IconoArea area={area} size={18} className="text-c3" />
+        <span className="text-base font-extrabold text-slate-900">{area.titulo}</span>
+        {area.descripcion && <span className="text-sm text-slate-500">· {area.descripcion}</span>}
+      </div>
+    </div>
+  );
 }
 
 export default function InicioGerente() {
   const [periodo, cambiarPeriodo] = usePestanaGuardada(CLAVE_PERIODO, Object.keys(PERIODOS), "mes");
   const [pestana, cambiarPestana] = usePestanaGuardada(CLAVE_PESTANA, Object.keys(PESTANAS), "inventario");
+  const [area, cambiarArea] = usePestanaGuardada(CLAVE_AREA, Object.keys(AREAS), "todas");
   const [hoy, setHoy] = useState(null);
   const nombre = useNombreUsuario();
+  const configuracion = AREAS[area];
 
   useEffect(() => {
     setHoy(new Date());
@@ -495,10 +665,15 @@ export default function InicioGerente() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-5 py-6 sm:px-6">
-        <SelectorPestanas pestanas={PERIODOS} valor={periodo} onCambiar={cambiarPeriodo} className="sm:w-[300px]" />
-        <SelectorPestanas pestanas={PESTANAS} valor={pestana} onCambiar={cambiarPestana} />
-        <AccesosRapidos accesos={ACCESOS[pestana]} />
-        <Resumen key={periodo} periodo={periodo} pestana={pestana} />
+        <SelectorAreas valor={area} onCambiar={cambiarArea} />
+        {configuracion.conPestanas && (
+          <SelectorPestanas pestanas={PESTANAS} valor={pestana} onCambiar={cambiarPestana} />
+        )}
+        {configuracion.conPeriodo && (
+          <SelectorPestanas pestanas={PERIODOS} valor={periodo} onCambiar={cambiarPeriodo} className="sm:w-[300px]" />
+        )}
+        <AccesosRapidos accesos={configuracion.conPestanas ? ACCESOS[pestana] : configuracion.accesos} />
+        <Resumen key={periodo} periodo={periodo} area={area} pestana={pestana} />
       </main>
     </div>
   );

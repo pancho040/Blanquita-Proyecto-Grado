@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from app.Repository.InventarioFinal.Conteo import ConteoProductoTerminadoRepository
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Constants.Cantidades import (
     CANTIDAD_INGRESO_PRODUCTO_TERMINADO,
@@ -9,6 +10,7 @@ from app.Constants.Cantidades import (
     LONGITUD_MINIMA_DESCRIPCION,
     LONGITUD_MAXIMA_DESCRIPCION,
 )
+from app.utils.dates import ZONA_BOLIVIA
 from app.utils.validators import EsCantidadValida, ValidarTexto, REGLA_CARACTERES_OBSERVACION
 from app.Models.InventarioFinal.ProductoFinal import(
       IngresoProductoTerminadoRequest,
@@ -41,6 +43,7 @@ OBSERVACION_INGRESO_PRODUCTO = "Ingreso al inventario de producto terminado"
 BLOQUEO_INGRESO = ("BloqueaIngreso", "Los ingresos de producto terminado están bloqueados")
 BLOQUEO_CORRECCION = ("BloqueaCorreccion", "Las correcciones de producto terminado están bloqueadas")
 BLOQUEO_SALIDA = ("BloqueaSalida", "Las salidas de producto terminado están bloqueadas")
+BLOQUEO_AJUSTE = "Los ajustes de producto terminado están bloqueados"
 
 
 def estado_bloqueo(fila: dict | None) -> EstadoBloqueoProductoTerminadoResponse:
@@ -52,9 +55,20 @@ def estado_bloqueo(fila: dict | None) -> EstadoBloqueoProductoTerminadoResponse:
 class ProductoFinalService:
     def __init__(self, db: Session):
             self.repository = ProductoFinalRepository(db)
+            self.conteo_repository = ConteoProductoTerminadoRepository(db)
+
+    def _ValidarSinConteo(self, mensaje: str) -> None:
+        conteo = self.conteo_repository.ObtenerConteoAbierto()
+        if conteo is not None:
+            inicio = conteo["FechaHoraInicio"].astimezone(ZONA_BOLIVIA)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{mensaje}: hay un conteo físico en curso, iniciado por {conteo['UsuarioInicio']} a las {inicio:%H:%M}",
+            )
 
     def _ValidarSinBloqueo(self, movimiento: tuple[str, str]) -> None:
         campo, mensaje = movimiento
+        self._ValidarSinConteo(mensaje)
         bloqueo = self.repository.ObtenerBloqueoActivo()
         if bloqueo is not None and bloqueo[campo]:
             raise HTTPException(
@@ -63,6 +77,18 @@ class ProductoFinalService:
             )
 
     def VerBloqueo(self) -> EstadoBloqueoProductoTerminadoResponse:
+        conteo = self.conteo_repository.ObtenerConteoAbierto()
+        if conteo is not None:
+            return EstadoBloqueoProductoTerminadoResponse(
+                Bloqueado=True,
+                IdConteoProductoTerminado=conteo["IdConteoProductoTerminado"],
+                UsuarioBloqueo=conteo["UsuarioInicio"],
+                FechaHoraBloqueo=conteo["FechaHoraInicio"],
+                MotivoBloqueo=f"Conteo físico N° {conteo['IdConteoProductoTerminado']}: {conteo['MotivoInicio']}",
+                BloqueaIngreso=True,
+                BloqueaCorreccion=True,
+                BloqueaSalida=True,
+            )
         return estado_bloqueo(self.repository.ObtenerBloqueoActivo())
 
     def BloquearMovimientos(
@@ -74,6 +100,7 @@ class ProductoFinalService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"El motivo es obligatorio, debe tener entre {LONGITUD_MINIMA_DESCRIPCION} y {LONGITUD_MAXIMA_DESCRIPCION} caracteres, {REGLA_CARACTERES_OBSERVACION}",
             )
+        self._ValidarSinConteo("No se puede bloquear los movimientos de producto terminado")
         if not (data.BloqueaIngreso or data.BloqueaCorreccion or data.BloqueaSalida):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -285,6 +312,7 @@ class ProductoFinalService:
     def AjustePositivoInventarioProductoTerminado(
         self, data: CorreccionProductoTerminadoRequest, id_usuario: int
     ) -> CorreccionProductoTerminadoResponse:
+        self._ValidarSinConteo(BLOQUEO_AJUSTE)
         return self._RegistrarCorreccion(
             data, id_usuario, ID_TIPO_MOVIMIENTO_AJUSTE_POSITIVO, CANTIDAD_AJUSTE_PRODUCTO_TERMINADO
         )
@@ -292,6 +320,7 @@ class ProductoFinalService:
     def AjusteNegativoInventarioProductoTerminado(
         self, data: CorreccionProductoTerminadoRequest, id_usuario: int
     ) -> CorreccionProductoTerminadoResponse:
+        self._ValidarSinConteo(BLOQUEO_AJUSTE)
         return self._RegistrarCorreccion(
             data, id_usuario, ID_TIPO_MOVIMIENTO_AJUSTE_NEGATIVO, CANTIDAD_AJUSTE_PRODUCTO_TERMINADO
         )

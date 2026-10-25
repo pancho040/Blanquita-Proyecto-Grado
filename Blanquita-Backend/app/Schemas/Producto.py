@@ -69,6 +69,35 @@ class BloqueoProductoTerminado(Base):
     BloqueaSalida: Mapped[bool] = mapped_column(server_default=true())
 
 
+class ConteoProductoTerminado(Base):
+    __tablename__ = "ConteoProductoTerminado"
+
+    IdConteoProductoTerminado: Mapped[int] = mapped_column(primary_key=True)
+    IdUsuarioInicio: Mapped[int]
+    FechaHoraInicio: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    MotivoInicio: Mapped[str] = mapped_column(Text)
+    Estado: Mapped[str] = mapped_column(Text, server_default="Abierto")
+    IdUsuarioCierre: Mapped[int | None]
+    FechaHoraCierre: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoAnulacion: Mapped[str | None] = mapped_column(Text)
+
+
+class ConteoProductoTerminadoDetalle(Base):
+    __tablename__ = "ConteoProductoTerminadoDetalle"
+
+    IdConteoProductoTerminadoDetalle: Mapped[int] = mapped_column(primary_key=True)
+    IdConteoProductoTerminado: Mapped[int]
+    IdPresentacion: Mapped[int]
+    CantidadSistema: Mapped[Decimal] = mapped_column(Numeric)
+    CantidadFisica: Mapped[Decimal | None] = mapped_column(Numeric)
+    IdUsuarioConteo: Mapped[int | None]
+    FechaHoraConteo: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    MotivoDiferencia: Mapped[str | None] = mapped_column(Text)
+    IdMovimientoProductoTerminado: Mapped[int | None]
+
+
 class TipoMovimientoInventario(Base):
     __tablename__ = "TipoMovimientoInventario"
 

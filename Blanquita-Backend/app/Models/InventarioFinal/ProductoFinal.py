@@ -92,6 +92,7 @@ class BloqueoProductoTerminadoRequest(BaseModel):
 class EstadoBloqueoProductoTerminadoResponse(BaseModel):
     Bloqueado: bool
     IdBloqueoProductoTerminado: int | None = None
+    IdConteoProductoTerminado: int | None = None
     UsuarioBloqueo: str | None = None
     FechaHoraBloqueo: datetime | None = None
     MotivoBloqueo: str | None = None

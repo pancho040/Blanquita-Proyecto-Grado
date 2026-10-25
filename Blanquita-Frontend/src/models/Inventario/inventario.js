@@ -141,6 +141,7 @@ export const BloqueoProductoTerminadoRequest = ({
 export const EstadoBloqueoProductoTerminadoResponse = (data) => ({
   Bloqueado: Boolean(data?.Bloqueado),
   IdBloqueoProductoTerminado: data?.IdBloqueoProductoTerminado ?? null,
+  IdConteoProductoTerminado: data?.IdConteoProductoTerminado ?? null,
   UsuarioBloqueo: data?.UsuarioBloqueo ?? null,
   FechaHoraBloqueo: data?.FechaHoraBloqueo ?? null,
   MotivoBloqueo: data?.MotivoBloqueo ?? null,
