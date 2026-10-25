@@ -67,11 +67,12 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center p-5 bg-gradient-to-br from-[#e3f4fb] via-[#f4f9fc] to-white font-sans text-[#123a4c]">
       <div className="w-full max-w-[400px] flex flex-col gap-[22px] animate-in fade-in slide-in-from-bottom-2 duration-300">
         <div className="flex flex-col items-center gap-[10px] text-center">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1C96C5] to-[#20A7DB] flex items-center justify-center shadow-[0_8px_20px_rgba(28,150,197,0.3)]">
-            <div className="w-[26px] h-[26px] rounded-full bg-white border-[7px] border-[#A0D9EF] box-border" />
-          </div>
+          <img
+            src="/LogoBlanquita.webp"
+            alt="Papel Blanquita"
+            className="h-24 w-auto drop-shadow-[0_8px_20px_rgba(28,150,197,0.3)]"
+          />
           <div className="flex flex-col gap-0.5">
-            <div className="text-2xl font-extrabold text-[#1C96C5]">Papel Blanquita</div>
             <div className="text-[13px] font-semibold text-[#5d8299]">Sistema de Inventario y Producción</div>
           </div>
         </div>
