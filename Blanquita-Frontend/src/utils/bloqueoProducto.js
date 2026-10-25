@@ -4,13 +4,20 @@ export const MOVIMIENTOS_BLOQUEO = [
   { campo: "BloqueaSalida", vista: "salida", texto: "Salida", femenino: true },
 ];
 
+export const RUTA_CONTEO_FISICO = "/encargado/producto/conteo";
+
+export const esBloqueoPorConteo = (bloqueo) =>
+  Boolean(bloqueo?.Bloqueado && bloqueo?.IdConteoProductoTerminado);
+
 export const vistaBloqueada = (bloqueo, vista) =>
+  esBloqueoPorConteo(bloqueo) ||
   Boolean(
     bloqueo?.Bloqueado &&
       MOVIMIENTOS_BLOQUEO.some((m) => m.vista === vista && bloqueo[m.campo]),
   );
 
 export const textoMovimientosBloqueados = (bloqueo) => {
+  if (esBloqueoPorConteo(bloqueo)) return "Movimientos bloqueados por conteo físico";
   const marcados = MOVIMIENTOS_BLOQUEO.filter((m) => bloqueo?.[m.campo]);
   if (marcados.length === 0) return "";
   const nombres = marcados.map((m) => m.texto.toLowerCase());

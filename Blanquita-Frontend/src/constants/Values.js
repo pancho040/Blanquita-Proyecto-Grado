@@ -55,6 +55,8 @@ export const MOTIVO_CORRECCION_MAX = 150;
 
 export const AjusteMax=500
 export const CANTIDAD_MAXIMA_SALIDA_PRODUCTO_TERMINADO = 5000;
+export const CANTIDAD_MAXIMA_CONTEO_PRODUCTO_TERMINADO = 10000;
+export const HORA_LIMITE_INICIO_CONTEO = 22;
 
 export const RolesUsuario = [
   { IdRol: 1, NombreRol: "Operador" },

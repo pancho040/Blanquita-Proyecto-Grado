@@ -103,22 +103,6 @@ export default function InicioRodela() {
   return (
     <div className="flex flex-col gap-4">
       <AccesosRapidos accesos={ACCESOS} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Reingresables
-          href={`${RUTA}/produccion`}
-          unidad="Rodelas"
-          minutos={datos.MinutosDeshacerTraslado}
-          items={datos.Reingresables.map((rodela) => ({
-            id: rodela.IdRodela,
-            codigo: rodela.CodigoRodela,
-            detalle: rodela.NombreTipoRodela,
-            fecha: rodela.FechaTraslado,
-          }))}
-        />
-        <EnProduccion enProduccion={datos.EnProduccion} />
-      </div>
-
       <Bloque
         titulo="Stock por tipo de rodela"
         descripcion="Pallets en almacén"
@@ -137,6 +121,22 @@ export default function InicioRodela() {
           }))}
         />
       </Bloque>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Reingresables
+          href={`${RUTA}/produccion`}
+          unidad="Rodelas"
+          minutos={datos.MinutosDeshacerTraslado}
+          items={datos.Reingresables.map((rodela) => ({
+            id: rodela.IdRodela,
+            codigo: rodela.CodigoRodela,
+            detalle: rodela.NombreTipoRodela,
+            fecha: rodela.FechaTraslado,
+          }))}
+        />
+        <EnProduccion enProduccion={datos.EnProduccion} />
+      </div>
+
+      
 
       <EncabezadoSemana datos={datos} />
 

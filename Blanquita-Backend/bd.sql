@@ -419,6 +419,42 @@ CREATE TABLE "BloqueoProductoTerminado" (
 CREATE UNIQUE INDEX "uq_bloqueopt_activo" ON "BloqueoProductoTerminado"((true)) WHERE "FechaHoraDesbloqueo" IS NULL;
 CREATE INDEX "idx_bloqueopt_fecha" ON "BloqueoProductoTerminado"("FechaHoraBloqueo");
 
+CREATE TABLE "ConteoProductoTerminado" (
+  "IdConteoProductoTerminado" SERIAL PRIMARY KEY,
+  "IdUsuarioInicio" INTEGER NOT NULL REFERENCES "Usuario"("IdUsuario") ON DELETE RESTRICT,
+  "FechaHoraInicio" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "MotivoInicio" TEXT NOT NULL,
+  "Estado" TEXT NOT NULL DEFAULT 'Abierto',
+  "IdUsuarioCierre" INTEGER REFERENCES "Usuario"("IdUsuario") ON DELETE RESTRICT,
+  "FechaHoraCierre" TIMESTAMPTZ,
+  "MotivoAnulacion" TEXT,
+  CONSTRAINT "ck_conteopt_estado" CHECK ("Estado" IN ('Abierto', 'Cerrado', 'Anulado')),
+  CONSTRAINT "ck_conteopt_cierre_completo" CHECK (
+    num_nonnulls("IdUsuarioCierre", "FechaHoraCierre") = CASE WHEN "Estado" = 'Abierto' THEN 0 ELSE 2 END
+  ),
+  CONSTRAINT "ck_conteopt_anulacion" CHECK (("Estado" = 'Anulado') = ("MotivoAnulacion" IS NOT NULL)),
+  CONSTRAINT "ck_conteopt_orden" CHECK ("FechaHoraCierre" IS NULL OR "FechaHoraCierre" >= "FechaHoraInicio")
+);
+CREATE UNIQUE INDEX "uq_conteopt_abierto" ON "ConteoProductoTerminado"((true)) WHERE "Estado" = 'Abierto';
+CREATE INDEX "idx_conteopt_fecha" ON "ConteoProductoTerminado"("FechaHoraInicio" DESC);
+
+CREATE TABLE "ConteoProductoTerminadoDetalle" (
+  "IdConteoProductoTerminadoDetalle" SERIAL PRIMARY KEY,
+  "IdConteoProductoTerminado" INTEGER NOT NULL REFERENCES "ConteoProductoTerminado"("IdConteoProductoTerminado") ON DELETE CASCADE,
+  "IdPresentacion" INTEGER NOT NULL REFERENCES "PresentacionProducto"("IdPresentacion") ON DELETE CASCADE,
+  "CantidadSistema" NUMERIC NOT NULL,
+  "CantidadFisica" NUMERIC,
+  "IdUsuarioConteo" INTEGER REFERENCES "Usuario"("IdUsuario") ON DELETE RESTRICT,
+  "FechaHoraConteo" TIMESTAMPTZ,
+  "MotivoDiferencia" TEXT,
+  "IdMovimientoProductoTerminado" INTEGER UNIQUE REFERENCES "MovimientoProductoTerminado"("IdMovimientoProductoTerminado") ON DELETE RESTRICT,
+  CONSTRAINT "uq_conteoptdet_presentacion" UNIQUE ("IdConteoProductoTerminado", "IdPresentacion"),
+  CONSTRAINT "ck_conteoptdet_cantidades" CHECK ("CantidadSistema" >= 0 AND ("CantidadFisica" IS NULL OR "CantidadFisica" >= 0)),
+  CONSTRAINT "ck_conteoptdet_conteo_completo" CHECK (num_nonnulls("CantidadFisica", "IdUsuarioConteo", "FechaHoraConteo") IN (0, 3)),
+  CONSTRAINT "ck_conteoptdet_motivo" CHECK ("MotivoDiferencia" IS NULL OR "CantidadFisica" IS NOT NULL),
+  CONSTRAINT "ck_conteoptdet_movimiento" CHECK ("IdMovimientoProductoTerminado" IS NULL OR "CantidadFisica" <> "CantidadSistema")
+);
+
 CREATE TABLE "TipoInsumo" (
   "IdTipoInsumo" SERIAL PRIMARY KEY,
   "NombreInsumo" TEXT NOT NULL,

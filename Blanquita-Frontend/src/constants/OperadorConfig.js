@@ -226,6 +226,19 @@ export const MotivosBloqueoProductoTerminado = [
   "Revisión de stock antes de despacho grande",
 ];
 
+export const MotivosInicioConteoProductoTerminado = [
+  "Conteo mensual de producto terminado",
+  "Conteo semanal de producto terminado",
+  "Revisión por diferencias en el stock",
+];
+
+export const MotivosDiferenciaConteoProductoTerminado = [
+  "Producto dañado o roto",
+  "Ingreso sin registrar",
+  "Salida sin registrar",
+  "Error en un registro anterior",
+];
+
 export const MotivosAjusteNegativoProductoTerminado = [
   "Conteo físico menor al registrado",
   "Producto dañado en almacén",

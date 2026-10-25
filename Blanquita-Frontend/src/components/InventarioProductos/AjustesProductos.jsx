@@ -22,7 +22,11 @@ import {
 import { limpiarObservacion } from "@/utils/validators";
 import { MotivosBloqueoProductoTerminado } from "@/constants/OperadorConfig";
 import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
-import { MOVIMIENTOS_BLOQUEO, textoMovimientosBloqueados } from "@/utils/bloqueoProducto";
+import {
+  MOVIMIENTOS_BLOQUEO,
+  textoMovimientosBloqueados,
+  esBloqueoPorConteo,
+} from "@/utils/bloqueoProducto";
 import { AvisoBloqueo } from "./comunes";
 
 const SELECCION_INICIAL = Object.fromEntries(MOVIMIENTOS_BLOQUEO.map((m) => [m.campo, true]));
@@ -187,85 +191,90 @@ export default function AjustesProductoTerminado() {
 
         {!loading && !error && (
           <div className="flex flex-col gap-5">
-            <AvisoBloqueo bloqueo={bloqueo} />
+            <AvisoBloqueo
+              bloqueo={bloqueo}
+              accion={esBloqueoPorConteo(bloqueo) ? { texto: "Ir al conteo" } : null}
+            />
 
-            <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-[16px] font-extrabold text-slate-900">
-                  {bloqueado ? "Desbloquear movimientos" : "Bloquear movimientos"}
-                </h2>
-                <p className="text-[13px] text-slate-600">
-                  {bloqueado
-                    ? "Al terminar el conteo, desbloquea para que la planta vuelva a registrar los movimientos bloqueados. Para cambiar la selección, desbloquea y vuelve a bloquear."
-                    : "Marca los movimientos de producto terminado que quieres detener mientras haces el conteo físico. Para un conteo confiable conviene bloquear todos."}
-                </p>
-              </div>
-
-              <SeleccionMovimientos
-                seleccion={seleccion}
-                bloqueo={bloqueo}
-                onCambio={cambiarSeleccion}
-                invalido={tocado && !bloqueado && !haySeleccion}
-                deshabilitado={enviando}
-              />
-
-              {!bloqueado && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">
-                    Motivo del bloqueo
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {MotivosBloqueoProductoTerminado.map((m) => {
-                      const activo = motivoLimpio === m;
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMotivo(m)}
-                          aria-pressed={activo}
-                          className={cn(
-                            "min-h-10 rounded-xl border-2 px-3 py-1.5 text-left text-[13px] font-bold transition-colors",
-                            activo
-                              ? "border-amber-400 bg-amber-50 text-amber-700"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                          )}
-                        >
-                          {m}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <Textarea
-                    value={motivo}
-                    onChange={(e) => setMotivo(limpiarObservacion(e.target.value))}
-                    placeholder="Elige una opción o escribe por qué bloqueas los movimientos"
-                    maxLength={MOTIVO_CORRECCION_MAX}
-                    aria-label="Motivo del bloqueo"
-                    className={cn(
-                      "min-h-20",
-                      tocado && !esMotivoValido(motivo) && "border-red-400 ring-1 ring-red-200",
-                    )}
-                  />
-                  <span className="text-xs text-slate-500">
-                    {motivoLimpio.length}/{MOTIVO_CORRECCION_MAX} · mínimo {MOTIVO_CORRECCION_MIN}{" "}
-                    caracteres
-                  </span>
+            {!esBloqueoPorConteo(bloqueo) && (
+              <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-[16px] font-extrabold text-slate-900">
+                    {bloqueado ? "Desbloquear movimientos" : "Bloquear movimientos"}
+                  </h2>
+                  <p className="text-[13px] text-slate-600">
+                    {bloqueado
+                      ? "Al terminar el conteo, desbloquea para que la planta vuelva a registrar los movimientos bloqueados. Para cambiar la selección, desbloquea y vuelve a bloquear."
+                      : "Marca los movimientos de producto terminado que quieres detener mientras haces el conteo físico. Para un conteo confiable conviene bloquear todos."}
+                  </p>
                 </div>
-              )}
 
-              <div className="flex justify-end">
-                <Button
-                  onClick={solicitarConfirmacion}
-                  className={cn(
-                    "h-11 gap-2 font-extrabold text-white",
-                    bloqueado ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700",
-                  )}
-                >
-                  {bloqueado ? <LockOpen size={16} strokeWidth={2.75} /> : <Lock size={16} strokeWidth={2.75} />}
-                  {bloqueado ? "Desbloquear movimientos" : "Bloquear movimientos"}
-                </Button>
-              </div>
-            </section>
+                <SeleccionMovimientos
+                  seleccion={seleccion}
+                  bloqueo={bloqueo}
+                  onCambio={cambiarSeleccion}
+                  invalido={tocado && !bloqueado && !haySeleccion}
+                  deshabilitado={enviando}
+                />
+
+                {!bloqueado && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                      Motivo del bloqueo
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {MotivosBloqueoProductoTerminado.map((m) => {
+                        const activo = motivoLimpio === m;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setMotivo(m)}
+                            aria-pressed={activo}
+                            className={cn(
+                              "min-h-10 rounded-xl border-2 px-3 py-1.5 text-left text-[13px] font-bold transition-colors",
+                              activo
+                                ? "border-amber-400 bg-amber-50 text-amber-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                            )}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Textarea
+                      value={motivo}
+                      onChange={(e) => setMotivo(limpiarObservacion(e.target.value))}
+                      placeholder="Elige una opción o escribe por qué bloqueas los movimientos"
+                      maxLength={MOTIVO_CORRECCION_MAX}
+                      aria-label="Motivo del bloqueo"
+                      className={cn(
+                        "min-h-20",
+                        tocado && !esMotivoValido(motivo) && "border-red-400 ring-1 ring-red-200",
+                      )}
+                    />
+                    <span className="text-xs text-slate-500">
+                      {motivoLimpio.length}/{MOTIVO_CORRECCION_MAX} · mínimo {MOTIVO_CORRECCION_MIN}{" "}
+                      caracteres
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={solicitarConfirmacion}
+                    className={cn(
+                      "h-11 gap-2 font-extrabold text-white",
+                      bloqueado ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700",
+                    )}
+                  >
+                    {bloqueado ? <LockOpen size={16} strokeWidth={2.75} /> : <Lock size={16} strokeWidth={2.75} />}
+                    {bloqueado ? "Desbloquear movimientos" : "Bloquear movimientos"}
+                  </Button>
+                </div>
+              </section>
+            )}
           </div>
         )}
       </main>

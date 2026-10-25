@@ -119,11 +119,11 @@ export default function MovimientosProductoTerminado({ usuario }) {
             {esEncargado && (
               <>
                 <TabsTrigger value="ajustePositivo" className={claseTab}>
-                  <ClipboardPlus size={15} strokeWidth={2.75} />
+                  {iconoTab("ajustePositivo", ClipboardPlus)}
                   Ajuste positivo
                 </TabsTrigger>
                 <TabsTrigger value="ajusteNegativo" className={claseTab}>
-                  <ClipboardMinus size={15} strokeWidth={2.75} />
+                  {iconoTab("ajusteNegativo", ClipboardMinus)}
                   Ajuste negativo
                 </TabsTrigger>
                 <TabsTrigger value="salida" className={claseTab}>

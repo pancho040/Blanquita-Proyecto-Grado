@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.Constants.AlertaStock import DOMINIOS_STOCK_NOTIFICACION, NIVEL_STOCK_CRITICO
-from app.Constants.Cantidades import HORAS_ALERTA_PAUSA_ABIERTA
+from app.Constants.Cantidades import HORAS_ALERTA_CONTEO_ABIERTO, HORAS_ALERTA_PAUSA_ABIERTA
 from app.Constants.Horario import HORA_FIN_SOLO_CONSULTA, HORA_INICIO_SOLO_CONSULTA
 from app.Constants.Roles import ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL
 from app.Models.BobinaPapel.Inicio import (
@@ -22,8 +22,10 @@ from app.Models.Notificacion.Notificacion import (
 from app.Repository.AlertaStock.AlertaStock import AlertaStockRepository
 from app.Repository.BobinaPapel.Inicio import InicioBobinaPapelRepository
 from app.Repository.BobinaServilleta.Inicio import InicioBobinaServilletaRepository
+from app.Repository.InventarioFinal.Conteo import ConteoProductoTerminadoRepository
 from app.Repository.InventarioFinal.ProductoFinal import ProductoFinalRepository
 from app.Services.AlertaStock.AlertaStock import _item
+from app.Services.InventarioFinal.Conteo import resumen_conteo
 from app.Services.InventarioFinal.ProductoFinal import estado_bloqueo
 from app.utils.horario import en_modo_consulta
 from app.utils.inicio import SemanaInicio, semana_inicio
@@ -35,6 +37,7 @@ class NotificacionService:
         self.bobina_papel = InicioBobinaPapelRepository(db)
         self.bobina_servilleta = InicioBobinaServilletaRepository(db)
         self.producto_final = ProductoFinalRepository(db)
+        self.conteo = ConteoProductoTerminadoRepository(db)
 
     def _Stock(self) -> StockNotificaciones:
         criticos = [
@@ -85,6 +88,8 @@ class NotificacionService:
         ve_alertas = id_rol in (ROL_LIDER_INVENTARIO_PRODUCCION, ROL_GERENTE_GENERAL)
         stock = self._Stock() if ve_alertas else None
         bloqueo = estado_bloqueo(self.producto_final.ObtenerBloqueoActivo()) if ve_alertas else None
+        fila_conteo = self.conteo.ObtenerConteoAbierto()
+        conteo = resumen_conteo(fila_conteo) if fila_conteo else None
 
         producciones = [
             *bobina_papel.Activas,
@@ -106,9 +111,15 @@ class NotificacionService:
             ModoConsulta=modo_consulta,
             Stock=stock,
             BloqueoProductoTerminado=bloqueo,
+            ConteoProductoTerminado=conteo,
+            HorasAlertaConteo=HORAS_ALERTA_CONTEO_ABIERTO,
             BobinaPapel=bobina_papel,
             BobinaServilleta=bobina_servilleta,
             HorasAlertaPausa=HORAS_ALERTA_PAUSA_ABIERTA,
             Atrasadas=sum(1 for produccion in producciones if produccion.Atrasada),
-            Total=(1 if modo_consulta else 0) + total_stock + total_bloqueo + len(producciones),
+            Total=(1 if modo_consulta else 0)
+            + (1 if conteo else 0)
+            + total_stock
+            + total_bloqueo
+            + len(producciones),
         )

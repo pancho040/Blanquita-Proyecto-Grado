@@ -18,7 +18,8 @@ import {
   PackagePlus,
   DoorClosedLocked,
   PackageCheck,
-  Bell
+  Bell,
+  NotebookPen
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 import { VeComoLider } from "@/utils/validators";
@@ -30,11 +31,13 @@ export function rutaDeItem(item, basePath, prefijo) {
 }
 
 export function rutasVisibles(rutas, idRol, esAdmin) {
-  return rutas.filter(
-    (item) =>
-      (!item.isLider || VeComoLider(idRol)) &&
-      (!item.soloAdmin || esAdmin),
-  );
+  const visible = (item) =>
+    (!item.isLider || VeComoLider(idRol)) && (!item.soloAdmin || esAdmin);
+  return rutas
+    .filter(visible)
+    .map((item) =>
+      item.subrutas ? { ...item, subrutas: item.subrutas.filter(visible) } : item,
+    );
 }
 
 export const RutasNavBar = [
@@ -102,6 +105,7 @@ export const RutasNavBar = [
     subrutas: [
       { titulo: "Inventario", icono: Boxes, ruta: "inventario" },
       { titulo: "Movimientos", icono: Combine, ruta: "movimientos" },
+      { titulo: "Conteo físico", icono: NotebookPen, ruta: "conteo", isLider: true },
     ],
   },
   {
@@ -178,6 +182,7 @@ export const RutasReportes = [
       { titulo: "Inventario", icono: Boxes, ruta: "inventario" },
       { titulo: "Producción", icono: Factory, ruta: "produccion" },
       { titulo: "Salidas", icono: Truck, ruta: "salidas" },
+      { titulo: "Conteos físicos", icono: NotebookPen, ruta: "conteos" },
     ],
   },
   {

@@ -7,6 +7,7 @@ import {
   Eye,
   Factory,
   Lock,
+  NotebookPen,
   PackageX,
   Icon,
   RefreshCw,
@@ -338,6 +339,35 @@ function SeccionBloqueo({ bloqueo, prefijo, ahora }) {
   );
 }
 
+function SeccionConteo({ conteo, horasAlerta, prefijo, ahora }) {
+  const href = `/${prefijo}/producto/${prefijo === "operador" ? "inventario" : "conteo"}`;
+  return (
+    <Seccion valor="conteo" titulo="Conteo físico en curso" icono={NotebookPen} cantidad={1} urgente>
+      <a
+        href={href}
+        className="flex flex-col gap-1.5 rounded-xl bg-amber-50/60 p-3 ring-1 ring-amber-200 transition-colors hover:bg-amber-50"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[13.5px] font-extrabold text-slate-900">
+            Conteo N° {conteo.IdConteoProductoTerminado} de producto terminado
+          </div>
+          <div className="flex shrink-0 items-center gap-1 text-[13px] font-extrabold tabular-nums text-amber-600">
+            <Timer size={14} />
+            {formatearSegundos(segundosDesde(conteo.FechaHoraInicio, ahora))}
+          </div>
+        </div>
+        <div className="text-[12.5px] text-slate-700">
+          Ingresos, correcciones, ajustes y salidas bloqueados hasta que se cierre.
+        </div>
+        <div className="text-[12px] text-slate-500">
+          Inició {conteo.UsuarioInicio} · {conteo.Contadas} de {conteo.TotalPresentaciones} contadas
+        </div>
+        {conteo.Atrasado && <AvisoAtraso>Abierto hace más de {horasAlerta} h</AvisoAtraso>}
+      </a>
+    </Seccion>
+  );
+}
+
 function Contenido({ datos, prefijo, ahora }) {
   if (datos.Total === 0) {
     return (
@@ -357,6 +387,17 @@ function Contenido({ datos, prefijo, ahora }) {
     datos.ModoConsulta && {
       valor: "modo-consulta",
       nodo: <SeccionModoConsulta modo={datos.ModoConsulta} />,
+    },
+    datos.ConteoProductoTerminado && {
+      valor: "conteo",
+      nodo: (
+        <SeccionConteo
+          conteo={datos.ConteoProductoTerminado}
+          horasAlerta={datos.HorasAlertaConteo}
+          prefijo={prefijo}
+          ahora={ahora}
+        />
+      ),
     },
     datos.BloqueoProductoTerminado?.Bloqueado && {
       valor: "bloqueo",
@@ -435,6 +476,7 @@ export default function Notificaciones({ idRol, renderBoton }) {
       (alertasStock > 0 ||
         datos.Atrasadas > 0 ||
         datos.BloqueoProductoTerminado?.Bloqueado ||
+        datos.ConteoProductoTerminado ||
         datos.ModoConsulta),
   );
 

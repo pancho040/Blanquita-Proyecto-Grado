@@ -1,5 +1,6 @@
 import { UmbralStockItem } from "@/models/AlertaStock/AlertaStock";
 import { EstadoBloqueoProductoTerminadoResponse } from "@/models/Inventario/inventario";
+import { ResumenConteoResponse } from "@/models/Inventario/conteo";
 
 export const ProduccionBobinaPapelResponse = (data) => ({
   IdProduccionBobinaTubo: data.IdProduccionBobinaTubo,
@@ -49,6 +50,10 @@ export const NotificacionesResponse = (data) => ({
   BloqueoProductoTerminado: data.BloqueoProductoTerminado
     ? EstadoBloqueoProductoTerminadoResponse(data.BloqueoProductoTerminado)
     : null,
+  ConteoProductoTerminado: data.ConteoProductoTerminado
+    ? ResumenConteoResponse(data.ConteoProductoTerminado)
+    : null,
+  HorasAlertaConteo: Number(data.HorasAlertaConteo ?? 0),
   BobinaPapel: ProduccionResponse(data.BobinaPapel, ProduccionBobinaPapelResponse),
   BobinaServilleta: ProduccionResponse(data.BobinaServilleta, ProduccionBobinaServilletaResponse),
   HorasAlertaPausa: Number(data.HorasAlertaPausa ?? 0),
