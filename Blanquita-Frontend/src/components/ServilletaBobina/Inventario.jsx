@@ -76,9 +76,14 @@ import {
 } from "@/components/Inventario/comunes";
 import Header from "@/components/layout/Header";
 import {
+  DECIMALES_PESO,
+  GRAMAJE_MAXIMO,
   MOTIVO_CORRECCION_MIN,
   MOTIVO_CORRECCION_MAX,
+  PESO_MAXIMO_UNIDAD_SERVILLETA_KG,
+  PESO_MINIMO_UNIDAD_SERVILLETA_KG,
 } from "@/constants/Values";
+import { errorMedida } from "@/utils/medidas";
 
 const ESTADO_ALMACEN_ID = 1;
 
@@ -86,7 +91,6 @@ const sinDatos = async () => [];
 
 const aTexto = (valor) => (valor === null || valor === undefined ? "" : String(valor));
 
-const valorInvalido = (valor) => valor !== "" && !(Number(valor) > 0);
 
 const etiquetaCantidad = (n, singular, plural) => {
   const c = Number(n || 0);
@@ -473,9 +477,21 @@ export default function InventarioBobinaServilleta({ usuario }) {
     if (errorDeCodigo) return errorDeCodigo;
     if (codigosEditados.filter((c) => c === codigo).length > 1)
       return "Código repetido";
-    if (valorInvalido(u.PesoBrutoKg)) return "Peso bruto inválido";
-    if (valorInvalido(u.GramajeGr)) return "Gramaje inválido";
-    return null;
+    return (
+      errorMedida(u.PesoBrutoKg, {
+        etiqueta: "Peso bruto",
+        unidad: "kg",
+        minimo: PESO_MINIMO_UNIDAD_SERVILLETA_KG,
+        maximo: PESO_MAXIMO_UNIDAD_SERVILLETA_KG,
+        obligatorio: false,
+      }) ??
+      errorMedida(u.GramajeGr, {
+        etiqueta: "Gramaje",
+        unidad: "g/m²",
+        maximo: GRAMAJE_MAXIMO,
+        obligatorio: false,
+      })
+    );
   };
 
   const erroresUnidades = formUnidades.map(errorUnidad);
@@ -840,10 +856,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                         id={`peso-unidad-${i}`}
                         etiqueta="Peso bruto (kg)"
                         opcional
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        inputMode="decimal"
+                        medida={DECIMALES_PESO}
                         valor={u.PesoBrutoKg}
                         onCambio={(valor) => actualizarUnidad(i, "PesoBrutoKg", valor)}
                       />
@@ -851,10 +864,7 @@ export default function InventarioBobinaServilleta({ usuario }) {
                         id={`gramaje-unidad-${i}`}
                         etiqueta="Gramaje (g/m²)"
                         opcional
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        inputMode="decimal"
+                        medida={DECIMALES_PESO}
                         valor={u.GramajeGr}
                         onCambio={(valor) => actualizarUnidad(i, "GramajeGr", valor)}
                       />

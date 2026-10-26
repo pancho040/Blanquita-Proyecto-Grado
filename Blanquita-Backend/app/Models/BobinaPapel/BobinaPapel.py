@@ -42,6 +42,7 @@ class TipoBobinaPapelIngreso(BaseModel):
     IdTipoBobina: int
     NombreTipoBobina: str
     Activo: bool
+    TaraKg: Decimal
 
 
 class EditarBobinaPapelRequest(BaseModel):

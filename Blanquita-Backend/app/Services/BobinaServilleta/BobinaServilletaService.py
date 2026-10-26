@@ -17,7 +17,7 @@ from app.Schemas.BobinaServilleta import (
     UnidadBobinaServilleta,
 )
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import CodigoMateriaPrima
+from app.utils.validators import CodigoMateriaPrima, MedidasUnidadServilleta
 
 
 class BobinaServilletaService:
@@ -36,6 +36,9 @@ class BobinaServilletaService:
         unidades = [unidad for bobina in data.Bobinas for unidad in bobina.Unidades]
         for unidad in unidades:
             unidad.CodigoBobina = CodigoMateriaPrima(unidad.CodigoBobina, "de la unidad")
+            medidas = MedidasUnidadServilleta(unidad.CodigoBobina, unidad.PesoBrutoKg, unidad.GramajeGr)
+            unidad.PesoBrutoKg = medidas["PesoBrutoKg"]
+            unidad.GramajeGr = medidas["GramajeGr"]
         codigos = [unidad.CodigoBobina for unidad in unidades]
 
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)

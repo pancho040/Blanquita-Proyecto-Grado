@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Header from "@/components/layout/Header";
 import {
@@ -11,9 +10,21 @@ import {
 import { ObtenerProveedoresForm } from "../../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
 import InputCodigo from "@/components/layout/InputCodigo";
+import InputMedida from "@/components/layout/InputMedida";
 import { codigoFinal } from "@/utils/handlers";
 import { errorCodigo } from "@/utils/validators";
 import { formatearNumero } from "@/utils/numeros";
+import { errorMedida, fueraDeRango, textoRango } from "@/utils/medidas";
+import {
+  GRAMAJE_MAXIMO,
+  PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+  PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+  PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG,
+  PESO_BRUTO_NORMAL_LOTE_BOBINA_PAPEL_KG,
+  TARA_MAXIMA_BOBINA_KG,
+  TARA_NORMAL_BOBINA_KG,
+  TOLERANCIA_PESO_NETO_KG,
+} from "@/constants/Values";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { soloActivos } from "@/utils/catalogo";
 import {
@@ -32,6 +43,7 @@ import {
   BotonQuitarFila,
   CabeceraFila,
   ErroresFilas,
+  AvisosLote,
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
@@ -45,8 +57,18 @@ const filaVacia = () => ({
   CodigoBobina: "",
   PesoBrutoKg: "",
   PesoNetoKg: "",
+  NetoManual: false,
   Gramaje: "",
 });
+
+const taraValida = (tara) =>
+  tara !== "" && Number.isFinite(Number(tara)) && Number(tara) <= TARA_MAXIMA_BOBINA_KG;
+
+const netoCalculado = (bruto, tara) => {
+  if (bruto === "" || !taraValida(tara)) return "";
+  const neto = Number(bruto) - Number(tara);
+  return Number.isFinite(neto) && neto > 0 ? String(Math.round(neto * 100) / 100) : "";
+};
 
 export default function IngresoBobinasPapel({ usuario }) {
   const [idProveedor, setIdProveedor] = useState("");
@@ -63,6 +85,22 @@ export default function IngresoBobinasPapel({ usuario }) {
   const { filas, actualizarFila, agregarFila, quitarFila, registrarRef, reiniciar } =
     useFilasLote(filaVacia, () => envio.setResultado(null));
 
+  const tipoActual = tipos.datos.find((t) => t.IdTipoBobina === idTipoBobina);
+
+  useEffect(() => {
+    if (tipoActual) setTara(String(tipoActual.TaraKg));
+  }, [tipoActual?.IdTipoBobina]);
+
+  const netoDe = (f) => (f.NetoManual ? f.PesoNetoKg : netoCalculado(f.PesoBrutoKg, tara));
+
+  const cambiarNeto = (id, valor) => {
+    actualizarFila(id, "NetoManual", valor !== "");
+    actualizarFila(id, "PesoNetoKg", valor);
+  };
+
+  const errorTara =
+    tara !== "" && !taraValida(tara) ? `La tara va de 0 a ${TARA_MAXIMA_BOBINA_KG} kg` : null;
+
   const repetidos = codigosRepetidos(filas.map((f) => f.CodigoBobina));
 
   const erroresFilas = erroresPorFila(filas, (f) => {
@@ -70,23 +108,70 @@ export default function IngresoBobinasPapel({ usuario }) {
     const errorDeCodigo = errorCodigo(codigo);
     if (errorDeCodigo) return errorDeCodigo;
     if (repetidos.has(codigo)) return "Código repetido";
-    const bruto = Number(f.PesoBrutoKg);
-    if (!f.PesoBrutoKg || bruto <= 0) return "Peso bruto inválido";
-    const neto = Number(f.PesoNetoKg);
-    if (!f.PesoNetoKg || neto <= 0) return "Peso neto inválido";
-    if (neto > bruto) return "El neto supera al bruto";
-    if (f.Gramaje !== "" && Number(f.Gramaje) <= 0) return "Gramaje inválido";
-    return null;
+    const neto = netoDe(f);
+    return (
+      errorMedida(f.PesoBrutoKg, {
+        etiqueta: "Peso bruto",
+        unidad: "kg",
+        minimo: PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+        maximo: PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+      }) ??
+      errorMedida(neto, {
+        etiqueta: "Peso neto",
+        unidad: "kg",
+        maximo: PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+      }) ??
+      (Number(neto) > Number(f.PesoBrutoKg) ? "El neto supera al bruto" : null) ??
+      errorMedida(f.Gramaje, {
+        etiqueta: "Gramaje",
+        unidad: "g/m²",
+        maximo: GRAMAJE_MAXIMO,
+        obligatorio: false,
+      })
+    );
   });
   const hayErrores = Object.keys(erroresFilas).length > 0;
 
   const totalBruto = filas.reduce((s, f) => s + Number(f.PesoBrutoKg || 0), 0);
-  const totalNeto = filas.reduce((s, f) => s + Number(f.PesoNetoKg || 0), 0);
-  const listo = !!idProveedor && !!idTipoBobina && filas.length > 0 && !hayErrores;
+  const totalNeto = filas.reduce((s, f) => s + Number(netoDe(f) || 0), 0);
+  const listo =
+    !!idProveedor && !!idTipoBobina && filas.length > 0 && !hayErrores && !errorTara;
+
+  const avisos = [
+    ...(fueraDeRango(tara, TARA_NORMAL_BOBINA_KG)
+      ? [`Tara de ${formatearNumero(tara)} kg; lo común es ${textoRango(TARA_NORMAL_BOBINA_KG, "kg")}`]
+      : []),
+    ...filas.flatMap((f, i) => {
+      if (erroresFilas[f.id]) return [];
+      const lista = [];
+      if (fueraDeRango(f.PesoBrutoKg, PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG)) {
+        lista.push(
+          `Bobina ${i + 1}: peso bruto de ${formatearNumero(f.PesoBrutoKg)} kg; lo común es ${textoRango(PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG, "kg")}`,
+        );
+      }
+      if (
+        f.NetoManual &&
+        taraValida(tara) &&
+        Math.abs(Number(f.PesoBrutoKg) - Number(tara) - Number(f.PesoNetoKg)) >
+          TOLERANCIA_PESO_NETO_KG
+      ) {
+        lista.push(
+          `Bobina ${i + 1}: el neto (${formatearNumero(f.PesoNetoKg)} kg) no coincide con bruto menos tara (${formatearNumero(netoCalculado(f.PesoBrutoKg, tara))} kg)`,
+        );
+      }
+      return lista;
+    }),
+    ...(totalBruto > PESO_BRUTO_NORMAL_LOTE_BOBINA_PAPEL_KG
+      ? [
+          `El lote suma ${formatearNumero(totalBruto)} kg de peso bruto; un camión trae como máximo unos ${formatearNumero(PESO_BRUTO_NORMAL_LOTE_BOBINA_PAPEL_KG, { decimales: 0 })} kg`,
+        ]
+      : []),
+  ];
 
   const validarLote = () => {
     if (!idProveedor) return "Selecciona el proveedor del lote.";
     if (!idTipoBobina) return "Selecciona el tipo de bobina del lote.";
+    if (errorTara) return errorTara;
     if (hayErrores) return "Revisa las bobinas marcadas en rojo antes de guardar.";
     return null;
   };
@@ -102,17 +187,14 @@ export default function IngresoBobinasPapel({ usuario }) {
             CodigoBobina: codigoFinal(f.CodigoBobina),
             PesoBrutoKg: Number(f.PesoBrutoKg),
             Gramaje: f.Gramaje === "" ? null : Number(f.Gramaje),
-            PesoNetoKg: Number(f.PesoNetoKg),
+            PesoNetoKg: Number(netoDe(f)),
           })),
         ),
       alGuardar: (data) => {
         reiniciar();
-        setTara("");
         toast.success(`${data.CantidadBobinas} bobinas ingresadas al almacén`);
       },
     });
-
-  const tipoActual = tipos.datos.find((t) => t.IdTipoBobina === idTipoBobina);
 
   const claseError = (err) => err && "border-red-300 focus-visible:ring-red-300";
 
@@ -156,16 +238,19 @@ export default function IngresoBobinasPapel({ usuario }) {
                 <Label className="text-xs font-bold uppercase tracking-wide text-slate-600">
                   Tara por bobina (kg)
                 </Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={tara}
-                    onChange={(e) => setTara(e.target.value)}
-                    placeholder="0.0"
-                    type="number"
-                    step="0.01"
-                    className="h-11"
-                  />
-                </div>
+                <InputMedida
+                  valor={tara}
+                  onCambio={setTara}
+                  enteros={3}
+                  className={cn("h-11", claseError(errorTara))}
+                />
+                {errorTara ? (
+                  <ErrorFila mensaje={errorTara} />
+                ) : (
+                  <span className="text-[12px] text-slate-500">
+                    Se usa para calcular el peso neto de cada bobina
+                  </span>
+                )}
               </div>
             </div>
 
@@ -227,33 +312,25 @@ export default function IngresoBobinasPapel({ usuario }) {
                           />
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
-                            value={f.PesoBrutoKg}
-                            onChange={(e) => actualizarFila(f.id, "PesoBrutoKg", e.target.value)}
-                            placeholder="0.0"
-                            type="number"
-                            step="0.01"
+                          <InputMedida
+                            valor={f.PesoBrutoKg}
+                            onCambio={(valor) => actualizarFila(f.id, "PesoBrutoKg", valor)}
                             className={cn("h-10", claseError(err))}
                           />
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
-                            value={f.PesoNetoKg}
-                            onChange={(e) => actualizarFila(f.id, "PesoNetoKg", e.target.value)}
-                            placeholder="0.0"
-                            type="number"
-                            step="0.01"
+                          <InputMedida
+                            valor={netoDe(f)}
+                            onCambio={(valor) => cambiarNeto(f.id, valor)}
                             className={cn("h-10", claseError(err))}
                           />
                         </td>
                         <td className="px-3 py-2.5">
-                          <Input
-                            value={f.Gramaje}
-                            onChange={(e) => actualizarFila(f.id, "Gramaje", e.target.value)}
-                            placeholder="0.0"
-                            type="number"
-                            step="0.01"
-                            className="h-10"
+                          <InputMedida
+                            valor={f.Gramaje}
+                            onCambio={(valor) => actualizarFila(f.id, "Gramaje", valor)}
+                            enteros={2}
+                            className={cn("h-10", claseError(err))}
                           />
                         </td>
                         <td className="px-3 py-2.5">
@@ -268,6 +345,7 @@ export default function IngresoBobinasPapel({ usuario }) {
                 </tbody>
               </table>
               {tocado && hayErrores && <ErroresFilas filas={filas} errores={erroresFilas} />}
+              <AvisosLote avisos={avisos} />
             </div>
 
             <div className="flex flex-col gap-3 p-5 md:hidden">
@@ -300,23 +378,17 @@ export default function IngresoBobinasPapel({ usuario }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
                         <Label className={ETIQUETA_MOVIL}>Bruto (kg)</Label>
-                        <Input
-                          value={f.PesoBrutoKg}
-                          onChange={(e) => actualizarFila(f.id, "PesoBrutoKg", e.target.value)}
-                          placeholder="0.0"
-                          type="number"
-                          step="0.01"
+                        <InputMedida
+                          valor={f.PesoBrutoKg}
+                          onCambio={(valor) => actualizarFila(f.id, "PesoBrutoKg", valor)}
                           className="h-11 bg-white"
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <Label className={ETIQUETA_MOVIL}>Neto (kg)</Label>
-                        <Input
-                          value={f.PesoNetoKg}
-                          onChange={(e) => actualizarFila(f.id, "PesoNetoKg", e.target.value)}
-                          placeholder="0.0"
-                          type="number"
-                          step="0.01"
+                        <InputMedida
+                          valor={netoDe(f)}
+                          onCambio={(valor) => cambiarNeto(f.id, valor)}
                           className="h-11 bg-white"
                         />
                       </div>
@@ -324,12 +396,10 @@ export default function IngresoBobinasPapel({ usuario }) {
 
                     <div className="flex flex-col gap-1.5">
                       <Label className={ETIQUETA_MOVIL}>Gramaje (g/m²)</Label>
-                      <Input
-                        value={f.Gramaje}
-                        onChange={(e) => actualizarFila(f.id, "Gramaje", e.target.value)}
-                        placeholder="0.0"
-                        type="number"
-                        step="0.01"
+                      <InputMedida
+                        valor={f.Gramaje}
+                        onCambio={(valor) => actualizarFila(f.id, "Gramaje", valor)}
+                        enteros={2}
                         className="h-11 bg-white"
                       />
                     </div>
@@ -338,6 +408,10 @@ export default function IngresoBobinasPapel({ usuario }) {
                   </div>
                 );
               })}
+            </div>
+
+            <div className="md:hidden">
+              <AvisosLote avisos={avisos} />
             </div>
           </section>
 
@@ -377,6 +451,7 @@ export default function IngresoBobinasPapel({ usuario }) {
         ]}
         codigos={filas.map((f) => codigoFinal(f.CodigoBobina))}
         editable="el código, los pesos y el gramaje de cada bobina"
+        inusuales={avisos}
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}
       />

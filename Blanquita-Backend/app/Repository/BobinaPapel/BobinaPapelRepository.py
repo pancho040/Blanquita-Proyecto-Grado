@@ -19,6 +19,7 @@ class BobinaPapelRepository:
             TipoBobina.IdTipoBobina,
             TipoBobina.NombreTipoBobina,
             TipoBobina.Activo,
+            TipoBobina.TaraKg,
         ).order_by(TipoBobina.NombreTipoBobina)
         return self.caller.Consultar(consulta)
 

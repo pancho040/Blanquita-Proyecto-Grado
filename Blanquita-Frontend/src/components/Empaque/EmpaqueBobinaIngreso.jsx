@@ -3,7 +3,6 @@ import { Plus, Trash2, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,9 +15,21 @@ import {
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
 import InputCodigo from "@/components/layout/InputCodigo";
+import InputMedida from "@/components/layout/InputMedida";
 import { codigoFinal } from "@/utils/handlers";
 import { errorCodigo } from "@/utils/validators";
 import { ACENTOS } from "@/constants/Acentos";
+import {
+  DECIMALES_TONELADAS,
+  PESO_MAXIMO_EMPAQUE_BOBINA_KG,
+  PESO_MINIMO_EMPAQUE_BOBINA_KG,
+  PESO_NORMAL_EMPAQUE_BOBINA_KG,
+  TONELADAS_MAXIMAS_PEDIDO,
+  TONELADAS_MINIMAS_PEDIDO,
+  TONELADAS_NORMALES_PEDIDO,
+} from "@/constants/Values";
+import { formatearNumero } from "@/utils/numeros";
+import { errorMedida, fueraDeRango, textoRango } from "@/utils/medidas";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { soloActivos } from "@/utils/catalogo";
 import { useEnvioLote, codigosRepetidos, erroresPorFila } from "@/hooks/useIngresoLote";
@@ -29,6 +40,7 @@ import {
   SelectorProveedor,
   BotonQuitarFila,
   CabeceraFila,
+  AvisosLote,
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
@@ -142,16 +154,26 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
     const errorDeCodigo = errorCodigo(codigo);
     if (errorDeCodigo) return errorDeCodigo;
     if (repetidos.has(codigo)) return "Código repetido";
-    if (!f.PesoKg || Number(f.PesoKg) <= 0) return "Peso inválido";
-    return null;
+    return errorMedida(f.PesoKg, {
+      etiqueta: "Peso",
+      unidad: "kg",
+      minimo: PESO_MINIMO_EMPAQUE_BOBINA_KG,
+      maximo: PESO_MAXIMO_EMPAQUE_BOBINA_KG,
+    });
   });
 
   const erroresBloques = erroresPorFila(bloques, (b) =>
     b.IdTipoEmpaque ? null : "Selecciona el tipo de empaque",
   );
 
-  const toneladasValidas =
-    !!cantidadToneladasPedida && Number(cantidadToneladasPedida) > 0;
+  const errorToneladas = errorMedida(cantidadToneladasPedida, {
+    etiqueta: "Toneladas pedidas",
+    unidad: "t",
+    minimo: TONELADAS_MINIMAS_PEDIDO,
+    maximo: TONELADAS_MAXIMAS_PEDIDO,
+    decimales: DECIMALES_TONELADAS,
+  });
+  const toneladasValidas = !errorToneladas;
   const hayErroresFilas = Object.keys(erroresFilas).length > 0;
   const hayErroresBloques = Object.keys(erroresBloques).length > 0;
 
@@ -164,7 +186,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
 
   const validarLote = () => {
     if (!idProveedor) return "Selecciona el proveedor del lote.";
-    if (!toneladasValidas) return "Indica la cantidad de toneladas pedidas.";
+    if (!toneladasValidas) return `${errorToneladas}.`;
     if (hayErroresBloques) return "Selecciona el tipo de empaque en cada bloque.";
     if (hayErroresFilas) return "Revisa los empaques marcados en rojo antes de guardar.";
     return null;
@@ -197,6 +219,23 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
 
   const nombreTipo = (idTipoEmpaque) =>
     tipos.datos.find((t) => t.IdTipoEmpaque === idTipoEmpaque)?.NombreTipoEmpaque ?? "";
+
+  const avisos = [
+    ...(toneladasValidas && fueraDeRango(cantidadToneladasPedida, TONELADAS_NORMALES_PEDIDO)
+      ? [
+          `Pedido de ${formatearNumero(cantidadToneladasPedida, { decimales: DECIMALES_TONELADAS, decimalesMinimos: 0 })} t; lo común es ${textoRango(TONELADAS_NORMALES_PEDIDO, "t", DECIMALES_TONELADAS)}`,
+        ]
+      : []),
+    ...bloques.flatMap((b) =>
+      b.filas.flatMap((f, i) =>
+        !erroresFilas[f.id] && fueraDeRango(f.PesoKg, PESO_NORMAL_EMPAQUE_BOBINA_KG)
+          ? [
+              `${nombreTipo(b.IdTipoEmpaque)} bobina ${i + 1}: peso de ${formatearNumero(f.PesoKg)} kg; lo común es ${textoRango(PESO_NORMAL_EMPAQUE_BOBINA_KG, "kg")}`,
+            ]
+          : [],
+      ),
+    ),
+  ];
 
   return (
     <div className="contenido-con-sidebar pt-20 md:pt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
@@ -253,15 +292,15 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
               <Label className="text-xs font-bold uppercase tracking-wide text-slate-600">
                 Toneladas pedidas
               </Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={cantidadToneladasPedida}
-                onChange={(e) => setCantidadToneladasPedida(e.target.value)}
-                placeholder="Ej. 12.5"
+              <InputMedida
+                valor={cantidadToneladasPedida}
+                onCambio={setCantidadToneladasPedida}
+                decimales={DECIMALES_TONELADAS}
+                enteros={2}
+                placeholder="Ej. 2.5"
                 className={cn("h-11", tocado && !toneladasValidas && ERROR_INPUT)}
               />
+              {tocado && errorToneladas && <ErrorFila mensaje={errorToneladas} />}
             </div>
           </DatosLote>
 
@@ -392,14 +431,10 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
                                   />
                                 </td>
                                 <td className="px-3 py-2">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={f.PesoKg}
-                                    onChange={(e) =>
-                                      actualizarFila(b.id, f.id, "PesoKg", e.target.value)
-                                    }
+                                  <InputMedida
+                                    valor={f.PesoKg}
+                                    onCambio={(valor) => actualizarFila(b.id, f.id, "PesoKg", valor)}
+                                    enteros={3}
                                     placeholder="0.00"
                                     className={cn("h-10", err && ERROR_INPUT)}
                                   />
@@ -450,14 +485,10 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
                               <Label className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
                                 Peso (kg)
                               </Label>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={f.PesoKg}
-                                onChange={(e) =>
-                                  actualizarFila(b.id, f.id, "PesoKg", e.target.value)
-                                }
+                              <InputMedida
+                                valor={f.PesoKg}
+                                onCambio={(valor) => actualizarFila(b.id, f.id, "PesoKg", valor)}
+                                enteros={3}
                                 placeholder="0.00"
                                 className="h-11 bg-white"
                               />
@@ -482,6 +513,11 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
                   </div>
                 );
               })}
+            {avisos.length > 0 && (
+              <div className="overflow-hidden rounded-2xl ring-1 ring-amber-200">
+                <AvisosLote avisos={avisos} />
+              </div>
+            )}
           </section>
 
           {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
@@ -522,6 +558,7 @@ export default function EmpaqueBobinaIngreso({ usuario }) {
         }))}
         codigos={filasPlanas.map((f) => codigoFinal(f.CodigoEmpaque))}
         aviso="Una vez registrado el lote ya no se podrán editar los códigos, los pesos, la cantidad, el tipo ni el proveedor."
+        inusuales={avisos}
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}
       />

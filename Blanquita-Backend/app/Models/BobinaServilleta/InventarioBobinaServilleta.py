@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import BaseModel, Field
 from datetime import datetime,date
 
@@ -64,8 +66,8 @@ class SubBobinaServilletaFueraInventarioResponse(BaseModel):
 class EditarUnidadBobinaServilletaItem(BaseModel):
     IdUnidadBobinaServilleta: int
     CodigoBobina: str
-    PesoBrutoKg: float | None = Field(default=None, gt=0)
-    GramajeGr: float | None = Field(default=None, gt=0)
+    PesoBrutoKg: Decimal | None = None
+    GramajeGr: Decimal | None = None
 
 
 class EditarBobinaServilletaRequest(BaseModel):

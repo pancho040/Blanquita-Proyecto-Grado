@@ -38,6 +38,7 @@ export const TipoBobinaPapelIngreso = (data) => ({
   IdTipoBobina: data.IdTipoBobina,
   NombreTipoBobina: data.NombreTipoBobina,
   Activo: data.Activo,
+  TaraKg: Number(data.TaraKg),
 });
 
 export const EditarBobinaPapelRequest = (data) => ({

@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SelectEntidad } from "@/components/layout/Selectentidad";
 import Header from "@/components/layout/Header";
+import InputMedida from "@/components/layout/InputMedida";
 import { ControlCantidad } from "@/components/InventarioProductos/comunes";
 import { ObtenerProveedoresForm } from "../../../services/Proveedor/Proveedor";
 import { useCatalogo } from "@/hooks/useCatalogo";
@@ -26,7 +26,15 @@ import {
   DialogoConfirmarLote,
 } from "@/components/IngresoLote/comunes";
 import { LotesEmpaque } from "@/components/Reportes/Empaque/Lotes";
-import { CANTIDAD_MAXIMA_EMPAQUE_BOLSA } from "@/constants/Values";
+import {
+  CANTIDAD_MAXIMA_EMPAQUE_BOLSA,
+  DECIMALES_TONELADAS,
+  TONELADAS_MAXIMAS_PEDIDO,
+  TONELADAS_MINIMAS_PEDIDO,
+  TONELADAS_NORMALES_PEDIDO,
+} from "@/constants/Values";
+import { formatearNumero } from "@/utils/numeros";
+import { errorMedida, fueraDeRango, textoRango } from "@/utils/medidas";
 import { aEntero } from "@/utils/validators";
 import { dateFormatter } from "@/utils/dates";
 import { CONFIG_BOLSAS } from "./config";
@@ -81,7 +89,21 @@ export default function IngresoBolsas({ tipo }) {
     return null;
   });
 
-  const toneladasValidas = toneladas === "" || Number(toneladas) > 0;
+  const errorToneladas = errorMedida(toneladas, {
+    etiqueta: "Toneladas pedidas",
+    unidad: "t",
+    minimo: TONELADAS_MINIMAS_PEDIDO,
+    maximo: TONELADAS_MAXIMAS_PEDIDO,
+    decimales: DECIMALES_TONELADAS,
+    obligatorio: false,
+  });
+  const toneladasValidas = !errorToneladas;
+  const avisos =
+    toneladasValidas && fueraDeRango(toneladas, TONELADAS_NORMALES_PEDIDO)
+      ? [
+          `Pedido de ${formatearNumero(toneladas, { decimales: DECIMALES_TONELADAS, decimalesMinimos: 0 })} t; lo común es ${textoRango(TONELADAS_NORMALES_PEDIDO, "t", DECIMALES_TONELADAS)}`,
+        ]
+      : [];
   const hayErrores = Object.keys(errores).length > 0;
   const listo = !!idProveedor && toneladasValidas && !hayErrores;
   const totalPaquetes = filas.reduce((s, f) => s + aEntero(f.Cantidad), 0);
@@ -94,7 +116,7 @@ export default function IngresoBolsas({ tipo }) {
 
   const validarLote = () => {
     if (!idProveedor) return "Selecciona el proveedor del lote.";
-    if (!toneladasValidas) return "Las toneladas pedidas deben ser mayores a 0.";
+    if (!toneladasValidas) return `${errorToneladas}.`;
     if (hayErrores) return "Revisa las filas marcadas en rojo antes de guardar.";
     return null;
   };
@@ -167,15 +189,15 @@ export default function IngresoBolsas({ tipo }) {
               <Label className="text-xs font-bold uppercase tracking-wide text-slate-600">
                 Toneladas pedidas (opcional)
               </Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={toneladas}
-                onChange={(e) => setToneladas(e.target.value)}
+              <InputMedida
+                valor={toneladas}
+                onCambio={setToneladas}
+                decimales={DECIMALES_TONELADAS}
+                enteros={2}
                 placeholder="Ej. 2.5"
                 className={cn("h-11", tocado && !toneladasValidas && ERROR_INPUT)}
               />
+              {tocado && errorToneladas && <ErrorFila mensaje={errorToneladas} />}
             </div>
           </DatosLote>
 
@@ -299,6 +321,7 @@ export default function IngresoBolsas({ tipo }) {
           valor: `${aEntero(f.Cantidad)} ${aEntero(f.Cantidad) === 1 ? "paquete" : "paquetes"}`,
         }))}
         aviso="Una vez registrado el lote ya no se podrá editar; las diferencias solo se corrigen con salidas o reingresos de máximo 5 paquetes."
+        inusuales={avisos}
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}
       />

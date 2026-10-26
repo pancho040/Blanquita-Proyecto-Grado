@@ -13,7 +13,7 @@ class IngresoBolsaJavaItem(BaseModel):
 
 class IngresoBolsaJavaRequest(BaseModel):
     IdProveedor: int = Field(..., gt=0)
-    CantidadToneladasPedida: Decimal | None = Field(default=None, gt=0)
+    CantidadToneladasPedida: Decimal | None = None
     BolsasJava: list[IngresoBolsaJavaItem]
 
 

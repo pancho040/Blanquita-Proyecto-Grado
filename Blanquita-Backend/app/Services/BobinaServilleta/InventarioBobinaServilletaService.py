@@ -27,7 +27,12 @@ from app.Repository.BobinaServilleta.InventarioBobinaServilleta import (
     InventarioBobinaServilletaRepository,
 )
 from app.Schemas.BobinaServilleta import MovimientoBobinaServilleta, MovimientoSubBobina
-from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import (
+    CodigoMateriaPrima,
+    MedidasUnidadServilleta,
+    REGLA_CARACTERES_OBSERVACION,
+    ValidarTexto,
+)
 
 CAMPOS_CORRECCION_UNIDAD = {
     "CodigoBobina": "Código",
@@ -149,8 +154,7 @@ class InventarioBobinaServilletaService:
                 {
                     "IdUnidadBobinaServilleta": unidad.IdUnidadBobinaServilleta,
                     "CodigoBobina": codigo,
-                    "PesoBrutoKg": unidad.PesoBrutoKg,
-                    "GramajeGr": unidad.GramajeGr,
+                    **MedidasUnidadServilleta(codigo, unidad.PesoBrutoKg, unidad.GramajeGr),
                 }
             )
 
