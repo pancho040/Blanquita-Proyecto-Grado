@@ -1,19 +1,11 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 const { usuario } = Astro.locals;
-import NavBar from '@/components/layout/NavBar';
-import SideBar from '@/components/layout/SideBar';
 import InicioOperador from '@/components/Usuario/InicioOperador';
 import BottomBar from '@/components/layout/Qr/BottomBar';
 ---
 
 <Layout>
-	<div class="md:hidden">
-		<NavBar client:media="(max-width: 767.98px)" idRol={usuario.IdRol} />
-	</div>
-	<div class="hidden md:block">
-		<SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} />
-	</div>
 	<InicioOperador client:load usuario={usuario} />
 	<BottomBar idRol={usuario.IdRol} subRuta={""} idOpcionSelect={4} client:load/>
 </Layout>

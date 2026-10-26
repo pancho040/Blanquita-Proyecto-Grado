@@ -1,11 +1,12 @@
 import { manejarErrorBackend } from "@/utils/validators";
+import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
 export async function ObtenerClientes(busqueda = "", idEstado = null) {
   let url = `/api/logistica/clientes?busqueda=${encodeURIComponent(busqueda)}`;
   if (idEstado !== null) {
     url += `&id_estado=${idEstado}`;
   }
-  const response = await fetch(url);
+  const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
@@ -13,7 +14,7 @@ export async function ObtenerClientes(busqueda = "", idEstado = null) {
 }
 
 export async function ObtenerClienteDetalle(idCliente) {
-  const response = await fetch(`/api/logistica/clientes/${idCliente}`);
+  const response = await fetchConCache(`/api/logistica/clientes/${idCliente}`, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
@@ -29,6 +30,7 @@ export async function CrearCliente(cliente) {
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
+  invalidarCache("/api/logistica/clientes");
   return await response.json();
 }
 
@@ -41,6 +43,7 @@ export async function ActualizarCliente(idCliente, datos) {
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
+  invalidarCache("/api/logistica/clientes");
   return await response.json();
 }
 
@@ -53,11 +56,12 @@ export async function AgregarPuntoVenta(idCliente, puntoVenta) {
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
+  invalidarCache("/api/logistica/clientes");
   return await response.json();
 }
 
 export async function ObtenerTodosPuntosVenta() {
-  const response = await fetch("/api/logistica/clientes/puntos-venta/todos");
+  const response = await fetchConCache("/api/logistica/clientes/puntos-venta/todos", {}, 45000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }

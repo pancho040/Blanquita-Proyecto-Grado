@@ -1,240 +1,498 @@
-import { useEffect, useState } from "react";
-import { Icon, ChevronDown, ChevronLeft, LogOut } from "lucide-react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Icon, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador } from "@/constants/NavBarRoutes";
+import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin } from "@/constants/NavBarRoutes";
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
 import { cerrarSesion } from "@/lib/logout-client";
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
-} from "@/components/ui/sidebar";
 
-/**
- * Version escritorio de la navegacion: reutiliza el mismo JSON que el NavBar
- * (RutasNavBar) y mantiene la paleta del NavBar mapeandola a los tokens
- * --sidebar-* que consume el componente ui/sidebar.
- */
-const PALETA_NAVBAR = {
-  "--sidebar": "#62C1E5",
-  "--sidebar-foreground": "#ffffff",
-  "--sidebar-accent": "#20A7DB",
-  "--sidebar-accent-foreground": "#ffffff",
-  "--sidebar-primary": "#20A7DB",
-  "--sidebar-primary-foreground": "#ffffff",
-  "--sidebar-border": "#A0D9EF",
-  "--sidebar-ring": "#A0D9EF",
-};
-
-const ANCHO_SIDEBAR = "17rem";
+const ANCHO_EXPANDIDO = "17rem";
+const ANCHO_COLAPSADO = "4.5rem";
 const CLAVE_ESTADO = "sidebar-abierto";
+const CLAVE_ES_ADMIN = "blanquita_es_admin";
+const CLAVE_SCROLL_SIDEBAR = "blanquita_sidebar_scroll_top";
+const CLAVE_GRUPOS_ABIERTOS = "blanquita_sidebar_grupos_abiertos";
 
-// Escritorio compacto: items 14px (text-sm), subitems 12px (text-xs).
-const CLASE_ITEM =
-  "h-10 gap-2.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent [&_svg]:size-5";
-const CLASE_SUBITEM =
-  "h-8 gap-2 text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent [&>svg]:size-4 [&>svg]:text-sidebar-foreground";
+function setCookie(nombre, valor, dias = 365) {
+  try {
+    const d = new Date();
+    d.setTime(d.getTime() + dias * 24 * 60 * 60 * 1000);
+    document.cookie = `${nombre}=${encodeURIComponent(valor)};expires=${d.toUTCString()};path=/;SameSite=Lax`;
+  } catch {}
+}
 
-function IconoItem({ item, size = 22 }) {
+function getCookie(nombre) {
+  try {
+    const match = document.cookie.match(new RegExp("(^| )" + nombre + "=([^;]+)"));
+    if (match) return decodeURIComponent(match[2]);
+  } catch {}
+  return null;
+}
+
+function obtenerGruposAbiertos() {
+  try {
+    const raw = window.sessionStorage.getItem(CLAVE_GRUPOS_ABIERTOS);
+    if (raw) return JSON.parse(raw);
+    const cookieRaw = getCookie("blanquita_sidebar_grupos");
+    if (cookieRaw) return JSON.parse(cookieRaw);
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarGrupoAbierto(clave, estado) {
+  try {
+    const actuales = obtenerGruposAbiertos();
+    actuales[clave] = estado;
+    const str = JSON.stringify(actuales);
+    window.sessionStorage.setItem(CLAVE_GRUPOS_ABIERTOS, str);
+    setCookie("blanquita_sidebar_grupos", str);
+  } catch {}
+}
+
+function guardarScrollSidebar() {
+  try {
+    const nav = document.querySelector("nav[data-sidebar-nav]");
+    if (nav) {
+      window.sessionStorage.setItem(CLAVE_SCROLL_SIDEBAR, String(nav.scrollTop));
+    }
+  } catch {}
+}
+
+function normalizarRuta(p) {
+  if (!p) return "/";
+  return p.split("?")[0].split("#")[0].replace(/\/+$/, "") || "/";
+}
+
+function IconoItem({ item, size = 20 }) {
+  if (!item || !item.icono) return null;
   if (item.esIconoLab) {
-    return <Icon iconNode={item.icono} size={size} />;
+    const IconLab = item.icono;
+    return <span className="inline-flex"><IconLab size={size} /></span>;
   }
   const IconoComp = item.icono;
   return <IconoComp size={size} />;
 }
 
-function EntradaSimple({ item, basePath, prefijo }) {
-  const rutaCompleta =
-    item.ruta === "" ? `${prefijo}/inicio` : `${basePath}/${item.ruta}`;
+// Resolver URL de manera unificada
+function resolverRuta(basePath, prefijo, rutaItem, rutaSub = null) {
+  let base = rutaItem;
+  const prefijosConocidos = ["admin", "supervisor", "contador", "encargado", "operador"];
+  const tienePrefijo = prefijosConocidos.some((p) => rutaItem.startsWith(p));
 
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        size="lg"
-        render={<a href={`/${rutaCompleta}`} />}
-        className={CLASE_ITEM}
-      >
-        <IconoItem item={item} size={20} />
-        <span>{item.titulo}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
+  if (!tienePrefijo) {
+    base = rutaItem === "" ? `${prefijo}/inicio` : `${basePath}/${rutaItem}`;
+  }
+
+  if (rutaSub !== null) {
+    return `/${base}/${rutaSub}`.replace(/\/+/g, "/").replace(/\/$/, "");
+  }
+  return `/${base}`.replace(/\/+/g, "/").replace(/\/$/, "");
 }
 
-function GrupoColapsable({ item, basePath }) {
-  const rutaCompleta = `${basePath}/${item.ruta}`;
-  const [abierto, setAbierto] = useState(false);
+const EntradaSimple = React.memo(function EntradaSimple({ item, basePath, prefijo, colapsado, rutaActual }) {
+  const rutaFinal = resolverRuta(basePath, prefijo, item.ruta);
+  const activo = normalizarRuta(rutaActual) === normalizarRuta(rutaFinal);
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        size="lg"
-        onClick={() => setAbierto((v) => !v)}
-        aria-expanded={abierto}
+    <li>
+      <a
+        href={rutaFinal}
+        data-astro-prefetch="hover"
+        title={item.titulo}
+        onClick={guardarScrollSidebar}
         className={cn(
-          CLASE_ITEM,
-          abierto && "bg-sidebar-accent text-sidebar-accent-foreground"
+          "flex items-center rounded-xl text-white font-medium select-none transition-colors duration-150",
+          "hover:bg-[#20A7DB] hover:shadow-sm focus-visible:bg-[#20A7DB] focus-visible:outline-none",
+          activo ? "bg-[#20A7DB] shadow-md shadow-[#1c96c544] font-semibold" : "bg-transparent",
+          colapsado
+            ? "h-11 w-11 mx-auto justify-center p-0"
+            : "h-10 px-3 gap-3 text-sm w-full justify-start"
         )}
       >
-        <IconoItem item={item} size={20} />
-        <span className="flex-1 text-left">{item.titulo}</span>
-        <ChevronDown
-          size={16}
-          className={cn(
-            "shrink-0 transition-transform duration-200",
-            abierto && "rotate-180"
-          )}
-        />
-      </SidebarMenuButton>
-
-      {abierto && (
-        <SidebarMenuSub className="mt-1 gap-1 border-sidebar-border">
-          {item.subrutas.map((sub) => (
-            <SidebarMenuSubItem key={sub.ruta}>
-              <SidebarMenuSubButton
-                render={<a href={`/${rutaCompleta}/${sub.ruta}`} />}
-                className={CLASE_SUBITEM}
-              >
-                <IconoItem item={sub} size={16} />
-                <span>{sub.titulo}</span>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-          ))}
-        </SidebarMenuSub>
-      )}
-    </SidebarMenuItem>
+        <div className="shrink-0 flex items-center justify-center">
+          <IconoItem item={item} size={colapsado ? 22 : 20} />
+        </div>
+        {!colapsado && (
+          <span className="truncate whitespace-nowrap">{item.titulo}</span>
+        )}
+      </a>
+    </li>
   );
-}
+});
 
-export default function SideBar({ idRol, seccion }) {
-  const prefijo = PREFIJO_POR_ROL[idRol];
-  const enReportes = seccion === "reportes";
-  const basePath = enReportes ? `${prefijo}/reportes` : prefijo;
-  const rutas = enReportes
-    ? RutasReportes
-    : idRol === Roles.Supervisor
-    ? RutasSupervisor
-    : idRol === Roles.Contador
-    ? RutasContador
-    : RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
+const GrupoColapsable = React.memo(function GrupoColapsable({
+  item,
+  basePath,
+  prefijo,
+  colapsado,
+  rutaActual,
+  alExpandirSidebar,
+  gruposIniciales = {},
+}) {
+  // Comprueba si este grupo contiene la ruta actualmente activa
+  const estaActivoElGrupo = useMemo(() => {
+    if (!item.subrutas) return false;
+    const actual = normalizarRuta(rutaActual);
+    return item.subrutas.some((sub) => {
+      const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
+      return actual === subUrl || (sub.ruta !== "" && actual.startsWith(subUrl + "/"));
+    });
+  }, [item, basePath, prefijo, rutaActual]);
 
-  // Arranca abierto para coincidir con el HTML del servidor (evita desajuste de
-  // hidratacion); el estado guardado se aplica ya en el cliente.
-  const [abierto, setAbierto] = useState(true);
+  const [desplegado, setDesplegado] = useState(() => {
+    if (estaActivoElGrupo) return true;
+    if (gruposIniciales && gruposIniciales[item.ruta] !== undefined) {
+      return Boolean(gruposIniciales[item.ruta]);
+    }
+    if (typeof window !== "undefined") {
+      const guardados = obtenerGruposAbiertos();
+      if (guardados[item.ruta] !== undefined) {
+        return Boolean(guardados[item.ruta]);
+      }
+    }
+    return false;
+  });
+
+  // Al navegar, si la nueva ruta pertenece a este grupo, abrirlo automáticamente
+  useEffect(() => {
+    if (estaActivoElGrupo) {
+      setDesplegado(true);
+      guardarGrupoAbierto(item.ruta, true);
+    }
+  }, [estaActivoElGrupo, item.ruta]);
+
+  const handleToggle = () => {
+    if (colapsado) {
+      alExpandirSidebar();
+      setDesplegado(true);
+      guardarGrupoAbierto(item.ruta, true);
+    } else {
+      setDesplegado((v) => {
+        const sig = !v;
+        guardarGrupoAbierto(item.ruta, sig);
+        return sig;
+      });
+    }
+  };
+
+  return (
+    <li className="flex flex-col">
+      <button
+        type="button"
+        onClick={handleToggle}
+        title={item.titulo}
+        aria-expanded={desplegado && !colapsado}
+        className={cn(
+          "flex items-center rounded-xl text-white font-medium select-none w-full transition-colors duration-150 cursor-pointer",
+          "hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none",
+          estaActivoElGrupo
+            ? "bg-[#20A7DB] shadow-sm font-semibold"
+            : desplegado && !colapsado
+            ? "bg-white/10"
+            : "bg-transparent",
+          colapsado
+            ? "h-11 w-11 mx-auto justify-center p-0"
+            : "h-10 px-3 gap-3 text-sm justify-start"
+        )}
+      >
+        <div className="shrink-0 flex items-center justify-center">
+          <IconoItem item={item} size={colapsado ? 22 : 20} />
+        </div>
+        {!colapsado && (
+          <>
+            <span className="flex-1 text-left truncate whitespace-nowrap">{item.titulo}</span>
+            <ChevronDown
+              size={16}
+              className={cn(
+                "shrink-0 transition-transform duration-200 opacity-80",
+                desplegado && "rotate-180"
+              )}
+            />
+          </>
+        )}
+      </button>
+
+      {!colapsado && desplegado && (
+        <ul className="mt-1 ml-4 pl-2.5 border-l-2 border-[#A0D9EF]/60 flex flex-col gap-1 py-1">
+          {item.subrutas.map((sub) => {
+            const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
+            const actual = normalizarRuta(rutaActual);
+            const esSubActivo = actual === subUrl || (sub.ruta !== "" && actual.startsWith(subUrl + "/"));
+
+            return (
+              <li key={sub.ruta}>
+                <a
+                  href={subUrl}
+                  data-astro-prefetch="hover"
+                  title={sub.titulo}
+                  onClick={guardarScrollSidebar}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white select-none transition-colors duration-150",
+                    "hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none",
+                    esSubActivo ? "bg-[#20A7DB] font-semibold shadow-xs" : "opacity-90 hover:opacity-100 hover:bg-[#20A7DB]/50"
+                  )}
+                >
+                  <IconoItem item={sub} size={15} />
+                  <span className="truncate">{sub.titulo}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </li>
+  );
+});
+
+export default function SideBar({
+  idRol,
+  seccion,
+  esAdmin: esAdminProp,
+  rutaInicial = "",
+  gruposIniciales = {},
+  abiertoInicial = true,
+}) {
+  // Inicialización idéntica en SSR y en el cliente para prevenir Hydration Mismatch
+  const [esAdmin, setEsAdmin] = useState(() => Boolean(esAdminProp));
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(CLAVE_ESTADO) === "false") {
-        setAbierto(false);
+    if (esAdminProp !== undefined) {
+      const boolVal = Boolean(esAdminProp);
+      setEsAdmin(boolVal);
+      try {
+        if (boolVal) {
+          window.localStorage.setItem(CLAVE_ES_ADMIN, "true");
+        } else {
+          window.localStorage.removeItem(CLAVE_ES_ADMIN);
+        }
+      } catch {
+        /* noop */
       }
-    } catch {
-      /* almacenamiento no disponible */
+    } else if (typeof window !== "undefined") {
+      const guardado = window.localStorage.getItem(CLAVE_ES_ADMIN) === "true";
+      setEsAdmin(guardado);
     }
+  }, [esAdminProp]);
+
+  const prefijo = esAdmin ? "admin" : PREFIJO_POR_ROL[idRol] || "admin";
+  const enReportes = seccion === "reportes";
+  const basePath = esAdmin ? "admin" : enReportes ? `${prefijo}/reportes` : prefijo;
+
+  const rutas = useMemo(() => {
+    if (esAdmin) return RutasAdmin;
+    if (enReportes) return RutasReportes;
+    if (idRol === Roles.Supervisor) return RutasSupervisor;
+    if (idRol === Roles.Contador) return RutasContador;
+    return RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
+  }, [esAdmin, enReportes, idRol]);
+
+  // Estado abierto/cerrado alimentado por prop de SSR o cookie/storage
+  const [abierto, setAbierto] = useState(() => Boolean(abiertoInicial));
+  // Desactivar animación de ancho al montar o navegar; solo animar cuando el usuario hace clic en el botón
+  const [animarAncho, setAnimarAncho] = useState(false);
+
+  // Sincronizar estado abierto guardado tras la hidratación segura en cliente
+  useEffect(() => {
+    try {
+      const guardado = window.localStorage.getItem(CLAVE_ESTADO);
+      if (guardado !== null) {
+        const esAbierto = guardado !== "false";
+        setAbierto(esAbierto);
+        document.documentElement.style.setProperty(
+          "--hueco-sidebar",
+          esAbierto ? ANCHO_EXPANDIDO : ANCHO_COLAPSADO
+        );
+      }
+    } catch {}
   }, []);
 
-  const alternar = () => {
+  // Ruta actual reactiva para Astro View Transitions
+  const [rutaActual, setRutaActual] = useState(rutaInicial);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.pathname !== rutaActual) {
+      setRutaActual(window.location.pathname);
+    }
+
+    const actualizarRuta = () => {
+      setRutaActual(window.location.pathname);
+    };
+
+    window.addEventListener("popstate", actualizarRuta);
+    document.addEventListener("astro:page-load", actualizarRuta);
+    document.addEventListener("astro:after-swap", actualizarRuta);
+
+    return () => {
+      window.removeEventListener("popstate", actualizarRuta);
+      document.removeEventListener("astro:page-load", actualizarRuta);
+      document.removeEventListener("astro:after-swap", actualizarRuta);
+    };
+  }, []);
+
+  const alternar = useCallback(() => {
+    setAnimarAncho(true);
     setAbierto((v) => {
       const siguiente = !v;
       try {
         window.localStorage.setItem(CLAVE_ESTADO, String(siguiente));
+        setCookie("blanquita_sidebar_abierto", String(siguiente));
       } catch {
-        /* almacenamiento no disponible */
+        /* noop */
       }
       return siguiente;
     });
-  };
+  }, []);
 
-  // Ajusta el hueco reservado para el contenido mediante una variable CSS en
-  // <html>. El contenedor de contenido (otra isla de Astro) la consume solo
-  // dentro de @media (min-width: 768px) en globals.css, asi que en movil nunca
-  // se aplica padding aunque esta variable quede fijada.
+  const expandir = useCallback(() => {
+    setAnimarAncho(true);
+    setAbierto(true);
+    try {
+      window.localStorage.setItem(CLAVE_ESTADO, "true");
+      setCookie("blanquita_sidebar_abierto", "true");
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  // Sincronizar el margen izquierdo del contenido con el ancho del sidebar
   useEffect(() => {
     const raiz = document.documentElement;
-    raiz.style.setProperty("--hueco-sidebar", abierto ? ANCHO_SIDEBAR : "0px");
-    return () => raiz.style.removeProperty("--hueco-sidebar");
+    const anchoActual = abierto ? ANCHO_EXPANDIDO : ANCHO_COLAPSADO;
+    raiz.style.setProperty("--hueco-sidebar", anchoActual);
   }, [abierto]);
 
+  const navRef = useRef(null);
+
+  // Restaurar y mantener fija la posición del scroll de la sidebar
+  useEffect(() => {
+    const restaurar = () => {
+      try {
+        const guardado = window.sessionStorage.getItem(CLAVE_SCROLL_SIDEBAR);
+        if (guardado !== null && navRef.current) {
+          navRef.current.scrollTop = parseInt(guardado, 10);
+        }
+      } catch {}
+    };
+
+    restaurar();
+    const t1 = setTimeout(restaurar, 25);
+    const t2 = setTimeout(restaurar, 120);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [rutaActual, abierto]);
+
+  const anchoSidebar = abierto ? ANCHO_EXPANDIDO : ANCHO_COLAPSADO;
+
   return (
-    <SidebarProvider style={PALETA_NAVBAR} className="contents">
-      <Sidebar
-        collapsible="none"
-        className="fixed inset-y-0 left-0 z-50 h-svh border-r-2 border-sidebar-border"
-        style={{
-          width: ANCHO_SIDEBAR,
-          transform: abierto ? undefined : "translateX(-100%)",
-          transition: "transform 0.3s ease-in-out",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-          boxShadow: "0 4px 20px #1c96c533",
+    <aside
+      aria-label="Menú lateral"
+      className="fixed inset-y-0 left-0 z-40 flex flex-col border-r-2 border-[#A0D9EF] text-white select-none overflow-hidden"
+      style={{
+        width: anchoSidebar,
+        transition: animarAncho ? "width 0.22s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+        backgroundColor: "#62C1E5",
+        boxShadow: "0 4px 20px #1c96c533",
+      }}
+    >
+      {/* Encabezado: Logo a la izquierda + Botón icono arriba a la derecha */}
+      <div className="h-16 flex items-center border-b-2 border-[#A0D9EF] shrink-0 overflow-hidden px-3">
+        {abierto ? (
+          <div className="flex items-center justify-between w-full">
+            <a
+              href={`/${basePath}/inicio`}
+              className="flex items-center hover:opacity-90 transition-opacity"
+            >
+              <img
+                src="/LogoBlanquita.webp"
+                alt="Papel Blanquita"
+                className="h-9 w-auto object-contain"
+                style={{ filter: "drop-shadow(0 4px 12px rgba(255,255,255,.35))" }}
+              />
+            </a>
+            <button
+              type="button"
+              onClick={alternar}
+              aria-label="Contraer menú lateral"
+              title="Contraer menú lateral"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 hover:bg-[#20A7DB] text-white transition-all duration-150 border border-white/20 hover:border-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 shrink-0 cursor-pointer"
+            >
+              <PanelLeftClose size={19} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center w-full">
+            <button
+              type="button"
+              onClick={alternar}
+              aria-label="Expandir menú lateral"
+              title="Expandir menú lateral"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 hover:bg-[#20A7DB] text-white transition-all duration-150 border border-white/30 hover:border-white/60 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 hover:scale-105 cursor-pointer"
+            >
+              <PanelLeftOpen size={20} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Lista de navegación con scroll independiente y ultra fluido */}
+      <nav
+        ref={navRef}
+        data-sidebar-nav="true"
+        onScroll={(e) => {
+          try {
+            window.sessionStorage.setItem(CLAVE_SCROLL_SIDEBAR, String(e.currentTarget.scrollTop));
+          } catch {}
         }}
+        className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 scrollbar-thin scrollbar-thumb-white/20"
       >
-        <SidebarHeader className="h-16 items-center justify-center border-b-2 border-sidebar-border md:h-20">
-          <img
-            src="/LogoBlanquita.webp"
-            alt="Papel Blanquita"
-            className="h-10 w-auto md:h-12"
-            style={{ filter: "drop-shadow(0 4px 12px rgba(255,255,255,.3))" }}
-          />
-        </SidebarHeader>
+        <ul className="flex flex-col gap-1.5">
+          {rutas.map((item) =>
+            item.subrutas ? (
+              <GrupoColapsable
+                key={item.ruta}
+                item={item}
+                basePath={basePath}
+                prefijo={prefijo}
+                colapsado={!abierto}
+                rutaActual={rutaActual}
+                alExpandirSidebar={expandir}
+                gruposIniciales={gruposIniciales}
+              />
+            ) : (
+              <EntradaSimple
+                key={item.ruta}
+                item={item}
+                basePath={basePath}
+                prefijo={prefijo}
+                colapsado={!abierto}
+                rutaActual={rutaActual}
+              />
+            )
+          )}
+        </ul>
+      </nav>
 
-        <SidebarContent className="p-3">
-          <SidebarMenu className="gap-1.5">
-            {rutas.map((item) =>
-              item.subrutas ? (
-                <GrupoColapsable key={item.ruta} item={item} basePath={basePath} />
-              ) : (
-                <EntradaSimple
-                  key={item.ruta}
-                  item={item}
-                  basePath={basePath}
-                  prefijo={prefijo}
-                />
-              )
-            )}
-          </SidebarMenu>
-        </SidebarContent>
-
-        <SidebarFooter className="border-t-2 border-sidebar-border p-3">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                onClick={cerrarSesion}
-                className={cn(
-                  CLASE_ITEM,
-                  "hover:bg-red-600 hover:text-white focus-visible:bg-red-600 focus-visible:text-white"
-                )}
-              >
-                <LogOut size={20} />
-                <span>Cerrar sesión</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      </Sidebar>
-
-      {/* Lengueta para plegar / desplegar, centrada verticalmente */}
-      <button
-        type="button"
-        onClick={alternar}
-        aria-label={abierto ? "Plegar menu" : "Desplegar menu"}
-        aria-expanded={abierto}
-        className="fixed top-1/2 z-50 flex h-20 w-7 -translate-y-1/2 items-center justify-center rounded-r-xl border-2 border-l-0 border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_4px_20px_#1c96c533] backdrop-blur transition-[left] duration-300 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-        style={{ left: abierto ? ANCHO_SIDEBAR : "0rem" }}
-      >
-        <ChevronLeft
-          size={20}
-          className={cn("transition-transform duration-300", !abierto && "rotate-180")}
-        />
-      </button>
-    </SidebarProvider>
+      {/* Pie con botón de Cerrar Sesión */}
+      <div className="border-t-2 border-[#A0D9EF] p-2.5 shrink-0">
+        <button
+          type="button"
+          onClick={cerrarSesion}
+          title="Cerrar sesión"
+          className={cn(
+            "flex items-center rounded-xl text-white font-medium transition-colors duration-150 select-none cursor-pointer",
+            "hover:bg-red-600 focus-visible:bg-red-600 focus-visible:outline-none",
+            !abierto
+              ? "h-11 w-11 mx-auto justify-center p-0"
+              : "h-10 px-3 gap-3 text-sm w-full justify-start"
+          )}
+        >
+          <LogOut size={!abierto ? 22 : 20} className="shrink-0" />
+          {abierto && <span className="truncate">Cerrar sesión</span>}
+        </button>
+      </div>
+    </aside>
   );
 }

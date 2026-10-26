@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import GestionPlanillas from "@/components/RRHH/Planillas/GestionPlanillas";
+---
+
+<Layout title="Planillas | Papelera Blanquita">
+  <GestionPlanillas client:only="react" />
+</Layout>

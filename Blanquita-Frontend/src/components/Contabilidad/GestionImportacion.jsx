@@ -26,36 +26,36 @@ import {
 const ARCHIVOS_EXCEL = [
   {
     id: "flujo",
-    titulo: "Flujo de Caja y Libro Diario",
-    archivo: "Flujo de Caja - Blanquita 2026.xlsx",
-    descripcion: "158 asientos de libro diario, arqueos de cortes por denominación y 30+ categorías contables.",
+    titulo: "Flujo de Caja",
+    archivo: "Flujo de Caja y Caja Chica 2025-2026.xlsx",
+    descripcion: "Asientos de libro diario, arqueos de caja y categorías contables.",
     icono: Wallet,
     color: "from-blue-500 to-cyan-600",
     fn: ImportarFlujoCaja,
   },
   {
     id: "notas",
-    titulo: "Control Notas de Venta",
-    archivo: "Control Notas de Venta - Blanquita 2026.xlsx",
-    descripcion: "47 despachos en camión, choferes, placas, fletes y desglose de Mega, Lux, Servilleta.",
+    titulo: "Notas de Venta",
+    archivo: "5_CONTROL NOTAS DE VENTA.xlsx",
+    descripcion: "Despachos en camión, choferes, fletes y paquetes entregados.",
     icono: Truck,
     color: "from-emerald-500 to-teal-600",
     fn: ImportarNotasVenta,
   },
   {
     id: "cxc",
-    titulo: "Cuentas por Cobrar y Abonos",
-    archivo: "CUENTAS POR COBRAR.xlsx",
-    descripcion: "38 clientes departamentales, 315 cuentas por cobrar y 427 abonos bancarios en BOB y USD.",
+    titulo: "Cuentas por Cobrar",
+    archivo: "3_CUENTAS POR COBRAR.xlsx",
+    descripcion: "Cartera de clientes, deudas vigentes y abonos bancarios.",
     icono: HandCoins,
     color: "from-amber-500 to-orange-600",
     fn: ImportarCuentasCobrar,
   },
   {
     id: "cxp",
-    titulo: "Cuentas Proveedores e Insumos",
-    archivo: "CUENTAS PROVEEDOR 2026.xlsx",
-    descripcion: "Proveedores industriales (Vinto, Derqui, Multiflex, Colmaflex, etc.), compras y pagos.",
+    titulo: "Cuentas por Pagar",
+    archivo: "CUENTAS PROVEEDOR.xlsx",
+    descripcion: "Proveedores industriales, insumos y pagos realizados.",
     icono: Layers,
     color: "from-purple-500 to-indigo-600",
     fn: ImportarProveedores,
@@ -109,10 +109,10 @@ export default function GestionImportacion({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <FileSpreadsheet className="h-7 w-7 text-[#20A7DB]" />
-            Importación y Sincronización de Archivos Excel
+            Importación de Archivos
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Procesamiento de los archivos contables de la empresa situados en la carpeta empresarial.
+            Sincronización de libros contables e información histórica.
           </p>
         </div>
 
@@ -124,12 +124,12 @@ export default function GestionImportacion({ usuario }) {
           {procesandoTodo ? (
             <>
               <RefreshCw className="h-4 w-4 animate-spin" />
-              Sincronizando Todo...
+              Sincronizando...
             </>
           ) : (
             <>
               <UploadCloud className="h-4 w-4" />
-              Sincronizar Todos los Excels
+              Sincronizar Todos
             </>
           )}
         </Button>

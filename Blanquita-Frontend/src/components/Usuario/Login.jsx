@@ -50,6 +50,15 @@ export default function Login() {
         return;
       }
 
+      if (data.IsAdmin) {
+        try {
+          window.localStorage.setItem("blanquita_es_admin", "true");
+        } catch {}
+      } else {
+        try {
+          window.localStorage.removeItem("blanquita_es_admin");
+        } catch {}
+      }
       window.location.href = data.rutaRedirect || '/';
     } catch (err) {
       fail('No se pudo conectar con el servidor. Intenta nuevamente.');

@@ -40,7 +40,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (esRutaPublicaAuth) {
     if (sesion) {
-      return context.redirect(RUTA_POR_ROL[sesion.IdRol] || "/");
+      const rutaDestino = sesion.IsAdmin ? "/admin/inicio" : (RUTA_POR_ROL[sesion.IdRol] || "/");
+      return context.redirect(rutaDestino);
     }
     limpiarSesion(context.cookies);
     return next();

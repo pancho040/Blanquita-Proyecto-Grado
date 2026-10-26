@@ -83,3 +83,60 @@ class AsignacionRutaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class RepartidorCrear(BaseModel):
+    Ci: str
+    PrimerNombre: str
+    SegundoNombre: Optional[str] = None
+    ApellidoPaterno: str
+    ApellidoMaterno: Optional[str] = None
+    Celular: Optional[str] = None
+    Clave: Optional[str] = "Blanquita123!"
+
+class RepartidorResponse(BaseModel):
+    IdUsuario: int
+    NombreCompleto: str
+    Ci: str
+    Celular: Optional[str] = None
+    IdEstadoUsuario: int
+    Estado: str
+    TotalAsignaciones: Optional[int] = 0
+
+class TelemetriaPing(BaseModel):
+    IdUsuarioRepartidor: int
+    IdAsignacionRuta: Optional[int] = None
+    Latitud: float
+    Longitud: float
+    Velocidad: Optional[float] = 0.0
+    Bateria: Optional[int] = 100
+    EstadoMovimiento: Optional[str] = "En Ruta"
+    DireccionAproximada: Optional[str] = None
+    ParadaActual: Optional[int] = None
+    ParadasCompletadas: Optional[int] = None
+    MontoCobradoTotal: Optional[float] = None
+
+class ChoferTrackingResponse(BaseModel):
+    IdTracking: int
+    IdUsuarioRepartidor: int
+    NombreRepartidor: str
+    Celular: Optional[str] = None
+    IdAsignacionRuta: Optional[int] = None
+    NombreRuta: Optional[str] = None
+    NombreZona: Optional[str] = None
+    EstadoAsignacion: Optional[str] = None
+    Latitud: float
+    Longitud: float
+    Velocidad: float
+    Bateria: int
+    EstadoMovimiento: str
+    DireccionAproximada: Optional[str] = None
+    ParadaActual: int
+    TotalParadas: int
+    ParadasCompletadas: int
+    MontoCobradoTotal: float
+    UltimaActualizacion: Optional[datetime] = None
+    SegundosDesdeUltimoReporte: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+

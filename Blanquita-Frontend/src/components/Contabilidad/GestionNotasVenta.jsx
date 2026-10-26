@@ -14,6 +14,8 @@ import {
   Tag,
   ChevronLeft,
   ChevronRight,
+  Printer,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,11 @@ import {
   CrearNotaVenta,
   ObtenerClientesCxC,
 } from "@/services/Contabilidad/cuentasCobrarService";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import ModalImportarExcel from "./ModalImportarExcel";
+import { ImportarNotasVenta } from "@/services/Contabilidad/importacionService";
+import { FileSpreadsheet } from "lucide-react";
+import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionNotasVenta({ usuario }) {
   const [notas, setNotas] = useState([]);
@@ -50,12 +57,15 @@ export default function GestionNotasVenta({ usuario }) {
   // Modales
   const [modalNuevaOpen, setModalNuevaOpen] = useState(false);
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [modalImportarOpen, setModalImportarOpen] = useState(false);
   const [notaSeleccionada, setNotaSeleccionada] = useState(null);
   const [detalleNota, setDetalleNota] = useState(null);
 
   // Formulario Nueva Nota
   const [formNota, setFormNota] = useState({
     numero_nota: "",
+    numero_entrega: "",
+    destino: "Sucre",
     id_cliente: "",
     numero_camion: "1",
     chofer: "",
@@ -64,13 +74,21 @@ export default function GestionNotasVenta({ usuario }) {
     condicion_venta: "Crédito",
     dias_credito: "15",
     observaciones: "",
-    // Paquetes
-    paquetes_mega: "0",
-    precio_mega: "120.00",
-    paquetes_lux: "0",
-    precio_lux: "95.00",
-    paquetes_servilleta: "0",
-    precio_servilleta: "45.00",
+    // Presentaciones según Excel 5_CONTROL NOTAS DE VENTA
+    paquetes_mega_12r: "0",
+    precio_mega_12r: "120.00",
+    paquetes_economico: "0",
+    precio_economico: "70.00",
+    paquetes_mega_30m: "0",
+    precio_mega_30m: "135.00",
+    paquetes_lux_6r: "0",
+    precio_lux_6r: "55.00",
+    paquetes_lux_12r: "0",
+    precio_lux_12r: "95.00",
+    paquetes_lux_24r: "0",
+    precio_lux_24r: "180.00",
+    paquetes_serv_500x6: "0",
+    precio_serv_500x6: "45.00",
     bonificacion_paquetes: "0",
   });
   const [guardandoNota, setGuardandoNota] = useState(false);
@@ -90,22 +108,36 @@ export default function GestionNotasVenta({ usuario }) {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [notasRes, clientesRes] = await Promise.all([
+
+      let clientesData = cache.get("contabilidad:clientesCxC");
+      const peticiones = [
         ObtenerNotasVenta({
           page: pagina,
           limit: limite,
           estadoPago: filtroEstadoPago !== "TODOS" ? filtroEstadoPago : null,
           busqueda: busqueda.trim(),
         }),
-        ObtenerClientesCxC().catch(() => []),
-      ]);
+      ];
+
+      if (!clientesData) {
+        peticiones.push(ObtenerClientesCxC().catch(() => []));
+      }
+
+      const resultados = await Promise.all(peticiones);
+      const notasRes = resultados[0];
+
+      if (!clientesData) {
+        const cRes = resultados[1];
+        clientesData = Array.isArray(cRes) ? cRes : cRes?.items || [];
+        cache.set("contabilidad:clientesCxC", clientesData, 300);
+      }
 
       const items = Array.isArray(notasRes) ? notasRes : (notasRes?.items || []);
       setNotas(items);
       setTotalRegistros(notasRes?.total != null ? notasRes.total : items.length);
       setTotalPaginas(notasRes?.total_paginas || 1);
 
-      setClientes(Array.isArray(clientesRes) ? clientesRes : clientesRes?.items || []);
+      setClientes(clientesData);
     } catch (err) {
       toast.error("Error al cargar notas de venta: " + err.message);
     } finally {
@@ -136,36 +168,25 @@ export default function GestionNotasVenta({ usuario }) {
       return;
     }
 
-    // Armar detalles
-    const detalles = [];
-    const pMega = parseInt(formNota.paquetes_mega, 10) || 0;
-    const pLux = parseInt(formNota.paquetes_lux, 10) || 0;
-    const pServ = parseInt(formNota.paquetes_servilleta, 10) || 0;
+    // Armar detalles según productos reales de Excel
+    const itemsProductos = [
+      { nombre: "MEGA 12R", paquetes: parseInt(formNota.paquetes_mega_12r, 10) || 0, precio: parseFloat(formNota.precio_mega_12r) || 0 },
+      { nombre: "Económico", paquetes: parseInt(formNota.paquetes_economico, 10) || 0, precio: parseFloat(formNota.precio_economico) || 0 },
+      { nombre: "MEGA 12R 30m", paquetes: parseInt(formNota.paquetes_mega_30m, 10) || 0, precio: parseFloat(formNota.precio_mega_30m) || 0 },
+      { nombre: "LUX 6R", paquetes: parseInt(formNota.paquetes_lux_6r, 10) || 0, precio: parseFloat(formNota.precio_lux_6r) || 0 },
+      { nombre: "LUX 12R", paquetes: parseInt(formNota.paquetes_lux_12r, 10) || 0, precio: parseFloat(formNota.precio_lux_12r) || 0 },
+      { nombre: "LUX 24R", paquetes: parseInt(formNota.paquetes_lux_24r, 10) || 0, precio: parseFloat(formNota.precio_lux_24r) || 0 },
+      { nombre: "SERV 500X6", paquetes: parseInt(formNota.paquetes_serv_500x6, 10) || 0, precio: parseFloat(formNota.precio_serv_500x6) || 0 },
+    ];
 
-    if (pMega > 0) {
-      detalles.push({
-        presentacion: "Mega Rollo Papel",
-        paquetes_entregados: pMega,
-        precio_unitario: parseFloat(formNota.precio_mega) || 0,
-        subtotal: pMega * (parseFloat(formNota.precio_mega) || 0),
-      });
-    }
-    if (pLux > 0) {
-      detalles.push({
-        presentacion: "Lux Clásico Papel",
-        paquetes_entregados: pLux,
-        precio_unitario: parseFloat(formNota.precio_lux) || 0,
-        subtotal: pLux * (parseFloat(formNota.precio_lux) || 0),
-      });
-    }
-    if (pServ > 0) {
-      detalles.push({
-        presentacion: "Servilleta Mesa",
-        paquetes_entregados: pServ,
-        precio_unitario: parseFloat(formNota.precio_servilleta) || 0,
-        subtotal: pServ * (parseFloat(formNota.precio_servilleta) || 0),
-      });
-    }
+    const detalles = itemsProductos
+      .filter((p) => p.paquetes > 0)
+      .map((p) => ({
+        presentacion: p.nombre,
+        paquetes_entregados: p.paquetes,
+        precio_unitario: p.precio,
+        subtotal: p.paquetes * p.precio,
+      }));
 
     if (detalles.length === 0) {
       toast.error("Debe ingresar al menos una presentación con paquetes despachados");
@@ -173,6 +194,12 @@ export default function GestionNotasVenta({ usuario }) {
     }
 
     const subtotal = detalles.reduce((acc, d) => acc + d.subtotal, 0);
+
+    const obsArray = [];
+    if (formNota.numero_entrega.trim()) obsArray.push(`N° Entrega: ${formNota.numero_entrega.trim()}`);
+    if (formNota.destino.trim()) obsArray.push(`Destino: ${formNota.destino.trim()}`);
+    if (formNota.observaciones.trim()) obsArray.push(formNota.observaciones.trim());
+    const obsCompleta = obsArray.join(" | ");
 
     try {
       setGuardandoNota(true);
@@ -188,14 +215,17 @@ export default function GestionNotasVenta({ usuario }) {
         dias_credito: parseInt(formNota.dias_credito, 10) || 15,
         subtotal,
         total_neto: subtotal,
-        observaciones: formNota.observaciones.trim() || null,
+        observaciones: obsCompleta || null,
         detalles,
       });
 
       toast.success("¡Nota de venta y despacho registrado exitosamente!");
+      invalidateContabilidad();
       setModalNuevaOpen(false);
       setFormNota({
         numero_nota: "",
+        numero_entrega: "",
+        destino: "Sucre",
         id_cliente: "",
         numero_camion: "1",
         chofer: "",
@@ -204,12 +234,20 @@ export default function GestionNotasVenta({ usuario }) {
         condicion_venta: "Crédito",
         dias_credito: "15",
         observaciones: "",
-        paquetes_mega: "0",
-        precio_mega: "120.00",
-        paquetes_lux: "0",
-        precio_lux: "95.00",
-        paquetes_servilleta: "0",
-        precio_servilleta: "45.00",
+        paquetes_mega_12r: "0",
+        precio_mega_12r: "120.00",
+        paquetes_economico: "0",
+        precio_economico: "70.00",
+        paquetes_mega_30m: "0",
+        precio_mega_30m: "135.00",
+        paquetes_lux_6r: "0",
+        precio_lux_6r: "55.00",
+        paquetes_lux_12r: "0",
+        precio_lux_12r: "95.00",
+        paquetes_lux_24r: "0",
+        precio_lux_24r: "180.00",
+        paquetes_serv_500x6: "0",
+        precio_serv_500x6: "45.00",
         bonificacion_paquetes: "0",
       });
       await cargarDatos();
@@ -227,20 +265,32 @@ export default function GestionNotasVenta({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <Truck className="h-7 w-7 text-[#20A7DB]" />
-            Control de Notas de Venta y Despachos
+            Notas de Venta
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Despachos en camión, fletes, desglose de paquetes (Mega, Lux, Servilleta) y bonificaciones de venta.
+            Control de despachos, notas de venta y entregas.
           </p>
         </div>
 
-        <Button
-          onClick={() => setModalNuevaOpen(true)}
-          className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Registrar Despacho / Nota
-        </Button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setModalImportarOpen(true)}
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
+            title="Importar control de notas de venta y despachos en camión desde Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Importar Excel</span>
+          </Button>
+          <Button
+            onClick={() => setModalNuevaOpen(true)}
+            className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Nueva Nota
+          </Button>
+        </div>
       </div>
 
       {/* Tarjetas Resumen */}
@@ -406,70 +456,38 @@ export default function GestionNotasVenta({ usuario }) {
           </table>
         </div>
 
-        {/* Paginación */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Mostrando {notas.length > 0 ? (pagina - 1) * limite + 1 : 0} a{" "}
-            {Math.min(pagina * limite, totalRegistros)} de {totalRegistros} notas
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Por página:</span>
-            <select
-              value={limite}
-              onChange={(e) => {
-                setLimite(Number(e.target.value));
-                setPagina(1);
-              }}
-              className="text-xs h-8 border border-slate-200 rounded-md bg-white px-2 text-slate-700"
-            >
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="h-8 px-2 text-xs"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                Anterior
-              </Button>
-              <span className="px-2 font-medium text-slate-700">
-                Pág. {pagina} de {totalPaginas}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina >= totalPaginas || cargando}
-                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                className="h-8 px-2 text-xs"
-              >
-                Siguiente
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Paginación Estandarizada */}
+        <PaginacionTabla
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          totalItems={totalRegistros}
+          pageSize={limite}
+          indiceInicio={notas.length > 0 ? (pagina - 1) * limite + 1 : 0}
+          indiceFin={Math.min(pagina * limite, totalRegistros)}
+          puedeRetroceder={pagina > 1}
+          puedeAvanzar={pagina < totalPaginas}
+          cambiarPagina={(p) => setPagina(p)}
+          cambiarPageSize={(nuevo) => {
+            setLimite(nuevo);
+            setPagina(1);
+          }}
+          opcionesPageSize={[10, 15, 25, 50]}
+        />
       </div>
 
       {/* MODAL REGISTRAR NOTA */}
+      {modalNuevaOpen && (
       <Dialog open={modalNuevaOpen} onOpenChange={setModalNuevaOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Truck className="h-5 w-5 text-[#20A7DB]" />
-              Registrar Nota de Venta y Despacho en Camión
+              Registrar Nota de Venta
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleCrearNota} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
                   N° Nota de Venta *
@@ -485,12 +503,32 @@ export default function GestionNotasVenta({ usuario }) {
 
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Cliente / Distribuidor *
+                  N° Nota de Entrega
+                </label>
+                <Input
+                  value={formNota.numero_entrega}
+                  onChange={(e) => setFormNota({ ...formNota, numero_entrega: e.target.value })}
+                  placeholder="Ej: NE-308"
+                  className="font-mono text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Cliente *
                 </label>
                 <select
                   required
                   value={formNota.id_cliente}
-                  onChange={(e) => setFormNota({ ...formNota, id_cliente: e.target.value })}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const cli = clientes.find((c) => c.IdCliente.toString() === id);
+                    setFormNota({
+                      ...formNota,
+                      id_cliente: id,
+                      destino: cli?.Ciudad || formNota.destino,
+                    });
+                  }}
                   className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
                 >
                   <option value="">Seleccione Cliente...</option>
@@ -501,12 +539,33 @@ export default function GestionNotasVenta({ usuario }) {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Destino / Ciudad
+                </label>
+                <select
+                  value={formNota.destino}
+                  onChange={(e) => setFormNota({ ...formNota, destino: e.target.value })}
+                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                >
+                  <option value="Sucre">Sucre</option>
+                  <option value="Cochabamba">Cochabamba</option>
+                  <option value="El Alto">El Alto</option>
+                  <option value="Tarija">Tarija</option>
+                  <option value="Oruro">Oruro</option>
+                  <option value="Potosí">Potosí</option>
+                  <option value="Uyuni">Uyuni</option>
+                  <option value="La Paz">La Paz</option>
+                  <option value="Santa Cruz">Santa Cruz</option>
+                </select>
+              </div>
             </div>
 
             {/* Datos del Camión y Transporte */}
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Datos del Camión y Transporte
+                Transporte y Despacho
               </span>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -519,7 +578,7 @@ export default function GestionNotasVenta({ usuario }) {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Nombre Chofer</label>
+                  <label className="text-[10px] text-slate-500 block">Chofer</label>
                   <Input
                     value={formNota.chofer}
                     onChange={(e) => setFormNota({ ...formNota, chofer: e.target.value })}
@@ -573,56 +632,93 @@ export default function GestionNotasVenta({ usuario }) {
               </div>
             </div>
 
-            {/* Desglose de Paquetes de Papel */}
+            {/* Desglose de Paquetes según Excel 5_CONTROL NOTAS DE VENTA */}
             <div className="border border-slate-200 rounded-xl p-3.5 space-y-3">
               <span className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider block">
-                Desglose de Paquetes Despachados
+                Paquetes Despachados
               </span>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-600 block">Paquetes Mega Rollo</label>
+                  <label className="text-xs font-medium text-slate-600 block">MEGA 12R</label>
                   <Input
                     type="number"
-                    value={formNota.paquetes_mega}
-                    onChange={(e) => setFormNota({ ...formNota, paquetes_mega: e.target.value })}
+                    value={formNota.paquetes_mega_12r}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_mega_12r: e.target.value })}
                     placeholder="0"
                     className="text-xs h-8 mt-1"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600 block">Paquetes Lux Clásico</label>
+                  <label className="text-xs font-medium text-slate-600 block">Económico</label>
                   <Input
                     type="number"
-                    value={formNota.paquetes_lux}
-                    onChange={(e) => setFormNota({ ...formNota, paquetes_lux: e.target.value })}
+                    value={formNota.paquetes_economico}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_economico: e.target.value })}
                     placeholder="0"
                     className="text-xs h-8 mt-1"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600 block">Paquetes Servilleta</label>
+                  <label className="text-xs font-medium text-slate-600 block">MEGA 12R 30m</label>
                   <Input
                     type="number"
-                    value={formNota.paquetes_servilleta}
-                    onChange={(e) => setFormNota({ ...formNota, paquetes_servilleta: e.target.value })}
+                    value={formNota.paquetes_mega_30m}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_mega_30m: e.target.value })}
                     placeholder="0"
                     className="text-xs h-8 mt-1"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-600 block">
-                  Bonificaciones / Paquetes Promoción sin Cargo
-                </label>
-                <Input
-                  type="number"
-                  value={formNota.bonificacion_paquetes}
-                  onChange={(e) => setFormNota({ ...formNota, bonificacion_paquetes: e.target.value })}
-                  placeholder="0"
-                  className="text-xs h-8 mt-1 w-44"
-                />
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block">LUX 6R</label>
+                  <Input
+                    type="number"
+                    value={formNota.paquetes_lux_6r}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_lux_6r: e.target.value })}
+                    placeholder="0"
+                    className="text-xs h-8 mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block">LUX 12R</label>
+                  <Input
+                    type="number"
+                    value={formNota.paquetes_lux_12r}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_lux_12r: e.target.value })}
+                    placeholder="0"
+                    className="text-xs h-8 mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block">LUX 24R</label>
+                  <Input
+                    type="number"
+                    value={formNota.paquetes_lux_24r}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_lux_24r: e.target.value })}
+                    placeholder="0"
+                    className="text-xs h-8 mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block">SERV 500X6</label>
+                  <Input
+                    type="number"
+                    value={formNota.paquetes_serv_500x6}
+                    onChange={(e) => setFormNota({ ...formNota, paquetes_serv_500x6: e.target.value })}
+                    placeholder="0"
+                    className="text-xs h-8 mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block">Bonificación (Sin cargo)</label>
+                  <Input
+                    type="number"
+                    value={formNota.bonificacion_paquetes}
+                    onChange={(e) => setFormNota({ ...formNota, bonificacion_paquetes: e.target.value })}
+                    placeholder="0"
+                    className="text-xs h-8 mt-1"
+                  />
+                </div>
               </div>
             </div>
 
@@ -650,49 +746,122 @@ export default function GestionNotasVenta({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
+
+      {/* MODAL IMPORTAR EXCEL */}
+      <ModalImportarExcel
+        abierto={modalImportarOpen}
+        onCerrar={() => setModalImportarOpen(false)}
+        titulo="Importar Notas de Venta (Camiones y Despachos)"
+        descripcion="Sube tu archivo Excel o procesa el control oficial del servidor para registrar despachos en camión, fletes y paquetes entregados."
+        archivoPredeterminadoNombre="5_CONTROL NOTAS DE VENTA AGOSTO_2026.XLSX"
+        onImportar={ImportarNotasVenta}
+        onCompletado={async () => {
+          await cargarDatos();
+        }}
+      />
 
       {/* MODAL DETALLE DE LA NOTA */}
+      {modalDetalleOpen && (
       <Dialog open={modalDetalleOpen} onOpenChange={setModalDetalleOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <Eye className="h-5 w-5 text-[#20A7DB]" />
-              Detalle del Despacho: {detalleNota?.NumeroNota || notaSeleccionada?.NumeroNota}
+        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
+          <DialogHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-slate-900 text-lg font-bold">
+              <FileText className="h-5 w-5 text-[#20A7DB]" />
+              <span>Nota Oficial de Venta & Despacho: {detalleNota?.NumeroNota || notaSeleccionada?.NumeroNota}</span>
             </DialogTitle>
+            <Button
+              type="button"
+              onClick={() => window.print()}
+              className="bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 h-8 text-xs font-semibold px-3 shadow-2xs"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Imprimir Nota / Recibo</span>
+            </Button>
           </DialogHeader>
 
           {detalleNota && (
-            <div className="space-y-4">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 gap-2 text-xs">
-                <div><strong>Cliente:</strong> {detalleNota.Cliente?.RazonSocial}</div>
-                <div><strong>Ciudad:</strong> {detalleNota.Cliente?.Ciudad}</div>
-                <div><strong>Chofer:</strong> {detalleNota.Chofer || "No asignado"}</div>
-                <div><strong>Placa:</strong> {detalleNota.Placa || "-"}</div>
-                <div><strong>Condición:</strong> {detalleNota.CondicionVenta}</div>
-                <div><strong>Flete Chofer:</strong> Bs. {Number(detalleNota.FleteChofer || 0).toFixed(2)}</div>
+            <div className="space-y-5 print:p-0">
+              {/* MEMBRETE CORPORATIVO FORMAL */}
+              <div className="border-b-2 border-slate-800 pb-3 flex justify-between items-start">
+                <div>
+                  <h1 className="text-xl font-black uppercase tracking-wider text-slate-900">
+                    Empresa de Papel Blanquita (Shema Asociados S.R.L.)
+                  </h1>
+                  <p className="text-xs font-semibold text-slate-600 uppercase">
+                    División Comercial, Despacho y Facturación • Sucre, Bolivia
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Calle Regimiento Charcas N° 37 • Tel: (4) 64-51234 • NIT: 1024589028
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                    NOTA DE VENTA N°
+                  </span>
+                  <span className="font-mono text-lg font-black text-[#20A7DB]">
+                    {detalleNota.NumeroNota || "NV-000"}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700 block mt-0.5">
+                    Fecha: {detalleNota.FechaVenta ? new Date(detalleNota.FechaVenta).toLocaleDateString("es-BO") : new Date().toLocaleDateString("es-BO")}
+                  </span>
+                </div>
               </div>
 
+              {/* DATOS DE LA OPERACIÓN Y CLIENTE */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <strong className="text-slate-500 block font-medium">Cliente / Razón Social:</strong>
+                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.RazonSocial}</span>
+                </div>
+                <div>
+                  <strong className="text-slate-500 block font-medium">Destino / Ciudad:</strong>
+                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.Ciudad || "Sucre"}</span>
+                </div>
+                <div>
+                  <strong className="text-slate-500 block font-medium">Transportista / Chofer:</strong>
+                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Chofer || "No asignado"}</span>
+                </div>
+                <div>
+                  <strong className="text-slate-500 block font-medium">Placa Camión:</strong>
+                  <span className="font-mono font-bold text-slate-900 mt-0.5 block">{detalleNota.Placa || "-"}</span>
+                </div>
+                <div>
+                  <strong className="text-slate-500 block font-medium">Condición de Venta:</strong>
+                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.CondicionVenta}</span>
+                </div>
+                <div>
+                  <strong className="text-slate-500 block font-medium">Flete de Chofer:</strong>
+                  <span className="font-mono font-bold text-slate-900 mt-0.5 block">Bs. {Number(detalleNota.FleteChofer || 0).toFixed(2)}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <strong className="text-slate-500 block font-medium">Observaciones:</strong>
+                  <span className="text-slate-700 mt-0.5 block">{detalleNota.Observacion || "Despacho regular conforme a pedido."}</span>
+                </div>
+              </div>
+
+              {/* TABLA DE ÍTEMS */}
               <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">
-                  Ítems Despachados
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 mb-2">
+                  Ítems y Productos Despachados
                 </h4>
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-500 border-b border-slate-200">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-600 border-b border-slate-200">
                       <tr>
-                        <th className="py-2.5 px-3">Presentación</th>
-                        <th className="py-2.5 px-3 text-center">Paquetes</th>
-                        <th className="py-2.5 px-3 text-right">P. Unitario</th>
+                        <th className="py-2.5 px-3">Presentación / Producto</th>
+                        <th className="py-2.5 px-3 text-center">Cantidad Paquetes</th>
+                        <th className="py-2.5 px-3 text-right">Precio Unitario</th>
                         <th className="py-2.5 px-3 text-right">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {detalleNota.Detalles?.map((d) => (
-                        <tr key={d.IdDetalleNota}>
-                          <td className="py-2.5 px-3 font-medium text-slate-800">{d.Presentacion}</td>
-                          <td className="py-2.5 px-3 text-center font-bold">{d.PaquetesEntregados}</td>
-                          <td className="py-2.5 px-3 text-right">Bs. {Number(d.PrecioUnitario || 0).toFixed(2)}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-800">
+                        <tr key={d.IdDetalleNota} className="hover:bg-slate-50/50">
+                          <td className="py-2.5 px-3 font-semibold text-slate-900">{d.Presentacion}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold">{d.PaquetesEntregados}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">Bs. {Number(d.PrecioUnitario || 0).toFixed(2)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
                             Bs. {Number(d.Subtotal || 0).toFixed(2)}
                           </td>
                         </tr>
@@ -702,22 +871,36 @@ export default function GestionNotasVenta({ usuario }) {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm">
-                <span className="font-bold text-slate-700">Total Importe Neto:</span>
-                <span className="font-extrabold text-base text-[#20A7DB]">
+              {/* TOTALES */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm gap-3">
+                <span className="font-bold text-slate-700">Total Importe Neto de la Operación:</span>
+                <span className="font-mono font-black text-lg text-[#20A7DB]">
                   Bs. {Number(detalleNota.TotalNeto || 0).toFixed(2)}
                 </span>
+              </div>
+
+              {/* SECCIÓN FORMAL DE FIRMAS IMPRIMIBLE */}
+              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs text-slate-600">
+                <div className="border-t border-slate-400 pt-2">
+                  <p className="font-bold text-slate-800">Entregado Conforme</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Firma Transportista / Despacho</p>
+                </div>
+                <div className="border-t border-slate-400 pt-2">
+                  <p className="font-bold text-slate-800">Recibido Conforme</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Firma y Sello del Cliente</p>
+                </div>
               </div>
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-slate-100 pt-3">
             <Button variant="outline" onClick={() => setModalDetalleOpen(false)}>
               Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

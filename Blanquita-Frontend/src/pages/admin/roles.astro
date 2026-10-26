@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const usuario = Astro.locals.usuario;
+import GestionRoles from "@/components/Admin/Roles/GestionRoles";
+---
+
+<Layout title="Roles | Papel Blanquita">
+  <GestionRoles client:only="react" usuario={usuario} />
+</Layout>

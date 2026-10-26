@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import CronogramaTurnos from "@/components/RRHH/Turnos/CronogramaTurnos";
+---
+
+<Layout title="Turnos | Papelera Blanquita">
+  <CronogramaTurnos client:only="react" />
+</Layout>

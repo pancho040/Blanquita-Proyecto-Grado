@@ -1,15 +1,23 @@
-import { useState } from "react";
-import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador } from "@/constants/NavBarRoutes";
-import { Icon, Menu, ChevronDown, LogOut } from "lucide-react";
-import { cerrarSesion } from "@/lib/logout-client";
+import React, { useState, useEffect, useMemo } from "react";
 import {
-  NavigationMenu,
-  NavigationMenuList,
-  NavigationMenuItem,
-  NavigationMenuTrigger,
-  NavigationMenuContent,
-  NavigationMenuLink,
-} from "@/components/ui/navigation-menu";
+  Menu,
+  ChevronRight,
+  LogOut,
+  User as UserIcon,
+  ShieldCheck,
+} from "lucide-react";
+import { cerrarSesion } from "@/lib/logout-client";
+import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin } from "@/constants/NavBarRoutes";
+import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
+import ThemeToggle from "@/components/layout/ThemeToggle";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetTrigger,
@@ -23,211 +31,376 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
+import { cn } from "@/lib/utils";
+
+const CLAVE_ES_ADMIN = "blanquita_es_admin";
+
+function normalizarRuta(p) {
+  if (!p) return "/";
+  return p.split("?")[0].split("#")[0].replace(/\/+$/, "") || "/";
+}
 
 function IconoItem({ item, size = 18 }) {
+  if (!item || !item.icono) return null;
   if (item.esIconoLab) {
-    return <Icon iconNode={item.icono} size={size} />;
+    const IconLab = item.icono;
+    return <span className="inline-flex"><IconLab size={size} /></span>;
   }
   const IconoComp = item.icono;
   return <IconoComp size={size} />;
 }
 
-function ItemNav({ item, basePath, prefijo }) {
-  const rutaCompleta =
-    item.ruta === "" ? `${prefijo}/inicio` : `${basePath}/${item.ruta}`;
+function resolverRuta(basePath, prefijo, rutaItem, rutaSub = null) {
+  let base = rutaItem;
+  const prefijosConocidos = ["admin", "supervisor", "contador", "encargado", "operador"];
+  const tienePrefijo = prefijosConocidos.some((p) => rutaItem.startsWith(p));
 
-  if (item.subrutas) {
-    return (
-      <NavigationMenuItem>
-        <NavigationMenuTrigger className="bg-transparent text-white hover:!bg-[#20A7DB] focus:!bg-[#20A7DB] data-[state=open]:!bg-[#20A7DB] ">
-          <span className="flex items-center gap-2">
-            <IconoItem item={item} />
-            {item.titulo}
-          </span>
-        </NavigationMenuTrigger>
-        <NavigationMenuContent>
-          <ul className="grid gap-1 p-2 min-w-[180px]">
-            {item.subrutas.map((sub) => (
-              <li key={sub.ruta}>
-                <NavigationMenuLink
-                  href={`/${rutaCompleta}/${sub.ruta}`}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:!bg-[#20A7DB] hover:!text-white"
-                >
-                  <IconoItem item={sub} />
-                  {sub.titulo}
-                </NavigationMenuLink>
-              </li>
-            ))}
-          </ul>
-        </NavigationMenuContent>
-      </NavigationMenuItem>
-    );
+  if (!tienePrefijo) {
+    base = rutaItem === "" ? `${prefijo}/inicio` : `${basePath}/${rutaItem}`;
   }
 
-  return (
-    <NavigationMenuItem>
-      <NavigationMenuLink
-        href={`/${rutaCompleta}`}
-        className="flex items-center gap-2 px-3 py-2 text-lg text-white hover:!bg-[#20A7DB] focus:!bg-[#20A7DB]"
-      >
-        <IconoItem item={item} />
-        {item.titulo}
-      </NavigationMenuLink>
-    </NavigationMenuItem>
-  );
+  if (rutaSub !== null) {
+    return `/${base}/${rutaSub}`.replace(/\/+/g, "/").replace(/\/$/, "");
+  }
+  return `/${base}`.replace(/\/+/g, "/").replace(/\/$/, "");
 }
 
-function ItemNavMovil({ item, basePath, prefijo, alNavegar }) {
-  const rutaCompleta =
-    item.ruta === "" ? `${prefijo}/inicio` : `${basePath}/${item.ruta}`;
+// Resuelve la información de Breadcrumb (módulo padre y página actual)
+function obtenerBreadcrumb(rutas, basePath, prefijo, pathname) {
+  const rutaActual = normalizarRuta(pathname);
 
-  if (!item.subrutas) {
-    return (
-      <a
-        href={`/${rutaCompleta}`}
-        onClick={alNavegar}
-        className="flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium text-white hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none"
-      >
-        <IconoItem item={item} size={20} />
-        {item.titulo}
-      </a>
-    );
+  for (const item of rutas) {
+    if (item.subrutas) {
+      for (const sub of item.subrutas) {
+        const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
+        if (rutaActual === subUrl || (sub.ruta !== "" && rutaActual.startsWith(subUrl + "/"))) {
+          return {
+            padre: item.titulo,
+            padreIcono: item,
+            actual: sub.titulo,
+            actualIcono: sub,
+          };
+        }
+      }
+    } else {
+      const itemUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta));
+      if (rutaActual === itemUrl) {
+        return {
+          padre: null,
+          padreIcono: null,
+          actual: item.titulo,
+          actualIcono: item,
+        };
+      }
+    }
   }
 
-  return (
-    <AccordionItem value={item.ruta} className="border-none">
-      <AccordionTrigger className="rounded-lg px-4 py-3 text-base font-medium text-white hover:bg-[#20A7DB] hover:no-underline focus-visible:bg-[#20A7DB] focus-visible:outline-none [&>svg]:hidden">
-        <span className="flex items-center gap-3">
-          <IconoItem item={item} size={20} />
-          {item.titulo}
-        </span>
-        <ChevronDown
-          size={18}
-          className="shrink-0 transition-transform duration-200 group-data-[panel-open]:rotate-180"
-        />
-      </AccordionTrigger>
-      <AccordionContent className="pb-1">
-        <ul className="ml-5 flex flex-col gap-1 border-l-2 border-[#A0D9EF] pl-3">
-          {item.subrutas.map((sub) => (
-            <li key={sub.ruta}>
-              <a
-                href={`/${rutaCompleta}/${sub.ruta}`}
-                onClick={alNavegar}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none"
-              >
-                <IconoItem item={sub} size={18} />
-                {sub.titulo}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </AccordionContent>
-    </AccordionItem>
-  );
+  // Fallback si no hay coincidencia exacta
+  const segmentos = rutaActual.split("/").filter(Boolean);
+  const ultimoSegmento = segmentos[segmentos.length - 1] || "Inicio";
+  const capitalizado = ultimoSegmento.charAt(0).toUpperCase() + ultimoSegmento.slice(1).replace(/-/g, " ");
+
+  return {
+    padre: segmentos.length > 2 ? "Gestión" : null,
+    padreIcono: null,
+    actual: capitalizado,
+    actualIcono: null,
+  };
 }
 
-export default function NavBar({ idRol, seccion }) {
-  const prefijo = PREFIJO_POR_ROL[idRol];
+export default function NavBar({
+  idRol,
+  seccion,
+  esAdmin: esAdminProp,
+  usuario,
+  rutaInicial = "/",
+}) {
+  // Inicialización idéntica en SSR y en el cliente para prevenir Hydration Mismatch
+  const [esAdmin, setEsAdmin] = useState(() => Boolean(esAdminProp));
+
+  useEffect(() => {
+    if (esAdminProp !== undefined) {
+      const boolVal = Boolean(esAdminProp);
+      setEsAdmin(boolVal);
+      try {
+        if (boolVal) {
+          window.localStorage.setItem(CLAVE_ES_ADMIN, "true");
+        } else {
+          window.localStorage.removeItem(CLAVE_ES_ADMIN);
+        }
+      } catch {
+        /* noop */
+      }
+    } else if (typeof window !== "undefined") {
+      const guardado = window.localStorage.getItem(CLAVE_ES_ADMIN) === "true";
+      setEsAdmin(guardado);
+    }
+  }, [esAdminProp]);
+
+  const prefijo = esAdmin ? "admin" : PREFIJO_POR_ROL[idRol] || "admin";
   const enReportes = seccion === "reportes";
-  const basePath = enReportes ? `${prefijo}/reportes` : prefijo;
-  const rutas = enReportes
-    ? RutasReportes
-    : idRol === Roles.Supervisor
-    ? RutasSupervisor
+  const basePath = esAdmin ? "admin" : enReportes ? `${prefijo}/reportes` : prefijo;
+
+  const rutas = useMemo(() => {
+    if (esAdmin) return RutasAdmin;
+    if (enReportes) return RutasReportes;
+    if (idRol === Roles.Supervisor) return RutasSupervisor;
+    if (idRol === Roles.Contador) return RutasContador;
+    return RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
+  }, [esAdmin, enReportes, idRol]);
+
+  // Ruta actual reactiva que inicia con la ruta del servidor (evita mismatch en breadcrumb)
+  const [rutaActual, setRutaActual] = useState(rutaInicial);
+
+  useEffect(() => {
+    // Sincronizar ruta en cliente si fuera diferente al montar
+    if (typeof window !== "undefined" && window.location.pathname !== rutaActual) {
+      setRutaActual(window.location.pathname);
+    }
+
+    const handleLocationChange = () => {
+      if (typeof window !== "undefined") {
+        setRutaActual(window.location.pathname);
+      }
+    };
+    window.addEventListener("popstate", handleLocationChange);
+    document.addEventListener("astro:page-load", handleLocationChange);
+    document.addEventListener("astro:after-swap", handleLocationChange);
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+      document.removeEventListener("astro:page-load", handleLocationChange);
+      document.removeEventListener("astro:after-swap", handleLocationChange);
+    };
+  }, []);
+
+  const breadcrumb = useMemo(() => {
+    return obtenerBreadcrumb(rutas, basePath, prefijo, rutaActual);
+  }, [rutas, basePath, prefijo, rutaActual]);
+
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+
+  // Nombre y Rol a mostrar
+  const nombreUsuario = usuario?.Nombre || usuario?.Usuario || (esAdmin ? "Administrador" : "Usuario");
+  const rolTexto = esAdmin
+    ? "Administrador General"
     : idRol === Roles.Contador
-    ? RutasContador
-    : RutasNavBar.filter((item) => !item.isLider || idRol === Roles.Encargado);
-  const [menuAbierto, setMenuAbierto] = useState(false);
+    ? "Contabilidad & Finanzas"
+    : idRol === Roles.Supervisor
+    ? "Supervisor de Logística"
+    : idRol === Roles.Encargado
+    ? "Encargado de Producción"
+    : "Operador de Planta";
+
+  const iniciales = (nombreUsuario || "U")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join("");
 
   return (
-    <nav
-      className="fixed top-0 left-0 z-30 flex w-full flex-row items-center justify-center px-4 h-20 md:h-30 text-white transition-all duration-300 ease-in-out"
+    <header
+      className="w-full h-16 text-white transition-all duration-200 select-none shrink-0"
       style={{
         backgroundColor: "#62C1E5",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)",
         boxShadow: "0 4px 20px #1c96c533",
         borderBottom: "2px solid #A0D9EF",
       }}
     >
-      <Sheet open={menuAbierto} onOpenChange={setMenuAbierto}>
-        <SheetTrigger
-          aria-label="Abrir menú"
-          className="md:hidden absolute left-4 flex items-center justify-center rounded-lg p-2 text-white hover:bg-[#20A7DB] focus-visible:bg-[#20A7DB] focus-visible:outline-none"
-        >
-          <Menu size={28} />
-        </SheetTrigger>
-        <SheetContent
-          side="left"
-          className="w-72 max-w-[80%] border-r-2 border-[#A0D9EF] p-0 text-white [&>button]:text-white [&>button]:opacity-100"
-          style={{ backgroundColor: "#62C1E5" }}
-        >
-          <SheetHeader className="h-20 flex-row items-center justify-start border-b-2 border-[#A0D9EF] px-4 py-0 space-y-0">
-            <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
-            <img
-              src="/LogoBlanquita.webp"
-              alt="Papel Blanquita"
-              className="h-14 w-auto"
-              style={{ filter: "drop-shadow(0 4px 12px rgba(255,255,255,.3))" }}
-            />
-          </SheetHeader>
+      <div className="h-full px-4 sm:px-6 md:px-8 flex items-center justify-between gap-4">
+        
+        {/* LADO IZQUIERDO: Botón Móvil + Breadcrumbs / Título de Página */}
+        <div className="flex items-center gap-3 min-w-0">
+          
+          {/* Botón Drawer Móvil (< md) */}
+          <Sheet open={menuMovilAbierto} onOpenChange={setMenuMovilAbierto}>
+            <SheetTrigger
+              aria-label="Abrir menú de navegación"
+              className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-[#20A7DB] text-white border border-white/20 transition-colors cursor-pointer shrink-0"
+            >
+              <Menu size={20} />
+            </SheetTrigger>
 
-          <Accordion
-            openMultiple={false}
-            className="flex flex-1 flex-col gap-1 overflow-y-auto p-3"
-          >
-            {rutas.map((item) => (
-              <ItemNavMovil
-                key={item.ruta}
-                item={item}
-                basePath={basePath}
-                prefijo={prefijo}
-                alNavegar={() => setMenuAbierto(false)}
-              />
-            ))}
-          </Accordion>
+            <SheetContent
+              side="left"
+              className="w-72 p-0 text-white border-r-2 border-[#A0D9EF] z-[100]"
+              style={{
+                backgroundColor: "#62C1E5",
+                boxShadow: "0 4px 25px rgba(28, 150, 197, 0.35)",
+              }}
+            >
+              <SheetHeader className="p-4 border-b-2 border-[#A0D9EF] flex flex-row items-center justify-between">
+                <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/LogoBlanquita.webp"
+                    alt="Papel Blanquita"
+                    className="h-9 w-auto"
+                    style={{ filter: "drop-shadow(0 4px 10px rgba(255,255,255,.35))" }}
+                  />
+                </div>
+              </SheetHeader>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMenuAbierto(false);
-              cerrarSesion();
-            }}
-            className="mt-auto flex items-center gap-3 border-t-2 border-[#A0D9EF] px-4 py-4 text-base font-medium text-white hover:bg-red-600 focus-visible:bg-red-600 focus-visible:outline-none"
-          >
-            <LogOut size={20} />
-            Cerrar sesión
-          </button>
-        </SheetContent>
-      </Sheet>
+              {/* Lista móvil de rutas */}
+              <div className="flex flex-col h-[calc(100%-80px)] justify-between p-3 overflow-y-auto">
+                <Accordion type="multiple" className="w-full flex flex-col gap-1.5">
+                  {rutas.map((item) => {
+                    if (!item.subrutas) {
+                      const rutaFinal = resolverRuta(basePath, prefijo, item.ruta);
+                      const activo = normalizarRuta(rutaActual) === normalizarRuta(rutaFinal);
+                      return (
+                        <a
+                          key={item.ruta}
+                          href={rutaFinal}
+                          onClick={() => setMenuMovilAbierto(false)}
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white transition-colors",
+                            activo ? "bg-[#20A7DB] shadow-sm font-semibold" : "hover:bg-[#20A7DB]/60"
+                          )}
+                        >
+                          <IconoItem item={item} size={18} />
+                          <span className="truncate">{item.titulo}</span>
+                        </a>
+                      );
+                    }
 
-      <div className="flex flex-row items-center justify-center gap-2">
-        <img
-          src="/LogoBlanquita.webp"
-          alt="Papel Blanquita"
-          className="h-16 md:h-25 w-auto transition-[filter] duration-300 ease-in-out"
-          style={{ filter: "drop-shadow(0 4px 12px rgba(255,255,255,.3))" }}
-        />
+                    const rutaSubActiva = item.subrutas.some((sub) => {
+                      const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
+                      const actual = normalizarRuta(rutaActual);
+                      return actual === subUrl || (sub.ruta !== "" && actual.startsWith(subUrl + "/"));
+                    });
 
-        <NavigationMenu className="hidden md:flex">
-          <NavigationMenuList>
-            {rutas.map((item) => (
-              <ItemNav key={item.ruta} item={item} basePath={basePath} prefijo={prefijo} />
-            ))}
-            <NavigationMenuItem>
-              <button
-                type="button"
+                    return (
+                      <AccordionItem key={item.ruta} value={item.ruta} className="border-none">
+                        <AccordionTrigger
+                          className={cn(
+                            "rounded-xl px-3.5 py-2.5 text-sm font-medium text-white hover:no-underline transition-colors",
+                            rutaSubActiva ? "bg-[#20A7DB]/80 font-semibold" : "hover:bg-[#20A7DB]/40"
+                          )}
+                        >
+                          <span className="flex items-center gap-3 truncate">
+                            <IconoItem item={item} size={18} />
+                            <span className="truncate">{item.titulo}</span>
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-1 pt-1">
+                          <ul className="ml-4 flex flex-col gap-1 border-l-2 border-[#A0D9EF]/60 pl-3">
+                            {item.subrutas.map((sub) => {
+                              const subUrl = resolverRuta(basePath, prefijo, item.ruta, sub.ruta);
+                              const esSubActivo = normalizarRuta(rutaActual) === normalizarRuta(subUrl);
+                              return (
+                                <li key={sub.ruta}>
+                                  <a
+                                    href={subUrl}
+                                    onClick={() => setMenuMovilAbierto(false)}
+                                    className={cn(
+                                      "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-white transition-colors",
+                                      esSubActivo ? "bg-[#20A7DB] font-semibold" : "opacity-90 hover:opacity-100 hover:bg-[#20A7DB]/50"
+                                    )}
+                                  >
+                                    <IconoItem item={sub} size={15} />
+                                    <span className="truncate">{sub.titulo}</span>
+                                  </a>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+
+                <div className="pt-3 border-t-2 border-[#A0D9EF]/60">
+                  <button
+                    type="button"
+                    onClick={cerrarSesion}
+                    className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white bg-red-600/90 hover:bg-red-600 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <LogOut size={18} />
+                    Cerrar sesión
+                  </button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          {/* Breadcrumb / Título elegante unificado con fondo corporativo */}
+          <nav aria-label="Ruta de navegación" className="flex items-center gap-1.5 sm:gap-2 min-w-0 text-sm">
+            {breadcrumb.padre && (
+              <>
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-white/80 font-medium text-xs sm:text-sm truncate">
+                  {breadcrumb.padreIcono && <IconoItem item={breadcrumb.padreIcono} size={15} />}
+                  <span>{breadcrumb.padre}</span>
+                </span>
+                <ChevronRight size={14} className="hidden sm:inline-block text-white/60 shrink-0" />
+              </>
+            )}
+            <div className="flex items-center gap-2 min-w-0">
+              {breadcrumb.actualIcono && (
+                <span className="p-1 rounded-lg bg-white/15 border border-white/20 text-white shrink-0 shadow-2xs">
+                  <IconoItem item={breadcrumb.actualIcono} size={16} />
+                </span>
+              )}
+              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate drop-shadow-xs">
+                {breadcrumb.actual}
+              </h1>
+            </div>
+          </nav>
+        </div>
+
+        {/* LADO DERECHO: Rol Badge + Modo Oscuro + Perfil Dropdown */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          
+          {/* Badge de Rol Ejecutivo Unificado */}
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-white/30 bg-white/15 text-white shadow-2xs backdrop-blur-xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <ShieldCheck size={13} className="text-white" />
+            <span className="truncate max-w-[140px]">{rolTexto}</span>
+          </div>
+
+          {/* Botón de Modo Oscuro Inerte (Listo para activar más adelante) */}
+          <ThemeToggle />
+
+          {/* Separador vertical sutil */}
+          <div className="hidden sm:block h-6 w-px bg-white/30" />
+
+          {/* Menú de Usuario / Perfil */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Menú de usuario"
+              className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/15 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <div className="h-9 w-9 rounded-xl bg-white/20 border border-white/30 text-white font-bold flex items-center justify-center text-xs sm:text-sm shadow-2xs">
+                {iniciales || <UserIcon size={16} />}
+              </div>
+              <div className="hidden md:flex flex-col text-left">
+                <span className="text-xs font-semibold text-white leading-tight truncate max-w-[120px]">
+                  {nombreUsuario}
+                </span>
+                <span className="text-[11px] text-white/80 leading-none truncate max-w-[120px]">
+                  {esAdmin ? "Administrador" : rolTexto}
+                </span>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-2xl shadow-xl border border-slate-200 bg-white z-[90]">
+              <DropdownMenuLabel className="px-2.5 py-2">
+                <p className="text-xs font-semibold text-slate-900 truncate">{nombreUsuario}</p>
+                <p className="text-[11px] text-slate-500 font-normal truncate">{rolTexto}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="my-1 border-slate-100" />
+              <DropdownMenuItem
                 onClick={cerrarSesion}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-lg text-white hover:!bg-red-600 focus:!bg-red-600 focus-visible:outline-none"
+                className="flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl cursor-pointer transition-colors"
               >
-                <LogOut size={18} />
-                Cerrar sesión
-              </button>
-            </NavigationMenuItem>
-          </NavigationMenuList>
-        </NavigationMenu>
+                <LogOut size={15} />
+                <span>Cerrar sesión</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+        </div>
       </div>
-    </nav>
+    </header>
   );
 }

@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import ControlAsistencia from "@/components/RRHH/Asistencia/ControlAsistencia";
+---
+
+<Layout title="Asistencia | Papelera Blanquita">
+  <ControlAsistencia client:only="react" />
+</Layout>

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import get_current_user, require_role
-from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR
+from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO
 from app.Services.Logistica.ClienteService import ClienteService
 from app.Models.Logistica.ClienteModel import (
     ClienteCrear, ClienteActualizar, PuntoVentaCrear,
@@ -13,8 +13,8 @@ from app.Models.Logistica.ClienteModel import (
 
 ClienteRouter = APIRouter(prefix="/logistica/clientes", tags=["Logística - Clientes"])
 
-# Roles permitidos para gestionar clientes: Supervisor, Gerente, Contador
-PERMISOS_LOGISTICA = [ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR]
+# Roles permitidos para gestionar clientes: Supervisor, Gerente, Contador y Chofer en Campo (HU-29)
+PERMISOS_LOGISTICA = [ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO]
 
 @ClienteRouter.get("", response_model=list[ClienteResponse])
 def listar_clientes(

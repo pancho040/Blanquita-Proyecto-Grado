@@ -33,11 +33,15 @@ from app.Routes.Qr.InventarioProducto import qrRouter
 from app.Routes.Logistica.ClienteRouter import ClienteRouter
 from app.Routes.Logistica.RutaRouter import RutaRouter
 from app.Routes.Logistica.PrecioRouter import PrecioRouter
+from app.Routes.Logistica.ChoferRouter import ChoferRouter
 
 from app.Routes.Contabilidad.TesoreriaRouter import TesoreriaRouter
 from app.Routes.Contabilidad.CuentasCobrarRouter import CuentasCobrarRouter
 from app.Routes.Contabilidad.CuentasPagarRouter import CuentasPagarRouter
 from app.Routes.Contabilidad.ImportacionRouter import ImportacionRouter
+from app.Routes.RRHH.RRHHRouter import RRHHRouter
+from app.Routes.Usuario.AuditRouter import AuditRouter
+from app.Routes.Reportes.ReportesRouter import ReportesRouter
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -123,6 +127,7 @@ app.include_router(qrRouter)
 app.include_router(ClienteRouter)
 app.include_router(RutaRouter)
 app.include_router(PrecioRouter)
+app.include_router(ChoferRouter)
 
 #ROUTERS CONTABILIDAD Y TESORERIA
 app.include_router(TesoreriaRouter)
@@ -133,4 +138,16 @@ app.include_router(CuentasPagarRouter)
 app.include_router(CuentasPagarRouter, prefix="/contabilidad")
 app.include_router(ImportacionRouter)
 app.include_router(ImportacionRouter, prefix="/contabilidad")
+
+#ROUTERS RECURSOS HUMANOS Y BIOMETRICO (SOLO ADMIN)
+app.include_router(RRHHRouter)
+app.include_router(RRHHRouter, prefix="/api")
+
+#ROUTERS AUDITORÍA TRANSACCIONAL
+app.include_router(AuditRouter)
+app.include_router(AuditRouter, prefix="/api")
+
+# ROUTERS REPORTES Y ANALÍTICA
+app.include_router(ReportesRouter)
+app.include_router(ReportesRouter, prefix="/api")
 

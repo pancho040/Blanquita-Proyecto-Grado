@@ -72,6 +72,8 @@ class CierreCajaCrear(BaseModel):
     HoraTermino: Optional[time] = None
     Observacion: Optional[str] = Field(None, validation_alias=AliasChoices("Observacion", "observacion", "observaciones_cierre"))
     DesgloseCortes: List[ArqueoCorteItem] = Field(default_factory=list, validation_alias=AliasChoices("DesgloseCortes", "desglose_cortes", "arqueo_detalle"))
+    AutorizadoPorContador: Optional[bool] = Field(False, validation_alias=AliasChoices("AutorizadoPorContador", "autorizado_contador"))
+    JustificativoDiferencia: Optional[str] = Field(None, validation_alias=AliasChoices("JustificativoDiferencia", "justificativo_diferencia"))
 
 class AperturaCierreCajaResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -143,10 +145,10 @@ class MovimientoCajaCrear(BaseModel):
     IdCategoriaMovimientoCaja: int = Field(..., validation_alias=AliasChoices("IdCategoriaMovimientoCaja", "id_categoria"))
     Monto: float = Field(..., gt=0, validation_alias=AliasChoices("Monto", "monto"))
     MetodoPago: str = Field("Efectivo", validation_alias=AliasChoices("MetodoPago", "metodo_pago"))
-    NumeroReferencia: Optional[str] = Field(None, validation_alias=AliasChoices("NumeroReferencia", "numero_referencia"))
+    NumeroReferencia: Optional[str] = Field(None, validation_alias=AliasChoices("NumeroReferencia", "numero_referencia", "numero_comprobante", "respaldo"))
     NotaCodigo: Optional[str] = None
     Solicitante: Optional[str] = Field(None, validation_alias=AliasChoices("Solicitante", "beneficiario", "solicitante"))
-    Respaldo: Optional[str] = None
+    Respaldo: Optional[str] = Field(None, validation_alias=AliasChoices("Respaldo", "respaldo", "numero_comprobante"))
     IdCuentaBancaria: Optional[int] = Field(None, validation_alias=AliasChoices("IdCuentaBancaria", "id_cuenta_bancaria"))
     Descripcion: Optional[str] = Field(None, validation_alias=AliasChoices("Descripcion", "glosa", "descripcion"))
     Tipo: Optional[str] = Field(None, validation_alias=AliasChoices("Tipo", "tipo"))

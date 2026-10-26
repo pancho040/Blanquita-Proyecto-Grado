@@ -43,13 +43,13 @@ export default function InicioSupervisor({ usuario }) {
         <div className="relative z-10 max-w-2xl space-y-2">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-md">
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Módulo de Logística & Distribución</span>
+            <span>Logística y Distribución</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Bienvenido, {nombre}
+            {nombre}
           </h1>
           <p className="text-sky-100 text-sm sm:text-base">
-            Control integral de clientes, puntos de venta, itinerarios de ruta y programación de repartidores para la ciudad de Sucre.
+            Control de clientes, rutas y despachos.
           </p>
         </div>
         <div className="absolute -right-8 -bottom-8 h-48 w-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />

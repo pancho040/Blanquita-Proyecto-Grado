@@ -8,6 +8,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tag, Edit2, Loader2, Package, CheckCircle2 } from "lucide-react";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { cache } from "@/lib/cacheService";
 
 export default function TablaPrecios() {
   const [precios, setPrecios] = useState([]);
@@ -24,11 +27,22 @@ export default function TablaPrecios() {
     VigenteDesde: new Date().toISOString().split("T")[0]
   });
 
-  const cargarPrecios = async () => {
+  const cargarPrecios = async (forzar = false) => {
+    const cacheKey = "logistica:precios";
     try {
+      if (!forzar) {
+        const enCache = cache.get(cacheKey);
+        if (enCache) {
+          setPrecios(enCache);
+          setLoading(false);
+          return;
+        }
+      }
       setLoading(true);
       const data = await ObtenerPrecios();
-      setPrecios(data);
+      const lista = data || [];
+      setPrecios(lista);
+      cache.set(cacheKey, lista, 300);
     } catch (err) {
       toast.error(err.message || "Error al cargar catálogo de precios");
     } finally {
@@ -39,6 +53,9 @@ export default function TablaPrecios() {
   useEffect(() => {
     cargarPrecios();
   }, []);
+
+  // Paginación optimizada
+  const paginacion = usePaginacion(precios, 10);
 
   const abrirEditar = (item) => {
     setItemEditar(item);
@@ -66,9 +83,10 @@ export default function TablaPrecios() {
         CantidadMinimaMayorista: Number(formPrecio.CantidadMinimaMayorista) || 10,
         VigenteDesde: formPrecio.VigenteDesde
       });
+      cache.invalidate("logistica:precios");
       toast.success("Precio actualizado exitosamente");
       setModalAbierto(false);
-      cargarPrecios();
+      cargarPrecios(true);
     } catch (err) {
       toast.error(err.message || "Error al guardar precio");
     } finally {
@@ -80,9 +98,9 @@ export default function TablaPrecios() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-800">Catálogo de Precios de Venta</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">Precios</h2>
           <p className="text-sm text-muted-foreground">
-            Tarifas unitarias y mayoristas para productos de papel (megarrollos, higiénico, servilletas)
+            Tarifas unitarias y mayoristas vigentes.
           </p>
         </div>
       </div>
@@ -124,7 +142,7 @@ export default function TablaPrecios() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {precios.map((p) => {
+                  {paginacion.itemsPaginados.map((p) => {
                     const tienePrecio = p.PrecioUnitario !== null;
                     return (
                       <tr key={p.IdPresentacion} className="hover:bg-slate-50/70">
@@ -178,12 +196,14 @@ export default function TablaPrecios() {
               </table>
             </div>
           )}
+          {precios.length > 0 && <PaginacionTabla {...paginacion} />}
         </CardContent>
       </Card>
 
       {/* Modal Fijar Precio */}
+      {modalAbierto && (
       <Dialog open={modalAbierto} onOpenChange={setModalAbierto}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-[#20A7DB] flex items-center gap-2">
               <Tag className="h-5 w-5" />
@@ -261,6 +281,7 @@ export default function TablaPrecios() {
           )}
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

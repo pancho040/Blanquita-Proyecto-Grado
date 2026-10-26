@@ -1,3 +1,4 @@
+from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.Repository.Contabilidad.CuentasCobrarRepository import CuentasCobrarRepository
@@ -42,6 +43,14 @@ class CuentasCobrarService:
         datos_nota["ImporteNeto"] = max(importe_neto, 0.0)
         
         if dto.EsCredito:
+            # RN-01: Validar bloqueo automático por mora o límite de crédito
+            if dto.IdCliente:
+                cred_check = self.repo.VerificarEstadoCreditoCliente(dto.IdCliente, datos_nota["ImporteNeto"])
+                if cred_check.get("Bloqueado"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=cred_check.get("Motivo")
+                    )
             datos_nota["TotalCancelado"] = 0.0
             datos_nota["SaldoPendiente"] = datos_nota["ImporteNeto"]
             datos_nota["EstadoCobranza"] = "Crédito Pendiente"
@@ -59,6 +68,11 @@ class CuentasCobrarService:
 
         # Si es crédito y se tiene cliente, crear registro de Cuenta por Cobrar
         if dto.EsCredito and dto.IdCliente:
+            dias_plazo = 15
+            if 'cred_check' in locals() and cred_check.get("DiasCredito"):
+                dias_plazo = cred_check.get("DiasCredito")
+            f_venc = dto.FechaVenta + timedelta(days=dias_plazo)
+
             self.repo.CrearCuentaCobrar({
                 "IdCliente": dto.IdCliente,
                 "IdPedido": None,
@@ -71,7 +85,7 @@ class CuentasCobrarService:
                 "MontoTotal": datos_nota["ImporteNeto"],
                 "SaldoPendiente": datos_nota["ImporteNeto"],
                 "FechaEmision": dto.FechaVenta,
-                "FechaVencimiento": None,
+                "FechaVencimiento": f_venc,
                 "IdUsuarioRegistro": id_usuario,
                 "Observacion": dto.Observacion
             })
@@ -89,6 +103,27 @@ class CuentasCobrarService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuenta por cobrar no encontrada")
         cxc["Abonos"] = self.repo.ListarAbonosPorCuenta(id_cxc)
         return cxc
+
+    def CrearCuentaCobrarManual(self, datos: dict, id_usuario: int | None = None) -> dict:
+        monto = float(datos.get("monto_total") or datos.get("MontoTotal") or 0.0)
+        hoy = date.today()
+        payload = {
+            "IdCliente": datos.get("id_cliente") or datos.get("IdCliente"),
+            "IdPedido": None,
+            "IdNotaVenta": datos.get("id_nota_venta") or datos.get("IdNotaVenta"),
+            "NumeroNotaVenta": datos.get("numero_nota") or datos.get("NumeroNotaVenta") or f"NV-{int(datetime.now().timestamp())}",
+            "NumeroNotaEntrega": datos.get("numero_entrega") or datos.get("NumeroNotaEntrega") or "-",
+            "FechaDespacho": datos.get("fecha_despacho") or datos.get("FechaDespacho") or hoy,
+            "DiasMora": 0,
+            "IdEstadoCuentaCobrar": 1,  # 1 = Pendiente
+            "MontoTotal": monto,
+            "SaldoPendiente": monto,
+            "FechaEmision": datos.get("fecha_emision") or datos.get("FechaEmision") or hoy,
+            "FechaVencimiento": datos.get("fecha_vencimiento") or datos.get("FechaVencimiento"),
+            "IdUsuarioRegistro": id_usuario,
+            "Observacion": datos.get("observaciones") or datos.get("Observacion") or ""
+        }
+        return self.repo.CrearCuentaCobrar(payload)
 
     def RegistrarAbono(self, dto: AbonoCuentaCobrarCrear, id_usuario: int | None = None) -> dict:
         cxc = self.repo.ObtenerCuentaCobrarPorId(dto.IdCuentaCobrar)
@@ -117,3 +152,6 @@ class CuentasCobrarService:
 
     def ObtenerResumenCartera(self) -> list[dict]:
         return self.repo.ObtenerResumenCartera()
+
+    def VerificarEstadoCredito(self, id_cliente: int, nuevo_monto: float = 0.0) -> dict:
+        return self.repo.VerificarEstadoCreditoCliente(id_cliente, nuevo_monto)

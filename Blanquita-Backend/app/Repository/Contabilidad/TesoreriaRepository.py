@@ -235,6 +235,47 @@ class TesoreriaRepository:
         return res or {"TotalIngresos": 0.0, "TotalEgresos": 0.0}
 
 
+    def ObtenerMovimientoCajaPorId(self, id_movimiento: int) -> dict | None:
+        sql = """
+            SELECT m.*, cat."TipoMovimiento", cat."NombreCategoria"
+            FROM "MovimientoCaja" m
+            JOIN "CategoriaMovimientoCaja" cat ON m."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            WHERE m."IdMovimientoCaja" = :id_mov;
+        """
+        return self.caller.LlamarUnRegistro(sql, {"id_mov": id_movimiento})
+
+    def AnularMovimientoCaja(self, id_movimiento: int, id_usuario: int | None, motivo: str = "") -> dict | None:
+        sql = """
+            UPDATE "MovimientoCaja"
+            SET "Anulado" = true,
+                "Descripcion" = COALESCE("Descripcion", '') || ' [ANULADO: ' || :motivo || ']'
+            WHERE "IdMovimientoCaja" = :id_mov
+            RETURNING *;
+        """
+        return self.caller.LlamarUnRegistro(sql, {
+            "id_mov": id_movimiento,
+            "motivo": motivo or "Anulación solicitada por administración"
+        })
+
+    def RegistrarAuditLog(self, id_usuario: int | None, accion: str, tabla: str, id_registro: str, detalle: str):
+        try:
+            sql = """
+                INSERT INTO "AuditLog" (
+                    "IdUsuario", "Accion", "TablaAfectada", "IdRegistroAfectado", "Detalle", "FechaHora"
+                ) VALUES (
+                    :id_u, :acc, :tabla, :id_reg, :det, now()
+                );
+            """
+            self.caller.LlamarFuncion(sql, {
+                "id_u": id_usuario,
+                "acc": accion,
+                "tabla": tabla,
+                "id_reg": id_registro,
+                "det": detalle
+            })
+        except Exception as e:
+            print(f"Error al registrar log de auditoría: {e}")
+
     # --- Solicitudes de Caja Chica ---
     def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None, fecha_fin = None) -> list[dict]:
         where_clauses = []

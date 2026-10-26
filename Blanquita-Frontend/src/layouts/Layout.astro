@@ -1,24 +1,159 @@
 ---
 import '../styles/globals.css';
+import { ClientRouter } from 'astro:transitions';
 import { Toaster } from '@/components/ui/sonner';
+import NavBar from '@/components/layout/NavBar';
+import SideBar from '@/components/layout/SideBar';
+
+interface Props {
+  title?: string;
+  sinMenu?: boolean;
+}
+
+const { title = "Sistema de Gestión Integral - Papel Blanquita", sinMenu = false } = Astro.props;
+const usuario = Astro.locals.usuario;
+const rutaActual = Astro.url.pathname;
+const mostrarMenu = !sinMenu && Boolean(usuario);
+
+// Estado SSR persistido mediante Cookies para garantizar 0 parpadeo al recargar o navegar
+const abiertoCookie = Astro.cookies.get('blanquita_sidebar_abierto')?.value;
+const abiertoInicial = abiertoCookie !== 'false';
+const anchoInicial = abiertoInicial ? '17rem' : '4.5rem';
+
+const gruposCookieRaw = Astro.cookies.get('blanquita_sidebar_grupos')?.value;
+let gruposIniciales: Record<string, boolean> = {};
+try {
+  if (gruposCookieRaw) {
+    gruposIniciales = JSON.parse(decodeURIComponent(gruposCookieRaw));
+  }
+} catch (e) {}
 ---
 <!doctype html>
 <html lang="es">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
-			<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+		<ClientRouter fallback="swap" />
+		<style is:inline define:vars={{ anchoInicial }}>
+			:root {
+				--hueco-sidebar: var(--anchoInicial, 17rem);
+			}
+		</style>
+		<script is:inline>
+			// Prevenir que InvalidStateError de View Transitions en segundo plano ensucie la consola
+			window.addEventListener('unhandledrejection', function(event) {
+				if (event.reason && (event.reason.name === 'InvalidStateError' || String(event.reason).includes('Transition was aborted'))) {
+					event.preventDefault();
+				}
+			});
+			// Prevenir bugs de Chromium (moveBefore) en swaps de View Transitions y forzar swap seguro con replaceWith
+			try {
+				if (typeof Element !== 'undefined' && Element.prototype && Element.prototype.moveBefore) {
+					Element.prototype.moveBefore = undefined;
+				}
+				if (typeof document !== 'undefined' && document.documentElement && document.documentElement.moveBefore) {
+					document.documentElement.moveBefore = undefined;
+				}
+			} catch (e) {}
+			// Prevenir estrictamente errores de entorno de test / actQueue en React 19
+			globalThis.IS_REACT_ACT_ENVIRONMENT = false;
+			try {
+				if (typeof globalThis.jest !== 'undefined') delete globalThis.jest;
+			} catch (e) {}
+			try {
+				var _k = '__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE';
+				var _stored = null;
+				Object.defineProperty(Object.prototype, _k, {
+					configurable: true,
+					enumerable: false,
+					get: function() {
+						return this === Object.prototype ? _stored : (this._cliInternals || _stored);
+					},
+					set: function(val) {
+						if (val && typeof val === 'object' && val.actQueue === undefined) {
+							val.actQueue = null;
+						}
+						if (this === Object.prototype) {
+							_stored = val;
+						} else {
+							this._cliInternals = val;
+						}
+					}
+				});
+			} catch (e) {}
+		</script>
+		<link rel="icon" type="image/x-icon" href="/favicon.ico" />
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
 		<link rel="icon" type="image/png" sizes="48x48" href="/android-chrome-512x512.png" />
 		<link rel="icon" type="image/png" sizes="48x48" href="/android-chrome-192x192.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Sistema de Gestión Integral - Papel Blanquita</title>
+		<title>{title}</title>
+		<!-- Leaflet CSS y JS globales para módulos de logística y clientes -->
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+		<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+		<script is:inline>
+			// Prevenir Flash de Layout al cargar y asegurar Tema Claro por defecto
+			(function() {
+				try {
+					var guardado = localStorage.getItem('sidebar-abierto');
+					if (guardado !== null) {
+						document.documentElement.style.setProperty('--hueco-sidebar', guardado !== 'false' ? '17rem' : '4.5rem');
+					}
+					// Forzar tema claro por defecto según requerimiento
+					document.documentElement.classList.remove('dark');
+				} catch (e) {}
+			})();
+		</script>
 	</head>
-	<body>
-		<slot />
-		<Toaster client:load richColors position="top-right" />
+	<body class="bg-slate-50 font-sans text-slate-900 antialiased min-h-screen selection:bg-[#20A7DB]/20 selection:text-[#1C96C5]">
+		{mostrarMenu ? (
+			<div class="flex min-h-screen w-full bg-slate-50 text-slate-900">
+				<!-- Barra Lateral Escritorio: Contenedor espaciador físico continuo y persistente -->
+				<div
+					id="shell-sidebar-wrapper"
+					transition:persist="blanquita-sidebar"
+					class="hidden md:block shrink-0 relative z-40"
+					style={`width: var(--hueco-sidebar, ${anchoInicial});`}
+				>
+					<SideBar
+						client:load
+						idRol={usuario.IdRol}
+						esAdmin={usuario.IsAdmin}
+						rutaInicial={rutaActual}
+						gruposIniciales={gruposIniciales}
+						abiertoInicial={abiertoInicial}
+					/>
+				</div>
+
+				<!-- Columna Derecha Principal: TopBar Ejecutiva + Contenido -->
+				<div class="flex-1 flex flex-col min-w-0 w-full min-h-screen">
+					<!-- TopBar / NavBar Ejecutiva integrada permanente -->
+					<header
+						id="shell-navbar-wrapper"
+						transition:persist="blanquita-navbar"
+						class="sticky top-0 z-30 w-full shrink-0"
+					>
+						<NavBar
+							client:load
+							usuario={usuario}
+							idRol={usuario.IdRol}
+							esAdmin={usuario.IsAdmin}
+							rutaInicial={rutaActual}
+						/>
+					</header>
+
+					<!-- Área de Contenido de la Página con espaciado profesional -->
+					<main class="flex-1 w-full px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8 max-w-[1600px] mx-auto overflow-x-hidden">
+						<slot />
+					</main>
+				</div>
+			</div>
+		) : (
+			<slot />
+		)}
+		<Toaster client:only="react" richColors position="top-right" />
 	</body>
 </html>
 

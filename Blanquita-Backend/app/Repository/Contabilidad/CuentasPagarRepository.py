@@ -8,13 +8,16 @@ class CuentasPagarRepository:
     # --- Proveedores ---
     def ListarProveedores(self) -> list[dict]:
         sql = """
-            SELECT p."IdProveedor", p."NombreProveedor", p."CelularProveedor", p."CorreoProveedor",
-                   p."IdEstadoProveedor", ep."NombreEstadoProveedor"
+            SELECT p."IdProveedor", p."NombreProveedor",
+                   COALESCE(p."IdEstadoProveedor", 1) as "IdEstadoProveedor",
+                   'Activo' as "NombreEstadoProveedor"
             FROM "Proveedor" p
-            JOIN "EstadoProveedor" ep ON p."IdEstadoProveedor" = ep."IdEstadoProveedor"
             ORDER BY p."NombreProveedor" ASC;
         """
-        return self.caller.LlamarFuncion(sql)
+        try:
+            return self.caller.LlamarFuncion(sql)
+        except Exception:
+            return []
 
     def ObtenerProveedorPorNombre(self, nombre: str) -> dict | None:
         sql = """

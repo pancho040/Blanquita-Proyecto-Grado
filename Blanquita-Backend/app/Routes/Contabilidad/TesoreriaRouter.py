@@ -240,6 +240,26 @@ def registrar_movimiento_caja(
     res["Glosa"] = res.get("Descripcion")
     return res
 
+@TesoreriaRouter.post("/movimientos/{id_movimiento}/anular")
+def anular_movimiento_caja(
+    id_movimiento: int,
+    datos: dict = {},
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """RN-04: Anula lógicamente un movimiento de caja con reversión bancaria y registro de auditoría."""
+    motivo = datos.get("motivo", "Anulación autorizada por administración")
+    return TesoreriaService(db).AnularMovimientoCaja(id_movimiento, usuario["IdUsuario"], motivo)
+
+@TesoreriaRouter.delete("/movimientos/{id_movimiento}")
+def eliminar_movimiento_caja(
+    id_movimiento: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """RN-04: Prohíbe la eliminación física y redirige a la anulación contable inmutable."""
+    return TesoreriaService(db).AnularMovimientoCaja(id_movimiento, usuario["IdUsuario"], "Eliminación convertida en anulación lógica según RN-04")
+
 
 # ==========================================
 # SOLICITUDES DE CAJA CHICA (SC) Y KPIS
@@ -414,3 +434,12 @@ def obtener_dashboard_kpis(
         "TotalCuentasPagar": total_cxp,
         "TotalCuentasCobrar": total_cxc,
     }
+
+@TesoreriaRouter.get("/cajas/{id_apertura}/resumen-gerencial")
+def obtener_resumen_gerencial_caja(
+    id_apertura: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """HU-10: Genera el resumen consolidado de liquidez y conciliación para Gerencia General."""
+    return TesoreriaService(db).ObtenerResumenGerencial(id_apertura)

@@ -24,4 +24,14 @@ def guardar_precio(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
-    return PrecioService(db).GuardarPrecio(dto)
+    """HU-17: Modificar precio unitario con registro de auditoría inmutable."""
+    return PrecioService(db).GuardarPrecio(dto, usuario["IdUsuario"])
+
+@PrecioRouter.get("/{id_presentacion}/historial")
+def listar_historial_precios(
+    id_presentacion: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """HU-17: Consulta el historial de precios anteriores y fechas de vigencia."""
+    return PrecioService(db).ListarHistorialPrecios(id_presentacion)

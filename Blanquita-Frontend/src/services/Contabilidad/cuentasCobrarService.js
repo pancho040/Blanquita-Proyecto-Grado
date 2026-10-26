@@ -1,4 +1,5 @@
 import { manejarErrorBackend } from "@/utils/validators";
+import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
 // ==========================================
 // NOTAS DE VENTA Y DESPACHOS
@@ -23,13 +24,13 @@ export async function ObtenerNotasVenta({
   params.append("offset", offset);
   if (page) params.append("page", page);
 
-  const res = await fetch(`/api/cxc/notas-venta?${params.toString()}`);
+  const res = await fetchConCache(`/api/cxc/notas-venta?${params.toString()}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
 export async function ObtenerNotaVentaDetalle(idNotaVenta) {
-  const res = await fetch(`/api/cxc/notas-venta/${idNotaVenta}`);
+  const res = await fetchConCache(`/api/cxc/notas-venta/${idNotaVenta}`, {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -41,6 +42,7 @@ export async function CrearNotaVenta(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
   return await res.json();
 }
 
@@ -65,13 +67,13 @@ export async function ObtenerCuentasCobrar({
   params.append("offset", offset);
   if (page) params.append("page", page);
 
-  const res = await fetch(`/api/cxc/cuentas?${params.toString()}`);
+  const res = await fetchConCache(`/api/cxc/cuentas?${params.toString()}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
 export async function ObtenerCuentaCobrarDetalle(idCuentaCobrar) {
-  const res = await fetch(`/api/cxc/cuentas/${idCuentaCobrar}`);
+  const res = await fetchConCache(`/api/cxc/cuentas/${idCuentaCobrar}`, {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -83,6 +85,7 @@ export async function CrearCuentaCobrar(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
   return await res.json();
 }
 
@@ -96,17 +99,18 @@ export async function RegistrarAbono(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
   return await res.json();
 }
 
 export async function ObtenerCarteraResumen() {
-  const res = await fetch("/api/cxc/cartera-resumen");
+  const res = await fetchConCache("/api/cxc/cartera-resumen", {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
 export async function ObtenerClientesCxC() {
-  const res = await fetch("/api/cxc/clientes");
+  const res = await fetchConCache("/api/cxc/clientes", {}, 60000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }

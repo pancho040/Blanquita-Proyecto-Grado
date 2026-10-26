@@ -15,6 +15,8 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +33,17 @@ import { toast } from "sonner";
 import {
   ObtenerCuentasCobrar,
   ObtenerCuentaCobrarDetalle,
+  CrearCuentaCobrar,
   RegistrarAbono,
   ObtenerCarteraResumen,
   ObtenerClientesCxC,
 } from "@/services/Contabilidad/cuentasCobrarService";
 import { ObtenerCuentasBancarias } from "@/services/Contabilidad/tesoreriaService";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import ModalImportarExcel from "./ModalImportarExcel";
+import { ImportarCuentasCobrar } from "@/services/Contabilidad/importacionService";
+import { FileSpreadsheet } from "lucide-react";
+import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionCuentasCobrar({ usuario }) {
   const [cuentas, setCuentas] = useState([]);
@@ -54,10 +62,27 @@ export default function GestionCuentasCobrar({ usuario }) {
   const [totalPaginas, setTotalPaginas] = useState(1);
 
   // Modales
+  const [modalCrearOpen, setModalCrearOpen] = useState(false);
   const [modalAbonoOpen, setModalAbonoOpen] = useState(false);
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [modalImportarOpen, setModalImportarOpen] = useState(false);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   const [detalleCuenta, setDetalleCuenta] = useState(null);
+
+  // Formulario Crear Cuenta Manual (Campos de Excel)
+  const [guardandoCrear, setGuardandoCrear] = useState(false);
+  const [formCrear, setFormCrear] = useState({
+    id_cliente: "",
+    destino: "Sucre",
+    celular: "",
+    numero_nota: "",
+    numero_entrega: "",
+    monto_total: "",
+    linea_credito: "",
+    fecha_emision: new Date().toISOString().split("T")[0],
+    fecha_vencimiento: "",
+    observaciones: "",
+  });
 
   // Formulario Abono
   const [formAbono, setFormAbono] = useState({
@@ -88,7 +113,12 @@ export default function GestionCuentasCobrar({ usuario }) {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [cuentasRes, resumenRes, clientesRes, bancosRes] = await Promise.all([
+
+      // Auxiliares desde caché
+      let clientesData = cache.get("contabilidad:clientesCxC");
+      let bancosData = cache.get("contabilidad:cuentasBancarias");
+
+      const peticiones = [
         ObtenerCuentasCobrar({
           page: pagina,
           limit: limite,
@@ -97,9 +127,30 @@ export default function GestionCuentasCobrar({ usuario }) {
           soloVencidas: filtroSoloVencidas,
         }),
         ObtenerCarteraResumen().catch(() => null),
-        ObtenerClientesCxC().catch(() => []),
-        ObtenerCuentasBancarias().catch(() => []),
-      ]);
+      ];
+
+      if (!clientesData) {
+        peticiones.push(ObtenerClientesCxC().catch(() => []));
+      }
+      if (!bancosData) {
+        peticiones.push(ObtenerCuentasBancarias().catch(() => []));
+      }
+
+      const resultados = await Promise.all(peticiones);
+      const cuentasRes = resultados[0];
+      const resumenRes = resultados[1];
+
+      let idx = 2;
+      if (!clientesData) {
+        const cRes = resultados[idx++];
+        clientesData = Array.isArray(cRes) ? cRes : cRes?.items || [];
+        cache.set("contabilidad:clientesCxC", clientesData, 300);
+      }
+      if (!bancosData) {
+        const bRes = resultados[idx++];
+        bancosData = Array.isArray(bRes) ? bRes : bRes?.items || [];
+        cache.set("contabilidad:cuentasBancarias", bancosData, 300);
+      }
 
       const items = Array.isArray(cuentasRes) ? cuentasRes : (cuentasRes?.items || []);
       setCuentas(items);
@@ -107,8 +158,8 @@ export default function GestionCuentasCobrar({ usuario }) {
       setTotalPaginas(cuentasRes?.total_paginas || 1);
 
       setResumen(resumenRes);
-      setClientes(Array.isArray(clientesRes) ? clientesRes : clientesRes?.items || []);
-      setBancos(Array.isArray(bancosRes) ? bancosRes : bancosRes?.items || []);
+      setClientes(clientesData);
+      setBancos(bancosData);
     } catch (err) {
       toast.error("Error al cargar datos de cuentas por cobrar: " + err.message);
     } finally {
@@ -124,6 +175,46 @@ export default function GestionCuentasCobrar({ usuario }) {
       setModalDetalleOpen(true);
     } catch (err) {
       toast.error("Error al cargar detalle: " + err.message);
+    }
+  };
+
+  const handleCrearCuenta = async (e) => {
+    e.preventDefault();
+    if (!formCrear.id_cliente || !formCrear.monto_total) {
+      toast.error("Seleccione un cliente e ingrese el monto");
+      return;
+    }
+    try {
+      setGuardandoCrear(true);
+      await CrearCuentaCobrar({
+        id_cliente: Number(formCrear.id_cliente),
+        monto_total: Number(formCrear.monto_total),
+        numero_nota: formCrear.numero_nota || undefined,
+        numero_entrega: formCrear.numero_entrega || undefined,
+        fecha_emision: formCrear.fecha_emision,
+        fecha_vencimiento: formCrear.fecha_vencimiento || undefined,
+        observaciones: `Destino: ${formCrear.destino} | Cel: ${formCrear.celular} | L.Cred: ${formCrear.linea_credito} | ${formCrear.observaciones}`.trim(),
+      });
+      toast.success("Cuenta por cobrar registrada exitosamente");
+      setModalCrearOpen(false);
+      setFormCrear({
+        id_cliente: "",
+        destino: "Sucre",
+        celular: "",
+        numero_nota: "",
+        numero_entrega: "",
+        monto_total: "",
+        linea_credito: "",
+        fecha_emision: new Date().toISOString().split("T")[0],
+        fecha_vencimiento: "",
+        observaciones: "",
+      });
+      invalidateContabilidad();
+      cargarDatos();
+    } catch (err) {
+      toast.error(err.message || "Error al registrar cuenta");
+    } finally {
+      setGuardandoCrear(false);
     }
   };
 
@@ -187,6 +278,7 @@ export default function GestionCuentasCobrar({ usuario }) {
       });
 
       toast.success("¡Abono bancario registrado exitosamente!");
+      invalidateContabilidad();
       setModalAbonoOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -196,6 +288,35 @@ export default function GestionCuentasCobrar({ usuario }) {
     }
   };
 
+  const enviarRecordatorioMora = (cuenta) => {
+    const nombre = cuenta.RazonSocial || cuenta.NombreComercial || "Cliente";
+    const saldo = Number(cuenta.SaldoPendiente || 0).toFixed(2);
+    const nota = cuenta.NumeroNota || `NV-${cuenta.IdNotaVenta || cuenta.IdCuentaCobrar}`;
+    const dias = cuenta.DiasMora || 0;
+    const telefono = cuenta.Telefono || "";
+
+    const mensaje = encodeURIComponent(
+      `Estimado cliente *${nombre}*,\n\nLe saludamos cordialmente de parte de *Empresa de Papel Blanquita (Shema Asociados S.R.L.)*.\n\nLe recordamos de manera atenta que mantiene un saldo pendiente de *Bs. ${saldo}* correspondiente a la Nota de Venta *${nota}* (${dias} días de vencimiento).\n\nAgradecemos su gentil colaboración para regularizar este compromiso a la brevedad mediante nuestras cuentas bancarias autorizadas o coordinando con su ejecutivo de distribución.\n\n_Departamento de Créditos y Cobranzas - Empresa de Papel Blanquita (Shema Asociados S.R.L.)_`
+    );
+
+    const url = telefono
+      ? `https://wa.me/591${telefono.replace(/\D/g, "")}?text=${mensaje}`
+      : `https://wa.me/?text=${mensaje}`;
+
+    window.open(url, "_blank");
+    // HU-08: Registrar recordatorio de mora en el log de auditoría
+    if (cuenta.IdCliente) {
+      fetch(`/api/contabilidad/cxc/clientes/${cuenta.IdCliente}/recordatorio-mora`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          detalle: `Recordatorio de mora enviado a ${nombre} por saldo de Bs. ${saldo} (Nota ${nota}, ${dias} días de vencimiento).`
+        })
+      }).catch(err => console.error("Error registrando recordatorio:", err));
+    }
+    toast.success(`Recordatorio de mora registrado y preparado para ${nombre}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Encabezado */}
@@ -203,20 +324,40 @@ export default function GestionCuentasCobrar({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <HandCoins className="h-7 w-7 text-[#20A7DB]" />
-            Cuentas por Cobrar y Cobranzas
+            Cuentas por Cobrar
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Control de cartera de clientes, estados de cuenta, días de mora y abonos bancarios (RF-06, RN-01).
+            Cartera de clientes, estados de cuenta, mora y abonos.
           </p>
         </div>
 
-        <Button
-          onClick={() => abrirModalAbono()}
-          className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Registrar Abono de Cliente
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setModalImportarOpen(true)}
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
+            title="Importar cartera de clientes y cuentas por cobrar desde Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Importar Excel</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setModalCrearOpen(true)}
+            className="flex items-center gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+          >
+            <PlusCircle className="h-4 w-4 text-[#20A7DB]" />
+            Nueva Cuenta
+          </Button>
+          <Button
+            onClick={() => abrirModalAbono()}
+            className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
+          >
+            <HandCoins className="h-4 w-4" />
+            Registrar Abono
+          </Button>
+        </div>
       </div>
 
       {/* Tarjetas Resumen de Cartera */}
@@ -429,15 +570,28 @@ export default function GestionCuentasCobrar({ usuario }) {
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                           {Number(c.SaldoPendiente || 0) > 0 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => abrirModalAbono(c)}
-                              className="h-7 px-2 text-xs text-[#20A7DB] border-[#20A7DB]/40 hover:bg-[#20A7DB]/10 flex items-center gap-1"
-                            >
-                              <PlusCircle className="h-3 w-3" />
-                              Abonar
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => enviarRecordatorioMora(c)}
+                                className="h-7 px-2 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 flex items-center gap-1 font-semibold"
+                                title="Enviar recordatorio de mora vía WhatsApp"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                Recordar
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => abrirModalAbono(c)}
+                                className="h-7 px-2 text-xs text-[#20A7DB] border-[#20A7DB]/40 hover:bg-[#20A7DB]/10 flex items-center gap-1"
+                              >
+                                <PlusCircle className="h-3 w-3" />
+                                Abonar
+                              </Button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -449,61 +603,215 @@ export default function GestionCuentasCobrar({ usuario }) {
           </table>
         </div>
 
-        {/* Paginación */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Mostrando {cuentas.length > 0 ? (pagina - 1) * limite + 1 : 0} a{" "}
-            {Math.min(pagina * limite, totalRegistros)} de {totalRegistros} cuentas
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Por página:</span>
-            <select
-              value={limite}
-              onChange={(e) => {
-                setLimite(Number(e.target.value));
-                setPagina(1);
-              }}
-              className="text-xs h-8 border border-slate-200 rounded-md bg-white px-2 text-slate-700"
-            >
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="h-8 px-2 text-xs"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                Anterior
-              </Button>
-              <span className="px-2 font-medium text-slate-700">
-                Pág. {pagina} de {totalPaginas}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina >= totalPaginas || cargando}
-                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                className="h-8 px-2 text-xs"
-              >
-                Siguiente
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Paginación Estandarizada */}
+        <PaginacionTabla
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          totalItems={totalRegistros}
+          pageSize={limite}
+          indiceInicio={cuentas.length > 0 ? (pagina - 1) * limite + 1 : 0}
+          indiceFin={Math.min(pagina * limite, totalRegistros)}
+          puedeRetroceder={pagina > 1}
+          puedeAvanzar={pagina < totalPaginas}
+          cambiarPagina={(p) => setPagina(p)}
+          cambiarPageSize={(nuevo) => {
+            setLimite(nuevo);
+            setPagina(1);
+          }}
+          opcionesPageSize={[10, 15, 25, 50]}
+        />
       </div>
 
+      {/* MODAL NUEVA CUENTA POR COBRAR (EXCEL / MANUAL) */}
+      {modalCrearOpen && (
+        <Dialog open={modalCrearOpen} onOpenChange={setModalCrearOpen}>
+          <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-slate-800">
+                <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
+                Registrar Cuenta por Cobrar
+              </DialogTitle>
+            </DialogHeader>
+
+            <form onSubmit={handleCrearCuenta} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Cliente */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Cliente *
+                  </label>
+                  <select
+                    required
+                    value={formCrear.id_cliente}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const cli = clientes.find((c) => c.IdCliente.toString() === id);
+                      setFormCrear({
+                        ...formCrear,
+                        id_cliente: id,
+                        celular: cli?.Telefono || formCrear.celular,
+                        destino: cli?.Ciudad || formCrear.destino,
+                      });
+                    }}
+                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  >
+                    <option value="">Seleccione Cliente...</option>
+                    {clientes.map((c) => (
+                      <option key={c.IdCliente} value={c.IdCliente}>
+                        {c.RazonSocial || c.NombreComercial} ({c.Ciudad || "Sin ciudad"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Destino */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Destino / Ciudad *
+                  </label>
+                  <select
+                    value={formCrear.destino}
+                    onChange={(e) => setFormCrear({ ...formCrear, destino: e.target.value })}
+                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  >
+                    <option value="Sucre">Sucre</option>
+                    <option value="Cochabamba">Cochabamba</option>
+                    <option value="El Alto">El Alto</option>
+                    <option value="Tarija">Tarija</option>
+                    <option value="Oruro">Oruro</option>
+                    <option value="Potosí">Potosí</option>
+                    <option value="Uyuni">Uyuni</option>
+                    <option value="La Paz">La Paz</option>
+                    <option value="Santa Cruz">Santa Cruz</option>
+                  </select>
+                </div>
+
+                {/* Celular */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Teléfono / Celular
+                  </label>
+                  <Input
+                    value={formCrear.celular}
+                    onChange={(e) => setFormCrear({ ...formCrear, celular: e.target.value })}
+                    placeholder="Ej: 71234567"
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                {/* Línea de Crédito */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Línea de Crédito
+                  </label>
+                  <Input
+                    value={formCrear.linea_credito}
+                    onChange={(e) => setFormCrear({ ...formCrear, linea_credito: e.target.value })}
+                    placeholder="Ej: 5000 Bs o 15 días"
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                {/* N° Nota de Venta */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    N° Nota de Venta
+                  </label>
+                  <Input
+                    value={formCrear.numero_nota}
+                    onChange={(e) => setFormCrear({ ...formCrear, numero_nota: e.target.value })}
+                    placeholder="Ej: NV-1045"
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                {/* N° Nota de Entrega */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    N° Nota de Entrega
+                  </label>
+                  <Input
+                    value={formCrear.numero_entrega}
+                    onChange={(e) => setFormCrear({ ...formCrear, numero_entrega: e.target.value })}
+                    placeholder="Ej: NE-308"
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                {/* Monto Total */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Monto Total (Bs.) *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.10"
+                    required
+                    value={formCrear.monto_total}
+                    onChange={(e) => setFormCrear({ ...formCrear, monto_total: e.target.value })}
+                    placeholder="0.00"
+                    className="text-xs h-9"
+                  />
+                </div>
+
+                {/* Fechas */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Fecha Emisión
+                    </label>
+                    <Input
+                      type="date"
+                      value={formCrear.fecha_emision}
+                      onChange={(e) => setFormCrear({ ...formCrear, fecha_emision: e.target.value })}
+                      className="text-xs h-9"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Fecha Vencimiento
+                    </label>
+                    <Input
+                      type="date"
+                      value={formCrear.fecha_vencimiento}
+                      onChange={(e) => setFormCrear({ ...formCrear, fecha_vencimiento: e.target.value })}
+                      className="text-xs h-9"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Observaciones
+                </label>
+                <Textarea
+                  rows={2}
+                  value={formCrear.observaciones}
+                  onChange={(e) => setFormCrear({ ...formCrear, observaciones: e.target.value })}
+                  placeholder="Acuerdo comercial, condiciones de pago..."
+                  className="text-xs"
+                />
+              </div>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setModalCrearOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={guardandoCrear} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+                  {guardandoCrear ? "Registrando..." : "Guardar Cuenta"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* MODAL REGISTRAR ABONO */}
+      {modalAbonoOpen && (
       <Dialog open={modalAbonoOpen} onOpenChange={setModalAbonoOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
@@ -664,10 +972,25 @@ export default function GestionCuentasCobrar({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
+
+      {/* MODAL IMPORTAR EXCEL */}
+      <ModalImportarExcel
+        abierto={modalImportarOpen}
+        onCerrar={() => setModalImportarOpen(false)}
+        titulo="Importar Cuentas por Cobrar"
+        descripcion="Sube tu archivo Excel o procesa la cartera oficial del servidor para actualizar saldos de clientes y abonos."
+        archivoPredeterminadoNombre="3_CUENTAS POR COBRAR GESTION 2025-2026.xlsx"
+        onImportar={ImportarCuentasCobrar}
+        onCompletado={async () => {
+          await cargarDatos();
+        }}
+      />
 
       {/* MODAL ESTADO DE CUENTA / HISTORIAL DE ABONOS */}
+      {modalDetalleOpen && (
       <Dialog open={modalDetalleOpen} onOpenChange={setModalDetalleOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full sm:max-w-4xl max-h-[88vh] overflow-y-auto p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <FileText className="h-5 w-5 text-[#20A7DB]" />
@@ -742,13 +1065,24 @@ export default function GestionCuentasCobrar({ usuario }) {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex justify-between items-center w-full">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
+            >
+              <Printer className="h-4 w-4 text-[#20A7DB]" />
+              <span>Imprimir Estado de Cuenta</span>
+            </Button>
             <Button variant="outline" onClick={() => setModalDetalleOpen(false)}>
               Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

@@ -38,6 +38,11 @@ import {
   ObtenerBalanceProveedores,
 } from "@/services/Contabilidad/cuentasPagarService";
 import { ObtenerCuentasBancarias } from "@/services/Contabilidad/tesoreriaService";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import ModalImportarExcel from "./ModalImportarExcel";
+import { ImportarProveedores } from "@/services/Contabilidad/importacionService";
+import { FileSpreadsheet } from "lucide-react";
+import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionCuentasPagar({ usuario }) {
   const [cuentas, setCuentas] = useState([]);
@@ -69,6 +74,7 @@ export default function GestionCuentasPagar({ usuario }) {
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [modalImportarOpen, setModalImportarOpen] = useState(false);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   const [detalleCuenta, setDetalleCuenta] = useState(null);
 
@@ -125,7 +131,12 @@ export default function GestionCuentasPagar({ usuario }) {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [kpisRes, cuentasRes, provsRes, bancosRes, balanceRes] = await Promise.all([
+
+      let provsData = cache.get("contabilidad:proveedoresCxP");
+      let bancosData = cache.get("contabilidad:cuentasBancarias");
+      let balanceData = cache.get("contabilidad:balanceProveedores");
+
+      const peticiones = [
         ObtenerKpisCxP().catch(() => null),
         ObtenerCuentasPagar({
           page: pagina,
@@ -133,10 +144,32 @@ export default function GestionCuentasPagar({ usuario }) {
           estado: filtroEstado !== "TODOS" ? filtroEstado : null,
           busqueda: busqueda.trim(),
         }),
-        ObtenerProveedoresContabilidad().catch(() => []),
-        ObtenerCuentasBancarias().catch(() => []),
-        ObtenerBalanceProveedores().catch(() => []),
-      ]);
+      ];
+
+      if (!provsData) peticiones.push(ObtenerProveedoresContabilidad().catch(() => []));
+      if (!bancosData) peticiones.push(ObtenerCuentasBancarias().catch(() => []));
+      if (!balanceData) peticiones.push(ObtenerBalanceProveedores().catch(() => []));
+
+      const resultados = await Promise.all(peticiones);
+      const kpisRes = resultados[0];
+      const cuentasRes = resultados[1];
+
+      let idx = 2;
+      if (!provsData) {
+        const pRes = resultados[idx++];
+        provsData = Array.isArray(pRes) ? pRes : pRes?.items || [];
+        cache.set("contabilidad:proveedoresCxP", provsData, 300);
+      }
+      if (!bancosData) {
+        const bRes = resultados[idx++];
+        bancosData = Array.isArray(bRes) ? bRes : bRes?.items || [];
+        cache.set("contabilidad:cuentasBancarias", bancosData, 300);
+      }
+      if (!balanceData) {
+        const balRes = resultados[idx++];
+        balanceData = Array.isArray(balRes) ? balRes : [];
+        cache.set("contabilidad:balanceProveedores", balanceData, 300);
+      }
 
       if (kpisRes) setKpis(kpisRes);
 
@@ -145,9 +178,9 @@ export default function GestionCuentasPagar({ usuario }) {
       setTotalRegistros(cuentasRes?.total != null ? cuentasRes.total : items.length);
       setTotalPaginas(cuentasRes?.total_paginas || 1);
 
-      setProveedores(Array.isArray(provsRes) ? provsRes : provsRes?.items || []);
-      setBancos(Array.isArray(bancosRes) ? bancosRes : bancosRes?.items || []);
-      setBalance(Array.isArray(balanceRes) ? balanceRes : []);
+      setProveedores(provsData);
+      setBancos(bancosData);
+      setBalance(balanceData);
     } catch (err) {
       toast.error("Error al cargar cuentas por pagar: " + err.message);
     } finally {
@@ -239,6 +272,7 @@ export default function GestionCuentasPagar({ usuario }) {
       });
 
       toast.success("¡Cuenta por pagar y factura registrada!");
+      invalidateContabilidad();
       setModalFacturaOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -270,6 +304,7 @@ export default function GestionCuentasPagar({ usuario }) {
       });
 
       toast.success("¡Pago a proveedor registrado exitosamente!");
+      invalidateContabilidad();
       setModalPagoOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -303,6 +338,7 @@ export default function GestionCuentasPagar({ usuario }) {
       });
 
       toast.success("¡Devolución y reducción de saldo procesada!");
+      invalidateContabilidad();
       setModalDevolucionOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -324,20 +360,30 @@ export default function GestionCuentasPagar({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <Layers className="h-7 w-7 text-[#20A7DB]" />
-            Cuentas por Pagar a Proveedores
+            Cuentas por Pagar
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestión de compras de bobinas, polietileno y químicos a proveedores (Vinto, Derqui, Multiflex, etc.).
+            Gestión de deudas con proveedores, facturas y pagos.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <Button
+            type="button"
+            variant="outline"
+            onClick={() => setModalImportarOpen(true)}
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
+            title="Importar cuentas de proveedores e insumos desde Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Importar Excel</span>
+          </Button>
+          <Button
             onClick={() => setModalFacturaOpen(true)}
             className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
           >
             <PlusCircle className="h-4 w-4" />
-            Registrar Factura Proveedor
+            Nueva Factura
           </Button>
           <Button
             onClick={() => abrirModalPago()}
@@ -533,61 +579,29 @@ export default function GestionCuentasPagar({ usuario }) {
           </table>
         </div>
 
-        {/* Paginación */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Mostrando {cuentas.length > 0 ? (pagina - 1) * limite + 1 : 0} a{" "}
-            {Math.min(pagina * limite, totalRegistros)} de {totalRegistros} facturas
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Por página:</span>
-            <select
-              value={limite}
-              onChange={(e) => {
-                setLimite(Number(e.target.value));
-                setPagina(1);
-              }}
-              className="text-xs h-8 border border-slate-200 rounded-md bg-white px-2 text-slate-700"
-            >
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="h-8 px-2 text-xs"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                Anterior
-              </Button>
-              <span className="px-2 font-medium text-slate-700">
-                Pág. {pagina} de {totalPaginas}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina >= totalPaginas || cargando}
-                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                className="h-8 px-2 text-xs"
-              >
-                Siguiente
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Paginación Estandarizada */}
+        <PaginacionTabla
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          totalItems={totalRegistros}
+          pageSize={limite}
+          indiceInicio={cuentas.length > 0 ? (pagina - 1) * limite + 1 : 0}
+          indiceFin={Math.min(pagina * limite, totalRegistros)}
+          puedeRetroceder={pagina > 1}
+          puedeAvanzar={pagina < totalPaginas}
+          cambiarPagina={(p) => setPagina(p)}
+          cambiarPageSize={(nuevo) => {
+            setLimite(nuevo);
+            setPagina(1);
+          }}
+          opcionesPageSize={[10, 15, 25, 50]}
+        />
       </div>
 
       {/* MODAL REGISTRAR FACTURA PROVEEDOR */}
+      {modalFacturaOpen && (
       <Dialog open={modalFacturaOpen} onOpenChange={setModalFacturaOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
@@ -705,10 +719,12 @@ export default function GestionCuentasPagar({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL REGISTRAR PAGO A PROVEEDOR */}
+      {modalPagoOpen && (
       <Dialog open={modalPagoOpen} onOpenChange={setModalPagoOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <CreditCard className="h-5 w-5 text-emerald-600" />
@@ -836,10 +852,12 @@ export default function GestionCuentasPagar({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL REGISTRAR DEVOLUCIÓN / COMPENSACIÓN */}
+      {modalDevolucionOpen && (
       <Dialog open={modalDevolucionOpen} onOpenChange={setModalDevolucionOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <CornerDownLeft className="h-5 w-5 text-amber-600" />
@@ -909,10 +927,25 @@ export default function GestionCuentasPagar({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
+
+      {/* MODAL IMPORTAR EXCEL */}
+      <ModalImportarExcel
+        abierto={modalImportarOpen}
+        onCerrar={() => setModalImportarOpen(false)}
+        titulo="Importar Cuentas por Pagar (Proveedores)"
+        descripcion="Sube tu archivo Excel o procesa el archivo oficial del servidor para registrar compras a proveedores, pesos y pagos."
+        archivoPredeterminadoNombre="CUENTAS PROVEEDOR 2025-2026.xlsx"
+        onImportar={ImportarProveedores}
+        onCompletado={async () => {
+          await cargarDatos();
+        }}
+      />
 
       {/* MODAL DETALLE DE LA CUENTA */}
+      {modalDetalleOpen && (
       <Dialog open={modalDetalleOpen} onOpenChange={setModalDetalleOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Eye className="h-5 w-5 text-[#20A7DB]" />
@@ -979,6 +1012,7 @@ export default function GestionCuentasPagar({ usuario }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { manejarErrorBackend } from "@/utils/validators";
+import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
 // ==========================================
 // CUENTAS BANCARIAS
 // ==========================================
 export async function ObtenerCuentasBancarias(soloActivas = true) {
-  const res = await fetch(`/api/tesoreria/bancos?solo_activas=${soloActivas}`);
+  const res = await fetchConCache(`/api/tesoreria/bancos?solo_activas=${soloActivas}`, {}, 60000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -16,6 +17,7 @@ export async function CrearCuentaBancaria(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -26,6 +28,7 @@ export async function ActualizarCuentaBancaria(idCuenta, datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -35,7 +38,7 @@ export async function ActualizarCuentaBancaria(idCuenta, datos) {
 export async function ObtenerCategoriasCaja(tipo = null) {
   let url = "/api/tesoreria/categorias-caja";
   if (tipo) url += `?tipo=${tipo}`;
-  const res = await fetch(url);
+  const res = await fetchConCache(url, {}, 120000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -47,6 +50,7 @@ export async function CrearCategoriaCaja(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria/categorias-caja");
   return await res.json();
 }
 
@@ -54,13 +58,13 @@ export async function CrearCategoriaCaja(datos) {
 // APERTURA, CIERRE Y ARQUEO DE CAJA
 // ==========================================
 export async function ObtenerCajas(limit = 20, offset = 0) {
-  const res = await fetch(`/api/tesoreria/cajas?limit=${limit}&offset=${offset}`);
+  const res = await fetchConCache(`/api/tesoreria/cajas?limit=${limit}&offset=${offset}`, {}, 30000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
 export async function ObtenerCajaActual() {
-  const res = await fetch("/api/tesoreria/cajas/actual");
+  const res = await fetchConCache("/api/tesoreria/cajas/actual", {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -72,6 +76,7 @@ export async function AperturarCaja(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -82,6 +87,7 @@ export async function CerrarCaja(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -92,6 +98,7 @@ export async function RegistrarArqueo(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -122,7 +129,7 @@ export async function ObtenerMovimientosCaja({
   params.append("offset", offset);
   if (page) params.append("page", page);
 
-  const res = await fetch(`/api/tesoreria/movimientos?${params.toString()}`);
+  const res = await fetchConCache(`/api/tesoreria/movimientos?${params.toString()}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -134,6 +141,7 @@ export async function RegistrarMovimientoCaja(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -141,7 +149,7 @@ export async function RegistrarMovimientoCaja(datos) {
 // SOLICITUDES DE CAJA CHICA (SC) Y KPIS
 // ==========================================
 export async function ObtenerCajaChicaKpis() {
-  const res = await fetch("/api/tesoreria/caja-chica-kpis");
+  const res = await fetchConCache("/api/tesoreria/caja-chica-kpis", {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -166,7 +174,7 @@ export async function ObtenerSolicitudesCajaChica({
   params.append("offset", offset);
   if (page) params.append("page", page);
 
-  const res = await fetch(`/api/tesoreria/solicitudes-caja-chica?${params.toString()}`);
+  const res = await fetchConCache(`/api/tesoreria/solicitudes-caja-chica?${params.toString()}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -178,6 +186,7 @@ export async function CrearSolicitudCajaChica(datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -188,6 +197,7 @@ export async function AprobarSolicitudCajaChica(idSolicitud, datos = {}) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -198,6 +208,7 @@ export async function RechazarSolicitudCajaChica(idSolicitud, datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -208,6 +219,7 @@ export async function DescargarSolicitudCajaChica(idSolicitud, datos) {
     body: JSON.stringify(datos),
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
@@ -215,7 +227,7 @@ export async function DescargarSolicitudCajaChica(idSolicitud, datos) {
 // KPIS Y DASHBOARD
 // ==========================================
 export async function ObtenerDashboardKPIs() {
-  const res = await fetch("/api/tesoreria/dashboard-kpis");
+  const res = await fetchConCache("/api/tesoreria/dashboard-kpis", {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }

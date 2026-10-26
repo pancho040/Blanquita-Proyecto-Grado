@@ -1,8 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
-
-
 const CLASES_ACCION =
   "h-11 gap-2 bg-white font-bold text-c3 shadow-md hover:bg-slate-100";
 
@@ -37,14 +35,12 @@ export default function Header({
       </>
     );
     botonAccion = accion.href ? (
-      <Button asChild className={CLASES_ACCION}>
-        <a
-          href={accion.href}
-          className="inline-flex items-center gap-2 whitespace-nowrap"
-        >
-          {contenido}
-        </a>
-      </Button>
+      <a
+        href={accion.href}
+        className={`inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent text-sm font-bold whitespace-nowrap transition-all select-none px-4 ${CLASES_ACCION}`}
+      >
+        {contenido}
+      </a>
     ) : (
       <Button onClick={accion.onClick} className={CLASES_ACCION}>
         {contenido}

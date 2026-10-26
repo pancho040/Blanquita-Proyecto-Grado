@@ -1,0 +1,9 @@
+---
+import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import CentroReportesRRHH from '@/components/RRHH/Reportes/CentroReportesRRHH';
+---
+
+<Layout title="Centro de Reportes de Recursos Humanos | Papelera Blanquita">
+  <CentroReportesRRHH client:only="react" usuario={usuario} />
+</Layout>

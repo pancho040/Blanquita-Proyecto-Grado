@@ -31,7 +31,7 @@ export const ALL = async ({ request, params, cookies }) => {
   };
 
   if (!["GET", "HEAD"].includes(request.method)) {
-    init.body = await request.text();
+    init.body = await request.arrayBuffer();
   }
 
   const backendResponse = await fetch(targetUrl, init);

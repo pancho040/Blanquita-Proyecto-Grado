@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet,
   ArrowUpRight,
@@ -13,6 +13,7 @@ import {
   Building2,
   Tag,
   Search,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import ArqueoCajaModal from "./ArqueoCajaModal";
+import ResumenCajaModal from "./ResumenCajaModal";
+import ModalImportarExcel from "./ModalImportarExcel";
+import { ImportarFlujoCaja } from "@/services/Contabilidad/importacionService";
+import { FileSpreadsheet } from "lucide-react";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { cache } from "@/lib/cacheService";
 import {
   ObtenerCajaActual,
   ObtenerCajas,
@@ -48,6 +56,8 @@ export default function GestionCaja({ usuario }) {
   const [modalAperturaOpen, setModalAperturaOpen] = useState(false);
   const [modalMovimientoOpen, setModalMovimientoOpen] = useState(false);
   const [modalArqueoOpen, setModalArqueoOpen] = useState(false);
+  const [modalResumenOpen, setModalResumenOpen] = useState(false);
+  const [modalImportarOpen, setModalImportarOpen] = useState(false);
 
   // Datos para formularios
   const [categorias, setCategorias] = useState([]);
@@ -65,6 +75,7 @@ export default function GestionCaja({ usuario }) {
   const [montoMov, setMontoMov] = useState("");
   const [glosaMov, setGlosaMov] = useState("");
   const [beneficiarioMov, setBeneficiarioMov] = useState("");
+  const [numeroComprobanteMov, setNumeroComprobanteMov] = useState("");
   const [guardandoMov, setGuardandoMov] = useState(false);
 
   // Filtros Libro Diario
@@ -178,6 +189,8 @@ export default function GestionCaja({ usuario }) {
         monto,
         glosa: glosaMov.trim(),
         beneficiario: beneficiarioMov.trim() || null,
+        numero_comprobante: numeroComprobanteMov.trim() || null,
+        respaldo: numeroComprobanteMov.trim() || null,
       });
 
       toast.success(`Movimiento de ${tipoMov.toLowerCase()} registrado correctamente`);
@@ -186,6 +199,7 @@ export default function GestionCaja({ usuario }) {
       setMontoMov("");
       setGlosaMov("");
       setBeneficiarioMov("");
+      setNumeroComprobanteMov("");
       setIdCategoriaMov("");
       setIdCuentaMov("");
 
@@ -198,18 +212,23 @@ export default function GestionCaja({ usuario }) {
   };
 
   // Filtrado de movimientos
-  const movimientosFiltrados = movimientos.filter((m) => {
-    if (filtroTipo !== "TODOS" && m.Tipo !== filtroTipo) return false;
-    if (filtroBusqueda.trim()) {
-      const q = filtroBusqueda.toLowerCase();
-      const coincideGlosa = m.Glosa?.toLowerCase().includes(q);
-      const coincideBen = m.Beneficiario?.toLowerCase().includes(q);
-      const coincideComp = m.NumeroComprobante?.toLowerCase().includes(q);
-      const coincideCat = m.NombreCategoria?.toLowerCase().includes(q);
-      return coincideGlosa || coincideBen || coincideComp || coincideCat;
-    }
-    return true;
-  });
+  const movimientosFiltrados = useMemo(() => {
+    return movimientos.filter((m) => {
+      if (filtroTipo !== "TODOS" && m.Tipo !== filtroTipo) return false;
+      if (filtroBusqueda.trim()) {
+        const q = filtroBusqueda.toLowerCase();
+        const coincideGlosa = m.Glosa?.toLowerCase().includes(q);
+        const coincideBen = m.Beneficiario?.toLowerCase().includes(q);
+        const coincideComp = m.NumeroComprobante?.toLowerCase().includes(q);
+        const coincideCat = m.NombreCategoria?.toLowerCase().includes(q);
+        return coincideGlosa || coincideBen || coincideComp || coincideCat;
+      }
+      return true;
+    });
+  }, [movimientos, filtroTipo, filtroBusqueda]);
+
+  // Paginación optimizada
+  const paginacion = usePaginacion(movimientosFiltrados, 15);
 
   return (
     <div className="space-y-6">
@@ -218,14 +237,37 @@ export default function GestionCaja({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <Wallet className="h-7 w-7 text-[#20A7DB]" />
-            Flujo de Caja Diaria y Arqueo
+            Flujo de Caja
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Control de aperturas, libro diario de ingresos/egresos y conciliación física de cortes (RF-04, RF-05).
+            Libro diario de ingresos, egresos y arqueo de caja.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setModalImportarOpen(true)}
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
+            title="Importar libro diario y arqueos desde archivo Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Importar Excel</span>
+          </Button>
+          {cajaActual && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalResumenOpen(true)}
+              className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
+              title="Visualizar informe consolidado de liquidez para gerencia"
+            >
+              <FileText className="h-4 w-4 text-[#20A7DB]" />
+              <span>Informe de Cierre</span>
+            </Button>
+          )}
+
           {cajaActual ? (
             <>
               <Button
@@ -448,7 +490,7 @@ export default function GestionCaja({ usuario }) {
                     </td>
                   </tr>
                 ) : (
-                  movimientosFiltrados.map((m) => (
+                  paginacion.itemsPaginados.map((m) => (
                     <tr key={m.IdMovimiento} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 whitespace-nowrap text-xs text-slate-500">
                         {m.FechaMovimiento
@@ -509,6 +551,9 @@ export default function GestionCaja({ usuario }) {
               </tbody>
             </table>
           </div>
+
+          {/* Paginacion de movimientos de caja */}
+          <PaginacionTabla {...paginacion} />
         </div>
       )}
 
@@ -588,217 +633,261 @@ export default function GestionCaja({ usuario }) {
               </tbody>
             </table>
           </div>
+
+          {/* Paginacion de movimientos de caja */}
+          <PaginacionTabla {...paginacion} />
         </div>
       )}
 
       {/* MODAL APERTURA DE CAJA */}
-      <Dialog open={modalAperturaOpen} onOpenChange={setModalAperturaOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <Unlock className="h-5 w-5 text-emerald-600" />
-              Apertura de Caja Diaria
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleAperturar} className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Saldo Inicial en Efectivo (Bs.) *
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={saldoInicialApertura}
-                onChange={(e) => setSaldoInicialApertura(e.target.value)}
-                placeholder="0.00"
-                className="text-lg font-bold"
-              />
-              <span className="text-xs text-slate-400">Monto físico con el que inicia la jornada.</span>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Observaciones de Apertura
-              </label>
-              <Textarea
-                rows={2}
-                value={obsApertura}
-                onChange={(e) => setObsApertura(e.target.value)}
-                placeholder="Novedades, billetes fraccionados, turno mañana..."
-                className="text-sm"
-              />
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" onClick={() => setModalAperturaOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={guardandoApertura} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                {guardandoApertura ? "Aperturando..." : "Confirmar Apertura"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL REGISTRO DE MOVIMIENTO */}
-      <Dialog open={modalMovimientoOpen} onOpenChange={setModalMovimientoOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
-              Registrar Movimiento en Caja
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCrearMovimiento} className="space-y-3.5">
-            {/* Switch Tipo */}
-            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setTipoMov("Ingreso")}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  tipoMov === "Ingreso"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                + Ingreso de Efectivo
-              </button>
-              <button
-                type="button"
-                onClick={() => setTipoMov("Egreso")}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  tipoMov === "Egreso"
-                    ? "bg-rose-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                - Egreso / Salida
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Categoría */}
+      {modalAperturaOpen && (
+        <Dialog open={modalAperturaOpen} onOpenChange={setModalAperturaOpen}>
+          <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-slate-800">
+                <Unlock className="h-5 w-5 text-emerald-600" />
+                Apertura de Caja Diaria
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAperturar} className="space-y-4 pt-2">
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Categoría Contable *
-                </label>
-                <select
-                  required
-                  value={idCategoriaMov}
-                  onChange={(e) => setIdCategoriaMov(e.target.value)}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
-                >
-                  <option value="">Seleccione Categoría...</option>
-                  {categorias
-                    .filter((c) => !c.Tipo || c.Tipo === tipoMov)
-                    .map((cat) => (
-                      <option key={cat.IdCategoria} value={cat.IdCategoria}>
-                        {cat.NombreCategoria}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Cuenta Bancaria (opcional) */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Cuenta / Destino (Opcional)
-                </label>
-                <select
-                  value={idCuentaMov}
-                  onChange={(e) => setIdCuentaMov(e.target.value)}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
-                >
-                  <option value="">Efectivo en Caja</option>
-                  {cuentasBancarias.map((b) => (
-                    <option key={b.IdCuentaBancaria} value={b.IdCuentaBancaria}>
-                      {b.NombreBanco} ({b.TipoMoneda})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Monto */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Monto (Bs.) *
+                  Saldo Inicial en Efectivo (Bs.) *
                 </label>
                 <Input
                   type="number"
                   step="0.01"
-                  min="0.10"
+                  min="0"
                   required
-                  value={montoMov}
-                  onChange={(e) => setMontoMov(e.target.value)}
+                  value={saldoInicialApertura}
+                  onChange={(e) => setSaldoInicialApertura(e.target.value)}
                   placeholder="0.00"
-                  className="font-bold text-base h-9"
+                  className="text-lg font-bold"
                 />
               </div>
 
-              {/* Beneficiario */}
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Beneficiario / Entregado a
+                  Observaciones de Apertura
+                </label>
+                <Textarea
+                  rows={2}
+                  value={obsApertura}
+                  onChange={(e) => setObsApertura(e.target.value)}
+                  placeholder="Novedades, billetes fraccionados, turno mañana..."
+                  className="text-sm"
+                />
+              </div>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setModalAperturaOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={guardandoApertura} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  {guardandoApertura ? "Aperturando..." : "Confirmar Apertura"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL REGISTRO DE MOVIMIENTO */}
+      {modalMovimientoOpen && (
+        <Dialog open={modalMovimientoOpen} onOpenChange={setModalMovimientoOpen}>
+          <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-slate-800">
+                <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
+                Registrar Movimiento en Caja
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCrearMovimiento} className="space-y-3.5">
+              {/* Switch Tipo */}
+              <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setTipoMov("Ingreso")}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
+                    tipoMov === "Ingreso"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  + Ingreso de Efectivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoMov("Egreso")}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${
+                    tipoMov === "Egreso"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  - Egreso / Salida
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Categoría */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Categoría Contable *
+                  </label>
+                  <select
+                    required
+                    value={idCategoriaMov}
+                    onChange={(e) => setIdCategoriaMov(e.target.value)}
+                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                  >
+                    <option value="">Seleccione Categoría...</option>
+                    {categorias
+                      .filter((c) => !c.Tipo || c.Tipo === tipoMov)
+                      .map((cat) => (
+                        <option key={cat.IdCategoria} value={cat.IdCategoria}>
+                          {cat.NombreCategoria}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Cuenta Bancaria (opcional) */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Cuenta / Destino (Opcional)
+                  </label>
+                  <select
+                    value={idCuentaMov}
+                    onChange={(e) => setIdCuentaMov(e.target.value)}
+                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                  >
+                    <option value="">Efectivo en Caja</option>
+                    {cuentasBancarias.map((b) => (
+                      <option key={b.IdCuentaBancaria} value={b.IdCuentaBancaria}>
+                        {b.NombreBanco} ({b.TipoMoneda})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Monto */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Monto (Bs.) *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.10"
+                    required
+                    value={montoMov}
+                    onChange={(e) => setMontoMov(e.target.value)}
+                    placeholder="0.00"
+                    className="font-bold text-base h-9"
+                  />
+                </div>
+
+                {/* Respaldo / Nro. Comprobante */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    N° Comprobante / Respaldo
+                  </label>
+                  <Input
+                    value={numeroComprobanteMov}
+                    onChange={(e) => setNumeroComprobanteMov(e.target.value)}
+                    placeholder="Ej: Recibo 1208, Factura 773"
+                    className="text-xs h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Beneficiario / Solicitante */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Beneficiario / Solicitante
                 </label>
                 <Input
                   value={beneficiarioMov}
                   onChange={(e) => setBeneficiarioMov(e.target.value)}
-                  placeholder="Ej: Chofer Juan Perez"
+                  placeholder="Ej: Juan Perez, Distribuidora Sucre"
                   className="text-xs h-9"
                 />
               </div>
-            </div>
 
-            {/* Glosa */}
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Concepto / Glosa Detallada *
-              </label>
-              <Textarea
-                rows={2}
-                required
-                value={glosaMov}
-                onChange={(e) => setGlosaMov(e.target.value)}
-                placeholder="Detalle la justificación del movimiento..."
-                className="text-xs"
-              />
-            </div>
+              {/* Glosa */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Concepto / Glosa Detallada *
+                </label>
+                <Textarea
+                  rows={2}
+                  required
+                  value={glosaMov}
+                  onChange={(e) => setGlosaMov(e.target.value)}
+                  placeholder="Detalle la justificación del movimiento..."
+                  className="text-xs"
+                />
+              </div>
 
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalMovimientoOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={guardandoMov}
-                className={
-                  tipoMov === "Ingreso"
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    : "bg-rose-600 hover:bg-rose-700 text-white"
-                }
-              >
-                {guardandoMov ? "Guardando..." : `Confirmar ${tipoMov}`}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <DialogFooter className="gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setModalMovimientoOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={guardandoMov}
+                  className={
+                    tipoMov === "Ingreso"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-rose-600 hover:bg-rose-700 text-white"
+                  }
+                >
+                  {guardandoMov ? "Guardando..." : `Confirmar ${tipoMov}`}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* MODAL DE ARQUEO Y CIERRE */}
-      <ArqueoCajaModal
-        isOpen={modalArqueoOpen}
-        onClose={() => setModalArqueoOpen(false)}
-        cajaActual={cajaActual}
-        onCajaCerrada={() => {
-          cargarDatos();
-          setVistaActiva("historial");
+      {modalArqueoOpen && (
+        <ArqueoCajaModal
+          isOpen={modalArqueoOpen}
+          onClose={() => setModalArqueoOpen(false)}
+          cajaActual={cajaActual}
+          onCajaCerrada={() => {
+            cargarDatos();
+            setVistaActiva("historial");
+          }}
+        />
+      )}
+
+      {/* MODAL IMPORTAR EXCEL */}
+      <ModalImportarExcel
+        abierto={modalImportarOpen}
+        onCerrar={() => setModalImportarOpen(false)}
+        titulo="Importar Flujo de Caja"
+        descripcion="Sube tu archivo Excel o procesa el archivo oficial del servidor para cargar ingresos, egresos y arqueos de caja."
+        archivoPredeterminadoNombre="Flujo de Caja y Caja Chica 2025 - 2026 OFI.xlsx"
+        onImportar={ImportarFlujoCaja}
+        onCompletado={async () => {
+          await cargarDatos();
         }}
       />
+
+      {/* MODAL DE RESUMEN EJECUTIVO DE CIERRE / LIQUIDEZ */}
+      {modalResumenOpen && (
+        <ResumenCajaModal
+          isOpen={modalResumenOpen}
+          onClose={() => setModalResumenOpen(false)}
+          caja={cajaActual}
+          movimientos={movimientos}
+        />
+      )}
     </div>
   );
 }

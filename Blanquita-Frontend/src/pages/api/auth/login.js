@@ -79,10 +79,14 @@ export async function POST({ request, cookies, clientAddress }) {
 
   guardarSesion(cookies, resultado);
 
+  const rutaDestino = sesion.IsAdmin 
+    ? "/admin/inicio" 
+    : (RUTA_POR_ROL[sesion.IdRol] || "/");
+
   return new Response(
     JSON.stringify({
       ...sesion,
-      rutaRedirect: RUTA_POR_ROL[sesion.IdRol] || "/"
+      rutaRedirect: rutaDestino
     }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );

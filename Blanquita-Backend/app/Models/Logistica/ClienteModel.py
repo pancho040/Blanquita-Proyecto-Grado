@@ -23,7 +23,7 @@ class PuntoVentaResponse(PuntoVentaBase):
 class ClienteBase(BaseModel):
     RazonSocial: str
     NombreComercial: Optional[str] = None
-    NitCi: str
+    NitCi: Optional[str] = None
     Telefono: Optional[str] = None
     CorreoElectronico: Optional[str] = None
     Direccion: Optional[str] = None

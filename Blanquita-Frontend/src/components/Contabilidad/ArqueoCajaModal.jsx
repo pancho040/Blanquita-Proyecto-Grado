@@ -18,6 +18,7 @@ const CORTES_BILLETES = [200, 100, 50, 20, 10];
 const CORTES_MONEDAS = [5, 2, 1, 0.5, 0.2, 0.1];
 
 export default function ArqueoCajaModal({ isOpen, onClose, cajaActual, onCajaCerrada }) {
+  if (!isOpen) return null;
   const [cantidades, setCantidades] = useState({});
   const [observaciones, setObservaciones] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -87,6 +88,8 @@ export default function ArqueoCajaModal({ isOpen, onClose, cajaActual, onCajaCer
         id_apertura_cierre: cajaActual.IdAperturaCierre,
         saldo_final_real: totalFisico,
         observaciones_cierre: observaciones.trim() || "Cierre de jornada regular",
+        autorizado_contador: true,
+        justificativo_diferencia: observaciones.trim(),
         arqueo_detalle: arqueoDetalle,
       });
 
@@ -102,14 +105,14 @@ export default function ArqueoCajaModal({ isOpen, onClose, cajaActual, onCajaCer
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl text-slate-800">
             <Calculator className="h-6 w-6 text-[#20A7DB]" />
-            Arqueo Físico y Cierre de Caja Diaria
+            Arqueo y Cierre de Caja
           </DialogTitle>
-          <p className="text-sm text-slate-500">
-            Conteo de efectivo por corte de billetes y monedas según normativa contable (RN-03).
+          <p className="text-xs text-slate-500">
+            Conteo de billetes y monedas.
           </p>
         </DialogHeader>
 

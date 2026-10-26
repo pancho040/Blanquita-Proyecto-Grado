@@ -136,8 +136,14 @@ class CuentasCobrarRepository:
         sql = f"""
             SELECT 
                 cxc.*,
+                CASE 
+                    WHEN cxc."SaldoPendiente" > 0 AND cxc."FechaVencimiento" IS NOT NULL AND CURRENT_DATE > cxc."FechaVencimiento" 
+                    THEN (CURRENT_DATE - cxc."FechaVencimiento")
+                    ELSE COALESCE(cxc."DiasMora", 0)
+                END as "DiasMora",
                 cli."RazonSocial" as "RazonSocialCliente",
                 cli."CiudadDestino",
+                cli."LimiteCreditoBs",
                 ec."NombreEstado"
             FROM "CuentaCobrar" cxc
             JOIN "Cliente" cli ON cxc."IdCliente" = cli."IdCliente"
@@ -235,7 +241,11 @@ class CuentasCobrarRepository:
                 COALESCE(SUM(cxc."MontoTotal"), 0) as "MontoDespachoTotal",
                 COALESCE(SUM(cxc."MontoTotal" - cxc."SaldoPendiente"), 0) as "TotalDepositos",
                 COALESCE(SUM(cxc."SaldoPendiente"), 0) as "SaldoPorCobrar",
-                COALESCE(MAX(cxc."DiasMora"), 0) as "DiasMoraPromedio",
+                COALESCE(MAX(CASE 
+                    WHEN cxc."SaldoPendiente" > 0 AND cxc."FechaVencimiento" IS NOT NULL AND CURRENT_DATE > cxc."FechaVencimiento" 
+                    THEN (CURRENT_DATE - cxc."FechaVencimiento")
+                    ELSE COALESCE(cxc."DiasMora", 0)
+                END), 0) as "DiasMoraPromedio",
                 c."Observacion"
             FROM "Cliente" c
             LEFT JOIN "CuentaCobrar" cxc ON c."IdCliente" = cxc."IdCliente"
@@ -244,3 +254,63 @@ class CuentasCobrarRepository:
             ORDER BY "SaldoPorCobrar" DESC, "MontoDespachoTotal" DESC;
         """
         return self.caller.LlamarFuncion(sql)
+
+    # --- RN-01: Verificación de Mora y Límite de Crédito ---
+    def VerificarEstadoCreditoCliente(self, id_cliente: int, nuevo_monto: float = 0.0) -> dict:
+        sql_cli = '''
+            SELECT "IdCliente", "RazonSocial", "NombreComercial", "LimiteCreditoBs", "DiasCredito"
+            FROM "Cliente"
+            WHERE "IdCliente" = :id_cliente;
+        '''
+        cli = self.caller.LlamarUnRegistro(sql_cli, {"id_cliente": id_cliente})
+        if not cli:
+            return {"Bloqueado": False, "Motivo": None, "MaxDiasMora": 0, "SaldoDeuda": 0.0, "LimiteCredito": 0.0}
+
+        limite = float(cli.get("LimiteCreditoBs") or 0.0)
+        dias_credito = int(cli.get("DiasCredito") or 15)
+
+        sql_mora = '''
+            SELECT 
+                COALESCE(SUM("SaldoPendiente"), 0) as "SaldoTotalDeuda",
+                COALESCE(MAX(CASE 
+                    WHEN "SaldoPendiente" > 0 AND "FechaVencimiento" IS NOT NULL AND CURRENT_DATE > "FechaVencimiento"
+                    THEN (CURRENT_DATE - "FechaVencimiento")
+                    ELSE COALESCE("DiasMora", 0)
+                END), 0) as "MaxDiasMora"
+            FROM "CuentaCobrar"
+            WHERE "IdCliente" = :id_cliente AND "SaldoPendiente" > 0;
+        '''
+        res_mora = self.caller.LlamarUnRegistro(sql_mora, {"id_cliente": id_cliente})
+        saldo_deuda = float(res_mora.get("SaldoTotalDeuda", 0.0)) if res_mora else 0.0
+        max_mora = int(res_mora.get("MaxDiasMora", 0)) if res_mora else 0
+
+        # RN-01: Bloqueo automático si cliente registra facturas vencidas con más de 15 días
+        if max_mora > 15:
+            return {
+                "Bloqueado": True,
+                "Motivo": f"Cliente bloqueado por mora: registra cuentas pendientes con {max_mora} días de vencimiento (> 15 días según RN-01).",
+                "MaxDiasMora": max_mora,
+                "SaldoDeuda": saldo_deuda,
+                "LimiteCredito": limite,
+                "DiasCredito": dias_credito
+            }
+
+        # RN-01: Bloqueo si supera límite de crédito configurado
+        if limite > 0 and (saldo_deuda + nuevo_monto) > limite:
+            return {
+                "Bloqueado": True,
+                "Motivo": f"Cliente bloqueado por límite de crédito: saldo deudor (Bs. {saldo_deuda:.2f}) + nuevo monto (Bs. {nuevo_monto:.2f}) supera el límite autorizado de Bs. {limite:.2f}.",
+                "MaxDiasMora": max_mora,
+                "SaldoDeuda": saldo_deuda,
+                "LimiteCredito": limite,
+                "DiasCredito": dias_credito
+            }
+
+        return {
+            "Bloqueado": False,
+            "Motivo": None,
+            "MaxDiasMora": max_mora,
+            "SaldoDeuda": saldo_deuda,
+            "LimiteCredito": limite,
+            "DiasCredito": dias_credito
+        }

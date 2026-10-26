@@ -1,0 +1,29 @@
+# Dependencias y entornos
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Astro y compilación
+.astro/
+dist/
+Blanquita-Frontend/.astro/
+Blanquita-Frontend/dist/
+
+# Expo / React Native
+.expo/
+Blanquita-Mobile/.expo/
+Blanquita-Mobile/node_modules/
+
+# Documentos y archivos locales de soporte
+archivos/
+archivos_contabilidad/
+*.xlsx
+*.xls
+*.csv
+
+# Sistema Operativo y logs
+.DS_Store
+Thumbs.db
+*.log

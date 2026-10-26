@@ -78,34 +78,34 @@ export default function InicioContador({ usuario }) {
       <div className="bg-gradient-to-r from-[#20A7DB] via-[#35b1e0] to-[#62C1E5] text-white p-6 sm:p-8 rounded-3xl shadow-sm relative overflow-hidden">
         <div className="relative z-10">
           <span className="text-xs font-semibold tracking-wider uppercase text-white/80 bg-white/20 px-3 py-1 rounded-full">
-            Módulo Financiero y Contabilidad
+            Contabilidad
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold mt-3">
-            Bienvenido, {usuario?.NombreCompleto || "Contador General"}
+            {usuario?.NombreCompleto || "Contador General"}
           </h1>
           <p className="text-sm text-white/90 mt-1 max-w-xl">
-            Resumen de liquidez en bancos, posición de cartera, cuentas por pagar y flujo de caja de Shema Asociados S.R.L.
+            Resumen de liquidez en bancos, cartera, cuentas por pagar y flujo de caja.
           </p>
 
           <div className="flex flex-wrap items-center gap-3 mt-5">
             <a href="/contador/caja">
               <Button className="bg-white text-[#20A7DB] hover:bg-slate-100 font-bold text-xs shadow-xs">
-                <Wallet className="h-4 w-4 mr-1.5" /> Libro Diario de Caja
+                <Wallet className="h-4 w-4 mr-1.5" /> Flujo de Caja
               </Button>
             </a>
             <a href="/contador/cuentas-cobrar">
               <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <HandCoins className="h-4 w-4 mr-1.5" /> Cartera x Cobrar
+                <HandCoins className="h-4 w-4 mr-1.5" /> Cuentas por Cobrar
               </Button>
             </a>
             <a href="/contador/cuentas-pagar">
               <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <Layers className="h-4 w-4 mr-1.5" /> Cuentas x Pagar
+                <Layers className="h-4 w-4 mr-1.5" /> Cuentas por Pagar
               </Button>
             </a>
             <a href="/contador/importacion">
               <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Sincronizar Excels
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Importar Archivos
               </Button>
             </a>
           </div>

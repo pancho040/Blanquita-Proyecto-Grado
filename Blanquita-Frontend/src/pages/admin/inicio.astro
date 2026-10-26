@@ -1,6 +1,9 @@
 ---
-import Layout from '../../layouts/Layout.astro';
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import InicioRRHH from "@/components/RRHH/InicioRRHH";
 ---
-<Layout>
-    <h1>PRUEBA ADMIN INGRESO</h1>
+
+<Layout title="Panel | Papelera Blanquita">
+  <InicioRRHH client:only="react" />
 </Layout>

@@ -1,19 +1,9 @@
 ---
 import Layout from '@/layouts/Layout.astro';
 const { usuario } = Astro.locals;
-import NavBar from '@/components/layout/NavBar';
-import SideBar from '@/components/layout/SideBar';
 import GestionCuentasCobrar from '@/components/Contabilidad/GestionCuentasCobrar';
 ---
 
-<Layout>
-  <div class="md:hidden">
-    <NavBar client:media="(max-width: 767.98px)" idRol={usuario.IdRol} />
-  </div>
-  <div class="hidden md:block">
-    <SideBar client:media="(min-width: 768px)" idRol={usuario.IdRol} />
-  </div>
-  <main class="p-4 sm:p-6 lg:p-8 pt-24 md:pt-8 max-w-7xl mx-auto">
-    <GestionCuentasCobrar client:load usuario={usuario} />
-  </main>
+<Layout title="Cuentas por Cobrar | Papelera Blanquita">
+  <GestionCuentasCobrar client:only="react" usuario={usuario} />
 </Layout>

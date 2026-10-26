@@ -186,6 +186,15 @@ def listar_cuentas_cobrar(
         "total_paginas": (total_registros + limit - 1) // limit if limit > 0 else 1
     }
 
+@CuentasCobrarRouter.post("/cuentas")
+def crear_cuenta_cobrar_manual(
+    dto: dict,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_CXC))
+):
+    """Permite registrar manualmente una Cuenta por Cobrar desde el módulo web."""
+    return CuentasCobrarService(db).CrearCuentaCobrarManual(dto, usuario["IdUsuario"])
+
 @CuentasCobrarRouter.get("/cuentas/{id_cxc}")
 def obtener_cuenta_cobrar(
     id_cxc: int,
@@ -250,3 +259,36 @@ def listar_clientes_cxc(
 ):
     sql = 'SELECT "IdCliente", "RazonSocial", "NombreComercial", "NitCi", "CiudadDestino" as "Ciudad" FROM "Cliente" ORDER BY "RazonSocial" ASC;'
     return CuentasCobrarService(db).repo.caller.LlamarFuncion(sql)
+
+@CuentasCobrarRouter.get("/clientes/{id_cliente}/estado-credito")
+def verificar_estado_credito_cliente(
+    id_cliente: int,
+    nuevo_monto: float = Query(0.0),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_CXC))
+):
+    """RN-01: Consulta si un cliente está bloqueado para venta a crédito por mora o límite de crédito."""
+    return CuentasCobrarService(db).VerificarEstadoCredito(id_cliente, nuevo_monto)
+
+@CuentasCobrarRouter.post("/clientes/{id_cliente}/recordatorio-mora")
+def registrar_recordatorio_mora(
+    id_cliente: int,
+    dto: dict = {},
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_CXC))
+):
+    """HU-08: Registra en el log de auditoría el recordatorio de mora enviado al cliente."""
+    from sqlalchemy import text
+    obs = dto.get("detalle") or f"Recordatorio de mora emitido por {usuario.get('PrimerNombre', 'Contador')} vía mensajería digital."
+    sql_audit = """
+        INSERT INTO "AuditLog" ("IdUsuario", "Accion", "TablaAfectada", "IdRegistroAfectado", "Detalle", "FechaHora")
+        VALUES (:id_usuario, 'RECORDATORIO_MORA', 'Cliente', :id_cliente, :detalle, NOW())
+        RETURNING "IdAuditLog";
+    """
+    res = db.execute(text(sql_audit), {
+        "id_usuario": usuario["IdUsuario"],
+        "id_cliente": str(id_cliente),
+        "detalle": obs
+    }).fetchone()
+    db.commit()
+    return {"success": True, "mensaje": "Recordatorio registrado con trazabilidad", "id_audit": res[0] if res else None}

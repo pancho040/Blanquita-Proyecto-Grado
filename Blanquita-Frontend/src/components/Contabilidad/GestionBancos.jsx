@@ -29,6 +29,8 @@ import {
   ActualizarCuentaBancaria,
   ObtenerMovimientosCaja,
 } from "@/services/Contabilidad/tesoreriaService";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionBancos({ usuario }) {
   const [bancos, setBancos] = useState([]);
@@ -62,12 +64,26 @@ export default function GestionBancos({ usuario }) {
     cargarBancos();
   }, []);
 
-  const cargarBancos = async () => {
+  const cargarBancos = async (forzar = false) => {
     try {
+      if (!forzar) {
+        const cached = cache.get("contabilidad:cuentasBancarias");
+        if (cached) {
+          setBancos(cached);
+          setCargando(false);
+          if (cached.length > 0 && !bancoSeleccionado) {
+            seleccionarBanco(cached[0], 1);
+          }
+          return;
+        }
+      }
+
       setCargando(true);
       const data = await ObtenerCuentasBancarias(false);
       const lista = Array.isArray(data) ? data : (data?.items || []);
       setBancos(lista);
+      cache.set("contabilidad:cuentasBancarias", lista, 300);
+
       if (lista.length > 0 && !bancoSeleccionado) {
         seleccionarBanco(lista[0], 1);
       }
@@ -118,6 +134,7 @@ export default function GestionBancos({ usuario }) {
       });
 
       toast.success("¡Cuenta bancaria registrada exitosamente!");
+      invalidateContabilidad();
       setModalNuevoOpen(false);
       setFormBanco({
         nombre_banco: "",
@@ -127,7 +144,7 @@ export default function GestionBancos({ usuario }) {
         titular: "Shema Asociados S.R.L.",
         saldo_actual: "0",
       });
-      await cargarBancos();
+      await cargarBancos(true);
     } catch (err) {
       toast.error(err.message || "Error al crear cuenta bancaria");
     } finally {
@@ -151,8 +168,9 @@ export default function GestionBancos({ usuario }) {
       });
 
       toast.success("Cuenta bancaria actualizada");
+      invalidateContabilidad();
       setModalEditarOpen(false);
-      await cargarBancos();
+      await cargarBancos(true);
     } catch (err) {
       toast.error(err.message || "Error al actualizar");
     } finally {
@@ -188,10 +206,10 @@ export default function GestionBancos({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <Landmark className="h-7 w-7 text-[#20A7DB]" />
-            Cuentas Bancarias Empresariales
+            Cuentas Bancarias
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Control de saldos en Banco Unión, BNB y cuentas corporativas de Shema Asociados S.R.L.
+            Control de saldos y movimientos bancarios.
           </p>
         </div>
 
@@ -200,7 +218,7 @@ export default function GestionBancos({ usuario }) {
           className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
         >
           <PlusCircle className="h-4 w-4" />
-          Registrar Nueva Cuenta
+          Nueva Cuenta
         </Button>
       </div>
 
@@ -386,45 +404,30 @@ export default function GestionBancos({ usuario }) {
             </table>
           </div>
 
-          {/* Paginación de Movimientos */}
-          <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <div>
-              Mostrando {movimientosBanco.length > 0 ? (paginaMovs - 1) * limiteMovs + 1 : 0} a{" "}
-              {Math.min(paginaMovs * limiteMovs, totalMovs)} de {totalMovs} transacciones
-            </div>
-
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={paginaMovs <= 1 || cargandoMovs}
-                onClick={() => seleccionarBanco(bancoSeleccionado, Math.max(1, paginaMovs - 1))}
-                className="h-8 px-2 text-xs"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                Anterior
-              </Button>
-              <span className="px-2 font-medium text-slate-700">
-                Pág. {paginaMovs} de {totalPaginasMovs}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={paginaMovs >= totalPaginasMovs || cargandoMovs}
-                onClick={() => seleccionarBanco(bancoSeleccionado, Math.min(totalPaginasMovs, paginaMovs + 1))}
-                className="h-8 px-2 text-xs"
-              >
-                Siguiente
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
+          {/* Paginación Estandarizada de Movimientos */}
+          <PaginacionTabla
+            paginaActual={paginaMovs}
+            totalPaginas={totalPaginasMovs}
+            totalItems={totalMovs}
+            pageSize={limiteMovs}
+            indiceInicio={movimientosBanco.length > 0 ? (paginaMovs - 1) * limiteMovs + 1 : 0}
+            indiceFin={Math.min(paginaMovs * limiteMovs, totalMovs)}
+            puedeRetroceder={paginaMovs > 1}
+            puedeAvanzar={paginaMovs < totalPaginasMovs}
+            cambiarPagina={(p) => seleccionarBanco(bancoSeleccionado, p)}
+            cambiarPageSize={(nuevo) => {
+              setLimiteMovs(nuevo);
+              seleccionarBanco(bancoSeleccionado, 1);
+            }}
+            opcionesPageSize={[10, 25, 50, 100]}
+          />
         </div>
       )}
 
       {/* MODAL NUEVA CUENTA */}
+      {modalNuevoOpen && (
       <Dialog open={modalNuevoOpen} onOpenChange={setModalNuevoOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Landmark className="h-5 w-5 text-[#20A7DB]" />
@@ -528,10 +531,12 @@ export default function GestionBancos({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL EDITAR CUENTA */}
+      {modalEditarOpen && (
       <Dialog open={modalEditarOpen} onOpenChange={setModalEditarOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Edit className="h-5 w-5 text-[#20A7DB]" />
@@ -600,6 +605,7 @@ export default function GestionBancos({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

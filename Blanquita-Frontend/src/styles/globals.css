@@ -135,14 +135,13 @@
    - --hueco-sidebar lo fija SideBar.jsx en <html> al plegar/desplegar; el valor
      por defecto (17rem) cubre el render del servidor y el previo a la hidratacion. */
 .contenido-con-sidebar {
-    transition: padding-left 0.3s ease-in-out;
+    width: 100%;
 }
 @media (min-width: 768px) {
     .contenido-con-sidebar {
-        padding-left: var(--hueco-sidebar, 17rem);
+        padding-left: 0;
     }
 }
-
 
 @font-face {
     font-family: "Ekamai";
@@ -195,4 +194,12 @@
         padding: 0;
         box-sizing: border-box;
     }
+}
+
+/* ==========================================================================
+   VIEW TRANSITIONS: TRANSICION LIMPIA E INMEDIATA SIN PARPADEO
+   ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none !important;
 }

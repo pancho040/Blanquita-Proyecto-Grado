@@ -35,6 +35,8 @@ import {
   RechazarSolicitudCajaChica,
   DescargarSolicitudCajaChica,
 } from "@/services/Contabilidad/tesoreriaService";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionSolicitudesCajaChica({ usuario }) {
   const [solicitudes, setSolicitudes] = useState([]);
@@ -142,6 +144,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
         justificacion: formNueva.justificacion.trim(),
       });
       toast.success("¡Solicitud de Caja Chica creada exitosamente!");
+      invalidateContabilidad();
       setModalNuevaOpen(false);
       setFormNueva({
         solicitante: "",
@@ -165,6 +168,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
         monto_aprobado: solicitudSeleccionada.MontoSolicitado,
       });
       toast.success("Solicitud aprobada y fondo desembolsado");
+      invalidateContabilidad();
       setModalAprobarOpen(false);
       await cargarSolicitudes();
     } catch (err) {
@@ -185,6 +189,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
         motivo_rechazo: motivoRechazo.trim(),
       });
       toast.success("Solicitud rechazada");
+      invalidateContabilidad();
       setModalRechazarOpen(false);
       setMotivoRechazo("");
       await cargarSolicitudes();
@@ -211,6 +216,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
         detalle_descargo: formRendir.detalle_descargo.trim() || "Descargo con facturas y recibos",
       });
       toast.success("¡Descargo y rendición de caja chica asentada!");
+      invalidateContabilidad();
       setModalRendirOpen(false);
       setFormRendir({ monto_gastado: "", detalle_descargo: "" });
       await cargarSolicitudes();
@@ -228,10 +234,10 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
             <Receipt className="h-7 w-7 text-[#20A7DB]" />
-            Vales de Caja Chica (SC)
+            Caja Chica
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestión y control de vales correlativos SC, autorizaciones de retiro y rendición de descargos.
+            Solicitudes de gastos menores, autorizaciones y rendición de descargos.
           </p>
         </div>
 
@@ -240,7 +246,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
         >
           <PlusCircle className="h-4 w-4" />
-          Nueva Solicitud SC
+          Nueva Solicitud
         </Button>
       </div>
 
@@ -443,61 +449,29 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </table>
         </div>
 
-        {/* Paginación */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Mostrando {solicitudes.length > 0 ? (pagina - 1) * limite + 1 : 0} a{" "}
-            {Math.min(pagina * limite, totalRegistros)} de {totalRegistros} solicitudes
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Por página:</span>
-            <select
-              value={limite}
-              onChange={(e) => {
-                setLimite(Number(e.target.value));
-                setPagina(1);
-              }}
-              className="text-xs h-8 border border-slate-200 rounded-md bg-white px-2 text-slate-700"
-            >
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina <= 1 || cargando}
-                onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="h-8 px-2 text-xs"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                Anterior
-              </Button>
-              <span className="px-2 font-medium text-slate-700">
-                Pág. {pagina} de {totalPaginas}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagina >= totalPaginas || cargando}
-                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                className="h-8 px-2 text-xs"
-              >
-                Siguiente
-                <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Paginación Estandarizada */}
+        <PaginacionTabla
+          paginaActual={pagina}
+          totalPaginas={totalPaginas}
+          totalItems={totalRegistros}
+          pageSize={limite}
+          indiceInicio={solicitudes.length > 0 ? (pagina - 1) * limite + 1 : 0}
+          indiceFin={Math.min(pagina * limite, totalRegistros)}
+          puedeRetroceder={pagina > 1}
+          puedeAvanzar={pagina < totalPaginas}
+          cambiarPagina={(p) => setPagina(p)}
+          cambiarPageSize={(nuevo) => {
+            setLimite(nuevo);
+            setPagina(1);
+          }}
+          opcionesPageSize={[10, 15, 25, 50]}
+        />
       </div>
 
       {/* MODAL NUEVA SOLICITUD */}
+      {modalNuevaOpen && (
       <Dialog open={modalNuevaOpen} onOpenChange={setModalNuevaOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Receipt className="h-5 w-5 text-[#20A7DB]" />
@@ -578,22 +552,21 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL APROBAR */}
+      {modalAprobarOpen && (
       <Dialog open={modalAprobarOpen} onOpenChange={setModalAprobarOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full sm:max-w-lg p-6 sm:p-7">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <CheckCircle2 className="h-5 w-5 text-blue-600" />
               Aprobar Vale {solicitudSeleccionada?.NumeroSolicitud}
             </DialogTitle>
           </DialogHeader>
-          <div className="text-sm text-slate-600 space-y-2">
+          <div className="text-sm text-slate-600 py-1">
             <p>
               ¿Confirma la entrega de <strong>Bs. {Number(solicitudSeleccionada?.MontoSolicitado || 0).toFixed(2)}</strong> en efectivo a <strong>{solicitudSeleccionada?.Solicitante}</strong>?
-            </p>
-            <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-              Esta operación registrará un vale activo que requiere rendición posterior mediante facturas o recibos.
             </p>
           </div>
           <DialogFooter className="gap-2 pt-2">
@@ -606,10 +579,12 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL RECHAZAR */}
+      {modalRechazarOpen && (
       <Dialog open={modalRechazarOpen} onOpenChange={setModalRechazarOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full sm:max-w-lg p-6 sm:p-7">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <XCircle className="h-5 w-5 text-rose-600" />
@@ -639,18 +614,20 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL RENDIR / DESCARGO */}
+      {modalRendirOpen && (
       <Dialog open={modalRendirOpen} onOpenChange={setModalRendirOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <FileCheck className="h-5 w-5 text-emerald-600" />
               Rendición de Cuentas: {solicitudSeleccionada?.NumeroSolicitud}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleRendir} className="space-y-3.5">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+          <form onSubmit={handleRendir} className="space-y-3.5 pt-1">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs grid grid-cols-2 gap-2">
               <div><strong>Solicitante:</strong> {solicitudSeleccionada?.Solicitante}</div>
               <div><strong>Monto Entregado:</strong> Bs. {Number(solicitudSeleccionada?.MontoSolicitado || 0).toFixed(2)}</div>
             </div>
@@ -711,10 +688,12 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* MODAL VISTA VALE DE CAJA CHICA (FORMATO OFICIAL BLANQUITA) */}
+      {modalValeOpen && (
       <Dialog open={modalValeOpen} onOpenChange={setModalValeOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
               <Printer className="h-5 w-5 text-[#20A7DB]" />
@@ -798,6 +777,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
