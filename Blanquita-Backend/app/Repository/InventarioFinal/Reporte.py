@@ -1,7 +1,7 @@
 from sqlalchemy import Date, Integer, cast, func, select
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import ZONA_HORARIA, filtro_rango
+from app.Repository.Consultas import ZONA_HORARIA, filtro_rango, listar_turnos
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
     InventarioProductoTerminado,
@@ -10,6 +10,7 @@ from app.Schemas.Producto import (
     Producto,
     TipoMovimientoInventario,
 )
+from app.Schemas.Produccion import Turno
 from app.Schemas.Usuario import Rol, Usuario
 
 TIPO_MOVIMIENTO_ENTRADA = 1
@@ -75,8 +76,13 @@ class ReporteProductoTerminadoRepository:
 
         if params.get("p_IdsProducto"):
             consulta = consulta.where(Producto.IdProducto.in_(params["p_IdsProducto"]))
+        if params.get("p_IdTurno") is not None:
+            consulta = consulta.where(mpt.IdTurno == params["p_IdTurno"])
 
         return self.caller.Consultar(consulta)
+
+    def Turnos(self) -> list[dict]:
+        return listar_turnos(self.caller)
 
     def ReporteMovimientosProduccion(self, params: dict) -> list[dict]:
         mpt = MovimientoProductoTerminado
@@ -92,6 +98,7 @@ class ReporteProductoTerminadoRepository:
                 mpt.IdTipoMovimientoInventario,
                 TipoMovimientoInventario.NombreTipoMovimientoInventario,
                 cast(mpt.CantidadIngresoInventario, Integer).label("Cantidad"),
+                Turno.NombreTurno,
                 mpt.Observacion,
                 Usuario.Ci,
                 Usuario.PrimerNombre,
@@ -106,6 +113,7 @@ class ReporteProductoTerminadoRepository:
             )
             .join(Usuario, Usuario.IdUsuario == mpt.IdUsuario)
             .join(Rol, Rol.IdRol == Usuario.IdRol)
+            .join(Turno, Turno.IdTurno == mpt.IdTurno)
             .where(
                 mpt.IdTipoMovimientoInventario.in_(TIPOS_MOVIMIENTO_PRODUCCION),
                 *filtro_rango(
@@ -117,6 +125,8 @@ class ReporteProductoTerminadoRepository:
 
         if params.get("p_IdsProducto"):
             consulta = consulta.where(Producto.IdProducto.in_(params["p_IdsProducto"]))
+        if params.get("p_IdTurno") is not None:
+            consulta = consulta.where(mpt.IdTurno == params["p_IdTurno"])
 
         return self.caller.Consultar(consulta)
 

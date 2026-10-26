@@ -46,7 +46,7 @@ def construir_reporte_produccion_diaria_producto_terminado(
     reporte = Reporte(
         titulo="Producción diaria - Producto terminado",
         subtitulo=_texto_periodo(data.PeriodoInicio, data.PeriodoFin),
-        filtros={"Líneas": _texto_lineas(data)},
+        filtros={"Líneas": _texto_lineas(data), "Turno": data.NombreTurno or "Todos"},
         generado_en=datetime.now(ZONA_BOLIVIA),
         generado_por=generado_por,
     )
@@ -123,6 +123,7 @@ def construir_reporte_produccion_diaria_producto_terminado(
             reporte.tabla(
                 columnas=[
                     ("Fecha", "FechaMovimiento"),
+                    ("Turno", "NombreTurno"),
                     ("Código", "CodigoPresentacion"),
                     ("Producto", "NombrePresentacion"),
                     ("Movimiento", "NombreTipoMovimientoInventario"),
@@ -138,6 +139,7 @@ def construir_reporte_produccion_diaria_producto_terminado(
                 filas=movimientos,
                 fila_total=[
                     "TOTAL",
+                    "",
                     "",
                     "",
                     "",

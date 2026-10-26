@@ -9,6 +9,7 @@ class ReporteProduccionDiariaProductoTerminadoRequest(BaseModel):
     FechaInicio: date
     FechaFin: date
     IdsProducto: Optional[list[int]] = None
+    IdTurno: Optional[int] = None
     VerMovimientos: bool = False
 
 
@@ -54,6 +55,7 @@ class MovimientoProduccionProductoTerminadoResponse(BaseModel):
     IdTipoMovimientoInventario: int
     NombreTipoMovimientoInventario: str
     Cantidad: int
+    NombreTurno: str
     Observacion: Optional[str]
     Ci: str
     PrimerNombre: str
@@ -67,6 +69,7 @@ class ReporteProduccionDiariaProductoTerminadoResponse(BaseModel):
     DiasPeriodo: int
     DiasConProduccion: int
     TodasLasLineas: bool
+    NombreTurno: Optional[str] = None
     Lineas: list[ProduccionLineaResponse]
     ProduccionPorDia: list[ProduccionDiaResponse]
     Movimientos: Optional[list[MovimientoProduccionProductoTerminadoResponse]] = None

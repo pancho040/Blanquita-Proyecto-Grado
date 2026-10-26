@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import case, func, literal, null, or_, select
 
 from app.Constants.AlertaStock import NIVEL_STOCK_BAJO, NIVEL_STOCK_CRITICO, NIVEL_STOCK_NORMAL
+from app.Constants.Turno import TURNO_HORAS_EXTRA, TURNOS_SISTEMA
 from app.Schemas.Produccion import Turno
 
 ZONA_HORARIA = "America/La_Paz"
@@ -45,9 +46,9 @@ def _turno_cubre_hora(turno: dict, hora: time) -> bool:
 
 def listar_turnos(caller) -> list[dict]:
     return caller.Consultar(
-        select(Turno.IdTurno, Turno.NombreTurno, Turno.HoraInicio, Turno.HoraFin).order_by(
-            Turno.IdTurno
-        )
+        select(Turno.IdTurno, Turno.NombreTurno, Turno.HoraInicio, Turno.HoraFin)
+        .where(Turno.IdTurno.in_(TURNOS_SISTEMA))
+        .order_by(Turno.IdTurno)
     )
 
 
@@ -59,8 +60,10 @@ def turno_de_hora(turnos: list[dict], hora: time) -> dict | None:
         if _turno_cubre_hora(turno, hora):
             return turno
 
-    anteriores = [turno for turno in turnos if turno["HoraInicio"] <= hora]
-    return max(anteriores or turnos, key=lambda turno: turno["HoraInicio"])
+    return next(
+        (turno for turno in turnos if turno["IdTurno"] == TURNO_HORAS_EXTRA),
+        turnos[-1],
+    )
 
 
 def turno_actual(caller) -> dict | None:

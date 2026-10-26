@@ -21,11 +21,12 @@ export async function verResumenProduccionDiaria(filtros) {
   return ResumenProduccionDiariaResponse(data);
 }
 
-export async function descargarReporteProduccionDiaria(fechaInicio, fechaFin, idsProducto, verMovimientos) {
+export async function descargarReporteProduccionDiaria(fechaInicio, fechaFin, idsProducto, verMovimientos, idTurno) {
   const params = construirQueryParams({
     FechaInicio: fechaInicio,
     FechaFin: fechaFin,
     IdsProducto: idsProducto,
+    IdTurno: idTurno || null,
     VerMovimientos: verMovimientos ?? false
   });
 

@@ -3,7 +3,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.Repository.Consultas import nivel_stock, nombre_operador, visible_en_inventario
+from app.Repository.Consultas import nivel_stock, nombre_operador, turno_actual, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
     BloqueoProductoTerminado,
@@ -20,6 +20,9 @@ class ProductoFinalRepository:
     def __init__(self, db: Session):
         self.db = db
         self.caller = DbCaller(db)
+
+    def IdTurnoActual(self) -> int:
+        return turno_actual(self.caller)["IdTurno"]
 
     def ObtenerPresentaciones(
         self, ids_presentacion: list[int]

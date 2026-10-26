@@ -46,6 +46,7 @@ class MovimientoProductoTerminado(Base):
     IdTipoMovimientoInventario: Mapped[int]
     IdPresentacion: Mapped[int]
     IdUsuario: Mapped[int]
+    IdTurno: Mapped[int]
     CantidadIngresoInventario: Mapped[Decimal] = mapped_column(Numeric)
     FechaMovimiento: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

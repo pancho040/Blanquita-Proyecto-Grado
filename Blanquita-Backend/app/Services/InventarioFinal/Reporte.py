@@ -88,6 +88,7 @@ class ReporteProductoTerminadoService:
                 detail=f"El rango de fechas no puede superar los {DIAS_MAXIMOS_REPORTE_PRODUCCION} días",
             )
 
+        nombre_turno = self._NombreTurno(data.IdTurno)
         lineas_solicitadas, todas_las_lineas = self._LineasSolicitadas(data.IdsProducto)
 
         filas = self.repository.ReporteProduccionDiaria(self._ParametrosPeriodo(data))
@@ -135,6 +136,7 @@ class ReporteProductoTerminadoService:
             DiasPeriodo=dias_periodo,
             DiasConProduccion=len(set().union(*dias_con_produccion.values())),
             TodasLasLineas=todas_las_lineas,
+            NombreTurno=nombre_turno,
             Lineas=lineas,
             ProduccionPorDia=[
                 ProduccionDiaResponse(Fecha=fecha, TotalesPorLinea=dict(totales))
@@ -217,7 +219,21 @@ class ReporteProductoTerminadoService:
             "p_FechaInicio": data.FechaInicio,
             "p_FechaFin": data.FechaFin,
             "p_IdsProducto": data.IdsProducto or None,
+            "p_IdTurno": data.IdTurno,
         }
+
+    def _NombreTurno(self, id_turno: int | None) -> str | None:
+        if id_turno is None:
+            return None
+        turno = next(
+            (turno for turno in self.repository.Turnos() if turno["IdTurno"] == id_turno), None
+        )
+        if turno is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El turno con id {id_turno} no existe",
+            )
+        return turno["NombreTurno"]
 
     def _ConstruirLinea(
         self,

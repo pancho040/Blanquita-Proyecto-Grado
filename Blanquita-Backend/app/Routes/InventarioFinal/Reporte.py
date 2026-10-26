@@ -62,6 +62,7 @@ def ResumenProduccionDiariaProductoTerminado(
         default=None,
         description="IDs de Producto (líneas) a incluir. Vacío = todas las líneas.",
     ),
+    IdTurno: int | None = None,
     service: ReporteProductoTerminadoService = Depends(
         reporte_producto_terminado_service
     ),
@@ -71,6 +72,7 @@ def ResumenProduccionDiariaProductoTerminado(
             FechaInicio=FechaInicio,
             FechaFin=FechaFin,
             IdsProducto=IdsProducto,
+            IdTurno=IdTurno,
         )
     )
 
@@ -89,6 +91,7 @@ def ReporteProduccionDiariaProductoTerminado(
         default=None,
         description="IDs de Producto (líneas) a incluir. Vacío = todas las líneas.",
     ),
+    IdTurno: int | None = None,
     VerMovimientos: bool = False,
     generado_por: str | None = Depends(get_generado_por),
     service: ReporteProductoTerminadoService = Depends(
@@ -100,6 +103,7 @@ def ReporteProduccionDiariaProductoTerminado(
             FechaInicio=FechaInicio,
             FechaFin=FechaFin,
             IdsProducto=IdsProducto,
+            IdTurno=IdTurno,
             VerMovimientos=VerMovimientos,
         )
     )

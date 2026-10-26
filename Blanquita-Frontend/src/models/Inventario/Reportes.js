@@ -1,7 +1,8 @@
 export const ResumenProduccionDiariaRequest = (filtros = {}) => ({
   FechaInicio: filtros.FechaInicio ?? null,
   FechaFin: filtros.FechaFin ?? null,
-  IdsProducto: filtros.IdsProducto ?? null
+  IdsProducto: filtros.IdsProducto ?? null,
+  IdTurno: filtros.IdTurno || null
 });
 
 export const ProduccionPresentacionResponse = (data) => ({
@@ -40,6 +41,7 @@ export const ResumenProduccionDiariaResponse = (data) => ({
   DiasPeriodo: data.DiasPeriodo,
   DiasConProduccion: data.DiasConProduccion,
   TodasLasLineas: data.TodasLasLineas,
+  NombreTurno: data.NombreTurno ?? null,
   Lineas: (data.Lineas ?? []).map(ProduccionLineaResponse),
   ProduccionPorDia: (data.ProduccionPorDia ?? []).map(ProduccionDiaResponse)
 });

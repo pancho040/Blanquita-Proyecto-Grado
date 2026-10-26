@@ -11,7 +11,7 @@ from app.Constants.Estados import (
     MOVIMIENTO_PT_AJUSTE_NEGATIVO,
     MOVIMIENTO_PT_AJUSTE_POSITIVO,
 )
-from app.Repository.Consultas import filtro_rango, nombre_operador, visible_en_inventario
+from app.Repository.Consultas import filtro_rango, nombre_operador, turno_actual, visible_en_inventario
 from app.Repository.DbCaller import DbCaller
 from app.Schemas.Producto import (
     ConteoProductoTerminado,
@@ -29,6 +29,9 @@ class ConteoProductoTerminadoRepository:
     def __init__(self, db: Session):
         self.db = db
         self.caller = DbCaller(db)
+
+    def IdTurnoActual(self) -> int:
+        return turno_actual(self.caller)["IdTurno"]
 
     def _ConsultaResumen(self):
         inicio = aliased(Usuario)

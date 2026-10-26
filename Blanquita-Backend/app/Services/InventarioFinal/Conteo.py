@@ -296,6 +296,7 @@ class ConteoProductoTerminadoService:
                 detail=f"El stock de {', '.join(cambiadas)} cambió durante el conteo, anule este conteo e inicie uno nuevo",
             )
 
+        id_turno = self.repository.IdTurnoActual()
         ajustes = []
         for detalle in con_diferencia:
             diferencia = int(detalle.CantidadFisica) - int(detalle.CantidadSistema)
@@ -309,6 +310,7 @@ class ConteoProductoTerminadoService:
                 ),
                 IdPresentacion=detalle.IdPresentacion,
                 IdUsuario=id_usuario,
+                IdTurno=id_turno,
                 CantidadIngresoInventario=abs(diferencia),
                 Observacion=f"Conteo físico N° {id_conteo}: {motivos[detalle.IdPresentacion]}",
             )
