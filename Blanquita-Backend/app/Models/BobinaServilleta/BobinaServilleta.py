@@ -7,8 +7,8 @@ from pydantic import BaseModel
 class UnidadBobinaServilletaItem(BaseModel):
     CodigoBobina: str
     IdFormatoSubBobina: int
-    PesoBrutoKg: float | None = None
-    GramajeGr: float | None = None
+    PesoBrutoKg: Decimal | None = None
+    GramajeGr: Decimal | None = None
 
 
 class BobinaServilletaItem(BaseModel):

@@ -5,7 +5,13 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.Constants.Cantidades import LONGITUD_MAXIMA_DESCRIPCION, LONGITUD_MINIMA_DESCRIPCION
+from app.Constants.Cantidades import (
+    GRAMAJE_MAXIMO,
+    LONGITUD_MAXIMA_DESCRIPCION,
+    LONGITUD_MINIMA_DESCRIPCION,
+    PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+    PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+)
 from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_EN_ALMACEN,
     MOVIMIENTO_MATERIA_PRIMA_CORRECCION,
@@ -20,7 +26,12 @@ from app.Models.BobinaPapel.BobinaPapel import (
 from app.Repository.BobinaPapel.BobinaPapelRepository import BobinaPapelRepository
 from app.Schemas.BobinaPapel import BobinaPapel, LoteBobina, MovimientoBobina
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import (
+    CodigoMateriaPrima,
+    REGLA_CARACTERES_OBSERVACION,
+    ValidarMedida,
+    ValidarTexto,
+)
 
 OBSERVACION_INGRESO_BOBINA = "Ingreso automático al almacén por registro de bobina"
 
@@ -40,6 +51,38 @@ def _mostrar(valor) -> str:
     return str(valor)
 
 
+def _ValidarMedidasBobina(codigo: str, bruto, neto, gramaje) -> dict:
+    peso_bruto = ValidarMedida(
+        bruto,
+        f"el peso bruto de la bobina {codigo}",
+        "kg",
+        PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+        PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+    )
+    peso_neto = ValidarMedida(
+        neto,
+        f"el peso neto de la bobina {codigo}",
+        "kg",
+        PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+    )
+    if peso_neto > peso_bruto:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"El peso neto de la bobina {codigo} no puede superar a su peso bruto",
+        )
+    return {
+        "PesoBrutoKg": peso_bruto,
+        "PesoNetoKg": peso_neto,
+        "Gramaje": ValidarMedida(
+            gramaje,
+            f"el gramaje de la bobina {codigo}",
+            "g/m²",
+            GRAMAJE_MAXIMO,
+            obligatorio=False,
+        ),
+    }
+
+
 class BobinaPapelService:
     def __init__(self, db: Session):
         self.repository = BobinaPapelRepository(db)
@@ -52,6 +95,10 @@ class BobinaPapelService:
             )
 
         codigos = [CodigoMateriaPrima(bobina.CodigoBobina, "de la bobina") for bobina in data.Bobinas]
+        medidas = [
+            _ValidarMedidasBobina(codigo, bobina.PesoBrutoKg, bobina.PesoNetoKg, bobina.Gramaje)
+            for codigo, bobina in zip(codigos, data.Bobinas)
+        ]
 
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:
@@ -104,11 +151,9 @@ class BobinaPapelService:
                     CodigoBobina=codigo,
                     IdTipoBobina=data.IdTipoBobina,
                     IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
-                    PesoBrutoKg=bobina.PesoBrutoKg,
-                    Gramaje=bobina.Gramaje,
-                    PesoNetoKg=bobina.PesoNetoKg,
+                    **medida,
                 )
-                for codigo, bobina in zip(codigos, data.Bobinas)
+                for codigo, medida in zip(codigos, medidas)
             ],
             id_usuario,
             OBSERVACION_INGRESO_BOBINA,
@@ -131,6 +176,7 @@ class BobinaPapelService:
             )
 
         codigo = CodigoMateriaPrima(data.CodigoBobina, "de la bobina")
+        medidas = _ValidarMedidasBobina(codigo, data.PesoBrutoKg, data.PesoNetoKg, data.Gramaje)
 
         bobina = self.repository.ObtenerBobinaBloqueada(data.IdBobinaPapel)
         if bobina is None:
@@ -142,9 +188,7 @@ class BobinaPapelService:
 
         nuevos = {
             "CodigoBobina": codigo,
-            "PesoBrutoKg": data.PesoBrutoKg,
-            "PesoNetoKg": data.PesoNetoKg,
-            "Gramaje": data.Gramaje,
+            **medidas,
         }
         cambios = {
             campo: valor

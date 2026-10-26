@@ -274,6 +274,23 @@ export function ErroresFilas({ filas, errores }) {
   );
 }
 
+export function AvisosLote({ avisos }) {
+  if (!avisos.length) return null;
+  return (
+    <div className="flex flex-col gap-1 border-t border-amber-100 bg-amber-50 px-5 py-3">
+      {avisos.map((aviso) => (
+        <div
+          key={aviso}
+          className="flex items-start gap-1.5 text-[12.5px] font-semibold text-amber-700"
+        >
+          <TriangleAlert size={14} strokeWidth={2.5} className="mt-0.5 shrink-0" />
+          {aviso}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ErrorFila({ mensaje }) {
   return (
     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-red-600">
@@ -332,14 +349,21 @@ export function DialogoConfirmarLote({
   codigos = [],
   editable,
   aviso = "Una vez registrado el lote ya no se podrá editar.",
+  inusuales = [],
   onCancelar,
   onConfirmar,
 }) {
   const [revisado, setRevisado] = useState(false);
+  const [inusualesRevisados, setInusualesRevisados] = useState(false);
 
   useEffect(() => {
-    if (abierto) setRevisado(false);
+    if (abierto) {
+      setRevisado(false);
+      setInusualesRevisados(false);
+    }
   }, [abierto]);
+
+  const listo = revisado && (inusuales.length === 0 || inusualesRevisados);
 
   return (
     <Dialog open={abierto} onOpenChange={(open) => !open && !enviando && onCancelar()}>
@@ -416,6 +440,27 @@ export function DialogoConfirmarLote({
           </span>
         </div>
 
+        {inusuales.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+            <div className="flex items-center gap-2 text-[13px] font-extrabold text-amber-800">
+              <TriangleAlert size={16} strokeWidth={2.5} className="shrink-0" />
+              Valores fuera de lo común
+            </div>
+            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-[12.5px] font-semibold text-amber-700">
+              {inusuales.map((texto) => (
+                <li key={texto}>{texto}</li>
+              ))}
+            </ul>
+            <CasillaConfirmacion
+              marcada={inusualesRevisados}
+              onCambio={setInusualesRevisados}
+              titulo="Los valores son correctos"
+            >
+              Confirmo que revisé estos valores contra la ficha del proveedor.
+            </CasillaConfirmacion>
+          </div>
+        )}
+
         <CasillaConfirmacion
           marcada={revisado}
           onCambio={setRevisado}
@@ -435,7 +480,7 @@ export function DialogoConfirmarLote({
           </Button>
           <Button
             onClick={onConfirmar}
-            disabled={!revisado || enviando}
+            disabled={!listo || enviando}
             className="h-11 gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
           >
             {enviando ? (

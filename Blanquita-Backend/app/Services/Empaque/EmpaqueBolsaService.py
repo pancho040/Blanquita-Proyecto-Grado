@@ -28,7 +28,12 @@ from app.Schemas.Empaque import (
     TipoEmpaqueBolsa,
 )
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import EsCantidadValida, REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import (
+    EsCantidadValida,
+    REGLA_CARACTERES_OBSERVACION,
+    ToneladasPedidas,
+    ValidarTexto,
+)
 
 ID_TIPO_MOVIMIENTO_INGRESO = 1
 ID_TIPO_MOVIMIENTO_SALIDA = 2
@@ -45,6 +50,7 @@ class EmpaqueBolsaService:
         self, data: IngresoEmpaqueBolsaRequest, id_usuario: int
     ) -> IngresoEmpaqueBolsaResponse:
         self._ValidarItemsIngreso(data)
+        toneladas = ToneladasPedidas(data.CantidadToneladasPedida, obligatorio=False)
 
         proveedor = self.repository.ObtenerProveedor(data.IdProveedor)
         if proveedor is None:
@@ -99,7 +105,7 @@ class EmpaqueBolsaService:
                 IdProveedor=data.IdProveedor,
                 IdUsuario=id_usuario,
                 FechaRecepcion=datetime.now(ZONA_BOLIVIA).date(),
-                CantidadToneladasPedida=data.CantidadToneladasPedida,
+                CantidadToneladasPedida=toneladas,
             ),
             registros,
             lambda l: f"Ingreso a almacén · Lote #{l.IdLoteEmpaque} de {proveedor['NombreProveedor']}",

@@ -13,7 +13,7 @@ class IngresoEmpaqueBolsaItem(BaseModel):
 
 class IngresoEmpaqueBolsaRequest(BaseModel):
     IdProveedor: int = Field(..., gt=0)
-    CantidadToneladasPedida: Decimal | None = Field(default=None, gt=0)
+    CantidadToneladasPedida: Decimal | None = None
     EmpaquesBolsa: list[IngresoEmpaqueBolsaItem]
 
 

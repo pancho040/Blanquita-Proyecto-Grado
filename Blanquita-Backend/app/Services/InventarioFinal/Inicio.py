@@ -35,7 +35,7 @@ from app.Models.InventarioFinal.Inicio import (
     TurnoProduccionProductoTerminado,
 )
 from app.Models.InventarioFinal.Reporte import ReporteSalidasProductoTerminadoRequest
-from app.Repository.Consultas import ZONA_HORARIA, turno_de_hora
+from app.Repository.Consultas import ZONA_HORARIA
 from app.Repository.InventarioFinal.Inicio import InicioProductoTerminadoRepository
 from app.Services.InventarioFinal.Reporte import ReporteProductoTerminadoService
 from app.utils.inicio import semana_inicio
@@ -43,7 +43,6 @@ from app.utils.inicio import semana_inicio
 MOVIMIENTOS_INGRESO = (MOVIMIENTO_PT_ENTRADA, MOVIMIENTO_PT_AUMENTO)
 MOVIMIENTOS_PRODUCCION = (*MOVIMIENTOS_INGRESO, MOVIMIENTO_PT_DESCUENTO)
 MOVIMIENTOS_CONTROL = (MOVIMIENTO_PT_AJUSTE_POSITIVO, MOVIMIENTO_PT_AJUSTE_NEGATIVO, MOVIMIENTO_PT_DESCUENTO)
-TURNO_SIN_DEFINIR = "Sin turno"
 
 
 def _unidades(cantidad: int, rollos: int | None, paquetes: int | None) -> int:
@@ -272,8 +271,7 @@ class InicioProductoTerminadoService:
             for turno in turnos_catalogo
         }
         for fila in movimientos:
-            turno = turno_de_hora(turnos_catalogo, fila["FechaMovimiento"].astimezone(self.zona).time())
-            nombre = turno["NombreTurno"] if turno else TURNO_SIN_DEFINIR
+            nombre = fila["NombreTurno"]
             registro = turnos.setdefault(nombre, {"NombreTurno": nombre, "Unidades": 0, "Registros": 0})
             registro["Unidades"] += _signo_produccion(fila) * _unidades_fila(fila)
             if fila["IdTipoMovimientoInventario"] in MOVIMIENTOS_INGRESO:

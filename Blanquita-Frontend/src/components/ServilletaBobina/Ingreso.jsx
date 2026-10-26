@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/layout/Header";
 import {
@@ -11,11 +10,20 @@ import {
 import { ObtenerProveedoresForm } from "../../services/Proveedor/Proveedor";
 import { dateFormatter } from "@/utils/dates";
 import InputCodigo from "@/components/layout/InputCodigo";
+import InputMedida from "@/components/layout/InputMedida";
 import { codigoFinal } from "@/utils/handlers";
 import { errorCodigo, numeroONulo } from "@/utils/validators";
 import { useCatalogo } from "@/hooks/useCatalogo";
 import { composicionFormato, soloActivos } from "@/utils/catalogo";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
+import {
+  GRAMAJE_MAXIMO,
+  PESO_MAXIMO_UNIDAD_SERVILLETA_KG,
+  PESO_MINIMO_UNIDAD_SERVILLETA_KG,
+  PESO_NORMAL_UNIDAD_SERVILLETA_KG,
+} from "@/constants/Values";
+import { formatearNumero } from "@/utils/numeros";
+import { errorMedida, fueraDeRango, textoRango } from "@/utils/medidas";
 import {
   useFilasLote,
   useEnvioLote,
@@ -30,6 +38,7 @@ import {
   SelectorTipo,
   EncabezadoFilas,
   CabeceraFila,
+  AvisosLote,
   ErrorFila,
   ErrorEnvio,
   BarraGuardarLote,
@@ -38,8 +47,6 @@ import {
 import LoteReporteServilleta from "@/components/Reportes/BobinaServilleta/Lote";
 
 const COLORES_UNIDAD = ["border-c3 text-c3", "border-serv3 text-serv3"];
-
-const pesoInvalido = (v) => v !== "" && Number(v) <= 0;
 
 const formatosActivos = (tipo) => (tipo?.Formatos ?? []).filter((f) => f.Activo);
 
@@ -130,20 +137,18 @@ function BloqueUnidad({ numero, unidad, formatos, conError, onCampo, inputRef, o
             conError && errorCodigo(codigoFinal(unidad.Codigo)) && "border-red-300 focus-visible:ring-red-300",
           )}
         />
-        <Input
-          value={unidad.PesoBruto}
-          onChange={(e) => onCampo("PesoBruto", e.target.value)}
+        <InputMedida
+          valor={unidad.PesoBruto}
+          onCambio={(valor) => onCampo("PesoBruto", valor)}
+          enteros={4}
           placeholder="Bruto (kg)"
-          type="number"
-          step="0.01"
           className="h-10"
         />
-        <Input
-          value={unidad.Gramaje}
-          onChange={(e) => onCampo("Gramaje", e.target.value)}
-          placeholder="Gramaje (g)"
-          type="number"
-          step="0.01"
+        <InputMedida
+          valor={unidad.Gramaje}
+          onCambio={(valor) => onCampo("Gramaje", valor)}
+          enteros={2}
+          placeholder="Gramaje (g/m²)"
           className="h-10"
         />
       </div>
@@ -157,9 +162,21 @@ const errorDeUnidad = (unidad, numero, repetidos) => {
   if (errorDeCodigo) return `Unidad ${numero}: ${errorDeCodigo}`;
   if (repetidos.has(codigo)) return `Código de unidad ${numero} repetido`;
   if (!unidad.IdFormato) return `Selecciona el formato de la unidad ${numero}`;
-  if (pesoInvalido(unidad.PesoBruto)) return `Peso bruto de unidad ${numero} inválido`;
-  if (pesoInvalido(unidad.Gramaje)) return `Gramaje de unidad ${numero} inválido`;
-  return null;
+  const error =
+    errorMedida(unidad.PesoBruto, {
+      etiqueta: "Peso bruto",
+      unidad: "kg",
+      minimo: PESO_MINIMO_UNIDAD_SERVILLETA_KG,
+      maximo: PESO_MAXIMO_UNIDAD_SERVILLETA_KG,
+      obligatorio: false,
+    }) ??
+    errorMedida(unidad.Gramaje, {
+      etiqueta: "Gramaje",
+      unidad: "g/m²",
+      maximo: GRAMAJE_MAXIMO,
+      obligatorio: false,
+    });
+  return error ? `Unidad ${numero}: ${error}` : null;
 };
 
 export default function IngresoBobinasServilleta({ usuario }) {
@@ -196,6 +213,18 @@ export default function IngresoBobinasServilleta({ usuario }) {
     return null;
   });
   const hayErrores = Object.keys(erroresFilas).length > 0;
+
+  const avisos = filas.flatMap((f, i) =>
+    erroresFilas[f.id]
+      ? []
+      : f.Unidades.flatMap((unidad, posicion) =>
+          fueraDeRango(unidad.PesoBruto, PESO_NORMAL_UNIDAD_SERVILLETA_KG)
+            ? [
+                `Bobina ${i + 1}, unidad ${posicion + 1}: peso bruto de ${formatearNumero(unidad.PesoBruto)} kg; lo común es ${textoRango(PESO_NORMAL_UNIDAD_SERVILLETA_KG, "kg")}`,
+              ]
+            : [],
+        ),
+  );
   const sinFormatos = !!tipoActual && formatos.length === 0;
 
   const listo =
@@ -343,6 +372,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
                 );
               })}
             </div>
+            <AvisosLote avisos={avisos} />
           </section>
 
           {envio.errorEnvio && <ErrorEnvio mensaje={envio.errorEnvio} />}
@@ -381,6 +411,7 @@ export default function IngresoBobinasServilleta({ usuario }) {
         ]}
         codigos={filas.flatMap((f) => f.Unidades.map((u) => codigoFinal(u.Codigo)))}
         editable="el código, el peso y el gramaje de cada unidad"
+        inusuales={avisos}
         onCancelar={envio.cancelarConfirmacion}
         onConfirmar={guardarLote}
       />

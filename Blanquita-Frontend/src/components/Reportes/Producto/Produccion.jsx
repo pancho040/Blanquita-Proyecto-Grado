@@ -8,11 +8,13 @@ import {
   BotonInforme,
   CampoFiltro,
   FiltroTipos,
+  SelectFiltro,
   DERECHA,
   contar,
 } from "@/components/Reportes/comunes";
 import { useReporte } from "@/hooks/useReporte";
 import { PILDORA_FILTRO } from "@/constants/Acentos";
+import { turnos } from "@/constants/Values";
 import { aFechaISO } from "@/utils/dates";
 import { formatearNumero } from "@/utils/numeros";
 import {
@@ -96,10 +98,11 @@ function tarjetaProduccion(linea) {
 export default function ProduccionReporteProducto({ usuario, contenedor: Contenedor = PaginaReporte }) {
   const reporte = useReporte(consultarResumen, {
     Rango: ATAJOS[0].rango(new Date()),
+    IdTurno: "",
     [LINEA_PRODUCTO.campo]: [],
   });
   const { filtros, catalogo: resumen } = reporte;
-  const { Rango } = filtros;
+  const { Rango, IdTurno } = filtros;
   const lineas = filtros[LINEA_PRODUCTO.campo];
 
   const [verMovimientos, setVerMovimientos] = useState(false);
@@ -125,14 +128,17 @@ export default function ProduccionReporteProducto({ usuario, contenedor: Contene
       }
     >
       <TarjetaFiltros
-        reporte={{ ...reporte, hayFiltros: atajoActivo !== "hoy" || lineas.length > 0 }}
+        reporte={{
+          ...reporte,
+          hayFiltros: atajoActivo !== "hoy" || lineas.length > 0 || Boolean(IdTurno),
+        }}
         informe={
           <BotonInforme
             disponible={rangoCompleto && hayProduccion}
             ayuda="PDF con el resumen por línea, la producción por día y el detalle por presentación del período elegido"
             ayudaNoDisponible={
               rangoCompleto
-                ? "No hay producción registrada en el período y las líneas elegidas"
+                ? "No hay producción registrada en el período, las líneas y el turno elegidos"
                 : undefined
             }
             exito="Informe de producción descargado"
@@ -142,12 +148,13 @@ export default function ProduccionReporteProducto({ usuario, contenedor: Contene
                 aFechaISO(Rango.to),
                 lineas,
                 verMovimientos,
+                IdTurno,
               )
             }
           />
         }
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <DoubleDatePicker
             id="rango-produccion-producto"
             label="Fecha de producción"
@@ -171,6 +178,14 @@ export default function ProduccionReporteProducto({ usuario, contenedor: Contene
               ))}
             </ToggleGroup>
           </CampoFiltro>
+          <SelectFiltro
+            reporte={reporte}
+            campo="IdTurno"
+            etiqueta="Turno"
+            opciones={turnos}
+            campoEtiqueta="NombreTurno"
+            placeholder="Todos los turnos"
+          />
         </div>
 
         <FiltroTipos reporte={reporte} tipo={LINEA_PRODUCTO} />

@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputCodigo from "@/components/layout/InputCodigo";
 import { cn } from "@/lib/utils";
+import { aMedida } from "@/utils/medidas";
 
 export default function InputForModal({
   id,
@@ -11,6 +12,7 @@ export default function InputForModal({
   onCambio,
   error = "",
   codigo = false,
+  medida = null,
   className = "",
   classNameInput = "",
   ...props
@@ -44,7 +46,10 @@ export default function InputForModal({
         <Input
           id={id}
           value={valor ?? ""}
-          onChange={(e) => onCambio(e.target.value)}
+          onChange={(e) =>
+            onCambio(medida === null ? e.target.value : aMedida(e.target.value, medida))
+          }
+          inputMode={medida === null ? undefined : "decimal"}
           aria-invalid={Boolean(error)}
           className={cn("h-11", classNameInput)}
           {...props}

@@ -8,6 +8,8 @@ from app.Constants.Cantidades import (
     LONGITUD_MAXIMA_DESCRIPCION,
     LONGITUD_MINIMA_DESCRIPCION,
     MINUTOS_REINGRESO_EMPAQUE_BOBINA,
+    PESO_MAXIMO_EMPAQUE_BOBINA_KG,
+    PESO_MINIMO_EMPAQUE_BOBINA_KG,
 )
 from app.Constants.Estados import (
     ESTADO_MATERIA_PRIMA_AGOTADO,
@@ -32,7 +34,13 @@ from app.Models.Empaque.EmpaqueBobina import (
 from app.Repository.Empaque.EmpaqueBobina import EmpaqueBobinaRepository
 from app.Schemas.Empaque import Empaque, LoteEmpaque, MovimientoEmpaque
 from app.utils.dates import ZONA_BOLIVIA
-from app.utils.validators import CodigoMateriaPrima, REGLA_CARACTERES_OBSERVACION, ValidarTexto
+from app.utils.validators import (
+    CodigoMateriaPrima,
+    REGLA_CARACTERES_OBSERVACION,
+    ToneladasPedidas,
+    ValidarMedida,
+    ValidarTexto,
+)
 
 OBSERVACION_INGRESO_EMPAQUE = "Ingreso automático al almacén por registro de empaque"
 OBSERVACION_TRASLADO_EMPAQUE = "Empaque trasladado a producción"
@@ -49,7 +57,18 @@ class EmpaqueBobinaService:
                 detail="Debe enviar al menos un empaque para registrar",
             )
 
+        toneladas = ToneladasPedidas(data.CantidadToneladasPedida)
         codigos = [CodigoMateriaPrima(empaque.CodigoEmpaque, "del empaque") for empaque in data.Empaques]
+        pesos = [
+            ValidarMedida(
+                empaque.PesoKg,
+                f"el peso del empaque {codigo}",
+                "kg",
+                PESO_MAXIMO_EMPAQUE_BOBINA_KG,
+                PESO_MINIMO_EMPAQUE_BOBINA_KG,
+            )
+            for codigo, empaque in zip(codigos, data.Empaques)
+        ]
         repetidos = sorted(codigo for codigo, veces in Counter(codigos).items() if veces > 1)
         if repetidos:
             raise HTTPException(
@@ -99,16 +118,16 @@ class EmpaqueBobinaService:
                 IdProveedor=data.IdProveedor,
                 IdUsuario=id_usuario,
                 FechaRecepcion=datetime.now(ZONA_BOLIVIA).date(),
-                CantidadToneladasPedida=data.CantidadToneladasPedida,
+                CantidadToneladasPedida=toneladas,
             ),
             [
                 Empaque(
                     CodigoEmpaque=codigo,
                     IdTipoEmpaque=empaque.IdTipoEmpaque,
                     IdEstadoMateriaPrima=ESTADO_MATERIA_PRIMA_EN_ALMACEN,
-                    PesoKg=empaque.PesoKg,
+                    PesoKg=peso,
                 )
-                for codigo, empaque in zip(codigos, data.Empaques)
+                for codigo, empaque, peso in zip(codigos, data.Empaques, pesos)
             ],
             id_usuario,
             OBSERVACION_INGRESO_EMPAQUE,

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -9,12 +10,12 @@ from app.Models.AlertaStock.AlertaStock import NivelStockResponse
 class EmpaqueItem(BaseModel):
     CodigoEmpaque: str
     IdTipoEmpaque: int
-    PesoKg: float
+    PesoKg: Decimal | None = None
 
 
 class IngresoEmpaqueRequest(BaseModel):
     IdProveedor: int
-    CantidadToneladasPedida: float
+    CantidadToneladasPedida: Decimal | None = None
     Empaques: list[EmpaqueItem]
 
 

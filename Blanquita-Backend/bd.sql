@@ -385,12 +385,14 @@ CREATE TABLE "MovimientoProductoTerminado" (
   "IdTipoMovimientoInventario" INTEGER NOT NULL REFERENCES "TipoMovimientoInventario"("IdTipoMovimientoInventario") ON DELETE CASCADE,
   "IdPresentacion" INTEGER NOT NULL REFERENCES "PresentacionProducto"("IdPresentacion") ON DELETE CASCADE,
   "IdUsuario" INTEGER NOT NULL REFERENCES "Usuario"("IdUsuario") ON DELETE CASCADE,
+  "IdTurno" INTEGER NOT NULL REFERENCES "Turno"("IdTurno") ON DELETE CASCADE,
   "CantidadIngresoInventario" NUMERIC NOT NULL,
   "FechaMovimiento" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "Observacion" TEXT
 );
 CREATE INDEX "idx_movprodterm_presentacion_fecha" ON "MovimientoProductoTerminado"("IdPresentacion", "FechaMovimiento" DESC);
 CREATE INDEX "idx_movprodterm_fecha" ON "MovimientoProductoTerminado"("FechaMovimiento");
+CREATE INDEX "idx_movprodterm_turno" ON "MovimientoProductoTerminado"("IdTurno");
 
 CREATE TABLE "InventarioProductoTerminado" (
   "IdPresentacion" INTEGER PRIMARY KEY REFERENCES "PresentacionProducto"("IdPresentacion") ON DELETE CASCADE,

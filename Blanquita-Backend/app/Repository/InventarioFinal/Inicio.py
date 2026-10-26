@@ -13,6 +13,7 @@ from app.Schemas.Producto import (
     Producto,
     TipoMovimientoInventario,
 )
+from app.Schemas.Produccion import Turno
 from app.Schemas.Usuario import Usuario
 
 
@@ -33,6 +34,8 @@ def _consulta_movimientos():
             PresentacionProducto.CantidadPorUnidadTerminada,
             mpt.CantidadIngresoInventario.cast(Integer).label("Cantidad"),
             nombre_operador(Usuario).label("Usuario"),
+            mpt.IdTurno,
+            Turno.NombreTurno,
             mpt.Observacion,
         )
         .join(
@@ -42,6 +45,7 @@ def _consulta_movimientos():
         .join(PresentacionProducto, PresentacionProducto.IdPresentacion == mpt.IdPresentacion)
         .join(Producto, Producto.IdProducto == PresentacionProducto.IdProducto)
         .join(Usuario, Usuario.IdUsuario == mpt.IdUsuario)
+        .join(Turno, Turno.IdTurno == mpt.IdTurno)
     )
 
 

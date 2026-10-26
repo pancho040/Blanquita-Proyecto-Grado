@@ -171,6 +171,7 @@ class ProductoFinalService:
 
         inventarios = self.repository.ObtenerInventariosBloqueados(sorted(ids_presentacion))
 
+        id_turno = self.repository.IdTurnoActual()
         registros = []
         for item in data.Presentaciones:
             inventario = (
@@ -185,6 +186,7 @@ class ProductoFinalService:
                         IdTipoMovimientoInventario=ID_TIPO_MOVIMIENTO_ENTRADA,
                         IdPresentacion=item.IdPresentacion,
                         IdUsuario=id_usuario,
+                        IdTurno=id_turno,
                         CantidadIngresoInventario=item.Cantidad,
                         Observacion=(item.Observacion or "").strip() or OBSERVACION_INGRESO_PRODUCTO,
                     ),
@@ -254,6 +256,7 @@ class ProductoFinalService:
                 detail=f"Las presentaciones {', '.join(faltantes)} no existen o no tienen inventario",
             )
 
+        id_turno = self.repository.IdTurnoActual()
         insuficientes = []
         registros = []
         for item in data.Presentaciones:
@@ -271,6 +274,7 @@ class ProductoFinalService:
                         IdTipoMovimientoInventario=ID_TIPO_MOVIMIENTO_SALIDA,
                         IdPresentacion=item.IdPresentacion,
                         IdUsuario=id_usuario,
+                        IdTurno=id_turno,
                         CantidadIngresoInventario=item.Cantidad,
                         Observacion=observacion,
                     ),
@@ -390,6 +394,7 @@ class ProductoFinalService:
         else:
             cantidad_nueva = disponible + data.Cantidad
 
+        id_turno = self.repository.IdTurnoActual()
         self.repository.RegistrarMovimientos(
             [
                 (
@@ -398,6 +403,7 @@ class ProductoFinalService:
                         IdTipoMovimientoInventario=id_tipo_movimiento,
                         IdPresentacion=data.IdPresentacion,
                         IdUsuario=id_usuario,
+                        IdTurno=id_turno,
                         CantidadIngresoInventario=data.Cantidad,
                         Observacion=observacion,
                     ),

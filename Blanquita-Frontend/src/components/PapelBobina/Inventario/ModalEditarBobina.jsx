@@ -13,8 +13,18 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import InputForModal from "@/components/layout/InputForModal";
+import { CasillaConfirmacion } from "@/components/Admin/CasillaConfirmacion";
 import { editarBobinaPapel } from "../../../services/BobinaPapel/BobinaPapel";
-import { MOTIVO_CORRECCION_MIN, MOTIVO_CORRECCION_MAX } from "@/constants/Values";
+import {
+  DECIMALES_PESO,
+  GRAMAJE_MAXIMO,
+  MOTIVO_CORRECCION_MAX,
+  MOTIVO_CORRECCION_MIN,
+  PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+  PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+  PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG,
+} from "@/constants/Values";
+import { errorMedida, fueraDeRango, textoRango } from "@/utils/medidas";
 import { codigoFinal } from "@/utils/handlers";
 import { errorCodigo, limpiarObservacion } from "@/utils/validators";
 import { dateFormatter } from "@/utils/dates";
@@ -35,16 +45,33 @@ const formularioDesde = (bobina) => ({
 
 function validar(form) {
   const errores = {};
-  const bruto = Number(form.PesoBrutoKg);
-  const neto = Number(form.PesoNetoKg);
   const motivo = form.Observacion.trim();
 
   const errorDeCodigo = errorCodigo(codigoFinal(form.CodigoBobina));
   if (errorDeCodigo) errores.CodigoBobina = errorDeCodigo;
-  if (form.PesoBrutoKg === "" || !(bruto > 0)) errores.PesoBrutoKg = "Peso bruto inválido";
-  if (form.PesoNetoKg === "" || !(neto > 0)) errores.PesoNetoKg = "Peso neto inválido";
-  else if (bruto > 0 && neto > bruto) errores.PesoNetoKg = "El neto supera al bruto";
-  if (form.Gramaje !== "" && !(Number(form.Gramaje) > 0)) errores.Gramaje = "Gramaje inválido";
+  const errorBruto = errorMedida(form.PesoBrutoKg, {
+    etiqueta: "Peso bruto",
+    unidad: "kg",
+    minimo: PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+    maximo: PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+  });
+  if (errorBruto) errores.PesoBrutoKg = errorBruto;
+  const errorNeto = errorMedida(form.PesoNetoKg, {
+    etiqueta: "Peso neto",
+    unidad: "kg",
+    maximo: PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+  });
+  if (errorNeto) errores.PesoNetoKg = errorNeto;
+  else if (!errorBruto && Number(form.PesoNetoKg) > Number(form.PesoBrutoKg)) {
+    errores.PesoNetoKg = "El neto supera al bruto";
+  }
+  const errorGramaje = errorMedida(form.Gramaje, {
+    etiqueta: "Gramaje",
+    unidad: "g/m²",
+    maximo: GRAMAJE_MAXIMO,
+    obligatorio: false,
+  });
+  if (errorGramaje) errores.Gramaje = errorGramaje;
   if (motivo.length < MOTIVO_CORRECCION_MIN || motivo.length > MOTIVO_CORRECCION_MAX) {
     errores.Observacion = `El motivo debe tener entre ${MOTIVO_CORRECCION_MIN} y ${MOTIVO_CORRECCION_MAX} caracteres`;
   }
@@ -91,10 +118,12 @@ export default function ModalEditarBobina({
   const [errores, setErrores] = useState({});
   const [errorEnvio, setErrorEnvio] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [inusualRevisado, setInusualRevisado] = useState(false);
 
   useEffect(() => {
     if (abierto) {
       setForm(formularioDesde(bobina));
+      setInusualRevisado(false);
       setErrores({});
       setErrorEnvio("");
       setGuardando(false);
@@ -113,11 +142,19 @@ export default function ModalEditarBobina({
 
   const cambios = calcularCambios(form, bobina);
   const largoMotivo = form.Observacion.trim().length;
+  const inusual =
+    !errorMedida(form.PesoBrutoKg, {
+      etiqueta: "Peso bruto",
+      unidad: "kg",
+      minimo: PESO_BRUTO_MINIMO_BOBINA_PAPEL_KG,
+      maximo: PESO_BRUTO_MAXIMO_BOBINA_PAPEL_KG,
+    }) && fueraDeRango(form.PesoBrutoKg, PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG);
 
   const guardar = async () => {
     const nuevosErrores = validar(form);
     setErrores(nuevosErrores);
     if (Object.keys(nuevosErrores).length > 0 || cambios.length === 0) return;
+    if (inusual && !inusualRevisado) return;
 
     setGuardando(true);
     setErrorEnvio("");
@@ -189,10 +226,7 @@ export default function ModalEditarBobina({
             <InputForModal
               id="PesoBrutoKg"
               etiqueta="Peso bruto (kg)"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
+              medida={DECIMALES_PESO}
               valor={form.PesoBrutoKg}
               onCambio={actualizar("PesoBrutoKg")}
               error={errores.PesoBrutoKg}
@@ -201,10 +235,7 @@ export default function ModalEditarBobina({
             <InputForModal
               id="PesoNetoKg"
               etiqueta="Peso neto (kg)"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
+              medida={DECIMALES_PESO}
               valor={form.PesoNetoKg}
               onCambio={actualizar("PesoNetoKg")}
               error={errores.PesoNetoKg}
@@ -214,10 +245,7 @@ export default function ModalEditarBobina({
               id="Gramaje"
               etiqueta="Gramaje (g/m²)"
               opcional
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
+              medida={DECIMALES_PESO}
               valor={form.Gramaje}
               onCambio={actualizar("Gramaje")}
               error={errores.Gramaje}
@@ -272,6 +300,16 @@ export default function ModalEditarBobina({
             </div>
           )}
 
+          {inusual && (
+            <CasillaConfirmacion
+              marcada={inusualRevisado}
+              onCambio={setInusualRevisado}
+              titulo="El peso bruto es correcto"
+            >
+              {`El peso bruto está fuera de lo común (${textoRango(PESO_BRUTO_NORMAL_BOBINA_PAPEL_KG, "kg")}). Confirmo que lo revisé contra la ficha del proveedor.`}
+            </CasillaConfirmacion>
+          )}
+
           {errorEnvio && (
             <div className="rounded-lg bg-red-50 px-3 py-2.5 text-center text-[13px] font-semibold text-red-600">
               {errorEnvio}
@@ -285,7 +323,7 @@ export default function ModalEditarBobina({
           </DialogClose>
           <Button
             onClick={guardar}
-            disabled={guardando || cambios.length === 0}
+            disabled={guardando || cambios.length === 0 || (inusual && !inusualRevisado)}
             className="gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
           >
             {guardando ? (
