@@ -4,8 +4,8 @@
 export const CONFIG = {
   // URLs del Servidor Backend FastAPI
   // IP local de la computadora para que el celular físico se conecte por Wi-Fi
-  API_BASE_URL: "http://192.168.1.65:8000",
-  API_TIMEOUT_MS: 6000,
+  API_BASE_URL: "https://blanquita-proyecto-grado-9f7j.onrender.com",
+  API_TIMEOUT_MS: 15000,
 
   // Credenciales de Supabase para acceso directo / autenticación / realtime
   SUPABASE_URL: "https://pyvimfqomqjdvopzsmts.supabase.co",
