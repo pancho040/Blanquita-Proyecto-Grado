@@ -1,9 +1,12 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import node from '@astrojs/node';
+import vercel from '@astrojs/vercel';
 import path from 'node:path';
 
 import tailwindcss from '@tailwindcss/vite';
+
+const isVercel = Boolean(process.env.VERCEL);
 
 export default defineConfig({
   output: 'server',
@@ -17,7 +20,7 @@ export default defineConfig({
     enabled: false,
   },
 
-  adapter: node({
+  adapter: isVercel ? vercel() : node({
     mode: 'standalone'
   }),
 

@@ -10,6 +10,8 @@ __pycache__/
 dist/
 Blanquita-Frontend/.astro/
 Blanquita-Frontend/dist/
+.vercel/
+Blanquita-Frontend/.vercel/
 
 # Expo / React Native
 .expo/
