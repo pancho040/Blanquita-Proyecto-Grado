@@ -33,6 +33,7 @@ export default defineConfig({
     },
     resolve: {
       alias: {
+        '@/constants/estados': path.resolve('./src/constants/Estados.js'),
         '@': path.resolve('./src'),
       },
       dedupe: ['react', 'react-dom'],

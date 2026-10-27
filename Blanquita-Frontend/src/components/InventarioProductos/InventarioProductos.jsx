@@ -62,7 +62,7 @@ import {
   insertarSalidaProductoTerminado,
   ajustePositivoInventarioProductoTerminado,
   ajusteNegativoInventarioProductoTerminado,
-} from "../../services/Inventario/inventario";
+} from "../../services/Inventario/Inventario";
 import Header from "@/components/layout/Header";
 
 const FILTROS = [
