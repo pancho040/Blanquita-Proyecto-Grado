@@ -1,0 +1,18 @@
+# Dependencias principales del Backend Blanquita (FastAPI en Render)
+fastapi>=0.138.1
+uvicorn[standard]>=0.49.0
+sqlalchemy>=2.0.51
+psycopg2-binary>=2.9.12
+pydantic>=2.13.4
+pyjwt[crypto]>=2.13.0
+supabase>=2.31.0
+httpx>=0.28.1
+python-dotenv>=1.2.2
+argon2-cffi>=25.1.0
+openpyxl>=3.1.5
+reportlab>=5.0.0
+segno>=1.6.6
+slowapi>=0.1.10
+python-multipart>=0.0.32
+tzdata>=2026.3
+gunicorn>=23.0.0
