@@ -132,11 +132,12 @@ const GrupoColapsable = React.memo(function GrupoColapsable({
 }) {
   // Comprueba si este grupo contiene la ruta actualmente activa
   const estaActivoElGrupo = useMemo(() => {
-    if (!item.subrutas) return false;
+    if (!item || !Array.isArray(item.subrutas)) return false;
     const actual = normalizarRuta(rutaActual);
     return item.subrutas.some((sub) => {
+      if (!sub) return false;
       const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
-      return actual === subUrl || (sub.ruta !== "" && actual.startsWith(subUrl + "/"));
+      return actual === subUrl || (Boolean(sub.ruta) && actual.startsWith(subUrl + "/"));
     });
   }, [item, basePath, prefijo, rutaActual]);
 
@@ -215,13 +216,14 @@ const GrupoColapsable = React.memo(function GrupoColapsable({
 
       {!colapsado && desplegado && (
         <ul className="mt-1 ml-4 pl-2.5 border-l-2 border-[#A0D9EF]/60 flex flex-col gap-1 py-1">
-          {item.subrutas.map((sub) => {
+          {item.subrutas.map((sub, sIdx) => {
+            if (!sub) return null;
             const subUrl = normalizarRuta(resolverRuta(basePath, prefijo, item.ruta, sub.ruta));
             const actual = normalizarRuta(rutaActual);
-            const esSubActivo = actual === subUrl || (sub.ruta !== "" && actual.startsWith(subUrl + "/"));
+            const esSubActivo = actual === subUrl || (Boolean(sub.ruta) && actual.startsWith(subUrl + "/"));
 
             return (
-              <li key={sub.ruta}>
+              <li key={`sub-${sub.titulo || ''}-${sub.ruta || sIdx}`}>
                 <a
                   href={subUrl}
                   data-astro-prefetch="hover"
@@ -449,10 +451,10 @@ export default function SideBar({
         className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 scrollbar-thin scrollbar-thumb-white/20"
       >
         <ul className="flex flex-col gap-1.5">
-          {rutas.map((item) =>
+          {rutas.map((item, idx) =>
             item.subrutas ? (
               <GrupoColapsable
-                key={item.ruta}
+                key={`grupo-${item.titulo || ''}-${item.ruta || idx}`}
                 item={item}
                 basePath={basePath}
                 prefijo={prefijo}
@@ -463,7 +465,7 @@ export default function SideBar({
               />
             ) : (
               <EntradaSimple
-                key={item.ruta}
+                key={`simple-${item.titulo || ''}-${item.ruta || idx}`}
                 item={item}
                 basePath={basePath}
                 prefijo={prefijo}

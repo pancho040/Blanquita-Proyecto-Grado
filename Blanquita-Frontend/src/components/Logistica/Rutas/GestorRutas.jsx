@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { 
   MapPin, 
@@ -88,6 +87,7 @@ export default function GestorRutas() {
   }, [rutaSeleccionada]);
 
   const [puntosRuta, setPuntosRuta] = useState([]);
+  const [subTabRuta, setSubTabRuta] = useState("mapa");
   const [todosPuntosVenta, setTodosPuntosVenta] = useState([]);
   const [guardandoItinerario, setGuardandoItinerario] = useState(false);
 
@@ -488,30 +488,49 @@ export default function GestorRutas() {
 
             <CardContent className="p-4">
               {rutaSeleccionada ? (
-                <Tabs defaultValue="mapa" className="space-y-4">
-                  <TabsList className="bg-slate-100 p-1">
-                    <TabsTrigger value="mapa" className="gap-1.5 text-xs">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setSubTabRuta("mapa")}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        subTabRuta === "mapa"
+                          ? "bg-white text-slate-900 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
                       <MapIcon className="h-3.5 w-3.5" />
                       <span>Mapa Satelital Vial (OSRM)</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="paradas" className="gap-1.5 text-xs">
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubTabRuta("paradas")}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        subTabRuta === "paradas"
+                          ? "bg-white text-slate-900 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
                       <ListOrdered className="h-3.5 w-3.5" />
                       <span>Secuencia & Puntos ({puntosRuta.length})</span>
-                    </TabsTrigger>
-                  </TabsList>
+                    </button>
+                  </div>
 
                   {/* TAB 1: MAPA */}
-                  <TabsContent value="mapa" className="space-y-3 focus:outline-none">
-                    <MapaRuta
-                      puntosRuta={puntosRuta}
-                      todosPuntosVenta={todosPuntosVenta}
-                      rutaSeleccionada={rutaSeleccionada}
-                      altura="h-[520px]"
-                    />
-                  </TabsContent>
+                  {subTabRuta === "mapa" && (
+                    <div className="space-y-3 focus:outline-none">
+                      <MapaRuta
+                        puntosRuta={puntosRuta}
+                        todosPuntosVenta={todosPuntosVenta}
+                        rutaSeleccionada={rutaSeleccionada}
+                        altura="h-[520px]"
+                      />
+                    </div>
+                  )}
 
-                  {/* TAB 2: GESTIÓN DE PARADAS CON BUSCADORSELECT */}
-                  <TabsContent value="paradas" className="space-y-4 focus:outline-none">
+                  {/* TAB 2: GESTIÓN DE PARADAS */}
+                  {subTabRuta === "paradas" && (
+                    <div className="space-y-4 focus:outline-none">
                     {/* Selector de clientes para agregar a la ruta */}
                     <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                       <div className="flex items-center justify-between">
@@ -599,8 +618,9 @@ export default function GestorRutas() {
                         ))
                       )}
                     </div>
-                  </TabsContent>
-                </Tabs>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-center py-16 text-muted-foreground text-sm">
                   Selecciona una ruta en el panel izquierdo para ver su mapa y editar paradas.

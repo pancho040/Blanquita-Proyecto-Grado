@@ -244,13 +244,14 @@ export default function NavBar({
               {/* Lista móvil de rutas */}
               <div className="flex flex-col h-[calc(100%-80px)] justify-between p-3 overflow-y-auto">
                 <Accordion type="multiple" className="w-full flex flex-col gap-1.5">
-                  {rutas.map((item) => {
+                  {rutas.map((item, idx) => {
+                    if (!item) return null;
                     if (!item.subrutas) {
                       const rutaFinal = resolverRuta(basePath, prefijo, item.ruta);
                       const activo = normalizarRuta(rutaActual) === normalizarRuta(rutaFinal);
                       return (
                         <a
-                          key={item.ruta}
+                          key={`nav-simple-${item.titulo || ''}-${item.ruta || idx}`}
                           href={rutaFinal}
                           onClick={() => setMenuMovilAbierto(false)}
                           className={cn(
@@ -271,7 +272,7 @@ export default function NavBar({
                     });
 
                     return (
-                      <AccordionItem key={item.ruta} value={item.ruta} className="border-none">
+                      <AccordionItem key={`nav-acc-${item.titulo || ''}-${item.ruta || idx}`} value={item.ruta || String(idx)} className="border-none">
                         <AccordionTrigger
                           className={cn(
                             "rounded-xl px-3.5 py-2.5 text-sm font-medium text-white hover:no-underline transition-colors",

@@ -148,6 +148,11 @@ export const RutasContador = [
     icono: ClipboardList,
     ruta: "reportes",
   },
+  {
+    titulo: "Perfil",
+    icono: CircleUserRound,
+    ruta: "perfil",
+  },
 ];
 
 // =============================================================================
