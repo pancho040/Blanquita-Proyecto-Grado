@@ -28,7 +28,7 @@ import {
 import { toast } from "sonner";
 import { ObtenerLogsAuditoria, ObtenerDetalleAuditoria } from "@/services/Admin/AuditService";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
-import ModuloAdminNav from "@/components/Admin/Common/ModuloAdminNav";
+
 
 const ACCIONES_COLOR = {
   CREACION: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -140,7 +140,6 @@ export default function GestionAuditoria() {
 
   return (
     <div className="space-y-6">
-      <ModuloAdminNav pestanaActiva="modificaciones" />
       {/* 1. CABECERA */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -227,7 +226,7 @@ export default function GestionAuditoria() {
                 setPagina(1);
               }}
               title="Fecha inicial"
-              className="h-9 text-xs font-mono"
+              className="h-9 text-xs "
             />
           </div>
 
@@ -240,7 +239,7 @@ export default function GestionAuditoria() {
                 setPagina(1);
               }}
               title="Fecha final"
-              className="h-9 text-xs font-mono"
+              className="h-9 text-xs "
             />
           </div>
         </div>
@@ -282,7 +281,7 @@ export default function GestionAuditoria() {
 
                   return (
                     <tr key={item.IdAuditLog} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
+                      <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
                         {item.FechaHora
                           ? new Date(item.FechaHora).toLocaleString("es-BO", {
                               day: "2-digit",
@@ -312,11 +311,11 @@ export default function GestionAuditoria() {
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 font-mono font-medium text-slate-700">
+                      <td className="py-3 px-4 font-medium text-slate-700">
                         {item.TablaAfectada}
                       </td>
 
-                      <td className="py-3 px-4 font-mono text-slate-500">
+                      <td className="py-3 px-4 text-slate-500">
                         {item.IdRegistroAfectado ? `#${item.IdRegistroAfectado}` : "-"}
                       </td>
 
@@ -391,7 +390,7 @@ export default function GestionAuditoria() {
 
                 <div>
                   <span className="text-slate-500 block font-medium">Fecha y Hora Exacta:</span>
-                  <span className="font-mono font-bold text-slate-900 mt-0.5 block">
+                  <span className="font-bold text-slate-900 mt-0.5 block">
                     {logSeleccionado.FechaHora
                       ? new Date(logSeleccionado.FechaHora).toLocaleString("es-BO")
                       : "-"}
@@ -403,13 +402,13 @@ export default function GestionAuditoria() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="font-bold text-slate-900">{logSeleccionado.Accion}</span>
                     <span className="text-slate-400">•</span>
-                    <span className="font-mono text-slate-700">{logSeleccionado.TablaAfectada}</span>
+                    <span className="text-slate-700">{logSeleccionado.TablaAfectada}</span>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-slate-500 block font-medium">Registro Afectado:</span>
-                  <span className="font-mono font-medium text-slate-700 mt-0.5 block">
+                  <span className="font-medium text-slate-700 mt-0.5 block">
                     {logSeleccionado.IdRegistroAfectado ? `#${logSeleccionado.IdRegistroAfectado}` : "N/A"}
                   </span>
                 </div>
@@ -449,7 +448,7 @@ export default function GestionAuditoria() {
                               <th className="py-2.5 px-3 bg-emerald-50/60 text-emerald-800">Valor Modificado / Nuevo</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 font-mono">
+                          <tbody className="divide-y divide-slate-100 ">
                             {diffs.map((d) => (
                               <tr key={d.campo} className="hover:bg-slate-50/70 transition-colors">
                                 <td className="py-2.5 px-3 font-semibold text-slate-800">
@@ -495,7 +494,7 @@ export default function GestionAuditoria() {
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1.5">
                         Estado Anterior
                       </span>
-                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-56 overflow-y-auto">
+                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 text-[11px] max-h-56 overflow-y-auto">
                         {logSeleccionado.DatosAnteriores ? (
                           <pre className="whitespace-pre-wrap">
                             {JSON.stringify(logSeleccionado.DatosAnteriores, null, 2)}
@@ -512,7 +511,7 @@ export default function GestionAuditoria() {
                       <span className="text-xs font-bold uppercase tracking-wider text-[#20A7DB] block mb-1.5">
                         Estado Posterior / Modificado
                       </span>
-                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-56 overflow-y-auto">
+                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 text-[11px] max-h-56 overflow-y-auto">
                         {logSeleccionado.DatosNuevos ? (
                           <pre className="whitespace-pre-wrap">
                             {JSON.stringify(logSeleccionado.DatosNuevos, null, 2)}

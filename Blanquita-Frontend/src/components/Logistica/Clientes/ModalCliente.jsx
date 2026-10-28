@@ -263,7 +263,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       onChange={handleChange}
                       placeholder="Ej. 10245678023"
                       required
-                      className="mt-1 bg-white border-slate-300 font-mono text-sm"
+                      className="mt-1 bg-white border-slate-300 text-sm"
                     />
                   </div>
 
@@ -392,7 +392,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       min="0"
                       value={formData.LimiteCreditoBs}
                       onChange={handleChange}
-                      className="mt-1 bg-white border-slate-300 font-mono font-bold text-slate-800"
+                      className="mt-1 bg-white border-slate-300 font-bold text-slate-800"
                     />
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {PRESETS_CREDITO_BS.map((val) => (
@@ -419,7 +419,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       min="0"
                       value={formData.DiasCredito}
                       onChange={handleChange}
-                      className="mt-1 bg-white border-slate-300 font-mono font-bold text-slate-800"
+                      className="mt-1 bg-white border-slate-300 font-bold text-slate-800"
                     />
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {PRESETS_DIAS.map((p) => (

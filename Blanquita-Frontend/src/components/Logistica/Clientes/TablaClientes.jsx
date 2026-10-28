@@ -296,7 +296,7 @@ export default function TablaClientes() {
                             <div className="text-xs text-[#20A7DB] font-medium mt-0.5">"{c.NombreComercial}"</div>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 font-mono text-xs text-slate-700">{c.NitCi}</td>
+                        <td className="px-4 py-3.5 text-xs text-slate-700">{c.NitCi}</td>
                         <td className="px-4 py-3.5 text-slate-600">
                           {c.Telefono ? (
                             <a
@@ -324,7 +324,7 @@ export default function TablaClientes() {
                             <span>{c.TotalPuntosVenta || 1} tiendas</span>
                           </Button>
                         </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-800">
+                        <td className="px-4 py-3.5 text-right font-bold text-slate-800">
                           Bs. {Number(c.LimiteCreditoBs).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-3.5 text-center">

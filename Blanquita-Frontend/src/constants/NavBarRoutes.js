@@ -40,17 +40,13 @@ export const RutasAdmin = [
     ruta: "admin/inicio",
   },
   {
-    titulo: "Usuarios y Roles",
+    titulo: "Usuarios y Seguridad",
     icono: ShieldCheck,
-    ruta: "admin/roles",
-  },
-  {
-    titulo: "Auditoría de Acciones",
-    icono: ShieldCheck,
-    ruta: "admin/auditoria",
+    ruta: "admin",
     subrutas: [
-      { titulo: "Historial de Modificaciones", icono: ShieldCheck, ruta: "" },
-      { titulo: "Reportes de Acciones", icono: ClipboardList, ruta: "reportes" },
+      { titulo: "Personal y Roles", icono: Users, ruta: "roles" },
+      { titulo: "Historial de Modificaciones", icono: ShieldCheck, ruta: "auditoria" },
+      { titulo: "Reportes de Auditoría", icono: ClipboardList, ruta: "auditoria/reportes" },
     ],
   },
   {

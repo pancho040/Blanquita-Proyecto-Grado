@@ -503,7 +503,7 @@ export default function GestionCaja({ usuario }) {
                             })
                           : "-"}
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs font-semibold text-slate-700">
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-700">
                         {m.NumeroComprobante || `MOV-${m.IdMovimiento}`}
                       </td>
                       <td className="py-3 px-4">

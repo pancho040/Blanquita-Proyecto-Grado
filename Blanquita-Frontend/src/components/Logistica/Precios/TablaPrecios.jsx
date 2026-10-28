@@ -146,7 +146,7 @@ export default function TablaPrecios() {
                     const tienePrecio = p.PrecioUnitario !== null;
                     return (
                       <tr key={p.IdPresentacion} className="hover:bg-slate-50/70">
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        <td className="px-4 py-3 text-xs text-slate-600">
                           {p.CodigoPresentacion}
                         </td>
                         <td className="px-4 py-3 font-semibold text-slate-900">

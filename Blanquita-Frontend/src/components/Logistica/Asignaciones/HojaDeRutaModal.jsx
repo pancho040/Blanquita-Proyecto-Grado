@@ -77,7 +77,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
                   HOJA DE RUTA N°
                 </span>
-                <span className="font-mono text-lg font-black text-[#20A7DB]">
+                <span className="text-lg font-black text-[#20A7DB]">
                   HR-{asignacion?.IdAsignacionRuta?.toString().padStart(5, "0")}
                 </span>
                 <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
@@ -100,12 +100,12 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
 
               <div>
                 <span className="text-slate-500 block uppercase text-[10px] font-bold">Odómetro Inicial</span>
-                <strong className="font-mono text-slate-900">{asignacion?.KilometrajeInicial ? `${asignacion.KilometrajeInicial} km` : "Pendiente"}</strong>
+                <strong className="text-slate-900">{asignacion?.KilometrajeInicial ? `${asignacion.KilometrajeInicial} km` : "Pendiente"}</strong>
               </div>
 
               <div>
                 <span className="text-slate-500 block uppercase text-[10px] font-bold">Odómetro Final</span>
-                <strong className="font-mono text-slate-900">{asignacion?.KilometrajeFinal ? `${asignacion.KilometrajeFinal} km` : "____________"}</strong>
+                <strong className="text-slate-900">{asignacion?.KilometrajeFinal ? `${asignacion.KilometrajeFinal} km` : "____________"}</strong>
               </div>
             </div>
 
@@ -153,7 +153,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
                             <p>{p.Direccion}</p>
                             {p.Referencia && <p className="text-[10px] text-slate-500 italic">Ref: {p.Referencia}</p>}
                           </td>
-                          <td className="p-2.5 text-center font-mono">
+                          <td className="p-2.5 text-center ">
                             Bs. _________
                           </td>
                           <td className="p-2.5 text-center border-l border-slate-200">

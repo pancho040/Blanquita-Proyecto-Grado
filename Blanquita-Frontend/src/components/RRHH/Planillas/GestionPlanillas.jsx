@@ -369,7 +369,7 @@ export default function GestionPlanillas() {
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Ganado Bruto</span>
               <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-slate-800 dark:text-slate-100 font-mono">
+            <div className="mt-2 text-2xl font-bold text-slate-800 dark:text-slate-100 ">
               Bs. {Number(planillaData.Planilla.TotalPlanilla || 0).toFixed(2)}
             </div>
             <span className="text-[11px] text-slate-400">Haberes + Bonos + Extras</span>
@@ -380,7 +380,7 @@ export default function GestionPlanillas() {
               <span className="text-xs font-medium text-rose-600 dark:text-rose-400">Aportes Gestora / AFP</span>
               <TrendingDown className="h-4 w-4 text-rose-500" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono">
+            <div className="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-400 ">
               Bs. {Number(planillaData.Planilla.TotalDescuentos || 0).toFixed(2)}
             </div>
             <span className="text-[11px] text-slate-400">12.71% de ley + deducciones</span>
@@ -391,7 +391,7 @@ export default function GestionPlanillas() {
               <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Líquido Pagable Neto</span>
               <DollarSign className="h-4 w-4 text-blue-500" />
             </div>
-            <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">
+            <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400 ">
               Bs. {Number(planillaData.Planilla.TotalLiquido || 0).toFixed(2)}
             </div>
             <span className="text-[11px] text-slate-400">Desembolso final a trabajadores</span>
@@ -470,7 +470,7 @@ export default function GestionPlanillas() {
                   <th className="py-3 px-3 font-semibold text-center">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 ">
                 {paginacion.itemsPaginados.map((d) => (
                   <tr 
                     key={d.IdDetallePlanilla}

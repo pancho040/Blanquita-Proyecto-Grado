@@ -384,7 +384,7 @@ export default function CentroReportesRRHH() {
                   type="number"
                   value={gestion}
                   onChange={(e) => setGestion(Number(e.target.value))}
-                  className="text-sm h-9 font-mono"
+                  className="text-sm h-9 "
                   placeholder="2026"
                 />
               </div>
@@ -472,13 +472,13 @@ export default function CentroReportesRRHH() {
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3 px-3 text-slate-500 whitespace-nowrap font-medium">{item.fecha}</td>
                         <td className="py-3 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
-                        <td className="py-3 px-3 font-mono text-slate-500">{item.ci}</td>
+                        <td className="py-3 px-3 text-slate-500">{item.ci}</td>
                         <td className="py-3 px-3 font-medium text-slate-800">{item.cargo}</td>
                         <td className="py-3 px-3 text-slate-600">{item.turno}</td>
-                        <td className="py-3 px-3 text-center font-mono text-slate-700">
+                        <td className="py-3 px-3 text-center text-slate-700">
                           {item.hora_real_entrada ? String(item.hora_real_entrada).slice(0, 5) : "--:--"}
                         </td>
-                        <td className="py-3 px-3 text-center font-mono text-slate-700">
+                        <td className="py-3 px-3 text-center text-slate-700">
                           {item.hora_real_salida ? String(item.hora_real_salida).slice(0, 5) : "--:--"}
                         </td>
                         <td className="py-3 px-3 text-center">
@@ -490,7 +490,7 @@ export default function CentroReportesRRHH() {
                             <span className="text-emerald-600 font-medium">0 min</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center font-mono font-medium">
+                        <td className="py-3 px-3 text-center font-medium">
                           {Number(item.horas_extra || 0) > 0 ? (
                             <span className="text-indigo-600 font-semibold">
                               +{Number(item.horas_extra).toFixed(1)} hrs
@@ -523,10 +523,10 @@ export default function CentroReportesRRHH() {
                     <td colSpan={7} className="py-3 px-3 text-right">
                       Totales del Período ({reporteData.metricas?.total_registros || 0} registros):
                     </td>
-                    <td className="py-3 px-3 text-center font-mono font-bold text-amber-700">
+                    <td className="py-3 px-3 text-center font-bold text-amber-700">
                       {reporteData.metricas?.total_minutos_atraso || 0} min
                     </td>
-                    <td className="py-3 px-3 text-center font-mono font-bold text-indigo-700">
+                    <td className="py-3 px-3 text-center font-bold text-indigo-700">
                       {Number(reporteData.metricas?.total_horas_extra || 0).toFixed(1)} hrs
                     </td>
                     <td className="py-3 px-3 text-center font-bold text-emerald-700">
@@ -559,28 +559,28 @@ export default function CentroReportesRRHH() {
                   {reporteData.data.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
-                      <td className="py-3 px-3 font-mono text-slate-500">{item.ci}</td>
+                      <td className="py-3 px-3 text-slate-500">{item.ci}</td>
                       <td className="py-3 px-3 font-medium text-slate-800">{item.cargo}</td>
-                      <td className="py-3 px-3 text-right font-mono">{formatCurrency(item.sueldo_basico || 0)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-emerald-600">
+                      <td className="py-3 px-3 text-right ">{formatCurrency(item.sueldo_basico || 0)}</td>
+                      <td className="py-3 px-3 text-right text-emerald-600">
                         {formatCurrency(item.horas_extra_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono text-emerald-600">
+                      <td className="py-3 px-3 text-right text-emerald-600">
                         {formatCurrency(item.comisiones_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-semibold text-slate-900 bg-slate-50/50">
+                      <td className="py-3 px-3 text-right font-semibold text-slate-900 bg-slate-50/50">
                         {formatCurrency(item.total_ganado || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono text-rose-600">
+                      <td className="py-3 px-3 text-right text-rose-600">
                         {formatCurrency(item.afp_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono text-rose-600">
+                      <td className="py-3 px-3 text-right text-rose-600">
                         {formatCurrency(item.anticipos_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-semibold text-rose-700 bg-rose-50/30">
+                      <td className="py-3 px-3 text-right font-semibold text-rose-700 bg-rose-50/30">
                         {formatCurrency(item.total_descuento || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/40">
+                      <td className="py-3 px-3 text-right font-bold text-emerald-700 bg-emerald-50/40">
                         {formatCurrency(item.liquido_pagable || 0)}
                       </td>
                       <td className="py-3 px-3 text-center">
@@ -602,16 +602,16 @@ export default function CentroReportesRRHH() {
                     <td colSpan={3} className="py-3 px-3 text-right">
                       Totales Nómina ({reporteData.metricas?.cantidad_boletas || 0} boletas):
                     </td>
-                    <td colSpan={3} className="py-3 px-3 text-right font-mono text-emerald-700">
+                    <td colSpan={3} className="py-3 px-3 text-right text-emerald-700">
                       Comisiones: {formatCurrency(reporteData.metricas?.total_comisiones_reparto_bs || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
+                    <td className="py-3 px-3 text-right font-bold text-slate-900">
                       {formatCurrency(reporteData.metricas?.total_bruto_acumulado_bs || 0)}
                     </td>
-                    <td colSpan={3} className="py-3 px-3 text-right font-mono font-bold text-rose-700">
+                    <td colSpan={3} className="py-3 px-3 text-right font-bold text-rose-700">
                       {formatCurrency(reporteData.metricas?.total_deducciones_bs || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
+                    <td className="py-3 px-3 text-right font-bold text-emerald-800 text-sm">
                       {formatCurrency(reporteData.metricas?.total_liquido_pagable_bs || 0)}
                     </td>
                     <td></td>

@@ -203,7 +203,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                     value={efectivoEntregado}
                     onChange={(e) => setEfectivoEntregado(e.target.value)}
                     required
-                    className="mt-1 font-mono font-bold"
+                    className="mt-1 font-bold"
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">Registrado por chofer en campo</span>
                 </div>
@@ -216,7 +216,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                     min="0"
                     value={transfReportada}
                     onChange={(e) => setTransfReportada(e.target.value)}
-                    className="mt-1 font-mono"
+                    className="mt-1 "
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">Verificado en banca móvil</span>
                 </div>
@@ -229,7 +229,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                     min="0"
                     value={qrReportado}
                     onChange={(e) => setQrReportado(e.target.value)}
-                    className="mt-1 font-mono"
+                    className="mt-1 "
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">Cobros con QR instantáneo</span>
                 </div>
@@ -244,7 +244,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                     placeholder="Ej. 145230.5"
                     value={kmFinal}
                     onChange={(e) => setKmFinal(e.target.value)}
-                    className="mt-1 font-mono"
+                    className="mt-1 "
                   />
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
                     Km Inicial: {data.Asignacion?.KilometrajeInicial || 0} km
@@ -296,7 +296,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
 
                 <div className="text-right shrink-0">
                   <span className="text-[11px] font-semibold block">Diferencia:</span>
-                  <span className="font-mono text-sm font-black">
+                  <span className="text-sm font-black">
                     {diferencia >= 0 ? "+" : ""}
                     {diferencia.toFixed(2)} Bs.
                   </span>
@@ -331,7 +331,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                     ) : (
                       data.DetallePedidos?.map((p, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="py-2 px-3 font-mono font-medium text-slate-900">
+                          <td className="py-2 px-3 font-medium text-slate-900">
                             {p.NumeroPedido || `PED-${p.IdPedido}`}
                           </td>
                           <td className="py-2 px-3">
@@ -342,13 +342,13 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
                               {p.NombrePuntoVenta}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-right font-mono font-semibold">
+                          <td className="py-2 px-3 text-right font-semibold">
                             {formatearMonto(p.MontoTotal)}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-emerald-700 font-medium">
+                          <td className="py-2 px-3 text-right text-emerald-700 font-medium">
                             {formatearMonto(p.CobradoEfectivo)}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-blue-700 font-medium">
+                          <td className="py-2 px-3 text-right text-blue-700 font-medium">
                             {formatearMonto(p.CobradoTransferenciaQr)}
                           </td>
                           <td className="py-2 px-3 text-center">

@@ -155,7 +155,7 @@ export default function GestionImportacion({ usuario }) {
                     </div>
                     <div>
                       <h3 className="font-bold text-base text-slate-800">{item.titulo}</h3>
-                      <span className="font-mono text-xs text-slate-400">{item.archivo}</span>
+                      <span className="text-xs text-slate-400">{item.archivo}</span>
                     </div>
                   </div>
 
@@ -176,7 +176,7 @@ export default function GestionImportacion({ usuario }) {
 
                 {/* Resultado si existe */}
                 {resultado && (
-                  <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 font-mono">
+                  <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 ">
                     {resultado.ok ? (
                       <div className="text-emerald-700 flex items-center gap-1.5 font-sans font-semibold">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

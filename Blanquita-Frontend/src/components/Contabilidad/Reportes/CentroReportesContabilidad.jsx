@@ -519,7 +519,7 @@ export default function CentroReportesContabilidad() {
                       <td className="p-2 font-semibold print:border print:border-black">{item.categoria}</td>
                       <td className="p-2 max-w-xs truncate print:border print:border-black">{item.glosa}</td>
                       <td className="p-2 print:border print:border-black">{item.beneficiario}</td>
-                      <td className="p-2 font-mono text-[10px] print:border print:border-black">{item.referencia}</td>
+                      <td className="p-2 text-[10px] print:border print:border-black">{item.referencia}</td>
                       <td className="p-2 print:border print:border-black">{item.metodo_pago}</td>
                       <td
                         className={`p-2 text-right font-bold whitespace-nowrap print:border print:border-black ${
@@ -567,9 +567,9 @@ export default function CentroReportesContabilidad() {
                   {reporteData.data.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
                       <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
-                      <td className="p-2 font-mono font-bold print:border print:border-black">{item.nro_nota}</td>
+                      <td className="p-2 font-bold print:border print:border-black">{item.nro_nota}</td>
                       <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.cliente_nombre}</td>
-                      <td className="p-2 font-mono text-[10px] print:border print:border-black">{item.cliente_nit}</td>
+                      <td className="p-2 text-[10px] print:border print:border-black">{item.cliente_nit}</td>
                       <td className="p-2 print:border print:border-black">{item.ciudad}</td>
                       <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_emision}</td>
                       <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_vencimiento || "-"}</td>
@@ -638,8 +638,8 @@ export default function CentroReportesContabilidad() {
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
                       <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
                       <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.proveedor_nombre}</td>
-                      <td className="p-2 font-mono text-[10px] print:border print:border-black">{item.proveedor_nit}</td>
-                      <td className="p-2 font-mono print:border print:border-black">{item.nro_factura_o_nota}</td>
+                      <td className="p-2 text-[10px] print:border print:border-black">{item.proveedor_nit}</td>
+                      <td className="p-2 print:border print:border-black">{item.nro_factura_o_nota}</td>
                       <td className="p-2 max-w-xs truncate print:border print:border-black">{item.concepto}</td>
                       <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_recepcion}</td>
                       <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_vencimiento || "-"}</td>
@@ -698,7 +698,7 @@ export default function CentroReportesContabilidad() {
                   {reporteData.data.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
                       <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
-                      <td className="p-2 font-mono font-bold print:border print:border-black">{item.nro_nota}</td>
+                      <td className="p-2 font-bold print:border print:border-black">{item.nro_nota}</td>
                       <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_venta}</td>
                       <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.cliente_nombre}</td>
                       <td className="p-2 print:border print:border-black">{item.ciudad_destino}</td>

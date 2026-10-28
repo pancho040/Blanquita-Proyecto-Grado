@@ -384,7 +384,7 @@ export default function GestionNotasVenta({ usuario }) {
               ) : (
                 notas.map((n) => (
                   <tr key={n.IdNotaVenta} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-xs text-[#20A7DB]">
+                    <td className="py-3 px-4 font-bold text-xs text-[#20A7DB]">
                       {n.NumeroNota}
                     </td>
                     <td className="py-3 px-4 text-xs text-slate-500">
@@ -497,7 +497,7 @@ export default function GestionNotasVenta({ usuario }) {
                   value={formNota.numero_nota}
                   onChange={(e) => setFormNota({ ...formNota, numero_nota: e.target.value })}
                   placeholder="Ej: NV-501"
-                  className="font-mono text-sm"
+                  className="text-sm"
                 />
               </div>
 
@@ -509,7 +509,7 @@ export default function GestionNotasVenta({ usuario }) {
                   value={formNota.numero_entrega}
                   onChange={(e) => setFormNota({ ...formNota, numero_entrega: e.target.value })}
                   placeholder="Ej: NE-308"
-                  className="font-mono text-sm"
+                  className="text-sm"
                 />
               </div>
 
@@ -592,7 +592,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.placa}
                     onChange={(e) => setFormNota({ ...formNota, placa: e.target.value })}
                     placeholder="Ej: 3021-XRT"
-                    className="text-xs font-mono h-8"
+                    className="text-xs h-8"
                   />
                 </div>
               </div>
@@ -799,7 +799,7 @@ export default function GestionNotasVenta({ usuario }) {
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
                     NOTA DE VENTA N°
                   </span>
-                  <span className="font-mono text-lg font-black text-[#20A7DB]">
+                  <span className="text-lg font-black text-[#20A7DB]">
                     {detalleNota.NumeroNota || "NV-000"}
                   </span>
                   <span className="text-xs font-semibold text-slate-700 block mt-0.5">
@@ -824,7 +824,7 @@ export default function GestionNotasVenta({ usuario }) {
                 </div>
                 <div>
                   <strong className="text-slate-500 block font-medium">Placa Camión:</strong>
-                  <span className="font-mono font-bold text-slate-900 mt-0.5 block">{detalleNota.Placa || "-"}</span>
+                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Placa || "-"}</span>
                 </div>
                 <div>
                   <strong className="text-slate-500 block font-medium">Condición de Venta:</strong>
@@ -832,7 +832,7 @@ export default function GestionNotasVenta({ usuario }) {
                 </div>
                 <div>
                   <strong className="text-slate-500 block font-medium">Flete de Chofer:</strong>
-                  <span className="font-mono font-bold text-slate-900 mt-0.5 block">Bs. {Number(detalleNota.FleteChofer || 0).toFixed(2)}</span>
+                  <span className="font-bold text-slate-900 mt-0.5 block">Bs. {Number(detalleNota.FleteChofer || 0).toFixed(2)}</span>
                 </div>
                 <div className="sm:col-span-2">
                   <strong className="text-slate-500 block font-medium">Observaciones:</strong>
@@ -859,9 +859,9 @@ export default function GestionNotasVenta({ usuario }) {
                       {detalleNota.Detalles?.map((d) => (
                         <tr key={d.IdDetalleNota} className="hover:bg-slate-50/50">
                           <td className="py-2.5 px-3 font-semibold text-slate-900">{d.Presentacion}</td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold">{d.PaquetesEntregados}</td>
-                          <td className="py-2.5 px-3 text-right font-mono">Bs. {Number(d.PrecioUnitario || 0).toFixed(2)}</td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                          <td className="py-2.5 px-3 text-center font-bold">{d.PaquetesEntregados}</td>
+                          <td className="py-2.5 px-3 text-right ">Bs. {Number(d.PrecioUnitario || 0).toFixed(2)}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900">
                             Bs. {Number(d.Subtotal || 0).toFixed(2)}
                           </td>
                         </tr>
@@ -874,7 +874,7 @@ export default function GestionNotasVenta({ usuario }) {
               {/* TOTALES */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm gap-3">
                 <span className="font-bold text-slate-700">Total Importe Neto de la Operación:</span>
-                <span className="font-mono font-black text-lg text-[#20A7DB]">
+                <span className="font-black text-lg text-[#20A7DB]">
                   Bs. {Number(detalleNota.TotalNeto || 0).toFixed(2)}
                 </span>
               </div>

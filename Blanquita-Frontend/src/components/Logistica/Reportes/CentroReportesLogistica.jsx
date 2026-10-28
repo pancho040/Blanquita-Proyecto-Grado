@@ -441,7 +441,7 @@ export default function CentroReportesLogistica() {
                     const efectividad = Number(item.porcentaje_efectividad || 0);
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-3 font-semibold text-sky-700 font-mono">
+                        <td className="py-3 px-3 font-semibold text-sky-700 ">
                           {`DSP-${item.id}`}
                         </td>
                         <td className="py-3 px-3 font-medium text-slate-900">{item.ruta_nombre}</td>
@@ -462,7 +462,7 @@ export default function CentroReportesLogistica() {
                             {item.estado_asignacion}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-center font-mono">
+                        <td className="py-3 px-3 text-center ">
                           <span className="font-semibold text-emerald-700">{item.paradas_entregadas || 0}</span> /{" "}
                           <span>{item.paradas_totales || 0}</span>
                         </td>
@@ -479,14 +479,14 @@ export default function CentroReportesLogistica() {
                             {efectividad.toFixed(1)}%
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-right font-semibold font-mono text-slate-900">
+                        <td className="py-3 px-3 text-right font-semibold text-slate-900">
                           {formatCurrency(item.total_recaudado || 0)}
                           <div className="text-[10px] text-slate-400 font-normal">
                             Ef: {formatCurrency(item.recaudacion_efectivo || 0)} | QR:{" "}
                             {formatCurrency(item.recaudacion_qr || 0)}
                           </div>
                         </td>
-                        <td className="py-3 px-3 text-right text-slate-600 font-mono">
+                        <td className="py-3 px-3 text-right text-slate-600 ">
                           {Number(item.km_recorridos || 0).toFixed(1)} km
                         </td>
                       </tr>
@@ -498,16 +498,16 @@ export default function CentroReportesLogistica() {
                     <td colSpan={5} className="py-3 px-3 text-right">
                       Totales del Período:
                     </td>
-                    <td className="py-3 px-3 text-center font-mono font-bold text-emerald-800">
+                    <td className="py-3 px-3 text-center font-bold text-emerald-800">
                       {reporteData.metricas?.total_paradas_entregadas || 0} / {reporteData.metricas?.total_paradas_programadas || 0}
                     </td>
                     <td className="py-3 px-3 text-right font-bold text-sky-700">
                       {Number(reporteData.metricas?.efectividad_promedio || 0).toFixed(1)}%
                     </td>
-                    <td className="py-3 px-3 text-right font-bold font-mono text-emerald-700">
+                    <td className="py-3 px-3 text-right font-bold text-emerald-700">
                       {formatCurrency(reporteData.metricas?.total_recaudado_global_bs || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
+                    <td className="py-3 px-3 text-right font-bold text-slate-800">
                       {Number(reporteData.metricas?.km_totales_recorridos || 0).toFixed(1)} km
                     </td>
                   </tr>
@@ -534,7 +534,7 @@ export default function CentroReportesLogistica() {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {reporteData.data.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-sky-700 font-mono">
+                      <td className="py-3 px-3 font-semibold text-sky-700 ">
                         {`CLI-${item.id}`}
                       </td>
                       <td className="py-3 px-3 font-medium text-slate-900">{item.razon_social}</td>
@@ -556,13 +556,13 @@ export default function CentroReportesLogistica() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-center font-mono font-semibold text-sky-700">
+                      <td className="py-3 px-3 text-center font-semibold text-sky-700">
                         {item.puntos_venta_count || 0}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-medium text-slate-700">
+                      <td className="py-3 px-3 text-right font-medium text-slate-700">
                         {formatCurrency(item.limite_credito_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-semibold text-slate-800">
+                      <td className="py-3 px-3 text-right font-semibold text-slate-800">
                         {item.total_compras_historicas || 0}
                       </td>
                     </tr>
@@ -573,7 +573,7 @@ export default function CentroReportesLogistica() {
                     <td colSpan={7} className="py-3 px-3 text-right">
                       Totales de Cartera ({reporteData.metricas?.total_clientes || 0} clientes):
                     </td>
-                    <td className="py-3 px-3 text-center font-mono font-bold text-sky-800">
+                    <td className="py-3 px-3 text-center font-bold text-sky-800">
                       {reporteData.metricas?.total_puntos_venta || 0} puntos
                     </td>
                     <td colSpan={2} className="py-3 px-3 text-right font-bold text-slate-700">

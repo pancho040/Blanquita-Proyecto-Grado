@@ -218,7 +218,7 @@ export default function MapaSelectorUbicacion({
         />
         
         {/* Badge flotante con coordenadas en tiempo real */}
-        <div className="absolute bottom-2 left-2 z-[400] bg-white px-2.5 py-1 rounded-lg border border-slate-300 text-[11px] font-mono font-semibold text-slate-800 shadow-sm flex items-center gap-2">
+        <div className="absolute bottom-2 left-2 z-[400] bg-white px-2.5 py-1 rounded-lg border border-slate-300 text-[11px] font-semibold text-slate-800 shadow-sm flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
           <span>Lat: {coords.lat}</span>
           <span>•</span>

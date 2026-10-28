@@ -141,7 +141,7 @@ export default function ModalSimuladorGPS({
                   <span className="text-[11px] font-bold text-slate-800 block truncate">
                     {pto.nombre}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono block">
+                  <span className="text-[10px] text-slate-400 block">
                     {pto.lat.toFixed(4)}, {pto.lng.toFixed(4)}
                   </span>
                 </button>
@@ -158,7 +158,7 @@ export default function ModalSimuladorGPS({
                 step="0.0001"
                 value={latitud}
                 onChange={(e) => setLatitud(e.target.value)}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
                 required
               />
             </div>
@@ -170,7 +170,7 @@ export default function ModalSimuladorGPS({
                 step="0.0001"
                 value={longitud}
                 onChange={(e) => setLongitud(e.target.value)}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
                 required
               />
             </div>
@@ -184,7 +184,7 @@ export default function ModalSimuladorGPS({
                 max="120"
                 value={velocidad}
                 onChange={(e) => setVelocidad(e.target.value)}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
 
@@ -196,7 +196,7 @@ export default function ModalSimuladorGPS({
                 max="100"
                 value={bateria}
                 onChange={(e) => setBateria(e.target.value)}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
 

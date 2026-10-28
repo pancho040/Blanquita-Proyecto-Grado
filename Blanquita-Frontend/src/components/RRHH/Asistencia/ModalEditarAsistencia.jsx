@@ -134,7 +134,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
                 value={formData.HoraEntrada}
                 onChange={handleChange}
                 placeholder="06:00:00"
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
             <div>
@@ -146,7 +146,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
                 value={formData.HoraSalida}
                 onChange={handleChange}
                 placeholder="15:00:00"
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
           </div>
@@ -164,7 +164,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
                 name="MinutosAtraso"
                 value={formData.MinutosAtraso}
                 onChange={handleChange}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
             <div>
@@ -179,7 +179,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
                 name="HorasExtras"
                 value={formData.HorasExtras}
                 onChange={handleChange}
-                className="mt-1 font-mono text-xs"
+                className="mt-1 text-xs"
               />
             </div>
           </div>

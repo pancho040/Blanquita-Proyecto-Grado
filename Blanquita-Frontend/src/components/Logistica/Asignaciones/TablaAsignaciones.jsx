@@ -558,10 +558,10 @@ export default function TablaAsignaciones() {
                         <td className="px-4 py-3.5 text-center">
                           {badgeEstado(a.Estado)}
                         </td>
-                        <td className="px-4 py-3.5 text-center font-mono text-xs text-slate-700">
+                        <td className="px-4 py-3.5 text-center text-xs text-slate-700">
                           {a.KilometrajeInicial ? `${a.KilometrajeInicial} km` : "—"}
                         </td>
-                        <td className="px-4 py-3.5 text-center font-mono text-xs text-slate-700">
+                        <td className="px-4 py-3.5 text-center text-xs text-slate-700">
                           {a.KilometrajeFinal ? (
                             <span className="font-bold text-emerald-600">{a.KilometrajeFinal} km</span>
                           ) : (
@@ -710,7 +710,7 @@ export default function TablaAsignaciones() {
                   placeholder="0.0"
                   value={formAsignacion.KilometrajeInicial}
                   onChange={(e) => setFormAsignacion({ ...formAsignacion, KilometrajeInicial: e.target.value })}
-                  className="bg-white border-slate-300 h-9 text-xs font-mono"
+                  className="bg-white border-slate-300 h-9 text-xs "
                 />
               </div>
             </div>
@@ -782,7 +782,7 @@ export default function TablaAsignaciones() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex flex-col justify-center">
                 <span className="text-[11px] text-slate-500 block font-medium">Km Inicial:</span>
-                <span className="font-mono text-base font-bold text-slate-800 mt-1">
+                <span className="text-base font-bold text-slate-800 mt-1">
                   {asignacionGestionar?.KilometrajeInicial ? `${asignacionGestionar.KilometrajeInicial} km` : "Sin dato"}
                 </span>
               </div>
@@ -794,12 +794,12 @@ export default function TablaAsignaciones() {
                   placeholder="Ej. 45248.0"
                   value={kmFinal}
                   onChange={(e) => setKmFinal(e.target.value)}
-                  className="mt-1 h-9 text-sm font-mono bg-white font-bold text-emerald-700"
+                  className="mt-1 h-9 text-sm bg-white font-bold text-emerald-700"
                 />
               </div>
               <div className="flex flex-col justify-center bg-white p-2.5 rounded-lg border border-slate-200">
                 <span className="text-[11px] text-slate-500 block font-medium">Distancia Recorrida:</span>
-                <span className={`font-mono text-base font-bold mt-1 ${kmRecorridos ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`text-base font-bold mt-1 ${kmRecorridos ? "text-emerald-600" : "text-slate-400"}`}>
                   {kmRecorridos ? `${kmRecorridos} km` : "Pendiente"}
                 </span>
               </div>
@@ -873,7 +873,7 @@ export default function TablaAsignaciones() {
                       >
                         <span className="font-extrabold text-[#20A7DB]">#{p.OrdenVisita}</span>
                         <span className="font-medium">{p.NombreCliente}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">({p.NombrePuntoVenta})</span>
+                        <span className="text-[11px] text-slate-400 ">({p.NombrePuntoVenta})</span>
                         {i < puntosMapa.length - 1 && (
                           <span className="text-slate-300 font-bold ml-1">·</span>
                         )}

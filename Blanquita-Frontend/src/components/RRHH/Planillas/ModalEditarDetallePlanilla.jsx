@@ -139,7 +139,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
               name="DiasTrabajados"
               value={formData.DiasTrabajados}
               onChange={handleChange}
-              className="mt-1 h-9 text-xs font-mono"
+              className="mt-1 h-9 text-xs "
             />
           </div>
 
@@ -149,7 +149,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
             <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-3">
               <h3 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center justify-between">
                 <span>Ingresos / Haberes</span>
-                <span className="font-mono text-emerald-700 dark:text-emerald-400">
+                <span className="text-emerald-700 dark:text-emerald-400">
                   Bs. {totalGanado.toFixed(2)}
                 </span>
               </h3>
@@ -162,7 +162,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="HaberBasico"
                   value={formData.HaberBasico}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -174,7 +174,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="BonoAntiguedad"
                   value={formData.BonoAntiguedad}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -186,7 +186,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="HorasExtrasMonto"
                   value={formData.HorasExtrasMonto}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -198,7 +198,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="OtrosBonos"
                   value={formData.OtrosBonos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
             <div className="p-4 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl border border-rose-200 dark:border-rose-800 space-y-3">
               <h3 className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center justify-between">
                 <span>Descuentos y Deducciones</span>
-                <span className="font-mono text-rose-700 dark:text-rose-400">
+                <span className="text-rose-700 dark:text-rose-400">
                   Bs. {totalDescuentos.toFixed(2)}
                 </span>
               </h3>
@@ -220,7 +220,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoAFP"
                   value={formData.DescuentoAFP}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -232,7 +232,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoAtrasos"
                   value={formData.DescuentoAtrasos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -244,7 +244,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoFaltas"
                   value={formData.DescuentoFaltas}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -256,7 +256,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="Anticipos"
                   value={formData.Anticipos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
 
@@ -268,7 +268,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="OtrosDescuentos"
                   value={formData.OtrosDescuentos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
                 />
               </div>
             </div>
@@ -284,7 +284,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                 Total Ganado ({totalGanado.toFixed(2)}) - Total Descuentos ({totalDescuentos.toFixed(2)})
               </span>
             </div>
-            <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 font-mono">
+            <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 ">
               Bs. {liquidoPagable.toFixed(2)}
             </div>
           </div>

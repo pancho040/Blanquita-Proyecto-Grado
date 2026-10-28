@@ -109,7 +109,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
                 value={formData.HoraInicio}
                 onChange={(e) => setFormData({ ...formData, HoraInicio: e.target.value })}
                 required
-                className="mt-1 bg-white border-slate-300 text-sm font-mono"
+                className="mt-1 bg-white border-slate-300 text-sm "
               />
             </div>
 
@@ -121,7 +121,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
                 value={formData.HoraFin}
                 onChange={(e) => setFormData({ ...formData, HoraFin: e.target.value })}
                 required
-                className="mt-1 bg-white border-slate-300 text-sm font-mono"
+                className="mt-1 bg-white border-slate-300 text-sm "
               />
             </div>
           </div>

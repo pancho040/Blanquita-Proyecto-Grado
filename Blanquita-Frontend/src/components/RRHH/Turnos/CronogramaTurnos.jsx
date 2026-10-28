@@ -293,7 +293,7 @@ export default function CronogramaTurnos() {
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            <div className="ml-2 text-sm font-bold text-slate-900 font-mono">
+            <div className="ml-2 text-sm font-bold text-slate-900 ">
               Semana del {diasSemana[0]?.diaMes} al {diasSemana[5]?.diaMes}
             </div>
           </div>
@@ -325,7 +325,7 @@ export default function CronogramaTurnos() {
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mt-0.5">
             EMPRESA DE PAPEL BLANQUITA • PLANTA INDUSTRIAL SUCRE
           </p>
-          <p className="text-[11px] font-mono font-semibold text-slate-500 mt-0.5">
+          <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
             Semana operativa: del {diasSemana[0]?.diaMes} al {diasSemana[5]?.diaMes}
           </p>
         </div>
@@ -347,7 +347,7 @@ export default function CronogramaTurnos() {
                   {diasSemana.map((d) => (
                     <th key={d.fechaStr} className="border border-slate-800 p-2 text-center min-w-[130px]">
                       <div className="font-extrabold uppercase text-xs">{d.nombre}</div>
-                      <div className="text-[11px] font-mono font-semibold text-slate-600">{d.diaMes}</div>
+                      <div className="text-[11px] font-semibold text-slate-600">{d.diaMes}</div>
                     </th>
                   ))}
                 </tr>
@@ -390,7 +390,7 @@ export default function CronogramaTurnos() {
                                       <p className="font-bold text-xs text-slate-900 leading-tight">
                                         {asig.PrimerNombre} {asig.ApellidoPaterno?.[0]}.
                                       </p>
-                                      <span className="text-[10px] text-slate-500 font-mono block">
+                                      <span className="text-[10px] text-slate-500 block">
                                         {asig.TurnoHoraInicio} - {asig.TurnoHoraFin}
                                       </span>
                                     </div>

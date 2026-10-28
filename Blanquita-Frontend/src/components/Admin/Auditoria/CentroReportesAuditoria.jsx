@@ -24,7 +24,6 @@ import ReporteKpisGrid, { formatNumber } from "@/components/common/Reportes/Repo
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import { getReporteAuditoriaSeguridad } from "@/services/Reportes/reportesService";
-import ModuloAdminNav from "@/components/Admin/Common/ModuloAdminNav";
 
 export default function CentroReportesAuditoria() {
   const [loading, setLoading] = useState(false);
@@ -97,7 +96,6 @@ export default function CentroReportesAuditoria() {
 
   return (
     <div className="space-y-6">
-      <ModuloAdminNav pestanaActiva="reportes" />
       {/* Membrete formal para impresión */}
       <ReporteHeaderFormal
         titulo="Reporte de Acciones y Trazabilidad de Auditoría"
@@ -306,7 +304,7 @@ export default function CentroReportesAuditoria() {
                       <div className="font-medium text-slate-800">
                         {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "-"}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
+                      <div className="text-[10px] text-slate-400 ">
                         {item.fecha_hora ? new Date(item.fecha_hora).toLocaleTimeString("es-BO") : ""}
                       </div>
                     </td>
@@ -316,7 +314,7 @@ export default function CentroReportesAuditoria() {
                         {item.rol}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-medium text-slate-800 font-mono">{item.modulo_tabla}</td>
+                    <td className="py-3 px-3 font-medium text-slate-800 ">{item.modulo_tabla}</td>
                     <td className="py-3 px-3 font-semibold text-sky-700">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -332,7 +330,7 @@ export default function CentroReportesAuditoria() {
                         {item.accion}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{item.id_registro}</td>
+                    <td className="py-3 px-3 text-slate-600 text-[11px]">{item.id_registro}</td>
                     <td className="py-3 px-3 text-slate-700 max-w-sm truncate" title={item.detalle}>
                       {item.detalle}
                     </td>
@@ -345,7 +343,7 @@ export default function CentroReportesAuditoria() {
                   <td colSpan={5} className="py-3 px-3 text-right">
                     Total Eventos Auditados en el Período:
                   </td>
-                  <td colSpan={2} className="py-3 px-3 font-bold font-mono text-slate-900">
+                  <td colSpan={2} className="py-3 px-3 font-bold text-slate-900">
                     {formatNumber(reporteData.metricas?.total_eventos_auditados || 0)} eventos
                   </td>
                 </tr>

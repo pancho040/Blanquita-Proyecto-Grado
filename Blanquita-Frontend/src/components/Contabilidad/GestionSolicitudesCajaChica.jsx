@@ -342,7 +342,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
               ) : (
                 solicitudes.map((s) => (
                   <tr key={s.IdSolicitud} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-xs text-[#20A7DB]">
+                    <td className="py-3 px-4 font-bold text-xs text-[#20A7DB]">
                       {s.NumeroSolicitud}
                     </td>
                     <td className="py-3 px-4 text-xs text-slate-500">
@@ -710,7 +710,7 @@ export default function GestionSolicitudesCajaChica({ usuario }) {
                   <div className="text-slate-500 text-[11px]">Papel Blanquita - Sucre, Bolivia</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono font-bold text-sm text-[#20A7DB]">
+                  <div className="font-bold text-sm text-[#20A7DB]">
                     {solicitudSeleccionada.NumeroSolicitud}
                   </div>
                   <div className="text-slate-400 text-[10px]">

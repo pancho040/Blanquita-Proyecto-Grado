@@ -124,7 +124,7 @@ export default function DetalleClienteModal({ idCliente, abierto, onCerrar }) {
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                   NIT / Carnet
                 </span>
-                <p className="font-mono font-bold text-slate-800 text-sm mt-0.5">{cliente.NitCi}</p>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">{cliente.NitCi}</p>
                 <div className="mt-1">
                   <Badge className={cliente.BloqueadoPorMora ? "bg-red-500 text-white text-[11px]" : "bg-emerald-500 text-white text-[11px]"}>
                     {cliente.BloqueadoPorMora ? "Bloqueado por Mora" : cliente.NombreEstado || "Activo"}
@@ -158,7 +158,7 @@ export default function DetalleClienteModal({ idCliente, abierto, onCerrar }) {
                 <span className="text-[11px] font-semibold text-sky-800 uppercase tracking-wider block">
                   Límite de Crédito
                 </span>
-                <p className="font-bold text-sky-950 text-base font-mono mt-0.5">
+                <p className="font-bold text-sky-950 text-base mt-0.5">
                   Bs. {Number(cliente.LimiteCreditoBs).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-[11px] text-sky-700">Plazo: {cliente.DiasCredito} días máximos</p>

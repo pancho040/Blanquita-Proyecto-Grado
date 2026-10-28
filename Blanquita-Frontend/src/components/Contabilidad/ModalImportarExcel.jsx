@@ -218,7 +218,7 @@ export default function ModalImportarExcel({
                 <span>{resultado.mensaje || "Registros procesados exitosamente"}</span>
               </div>
               {resultado.detalle && (
-                <div className="text-[11.5px] text-emerald-950/80 space-y-0.5 pl-6 font-mono">
+                <div className="text-[11.5px] text-emerald-950/80 space-y-0.5 pl-6 ">
                   {Object.entries(resultado.detalle)
                     .filter(([k]) => k !== "Archivo")
                     .map(([k, v]) => (

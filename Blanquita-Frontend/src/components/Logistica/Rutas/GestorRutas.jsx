@@ -552,13 +552,13 @@ export default function GestorRutas() {
                             className="p-3.5 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-sky-200 transition-colors"
                           >
                             <div className="flex items-center gap-3">
-                              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#20A7DB] font-extrabold text-xs font-mono shrink-0">
+                              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#20A7DB] font-extrabold text-xs shrink-0">
                                 #{idx + 1}
                               </span>
                               <div>
                                 <p className="font-bold text-sm text-slate-900">{p.NombreCliente}</p>
                                 <p className="text-xs text-slate-600">{p.Direccion || "Sin dirección"}</p>
-                                <span className="text-[11px] text-slate-400 font-mono">
+                                <span className="text-[11px] text-slate-400 ">
                                   Punto: {p.NombrePuntoVenta}
                                 </span>
                               </div>

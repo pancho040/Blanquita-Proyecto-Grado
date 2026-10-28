@@ -23,7 +23,7 @@ import {
   USUARIOS_INICIALES,
 } from "@/constants/RolesPermisos";
 import ModalPermisosUsuario from "./ModalPermisosUsuario";
-import ModuloAdminNav from "@/components/Admin/Common/ModuloAdminNav";
+
 import { toast } from "sonner";
 
 const CLAVE_STORAGE_USERS = "blanquita_roles_usuarios";
@@ -126,7 +126,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
 
   return (
     <div className="space-y-6">
-      <ModuloAdminNav pestanaActiva="roles" />
+
       {/* ENCABEZADO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
@@ -157,7 +157,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            Gestión de Usuarios y Roles ({roles.length})
+            Matriz de Permisos ({roles.length})
           </button>
         </div>
       </div>
@@ -313,7 +313,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
       {/* VISTA 2: PLANTILLAS DE ROLES Y MATRIZ POR DEFECTO */}
       {tabActiva === "matriz" && (
         <div className="space-y-6">
-      <ModuloAdminNav pestanaActiva="roles" />
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((r) => {
               // Contar cuántos usuarios tienen este rol

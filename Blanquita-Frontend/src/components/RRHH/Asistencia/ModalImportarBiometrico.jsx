@@ -279,7 +279,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
               value={textoCrudo}
               onChange={handleTextoChange}
               placeholder="Pega aquí el contenido del archivo si no deseas subirlo..."
-              className="w-full p-2.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full p-2.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -303,7 +303,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
                       <th className="py-1.5 px-3">Tipo Marca</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 ">
                     {registrosParseados.slice(0, 5).map((reg, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                         <td className="py-1.5 px-3 text-slate-400">{idx + 1}</td>

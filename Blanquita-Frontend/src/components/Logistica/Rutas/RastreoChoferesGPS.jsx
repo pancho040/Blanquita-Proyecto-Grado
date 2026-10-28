@@ -477,15 +477,15 @@ export default function RastreoChoferesGPS() {
 
                     {/* SENSORES Y TELEMETRÍA */}
                     <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2 border-t border-slate-100 text-[10px] text-slate-600">
-                      <div className="flex items-center gap-1 font-mono">
+                      <div className="flex items-center gap-1 ">
                         <Gauge className="h-3 w-3 text-slate-400" />
                         <span>{ch.Velocidad || 0} km/h</span>
                       </div>
-                      <div className="flex items-center gap-1 font-mono">
+                      <div className="flex items-center gap-1 ">
                         <BatteryCharging className="h-3 w-3 text-emerald-600" />
                         <span>{ch.Bateria || 100}%</span>
                       </div>
-                      <div className="flex items-center gap-1 font-mono text-right justify-end">
+                      <div className="flex items-center gap-1 text-right justify-end">
                         <Clock className="h-3 w-3 text-slate-400" />
                         <span>hace {ch.SegundosDesdeUltimoReporte || 0}s</span>
                       </div>
@@ -511,7 +511,7 @@ export default function RastreoChoferesGPS() {
                     <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                       <div>
                         <span className="text-[10px] text-slate-500 block">Cobrado en Ruta:</span>
-                        <span className="text-xs font-mono font-bold text-emerald-700">
+                        <span className="text-xs font-bold text-emerald-700">
                           {formatearMonto(ch.MontoCobradoTotal)}
                         </span>
                       </div>

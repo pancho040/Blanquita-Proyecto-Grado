@@ -144,7 +144,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                     onChange={handleChange}
                     placeholder="Ej. 7891004"
                     required
-                    className="mt-1 bg-white border-slate-300 font-mono text-sm"
+                    className="mt-1 bg-white border-slate-300 text-sm"
                   />
                 </div>
 
@@ -216,7 +216,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                   value={nuevoChofer.Clave}
                   onChange={handleChange}
                   placeholder="Blanquita123!"
-                  className="mt-1 bg-white border-slate-300 text-sm font-mono max-w-xs"
+                  className="mt-1 bg-white border-slate-300 text-sm max-w-xs"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
                   Clave inicial con la que el chofer ingresará a su módulo de entregas.
@@ -286,7 +286,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                         <td className="px-4 py-3 font-semibold text-slate-900">
                           {c.NombreCompleto}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                        <td className="px-4 py-3 text-xs text-slate-700">
                           {c.Ci}
                         </td>
                         <td className="px-4 py-3 text-slate-600">
@@ -304,7 +304,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                             <span className="text-xs text-slate-400 italic">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center font-mono text-xs">
+                        <td className="px-4 py-3 text-center text-xs">
                           <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
                             {c.TotalAsignaciones || 0}
                           </span>

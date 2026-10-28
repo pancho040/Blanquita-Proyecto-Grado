@@ -511,12 +511,12 @@ export default function GestionCuentasCobrar({ usuario }) {
                         <div className="font-semibold text-slate-800 text-xs">
                           {c.RazonSocial || c.NombreComercial}
                         </div>
-                        {c.NIT_CI && <div className="text-[11px] text-slate-400 font-mono">NIT: {c.NIT_CI}</div>}
+                        {c.NIT_CI && <div className="text-[11px] text-slate-400 ">NIT: {c.NIT_CI}</div>}
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-600 font-medium">
                         {c.Ciudad || "Sucre"}
                       </td>
-                      <td className="py-3 px-4 font-mono font-semibold text-xs text-[#20A7DB]">
+                      <td className="py-3 px-4 font-semibold text-xs text-[#20A7DB]">
                         {c.NumeroNota || `NV-${c.IdNotaVenta || c.IdCuentaCobrar}`}
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-500">
@@ -901,7 +901,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                   value={formAbono.numero_deposito}
                   onChange={(e) => setFormAbono({ ...formAbono, numero_deposito: e.target.value })}
                   placeholder="Ej: DEP-48921"
-                  className="text-xs font-mono h-9"
+                  className="text-xs h-9"
                 />
               </div>
 
@@ -1043,7 +1043,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                         detalleCuenta.Abonos.map((ab) => (
                           <tr key={ab.IdAbono} className="hover:bg-slate-50">
                             <td className="py-2.5 px-3">{ab.FechaAbono ? new Date(ab.FechaAbono).toLocaleDateString("es-BO") : "-"}</td>
-                            <td className="py-2.5 px-3 font-mono font-semibold text-slate-700">{ab.NumeroDeposito || "-"}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-700">{ab.NumeroDeposito || "-"}</td>
                             <td className="py-2.5 px-3 font-medium text-slate-700">{ab.NombreBanco || "Efectivo"}</td>
                             <td className="py-2.5 px-3 text-slate-500">{ab.Depositante || "-"}</td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">

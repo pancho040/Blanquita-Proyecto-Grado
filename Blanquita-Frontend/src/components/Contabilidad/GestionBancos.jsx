@@ -292,7 +292,7 @@ export default function GestionBancos({ usuario }) {
               </div>
 
               {/* Número de Cuenta y Titular */}
-              <div className="mt-4 font-mono text-xs font-semibold text-slate-600 tracking-wider">
+              <div className="mt-4 text-xs font-semibold text-slate-600 tracking-wider">
                 {b.NumeroCuenta}
               </div>
               <div className="text-[11px] text-slate-400 truncate mt-0.5">{b.Titular}</div>
@@ -371,7 +371,7 @@ export default function GestionBancos({ usuario }) {
                       <td className="py-3 px-4 text-xs text-slate-500">
                         {m.FechaMovimiento ? new Date(m.FechaMovimiento).toLocaleDateString("es-BO") : "-"}
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs font-semibold text-slate-700">
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-700">
                         {m.NumeroComprobante || `MOV-${m.IdMovimiento}`}
                       </td>
                       <td className="py-3 px-4 text-xs font-medium text-slate-800">
@@ -458,7 +458,7 @@ export default function GestionBancos({ usuario }) {
                   value={formBanco.numero_cuenta}
                   onChange={(e) => setFormBanco({ ...formBanco, numero_cuenta: e.target.value })}
                   placeholder="Ej: 1000003429182"
-                  className="font-mono text-sm"
+                  className="text-sm"
                 />
               </div>
 
@@ -565,7 +565,7 @@ export default function GestionBancos({ usuario }) {
                   required
                   value={formBanco.numero_cuenta}
                   onChange={(e) => setFormBanco({ ...formBanco, numero_cuenta: e.target.value })}
-                  className="font-mono text-sm"
+                  className="text-sm"
                 />
               </div>
 

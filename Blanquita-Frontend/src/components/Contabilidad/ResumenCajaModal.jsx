@@ -62,7 +62,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
                 ARQUEO / CIERRE N°
               </span>
-              <span className="font-mono text-lg font-black text-[#20A7DB]">
+              <span className="text-lg font-black text-[#20A7DB]">
                 {caja.NumeroArqueo || `CJ-${caja.IdAperturaCierreCaja || caja.IdCaja}`}
               </span>
               <span className="text-xs font-semibold text-slate-700 block mt-0.5">
@@ -87,13 +87,13 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
             </div>
             <div>
               <span className="text-slate-500 block font-medium">Hora de Apertura:</span>
-              <span className="font-mono font-bold text-slate-900 mt-0.5 block">
+              <span className="font-bold text-slate-900 mt-0.5 block">
                 {caja.FechaApertura ? new Date(caja.FechaApertura).toLocaleTimeString("es-BO") : "-"}
               </span>
             </div>
             <div>
               <span className="text-slate-500 block font-medium">Hora de Cierre:</span>
-              <span className="font-mono font-bold text-slate-900 mt-0.5 block">
+              <span className="font-bold text-slate-900 mt-0.5 block">
                 {caja.FechaCierre ? new Date(caja.FechaCierre).toLocaleTimeString("es-BO") : "En curso"}
               </span>
             </div>
@@ -103,7 +103,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl">
               <span className="text-xs font-medium text-slate-500 block">Saldo Inicial</span>
-              <span className="text-lg font-bold text-slate-900 mt-1 block font-mono">
+              <span className="text-lg font-bold text-slate-900 mt-1 block ">
                 {formatearMonto(saldoInicial)}
               </span>
               <span className="text-[11px] text-slate-400 mt-0.5 block">Fondo de apertura</span>
@@ -111,7 +111,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
 
             <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl">
               <span className="text-xs font-semibold text-emerald-800 block">Total Ingresos</span>
-              <span className="text-lg font-bold text-emerald-700 mt-1 block font-mono">
+              <span className="text-lg font-bold text-emerald-700 mt-1 block ">
                 +{formatearMonto(totalIngresos)}
               </span>
               <span className="text-[11px] text-emerald-600 mt-0.5 block">{ingresos.length} operaciones</span>
@@ -119,7 +119,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
 
             <div className="p-3.5 bg-rose-50/50 border border-rose-200 rounded-xl">
               <span className="text-xs font-semibold text-rose-800 block">Total Egresos</span>
-              <span className="text-lg font-bold text-rose-700 mt-1 block font-mono">
+              <span className="text-lg font-bold text-rose-700 mt-1 block ">
                 -{formatearMonto(totalEgresos)}
               </span>
               <span className="text-[11px] text-rose-600 mt-0.5 block">{egresos.length} egresos</span>
@@ -127,7 +127,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
 
             <div className="p-3.5 bg-sky-50/50 border border-sky-200 rounded-xl">
               <span className="text-xs font-semibold text-sky-800 block">Saldo Neto en Caja</span>
-              <span className="text-lg font-black text-[#20A7DB] mt-1 block font-mono">
+              <span className="text-lg font-black text-[#20A7DB] mt-1 block ">
                 {formatearMonto(saldoReal)}
               </span>
               <span className="text-[11px] text-sky-600 mt-0.5 block">Efectivo físico disponible</span>
@@ -166,7 +166,7 @@ export default function ResumenCajaModal({ isOpen, onClose, caja, movimientos = 
 
             <div className="text-right shrink-0">
               <span className="text-[11px] font-semibold block">Diferencia:</span>
-              <span className="font-mono text-sm font-black">
+              <span className="text-sm font-black">
                 {diferencia >= 0 ? "+" : ""}
                 {diferencia.toFixed(2)} Bs.
               </span>

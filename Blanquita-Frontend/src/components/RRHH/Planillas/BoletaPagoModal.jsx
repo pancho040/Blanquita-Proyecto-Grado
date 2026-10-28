@@ -161,13 +161,13 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Haber Básico</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium">
+                        <td className="py-1.5 px-3 text-right font-medium">
                           {Number(boleta.Ingresos?.HaberBasico || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Bono de Antigüedad</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium">
+                        <td className="py-1.5 px-3 text-right font-medium">
                           {Number(boleta.Ingresos?.BonoAntiguedad || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -175,13 +175,13 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Horas Extras ({boleta.Ingresos?.HorasExtrasCantidad || 0} hrs)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium">
+                        <td className="py-1.5 px-3 text-right font-medium">
                           {Number(boleta.Ingresos?.HorasExtrasMonto || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Otros Bonos y Recargos</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium">
+                        <td className="py-1.5 px-3 text-right font-medium">
                           {Number(boleta.Ingresos?.OtrosBonos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -189,7 +189,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tfoot>
                       <tr className="bg-slate-100 dark:bg-slate-850 font-bold border-t border-slate-200 dark:border-slate-700">
                         <td className="py-2 px-3 text-slate-800 dark:text-slate-100">TOTAL GANADO</td>
-                        <td className="py-2 px-3 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                        <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">
                           {Number(boleta.Ingresos?.TotalGanado || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -206,7 +206,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Aporte Gestora / AFP (12.71%)</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.GestoraAFP || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -214,7 +214,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Descuento Atrasos ({boleta.Descuentos?.MinutosAtraso || 0} min)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.AtrasosMonto || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -222,19 +222,19 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Descuento Faltas ({boleta.Descuentos?.FaltasCantidad || 0} días)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.FaltasMonto || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Anticipos de Sueldo / Préstamos</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.Anticipos || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Otros Descuentos</td>
-                        <td className="py-1.5 px-3 text-right font-mono font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.OtrosDescuentos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -242,7 +242,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tfoot>
                       <tr className="bg-slate-100 dark:bg-slate-850 font-bold border-t border-slate-200 dark:border-slate-700">
                         <td className="py-2 px-3 text-slate-800 dark:text-slate-100">TOTAL DESCUENTOS</td>
-                        <td className="py-2 px-3 text-right font-mono text-rose-600 dark:text-rose-400">
+                        <td className="py-2 px-3 text-right text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.TotalDescuentos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -262,7 +262,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400 font-mono">
+                  <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400 ">
                     Bs. {Number(boleta.LiquidoPagable || 0).toFixed(2)}
                   </span>
                 </div>

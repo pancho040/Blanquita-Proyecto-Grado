@@ -117,7 +117,7 @@ export default function ModalEmpleado({ empleado, abierto, onCerrar, onGuardado 
               <span>Editar Ficha Laboral del Empleado</span>
             </DialogTitle>
             <p className="text-xs text-slate-500 mt-0.5">
-              CI: <strong className="text-slate-800 font-mono">{empleado.Ci}</strong> • Rol Sistema: <span className="text-sky-700 font-semibold">{empleado.NombreRol}</span>
+              CI: <strong className="text-slate-800 ">{empleado.Ci}</strong> • Rol Sistema: <span className="text-sky-700 font-semibold">{empleado.NombreRol}</span>
             </p>
           </div>
         </DialogHeader>
@@ -238,7 +238,7 @@ export default function ModalEmpleado({ empleado, abierto, onCerrar, onGuardado 
                 <Label className="text-xs font-semibold text-slate-700">
                   Sueldo Básico Mensual (Bs.) *
                 </Label>
-                <span className="text-[11px] text-slate-500 font-mono">
+                <span className="text-[11px] text-slate-500 ">
                   Base LGT Sucre
                 </span>
               </div>
@@ -252,7 +252,7 @@ export default function ModalEmpleado({ empleado, abierto, onCerrar, onGuardado 
                   value={formData.SueldoBasico}
                   onChange={handleChange}
                   required
-                  className="pl-9 bg-white border-slate-300 font-mono font-bold text-base text-emerald-700 h-10"
+                  className="pl-9 bg-white border-slate-300 font-bold text-base text-emerald-700 h-10"
                 />
               </div>
 
@@ -264,7 +264,7 @@ export default function ModalEmpleado({ empleado, abierto, onCerrar, onGuardado 
                     key={p}
                     type="button"
                     onClick={() => handlePresetSueldo(p)}
-                    className={`text-xs px-2.5 py-1 rounded-md font-mono font-semibold transition-colors border ${
+                    className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-colors border ${
                       Number(formData.SueldoBasico) === p
                         ? "bg-[#20A7DB] text-white border-[#20A7DB]"
                         : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
@@ -296,7 +296,7 @@ export default function ModalEmpleado({ empleado, abierto, onCerrar, onGuardado 
                   value={formData.CuentaBancaria}
                   onChange={handleChange}
                   placeholder="Ej. 100000458921"
-                  className="mt-1 bg-white border-slate-300 text-sm h-9 font-mono"
+                  className="mt-1 bg-white border-slate-300 text-sm h-9 "
                 />
               </div>
             </div>

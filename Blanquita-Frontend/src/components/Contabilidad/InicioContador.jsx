@@ -240,7 +240,7 @@ export default function InicioContador({ usuario }) {
               >
                 <div>
                   <div className="font-bold text-xs text-slate-800">{b.NombreBanco}</div>
-                  <div className="font-mono text-[11px] text-slate-400">{b.NumeroCuenta}</div>
+                  <div className="text-[11px] text-slate-400">{b.NumeroCuenta}</div>
                 </div>
                 <div className="text-right">
                   <div className="font-extrabold text-sm text-slate-800">

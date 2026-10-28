@@ -498,7 +498,7 @@ export default function GestionCuentasPagar({ usuario }) {
                       <div className="font-bold text-slate-800 text-xs">{c.NombreProveedor}</div>
                       <div className="text-[11px] text-slate-400">{c.Ciudad || "Bolivia"}</div>
                     </td>
-                    <td className="py-3 px-4 font-mono font-semibold text-xs text-[#20A7DB]">
+                    <td className="py-3 px-4 font-semibold text-xs text-[#20A7DB]">
                       {c.NumeroFactura}
                     </td>
                     <td className="py-3 px-4 text-xs text-slate-700 max-w-xs truncate" title={c.Concepto}>
@@ -639,7 +639,7 @@ export default function GestionCuentasPagar({ usuario }) {
                   value={formFactura.numero_factura}
                   onChange={(e) => setFormFactura({ ...formFactura, numero_factura: e.target.value })}
                   placeholder="Ej: FAC-8492"
-                  className="font-mono text-xs h-9"
+                  className="text-xs h-9"
                 />
               </div>
 
@@ -808,7 +808,7 @@ export default function GestionCuentasPagar({ usuario }) {
                   value={formPago.numero_cheque_transferencia}
                   onChange={(e) => setFormPago({ ...formPago, numero_cheque_transferencia: e.target.value })}
                   placeholder="Ej: TRF-9120"
-                  className="text-xs font-mono h-9"
+                  className="text-xs h-9"
                 />
               </div>
 
@@ -897,7 +897,7 @@ export default function GestionCuentasPagar({ usuario }) {
                   value={formDev.numero_nota_credito}
                   onChange={(e) => setFormDev({ ...formDev, numero_nota_credito: e.target.value })}
                   placeholder="Ej: NC-0045"
-                  className="font-mono text-xs h-9"
+                  className="text-xs h-9"
                 />
               </div>
             </div>
@@ -984,7 +984,7 @@ export default function GestionCuentasPagar({ usuario }) {
                         detalleCuenta.Pagos.map((p) => (
                           <tr key={p.IdPago}>
                             <td className="py-2.5 px-3">{new Date(p.FechaPago).toLocaleDateString("es-BO")}</td>
-                            <td className="py-2.5 px-3 font-mono">{p.NumeroChequeTransferencia || "-"}</td>
+                            <td className="py-2.5 px-3 ">{p.NumeroChequeTransferencia || "-"}</td>
                             <td className="py-2.5 px-3">{p.MetodoPago}</td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Bs. {Number(p.MontoPago || 0).toFixed(2)}

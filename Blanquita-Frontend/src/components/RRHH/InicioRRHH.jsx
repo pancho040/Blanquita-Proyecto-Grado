@@ -109,7 +109,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Personal Activo</span>
               <Users className="h-4 w-4 text-[#20A7DB]" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-slate-900 ">
               {resumen?.TotalEmpleadosActivos || 0}
             </div>
             <p className="text-[10px] text-slate-400">Colaboradores</p>
@@ -122,7 +122,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Turnos Planta</span>
               <Clock className="h-4 w-4 text-emerald-600" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-slate-900 ">
               {resumen?.TotalTurnosConfigurados || 4}
             </div>
             <p className="text-[10px] text-slate-400">Horarios activos</p>
@@ -135,7 +135,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Presentes Hoy</span>
               <CheckCircle2 className="h-4 w-4 text-sky-600" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-sky-700 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-sky-700 ">
               {resumen?.AsistenciasHoy || 0}
             </div>
             <p className="text-[10px] text-slate-400">Marcaciones efectivas</p>
@@ -148,7 +148,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Faltas Hoy</span>
               <AlertTriangle className="h-4 w-4 text-amber-500" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-amber-600 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-amber-600 ">
               {resumen?.FaltasHoy || 0}
             </div>
             <p className="text-[10px] text-slate-400">Sin registro</p>
@@ -161,7 +161,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Masa Salarial</span>
               <DollarSign className="h-4 w-4 text-emerald-600" />
             </div>
-            <div className="text-lg font-black text-emerald-700 font-mono truncate">
+            <div className="text-lg font-black text-emerald-700 truncate">
               Bs. {Number(resumen?.MasaSalarialMensual || 0).toLocaleString("es-BO", { minimumFractionDigits: 0 })}
             </div>
             <p className="text-[10px] text-slate-400">Presupuesto mensual</p>
@@ -174,7 +174,7 @@ export default function InicioRRHH({ usuario }) {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Biométrico</span>
               <Fingerprint className="h-4 w-4 text-purple-600" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-purple-700 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-purple-700 ">
               NG-ECO
             </div>
             <p className="text-[10px] text-emerald-600 font-semibold">En Línea / USB</p>

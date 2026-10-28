@@ -143,7 +143,7 @@ export default function ConfiguracionLaboral() {
                 name="ToleranciaAtrasoMinutos"
                 value={formData.ToleranciaAtrasoMinutos}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
               <span className="text-[11px] text-slate-400">
                 Marcaciones dentro de este margen no computan como atraso.
@@ -160,7 +160,7 @@ export default function ConfiguracionLaboral() {
                 name="HorasMesLaboral"
                 value={formData.HorasMesLaboral}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
               <span className="text-[11px] text-slate-400">
                 Estándar legal boliviano: 240 horas mensuales (8 hrs/día).
@@ -190,7 +190,7 @@ export default function ConfiguracionLaboral() {
                 name="FactorRecargoHorasExtras"
                 value={formData.FactorRecargoHorasExtras}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
               <span className="text-[11px] text-slate-400">
                 2.0 equivale al 100% de recargo según la LGT.
@@ -208,7 +208,7 @@ export default function ConfiguracionLaboral() {
                 name="PorcentajeGestoraAFP"
                 value={formData.PorcentajeGestoraAFP}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
               <span className="text-[11px] text-slate-400">
                 Porcentaje obligatorio de ley (12.71%).
@@ -226,7 +226,7 @@ export default function ConfiguracionLaboral() {
                 name="SueldoMinimoNacional"
                 value={formData.SueldoMinimoNacional}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
               <span className="text-[11px] text-slate-400">
                 Base de cálculo para bonos de antigüedad.
@@ -265,7 +265,7 @@ export default function ConfiguracionLaboral() {
                 name="NIT"
                 value={formData.NIT}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs font-mono"
+                className="mt-1 h-9 text-xs "
               />
             </div>
 

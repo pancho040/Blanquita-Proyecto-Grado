@@ -121,7 +121,7 @@ export default function GestionEmpleados() {
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-right">
             <span className="text-[10px] text-slate-400 block font-semibold uppercase">Masa Salarial</span>
-            <strong className="text-base font-bold text-emerald-700 font-mono">
+            <strong className="text-base font-bold text-emerald-700 ">
               Bs. {masaSalarial.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
             </strong>
           </div>
@@ -206,17 +206,12 @@ export default function GestionEmpleados() {
                     >
                       {/* Empleado */}
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#20A7DB] font-bold text-xs shrink-0">
-                            {emp.PrimerNombre?.[0]}{emp.ApellidoPaterno?.[0]}
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900 text-sm">{emp.NombreCompleto}</p>
-                            <span className="text-[11px] text-slate-400 font-mono">
+                        <div>
+                            <p className="font-semibold text-slate-900 text-sm">{emp.NombreCompleto}</p>
+                            <span className="text-xs text-slate-500">
                               CI: {emp.Ci} {emp.Celular ? `• Cel: ${emp.Celular}` : ""}
                             </span>
                           </div>
-                        </div>
                       </td>
 
                       {/* Área */}
@@ -240,7 +235,7 @@ export default function GestionEmpleados() {
                       </td>
 
                       {/* Sueldo Básico */}
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 text-sm">
+                      <td className="px-4 py-3.5 text-right font-bold text-slate-900 text-sm">
                         Bs. {Number(emp.SueldoBasico || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
                       </td>
 
@@ -248,7 +243,7 @@ export default function GestionEmpleados() {
                       <td className="px-4 py-3.5">
                         <div className="text-slate-700">
                           <p className="font-medium text-xs">{emp.Banco || "Banco Unión"}</p>
-                          <span className="text-[11px] font-mono text-slate-400">
+                          <span className="text-[11px] text-slate-400">
                             {emp.CuentaBancaria || "Sin registrar"}
                           </span>
                         </div>

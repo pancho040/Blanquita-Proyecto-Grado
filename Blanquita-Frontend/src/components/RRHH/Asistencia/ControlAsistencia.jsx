@@ -415,7 +415,7 @@ export default function ControlAsistencia() {
                       key={a.IdAsistenciaDiaria}
                       className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
                     >
-                      <td className="py-3 px-4 font-mono font-medium text-slate-700 dark:text-slate-300">
+                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300">
                         {a.Fecha}
                       </td>
 
@@ -423,7 +423,7 @@ export default function ControlAsistencia() {
                         <div className="font-semibold text-slate-800 dark:text-slate-100">
                           {a.PrimerNombre} {a.ApellidoPaterno}
                         </div>
-                        <div className="text-[11px] text-slate-400 font-mono">
+                        <div className="text-[11px] text-slate-400 ">
                           CI: {a.CI || a.IdUsuario}
                         </div>
                       </td>
@@ -443,7 +443,7 @@ export default function ControlAsistencia() {
                             <span className="font-semibold text-slate-700 dark:text-slate-200">
                               {a.NombreTurno}
                             </span>
-                            <span className="block text-[11px] text-slate-400 font-mono">
+                            <span className="block text-[11px] text-slate-400 ">
                               {a.TurnoHoraEntrada ? String(a.TurnoHoraEntrada).substring(0, 5) : "--:--"} - {a.TurnoHoraSalida ? String(a.TurnoHoraSalida).substring(0, 5) : "--:--"}
                             </span>
                           </div>
@@ -452,7 +452,7 @@ export default function ControlAsistencia() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 font-mono">
+                      <td className="py-3 px-4 ">
                         {a.HoraEntrada ? (
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
                             tieneAtraso ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "text-slate-700 dark:text-slate-300"
@@ -464,7 +464,7 @@ export default function ControlAsistencia() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 font-mono">
+                      <td className="py-3 px-4 ">
                         {a.HoraSalida ? (
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
                             tieneHE ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "text-slate-700 dark:text-slate-300"
@@ -476,7 +476,7 @@ export default function ControlAsistencia() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-center font-mono">
+                      <td className="py-3 px-4 text-center ">
                         {tieneAtraso ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                             +{a.MinutosAtraso} min
@@ -486,7 +486,7 @@ export default function ControlAsistencia() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-center font-mono">
+                      <td className="py-3 px-4 text-center ">
                         {tieneHE ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
                             +{Number(a.HorasExtras).toFixed(1)} h
