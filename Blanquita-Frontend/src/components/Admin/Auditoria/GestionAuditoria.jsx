@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { ObtenerLogsAuditoria, ObtenerDetalleAuditoria } from "@/services/Admin/AuditService";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import ModuloAdminNav from "@/components/Admin/Common/ModuloAdminNav";
 
 const ACCIONES_COLOR = {
   CREACION: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -60,6 +61,28 @@ export default function GestionAuditoria() {
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
   const [logSeleccionado, setLogSeleccionado] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [mostrarJsonTecnico, setMostrarJsonTecnico] = useState(false);
+
+  const calcularDiferencias = (anteriores, nuevos) => {
+    if (!anteriores && !nuevos) return [];
+    const ant = anteriores && typeof anteriores === "object" ? anteriores : {};
+    const nue = nuevos && typeof nuevos === "object" ? nuevos : {};
+    const todasLasClaves = Array.from(new Set([...Object.keys(ant), ...Object.keys(nue)]));
+
+    return todasLasClaves
+      .map((clave) => {
+        const valAnt = ant[clave];
+        const valNue = nue[clave];
+        const modificado = JSON.stringify(valAnt) !== JSON.stringify(valNue);
+        return {
+          campo: clave,
+          anterior: valAnt !== undefined ? (typeof valAnt === "object" ? JSON.stringify(valAnt) : String(valAnt)) : "—",
+          nuevo: valNue !== undefined ? (typeof valNue === "object" ? JSON.stringify(valNue) : String(valNue)) : "—",
+          modificado,
+        };
+      })
+      .filter((item) => item.modificado);
+  };
 
   const cargarLogs = async (silencioso = false) => {
     try {
@@ -98,6 +121,7 @@ export default function GestionAuditoria() {
 
   const handleVerDetalle = async (item) => {
     try {
+      setMostrarJsonTecnico(false);
       setCargandoDetalle(true);
       setModalDetalleAbierto(true);
       const detalle = await ObtenerDetalleAuditoria(item.IdAuditLog);
@@ -116,11 +140,12 @@ export default function GestionAuditoria() {
 
   return (
     <div className="space-y-6">
+      <ModuloAdminNav pestanaActiva="modificaciones" />
       {/* 1. CABECERA */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900">
-            Auditoría
+            Historial de Modificaciones y Acciones
           </h2>
         </div>
 
@@ -383,9 +408,9 @@ export default function GestionAuditoria() {
                 </div>
 
                 <div>
-                  <span className="text-slate-500 block font-medium">Dirección IP:</span>
+                  <span className="text-slate-500 block font-medium">Registro Afectado:</span>
                   <span className="font-mono font-medium text-slate-700 mt-0.5 block">
-                    {logSeleccionado.DireccionIp || "Red Local Segura"}
+                    {logSeleccionado.IdRegistroAfectado ? `#${logSeleccionado.IdRegistroAfectado}` : "N/A"}
                   </span>
                 </div>
               </div>
@@ -399,41 +424,108 @@ export default function GestionAuditoria() {
                 </p>
               </div>
 
-              {/* COMPARATIVO DE DATOS ANTERIORES VS NUEVOS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1.5">
-                    Estado Anterior de los Datos
+              {/* TABLA VISUAL DE MODIFICACIONES REALIZADAS */}
+              {(() => {
+                const diffs = calcularDiferencias(logSeleccionado.DatosAnteriores, logSeleccionado.DatosNuevos);
+                if (diffs.length > 0) {
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+                          Modificaciones Realizadas ({diffs.length} {diffs.length === 1 ? "campo modificado" : "campos modificados"})
+                        </span>
+                        <Badge variant="outline" className="text-[11px] font-semibold text-blue-700 border-blue-200 bg-blue-50">
+                          Acción: {logSeleccionado.Accion}
+                        </Badge>
+                      </div>
+
+                      <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase">
+                            <tr>
+                              <th className="py-2.5 px-3">Campo / Propiedad</th>
+                              <th className="py-2.5 px-3 bg-rose-50/60 text-rose-800">Valor Anterior</th>
+                              <th className="py-2.5 px-3 bg-emerald-50/60 text-emerald-800">Valor Modificado / Nuevo</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-mono">
+                            {diffs.map((d) => (
+                              <tr key={d.campo} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                  {d.campo}
+                                </td>
+                                <td className="py-2.5 px-3 text-rose-700 bg-rose-50/30">
+                                  <span className="inline-block line-through opacity-85 mr-1">{d.anterior}</span>
+                                </td>
+                                <td className="py-2.5 px-3 text-emerald-700 font-medium bg-emerald-50/30">
+                                  {d.nuevo}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* REGISTRO TÉCNICO JSON PLEGABLE */}
+              <div className="pt-1 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-600">
+                    Estructura técnica de datos
                   </span>
-                  <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-64 overflow-y-auto">
-                    {logSeleccionado.DatosAnteriores ? (
-                      <pre className="whitespace-pre-wrap">
-                        {JSON.stringify(logSeleccionado.DatosAnteriores, null, 2)}
-                      </pre>
-                    ) : (
-                      <span className="text-slate-500">
-                        Sin estado previo (Registro nuevo / Creación inicial)
-                      </span>
-                    )}
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMostrarJsonTecnico(!mostrarJsonTecnico)}
+                    className="h-7 text-[11px] text-slate-600 font-medium"
+                  >
+                    {mostrarJsonTecnico ? "Ocultar JSON" : "Ver Datos en Crudo (JSON)"}
+                  </Button>
                 </div>
 
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#20A7DB] block mb-1.5">
-                    Estado Posterior / Modificado
-                  </span>
-                  <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-64 overflow-y-auto">
-                    {logSeleccionado.DatosNuevos ? (
-                      <pre className="whitespace-pre-wrap">
-                        {JSON.stringify(logSeleccionado.DatosNuevos, null, 2)}
-                      </pre>
-                    ) : (
-                      <span className="text-slate-500">
-                        Sin datos posteriores (Registro eliminado)
+                {mostrarJsonTecnico && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1.5">
+                        Estado Anterior
                       </span>
-                    )}
+                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-56 overflow-y-auto">
+                        {logSeleccionado.DatosAnteriores ? (
+                          <pre className="whitespace-pre-wrap">
+                            {JSON.stringify(logSeleccionado.DatosAnteriores, null, 2)}
+                          </pre>
+                        ) : (
+                          <span className="text-slate-500">
+                            Sin estado previo (Registro nuevo / Creación inicial)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#20A7DB] block mb-1.5">
+                        Estado Posterior / Modificado
+                      </span>
+                      <div className="bg-slate-900 text-slate-100 rounded-xl p-3 font-mono text-[11px] max-h-56 overflow-y-auto">
+                        {logSeleccionado.DatosNuevos ? (
+                          <pre className="whitespace-pre-wrap">
+                            {JSON.stringify(logSeleccionado.DatosNuevos, null, 2)}
+                          </pre>
+                        ) : (
+                          <span className="text-slate-500">
+                            Sin datos posteriores (Registro eliminado)
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <DialogFooter className="border-t border-slate-100 pt-3">

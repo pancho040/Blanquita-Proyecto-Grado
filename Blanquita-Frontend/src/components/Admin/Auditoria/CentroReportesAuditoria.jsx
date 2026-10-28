@@ -24,6 +24,7 @@ import ReporteKpisGrid, { formatNumber } from "@/components/common/Reportes/Repo
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import { getReporteAuditoriaSeguridad } from "@/services/Reportes/reportesService";
+import ModuloAdminNav from "@/components/Admin/Common/ModuloAdminNav";
 
 export default function CentroReportesAuditoria() {
   const [loading, setLoading] = useState(false);
@@ -81,7 +82,7 @@ export default function CentroReportesAuditoria() {
       modulo_tabla: "Módulo / Tabla Afectada",
       accion: "Acción Ejecutada",
       id_registro: "ID Registro Afectado",
-      direccion_ip: "Dirección IP",
+
       detalle: "Glosa Técnica / Detalle",
     };
     exportarAExcelCSV("Reporte_Trazabilidad_Auditoria_Seguridad", columnas, reporteData.data);
@@ -96,10 +97,11 @@ export default function CentroReportesAuditoria() {
 
   return (
     <div className="space-y-6">
+      <ModuloAdminNav pestanaActiva="reportes" />
       {/* Membrete formal para impresión */}
       <ReporteHeaderFormal
-        titulo="Reporte de Trazabilidad, Auditoría y Seguridad de Operaciones"
-        subtitulo="Supervisión de Acceso, Transacciones Financieras y Registros de Modificación"
+        titulo="Reporte de Acciones y Trazabilidad de Auditoría"
+        subtitulo="Consolidado de eventos, modificaciones y operaciones ejecutadas por los usuarios"
         rangoFechas={
           fechaInicio && fechaFin
             ? `${fechaInicio} al ${fechaFin}`
@@ -248,7 +250,7 @@ export default function CentroReportesAuditoria() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
               <Input
-                placeholder="Usuario, glosa o IP..."
+                placeholder="Usuario, módulo o detalle..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="pl-8 text-sm h-9"
@@ -294,7 +296,7 @@ export default function CentroReportesAuditoria() {
                   <th className="py-3 px-3">Acción</th>
                   <th className="py-3 px-3">ID Registro</th>
                   <th className="py-3 px-3">Detalle de Operación</th>
-                  <th className="py-3 px-3">IP Origen</th>
+
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -334,13 +336,13 @@ export default function CentroReportesAuditoria() {
                     <td className="py-3 px-3 text-slate-700 max-w-sm truncate" title={item.detalle}>
                       {item.detalle}
                     </td>
-                    <td className="py-3 px-3 font-mono text-slate-500 text-[11px]">{item.direccion_ip || "127.0.0.1"}</td>
+
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={6} className="py-3 px-3 text-right">
+                  <td colSpan={5} className="py-3 px-3 text-right">
                     Total Eventos Auditados en el Período:
                   </td>
                   <td colSpan={2} className="py-3 px-3 font-bold font-mono text-slate-900">

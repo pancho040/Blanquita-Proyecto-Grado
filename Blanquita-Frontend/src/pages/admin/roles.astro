@@ -4,6 +4,6 @@ const usuario = Astro.locals.usuario;
 import GestionRoles from "@/components/Admin/Roles/GestionRoles";
 ---
 
-<Layout title="Roles | Papel Blanquita">
+<Layout title="Usuarios y Roles | Papel Blanquita">
   <GestionRoles client:only="react" usuario={usuario} />
 </Layout>
