@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import ReporteKpisGrid, { formatCurrency, formatNumber } from "@/components/common/Reportes/ReporteKpisGrid";
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import {
   getReporteAsistenciaPuntualidad,
@@ -52,6 +54,7 @@ export default function CentroReportesRRHH() {
   const [tabActiva, setTabActiva] = useState("asistencia");
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
+  const paginacion = usePaginacion(reporteData.data || [], 15);
 
   // Filtros Comunes
   const [busqueda, setBusqueda] = useState("");
@@ -465,8 +468,9 @@ export default function CentroReportesRRHH() {
                     <th className="py-3 px-3 text-center">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {reporteData.data.map((item, idx) => {
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => {
                     const atraso = Number(item.minutos_atraso || 0);
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
@@ -518,6 +522,23 @@ export default function CentroReportesRRHH() {
                     );
                   })}
                 </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="whitespace-nowrap">{item.fecha}</td>
+                      <td className="font-semibold">{item.empleado_nombre}</td>
+                      <td>{item.ci}</td>
+                      <td>{item.cargo}</td>
+                      <td>{item.turno}</td>
+                      <td className="text-center">{item.hora_real_entrada ? String(item.hora_real_entrada).slice(0, 5) : "--:--"}</td>
+                      <td className="text-center">{item.hora_real_salida ? String(item.hora_real_salida).slice(0, 5) : "--:--"}</td>
+                      <td className="text-center">{Number(item.minutos_atraso || 0) > 0 ? `${item.minutos_atraso} min` : "0 min"}</td>
+                      <td className="text-center">{Number(item.horas_extra || 0) > 0 ? `+${Number(item.horas_extra).toFixed(1)} hrs` : "0.0"}</td>
+                      <td className="text-center font-bold">{item.estado_asistencia}</td>
+                    </tr>
+                  ))}
+                </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
                     <td colSpan={7} className="py-3 px-3 text-right">
@@ -555,8 +576,9 @@ export default function CentroReportesRRHH() {
                     <th className="py-3 px-3 text-center">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {reporteData.data.map((item, idx) => (
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
                       <td className="py-3 px-3 text-slate-500">{item.ci}</td>
@@ -597,6 +619,25 @@ export default function CentroReportesRRHH() {
                     </tr>
                   ))}
                 </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="font-semibold">{item.empleado_nombre}</td>
+                      <td>{item.ci}</td>
+                      <td>{item.cargo}</td>
+                      <td className="text-right">{formatCurrency(item.sueldo_basico || 0)}</td>
+                      <td className="text-right">{formatCurrency(item.horas_extra_bs || 0)}</td>
+                      <td className="text-right">{formatCurrency(item.comisiones_bs || 0)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.total_ganado || 0)}</td>
+                      <td className="text-right">{formatCurrency(item.afp_bs || 0)}</td>
+                      <td className="text-right">{formatCurrency(item.anticipos_bs || 0)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.total_descuento || 0)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.liquido_pagable || 0)}</td>
+                      <td className="text-center font-bold">{item.aprobada ? "Aprobada" : "Borrador"}</td>
+                    </tr>
+                  ))}
+                </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
                     <td colSpan={3} className="py-3 px-3 text-right">
@@ -619,8 +660,25 @@ export default function CentroReportesRRHH() {
                 </tfoot>
               </table>
             )}
+            <PaginacionTabla {...paginacion} />
           </div>
         )}
+
+        {/* Firmas de Respaldo al Imprimir */}
+        <div className="hidden print:grid grid-cols-2 gap-12 text-center text-[10px] pt-14 pb-4">
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Jefe de Recursos Humanos
+            </div>
+            <span className="text-[9px] text-gray-600">Revisado y Verificado</span>
+          </div>
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Gerente General
+            </div>
+            <span className="text-[9px] text-gray-600">Shema Asociados S.R.L. - Aprobado</span>
+          </div>
+        </div>
       </div>
     </div>
   );

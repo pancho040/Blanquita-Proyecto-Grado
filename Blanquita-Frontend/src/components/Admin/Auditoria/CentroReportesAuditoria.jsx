@@ -22,12 +22,15 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import ReporteKpisGrid, { formatNumber } from "@/components/common/Reportes/ReporteKpisGrid";
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import { getReporteAuditoriaSeguridad } from "@/services/Reportes/reportesService";
 
 export default function CentroReportesAuditoria() {
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
+  const paginacion = usePaginacion(reporteData.data || [], 15);
 
   // Filtros
   const [fechaInicio, setFechaInicio] = useState("");
@@ -297,14 +300,15 @@ export default function CentroReportesAuditoria() {
 
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {reporteData.data.map((item, idx) => (
+              {/* Cuerpo pantalla con paginación */}
+              <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
+                {paginacion.itemsPaginados.map((item, idx) => (
                   <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-3 whitespace-nowrap">
                       <div className="font-medium text-slate-800">
                         {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "-"}
                       </div>
-                      <div className="text-[10px] text-slate-400 ">
+                      <div className="text-[10px] text-slate-400">
                         {item.fecha_hora ? new Date(item.fecha_hora).toLocaleTimeString("es-BO") : ""}
                       </div>
                     </td>
@@ -314,7 +318,7 @@ export default function CentroReportesAuditoria() {
                         {item.rol}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-medium text-slate-800 ">{item.modulo_tabla}</td>
+                    <td className="py-3 px-3 font-medium text-slate-800">{item.modulo_tabla}</td>
                     <td className="py-3 px-3 font-semibold text-sky-700">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -334,7 +338,22 @@ export default function CentroReportesAuditoria() {
                     <td className="py-3 px-3 text-slate-700 max-w-sm truncate" title={item.detalle}>
                       {item.detalle}
                     </td>
-
+                  </tr>
+                ))}
+              </tbody>
+              {/* Cuerpo impresión en papel con datos completos */}
+              <tbody className="hidden print:table-row-group text-black">
+                {(reporteData.data || []).map((item, idx) => (
+                  <tr key={`print-${item.id || idx}`}>
+                    <td className="whitespace-nowrap">
+                      {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") + " " + new Date(item.fecha_hora).toLocaleTimeString("es-BO") : "-"}
+                    </td>
+                    <td className="font-semibold">{item.usuario_nombre}</td>
+                    <td>{item.rol}</td>
+                    <td className="font-medium">{item.modulo_tabla}</td>
+                    <td className="font-bold">{item.accion}</td>
+                    <td>{item.id_registro}</td>
+                    <td>{item.detalle}</td>
                   </tr>
                 ))}
               </tbody>
@@ -349,8 +368,25 @@ export default function CentroReportesAuditoria() {
                 </tr>
               </tfoot>
             </table>
+            <PaginacionTabla {...paginacion} />
           </div>
         )}
+
+        {/* Firmas de Respaldo al Imprimir */}
+        <div className="hidden print:grid grid-cols-2 gap-12 text-center text-[10px] pt-14 pb-4">
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Auditor Interno de Sistemas
+            </div>
+            <span className="text-[9px] text-gray-600">Trazabilidad y Seguridad Informática</span>
+          </div>
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Gerente General
+            </div>
+            <span className="text-[9px] text-gray-600">Shema Asociados S.R.L. - Supervisado</span>
+          </div>
+        </div>
       </div>
     </div>
   );

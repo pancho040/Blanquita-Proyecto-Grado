@@ -185,3 +185,112 @@
 ::view-transition-new(root) {
     animation: none !important;
 }
+
+
+/* ==========================================================================
+   OPTIMIZACION PARA IMPRESION PROFESIONAL Y MINIMALISTA DE REPORTES
+   ========================================================================== */
+@media print {
+    @page {
+        size: landscape;
+        margin: 8mm 10mm 10mm 10mm;
+    }
+
+    /* Ocultar elementos de navegacion y controles en papel */
+    #shell-sidebar-wrapper,
+    #shell-navbar-wrapper,
+    nav,
+    aside,
+    header,
+    .no-print,
+    button,
+    select,
+    input,
+    [data-astro-prefetch],
+    .print\:hidden {
+        display: none !important;
+    }
+
+    /* Fondo blanco puro y texto negro de alto contraste */
+    html,
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 8.5pt !important;
+        line-height: 1.25 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    main {
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+
+    /* Tablas minimalistas ajustadas al 100% del ancho de hoja sin desbordar */
+    table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        table-layout: auto !important;
+        border-collapse: collapse !important;
+        font-size: 8pt !important;
+        margin: 6px 0 !important;
+    }
+
+    th,
+    td {
+        padding: 4px 6px !important;
+        border: 1px solid #94a3b8 !important;
+        color: #000000 !important;
+        background: transparent !important;
+        word-break: normal !important;
+    }
+
+    th {
+        background-color: #f1f5f9 !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        font-size: 7.5pt !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    thead {
+        display: table-header-group !important;
+    }
+
+    tfoot {
+        display: table-footer-group !important;
+    }
+
+    .overflow-x-auto,
+    .overflow-y-auto {
+        overflow: visible !important;
+    }
+
+    .shadow,
+    .shadow-sm,
+    .shadow-md,
+    .shadow-lg,
+    .shadow-xl {
+        box-shadow: none !important;
+    }
+
+    .rounded,
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl {
+        border-radius: 0 !important;
+    }
+}

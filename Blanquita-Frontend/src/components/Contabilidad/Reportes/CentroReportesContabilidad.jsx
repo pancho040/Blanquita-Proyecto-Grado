@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import ReporteKpisGrid, { formatCurrency, formatNumber } from "@/components/common/Reportes/ReporteKpisGrid";
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import {
   getReporteFlujoCaja,
@@ -41,6 +43,7 @@ export default function CentroReportesContabilidad() {
   const [tabActiva, setTabActiva] = useState("flujo_caja");
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
+  const paginacion = usePaginacion(reporteData.data || [], 15);
 
   // Filtros Comunes
   const [fechaInicio, setFechaInicio] = useState("");
@@ -496,38 +499,57 @@ export default function CentroReportesContabilidad() {
                     <th className="p-2.5 print:border print:border-black text-right font-black">Monto (Bs.)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:text-black">
-                  {reporteData.data.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
-                      <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">
-                        {idx + 1}
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="p-2 text-center font-bold text-slate-400">
+                        {paginacion.indiceInicio + idx}
                       </td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">
+                      <td className="p-2 whitespace-nowrap">
                         {new Date(item.fecha_hora).toLocaleDateString()} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </td>
-                      <td className="p-2 print:border print:border-black">
+                      <td className="p-2">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             item.tipo === "Ingreso"
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
                               : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                          } print:border print:border-black print:bg-white print:text-black`}
+                          }`}
                         >
                           {item.tipo}
                         </span>
                       </td>
-                      <td className="p-2 font-semibold print:border print:border-black">{item.categoria}</td>
-                      <td className="p-2 max-w-xs truncate print:border print:border-black">{item.glosa}</td>
-                      <td className="p-2 print:border print:border-black">{item.beneficiario}</td>
-                      <td className="p-2 text-[10px] print:border print:border-black">{item.referencia}</td>
-                      <td className="p-2 print:border print:border-black">{item.metodo_pago}</td>
+                      <td className="p-2 font-semibold">{item.categoria}</td>
+                      <td className="p-2 max-w-xs truncate">{item.glosa}</td>
+                      <td className="p-2">{item.beneficiario}</td>
+                      <td className="p-2 text-[10px]">{item.referencia}</td>
+                      <td className="p-2">{item.metodo_pago}</td>
                       <td
-                        className={`p-2 text-right font-bold whitespace-nowrap print:border print:border-black ${
+                        className={`p-2 text-right font-bold whitespace-nowrap ${
                           item.tipo === "Ingreso" ? "text-emerald-600" : "text-rose-600"
-                        } print:text-black`}
+                        }`}
                       >
                         {formatCurrency(item.monto)}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="text-center font-bold">{idx + 1}</td>
+                      <td className="whitespace-nowrap">
+                        {new Date(item.fecha_hora).toLocaleDateString()} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td>{item.tipo}</td>
+                      <td className="font-semibold">{item.categoria}</td>
+                      <td>{item.glosa}</td>
+                      <td>{item.beneficiario}</td>
+                      <td>{item.referencia}</td>
+                      <td>{item.metodo_pago}</td>
+                      <td className="text-right font-bold whitespace-nowrap">{formatCurrency(item.monto)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -563,17 +585,18 @@ export default function CentroReportesContabilidad() {
                     <th className="p-2.5 print:border print:border-black text-right font-black">Saldo Deudor</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:text-black">
-                  {reporteData.data.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
-                      <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
-                      <td className="p-2 font-bold print:border print:border-black">{item.nro_nota}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.cliente_nombre}</td>
-                      <td className="p-2 text-[10px] print:border print:border-black">{item.cliente_nit}</td>
-                      <td className="p-2 print:border print:border-black">{item.ciudad}</td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_emision}</td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_vencimiento || "-"}</td>
-                      <td className="p-2 text-center font-bold print:border print:border-black">
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="p-2 font-bold">{item.nro_nota}</td>
+                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.cliente_nombre}</td>
+                      <td className="p-2 text-[10px]">{item.cliente_nit}</td>
+                      <td className="p-2">{item.ciudad}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fecha_emision}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
+                      <td className="p-2 text-center font-bold">
                         {item.dias_mora > 0 ? (
                           <span className={item.dias_mora > 15 ? "text-rose-600 font-black" : "text-amber-600"}>
                             {item.dias_mora} d
@@ -582,7 +605,7 @@ export default function CentroReportesContabilidad() {
                           <span className="text-emerald-600">0 d</span>
                         )}
                       </td>
-                      <td className="p-2 text-center print:border print:border-black">
+                      <td className="p-2 text-center">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
                             item.urgencia === "VENCIDO"
@@ -592,14 +615,33 @@ export default function CentroReportesContabilidad() {
                               : item.urgencia === "CANCELADO"
                               ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                               : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          } print:border print:border-black print:bg-white print:text-black`}
+                          }`}
                         >
                           {item.urgencia}
                         </span>
                       </td>
-                      <td className="p-2 text-right print:border print:border-black">{formatCurrency(item.monto_total)}</td>
-                      <td className="p-2 text-right text-emerald-600 print:text-black print:border print:border-black">{formatCurrency(item.total_abonado)}</td>
-                      <td className="p-2 text-right font-black text-rose-600 print:text-black print:border print:border-black">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="p-2 text-right">{formatCurrency(item.monto_total)}</td>
+                      <td className="p-2 text-right text-emerald-600">{formatCurrency(item.total_abonado)}</td>
+                      <td className="p-2 text-right font-black text-rose-600">{formatCurrency(item.saldo_pendiente)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="text-center font-bold">{idx + 1}</td>
+                      <td className="font-bold">{item.nro_nota}</td>
+                      <td className="font-bold">{item.cliente_nombre}</td>
+                      <td>{item.cliente_nit}</td>
+                      <td>{item.ciudad}</td>
+                      <td className="whitespace-nowrap">{item.fecha_emision}</td>
+                      <td className="whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
+                      <td className="text-center font-bold">{item.dias_mora || 0} d</td>
+                      <td className="text-center font-bold">{item.urgencia}</td>
+                      <td className="text-right">{formatCurrency(item.monto_total)}</td>
+                      <td className="text-right">{formatCurrency(item.total_abonado)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -633,18 +675,19 @@ export default function CentroReportesContabilidad() {
                     <th className="p-2.5 print:border print:border-black text-right font-black">Saldo Pendiente</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:text-black">
-                  {reporteData.data.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
-                      <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.proveedor_nombre}</td>
-                      <td className="p-2 text-[10px] print:border print:border-black">{item.proveedor_nit}</td>
-                      <td className="p-2 print:border print:border-black">{item.nro_factura_o_nota}</td>
-                      <td className="p-2 max-w-xs truncate print:border print:border-black">{item.concepto}</td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_recepcion}</td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_vencimiento || "-"}</td>
-                      <td className="p-2 text-center font-bold print:border print:border-black">{item.dias_para_vencimiento} d</td>
-                      <td className="p-2 text-center print:border print:border-black">
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.proveedor_nombre}</td>
+                      <td className="p-2 text-[10px]">{item.proveedor_nit}</td>
+                      <td className="p-2">{item.nro_factura_o_nota}</td>
+                      <td className="p-2 max-w-xs truncate">{item.concepto}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fecha_recepcion}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
+                      <td className="p-2 text-center font-bold">{item.dias_para_vencimiento} d</td>
+                      <td className="p-2 text-center">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
                             item.urgencia === "VENCIDO"
@@ -652,14 +695,31 @@ export default function CentroReportesContabilidad() {
                               : item.urgencia === "CRÍTICO"
                               ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                               : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          } print:border print:border-black print:bg-white print:text-black`}
+                          }`}
                         >
                           {item.urgencia}
                         </span>
                       </td>
-                      <td className="p-2 text-right font-black text-rose-600 print:text-black print:border print:border-black">
+                      <td className="p-2 text-right font-black text-rose-600">
                         {formatCurrency(item.saldo_pendiente_bs)}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="text-center font-bold">{idx + 1}</td>
+                      <td className="font-bold">{item.proveedor_nombre}</td>
+                      <td>{item.proveedor_nit}</td>
+                      <td>{item.nro_factura_o_nota}</td>
+                      <td>{item.concepto}</td>
+                      <td className="whitespace-nowrap">{item.fecha_recepcion}</td>
+                      <td className="whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
+                      <td className="text-center font-bold">{item.dias_para_vencimiento} d</td>
+                      <td className="text-center font-bold">{item.urgencia}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente_bs)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -694,24 +754,43 @@ export default function CentroReportesContabilidad() {
                     <th className="p-2.5 print:border print:border-black text-right font-black">Saldo</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:text-black">
-                  {reporteData.data.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
-                      <td className="p-2 text-center font-bold text-slate-400 print:text-black print:border print:border-black">{idx + 1}</td>
-                      <td className="p-2 font-bold print:border print:border-black">{item.nro_nota}</td>
-                      <td className="p-2 whitespace-nowrap print:border print:border-black">{item.fecha_venta}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100 print:text-black print:border print:border-black">{item.cliente_nombre}</td>
-                      <td className="p-2 print:border print:border-black">{item.ciudad_destino}</td>
-                      <td className="p-2 print:border print:border-black">{item.chofer} ({item.placa})</td>
-                      <td className="p-2 print:border print:border-black">
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="p-2 font-bold">{item.nro_nota}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fecha_venta}</td>
+                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.cliente_nombre}</td>
+                      <td className="p-2">{item.ciudad_destino}</td>
+                      <td className="p-2">{item.chofer} ({item.placa})</td>
+                      <td className="p-2">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${item.condicion_venta === "Contado" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
                           {item.condicion_venta}
                         </span>
                       </td>
-                      <td className="p-2 text-right print:border print:border-black">{formatCurrency(item.total_bruto)}</td>
-                      <td className="p-2 text-right text-slate-500 print:border print:border-black">{formatCurrency(item.descuento)}</td>
-                      <td className="p-2 text-right font-bold text-slate-900 dark:text-white print:border print:border-black">{formatCurrency(item.importe_neto)}</td>
-                      <td className="p-2 text-right font-bold text-rose-600 print:text-black print:border print:border-black">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="p-2 text-right">{formatCurrency(item.total_bruto)}</td>
+                      <td className="p-2 text-right text-slate-500">{formatCurrency(item.descuento)}</td>
+                      <td className="p-2 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(item.importe_neto)}</td>
+                      <td className="p-2 text-right font-bold text-rose-600">{formatCurrency(item.saldo_pendiente)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="text-center font-bold">{idx + 1}</td>
+                      <td className="font-bold">{item.nro_nota}</td>
+                      <td className="whitespace-nowrap">{item.fecha_venta}</td>
+                      <td className="font-bold">{item.cliente_nombre}</td>
+                      <td>{item.ciudad_destino}</td>
+                      <td>{item.chofer} ({item.placa})</td>
+                      <td>{item.condicion_venta}</td>
+                      <td className="text-right">{formatCurrency(item.total_bruto)}</td>
+                      <td className="text-right">{formatCurrency(item.descuento)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.importe_neto)}</td>
+                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -726,6 +805,7 @@ export default function CentroReportesContabilidad() {
                 </tfoot>
               </table>
             )}
+            <PaginacionTabla {...paginacion} />
           </div>
         )}
 

@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import ReporteKpisGrid, { formatCurrency, formatNumber } from "@/components/common/Reportes/ReporteKpisGrid";
 import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderFormal";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import {
   getReporteDesempenoRutas,
@@ -38,6 +40,7 @@ export default function CentroReportesLogistica() {
   const [tabActiva, setTabActiva] = useState("desempeno_rutas");
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
+  const paginacion = usePaginacion(reporteData.data || [], 15);
 
   // Filtros Comunes
   const [fechaInicio, setFechaInicio] = useState("");
@@ -436,12 +439,13 @@ export default function CentroReportesLogistica() {
                     <th className="py-3 px-3 text-right">Distancia</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {reporteData.data.map((item, idx) => {
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => {
                     const efectividad = Number(item.porcentaje_efectividad || 0);
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-3 font-semibold text-sky-700 ">
+                        <td className="py-3 px-3 font-semibold text-sky-700">
                           {`DSP-${item.id}`}
                         </td>
                         <td className="py-3 px-3 font-medium text-slate-900">{item.ruta_nombre}</td>
@@ -462,7 +466,7 @@ export default function CentroReportesLogistica() {
                             {item.estado_asignacion}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-center ">
+                        <td className="py-3 px-3 text-center">
                           <span className="font-semibold text-emerald-700">{item.paradas_entregadas || 0}</span> /{" "}
                           <span>{item.paradas_totales || 0}</span>
                         </td>
@@ -486,12 +490,28 @@ export default function CentroReportesLogistica() {
                             {formatCurrency(item.recaudacion_qr || 0)}
                           </div>
                         </td>
-                        <td className="py-3 px-3 text-right text-slate-600 ">
+                        <td className="py-3 px-3 text-right text-slate-600">
                           {Number(item.km_recorridos || 0).toFixed(1)} km
                         </td>
                       </tr>
                     );
                   })}
+                </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="font-semibold">{`DSP-${item.id}`}</td>
+                      <td className="font-medium">{item.ruta_nombre}</td>
+                      <td className="whitespace-nowrap">{item.fecha}</td>
+                      <td>{item.chofer_nombre || "Sin Chofer"}</td>
+                      <td className="text-center font-bold">{item.estado_asignacion}</td>
+                      <td className="text-center font-bold">{item.paradas_entregadas || 0} / {item.paradas_totales || 0}</td>
+                      <td className="text-right font-bold">{Number(item.porcentaje_efectividad || 0).toFixed(1)}%</td>
+                      <td className="text-right font-bold">{formatCurrency(item.total_recaudado || 0)}</td>
+                      <td className="text-right">{Number(item.km_recorridos || 0).toFixed(1)} km</td>
+                    </tr>
+                  ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
@@ -531,10 +551,11 @@ export default function CentroReportesLogistica() {
                     <th className="py-3 px-3 text-right">Compras Históricas</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {reporteData.data.map((item, idx) => (
+                {/* Cuerpo pantalla con paginación */}
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
+                  {paginacion.itemsPaginados.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-sky-700 ">
+                      <td className="py-3 px-3 font-semibold text-sky-700">
                         {`CLI-${item.id}`}
                       </td>
                       <td className="py-3 px-3 font-medium text-slate-900">{item.razon_social}</td>
@@ -568,6 +589,23 @@ export default function CentroReportesLogistica() {
                     </tr>
                   ))}
                 </tbody>
+                {/* Cuerpo impresión en papel con datos completos */}
+                <tbody className="hidden print:table-row-group text-black">
+                  {(reporteData.data || []).map((item, idx) => (
+                    <tr key={`print-${item.id || idx}`}>
+                      <td className="font-semibold">{`CLI-${item.id}`}</td>
+                      <td className="font-bold">{item.razon_social}</td>
+                      <td>{item.nombre_comercial || "-"}</td>
+                      <td>{item.ciudad || "Sucre"}</td>
+                      <td>{item.telefono || "N/A"}</td>
+                      <td className="truncate max-w-xs">{item.direccion || "Sin dirección"}</td>
+                      <td className="text-center font-bold">{item.latitud && item.longitud ? "GPS OK" : "Sin GPS"}</td>
+                      <td className="text-center font-bold">{item.puntos_venta_count || 0}</td>
+                      <td className="text-right">{formatCurrency(item.limite_credito_bs || 0)}</td>
+                      <td className="text-right font-bold">{item.total_compras_historicas || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
                     <td colSpan={7} className="py-3 px-3 text-right">
@@ -583,8 +621,25 @@ export default function CentroReportesLogistica() {
                 </tfoot>
               </table>
             )}
+            <PaginacionTabla {...paginacion} />
           </div>
         )}
+
+        {/* Firmas de Respaldo al Imprimir */}
+        <div className="hidden print:grid grid-cols-2 gap-12 text-center text-[10px] pt-14 pb-4">
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Jefe de Logística y Despacho
+            </div>
+            <span className="text-[9px] text-gray-600">Control Operativo de Distribución</span>
+          </div>
+          <div>
+            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+              Gerente General
+            </div>
+            <span className="text-[9px] text-gray-600">Shema Asociados S.R.L. - Aprobado</span>
+          </div>
+        </div>
       </div>
     </div>
   );

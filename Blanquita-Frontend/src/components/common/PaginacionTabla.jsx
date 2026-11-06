@@ -51,7 +51,7 @@ export default function PaginacionTabla({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white border-t border-slate-200 text-xs text-slate-600 select-none">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white border-t border-slate-200 text-xs text-slate-600 select-none print:hidden">
       {/* Información de rango y selector de tamaño */}
       <div className="flex items-center gap-3">
         <span>
