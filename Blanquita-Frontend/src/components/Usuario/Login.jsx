@@ -76,13 +76,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-sky-50/60 via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-100 font-sans selection:bg-[#20A7DB]/20 selection:text-[#188cba] relative overflow-hidden">
+      {/* Halos decorativos de fondo con el celeste corporativo de Blanquita */}
+      <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#20A7DB]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#20A7DB]/10 rounded-full blur-3xl pointer-events-none" />
+
       {/* Contenedor Central */}
-      <div className="w-full max-w-[390px] flex flex-col gap-6 animate-in fade-in duration-300">
+      <div className="w-full max-w-[390px] flex flex-col gap-6 animate-in fade-in duration-300 relative z-10">
         
         {/* Identidad de Marca y Logo Oficial */}
         <div className="flex flex-col items-center text-center">
-          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs mb-4">
+          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-sky-100 dark:border-slate-800 shadow-sm shadow-[#20A7DB]/10 mb-4 transition-transform hover:scale-105 duration-200">
             <img 
               src="/LogoBlanquita.webp" 
               alt="Papel Blanquita" 
@@ -99,14 +103,17 @@ export default function Login() {
         </div>
 
         {/* Tarjeta de Inicio de Sesión */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-lg shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+          {/* Línea superior con gradiente corporativo */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#20A7DB] via-[#52c2ed] to-[#20A7DB]" />
+
           <form onSubmit={handleIngresar} className="flex flex-col gap-4">
             
             {/* Campo CI */}
             <div className="space-y-1.5">
               <Label 
                 htmlFor="ci" 
-                className="text-[11px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400"
+                className="text-[11px] font-semibold tracking-wider uppercase text-slate-600 dark:text-slate-400"
               >
                 Carnet de Identidad (CI)
               </Label>
@@ -120,7 +127,7 @@ export default function Login() {
                 autoComplete="username"
                 placeholder="Ej. 10000001"
                 disabled={cargando}
-                className="h-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-1 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-300"
+                className="h-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-2 focus-visible:ring-[#20A7DB] focus-visible:border-[#20A7DB] transition-all"
               />
             </div>
 
@@ -129,7 +136,7 @@ export default function Login() {
               <div className="flex items-center justify-between">
                 <Label 
                   htmlFor="clave" 
-                  className="text-[11px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400"
+                  className="text-[11px] font-semibold tracking-wider uppercase text-slate-600 dark:text-slate-400"
                 >
                   Contraseña
                 </Label>
@@ -145,13 +152,13 @@ export default function Login() {
                   autoComplete="current-password"
                   disabled={cargando}
                   placeholder="••••••••••••"
-                  className="h-10 pr-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-1 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-300"
+                  className="h-10 pr-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-2 focus-visible:ring-[#20A7DB] focus-visible:border-[#20A7DB] transition-all"
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setMostrarClave(!mostrarClave)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#20A7DB] dark:hover:text-[#20A7DB] transition-colors"
                 >
                   {mostrarClave ? (
                     <EyeOff className="h-4 w-4" />
@@ -169,15 +176,15 @@ export default function Login() {
               </div>
             )}
 
-            {/* Botón de Ingreso */}
+            {/* Botón de Ingreso con el Celeste de la Interfaz (#20A7DB) */}
             <Button
               type="submit"
               disabled={cargando}
-              className="h-10 mt-2 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2"
+              className="h-10 mt-2 bg-[#20A7DB] hover:bg-[#188cba] active:bg-[#1579a1] text-white text-xs font-bold rounded-lg shadow-sm hover:shadow-md hover:shadow-[#20A7DB]/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {cargando ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
                   <span>Validando credenciales...</span>
                 </>
               ) : (
@@ -192,11 +199,11 @@ export default function Login() {
 
         {/* Footer Corporativo Sobrio */}
         <div className="flex flex-col items-center gap-1.5 text-center">
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+          <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+            <ShieldCheck className="h-3.5 w-3.5 text-[#20A7DB]" />
             <span>Shema Asociados S.R.L. · Acceso Restringido</span>
           </div>
-          <span className="text-[10px] text-slate-400/80">
+          <span className="text-[10px] text-slate-400">
             Versión 2.0 Enterprise
           </span>
         </div>
@@ -205,4 +212,3 @@ export default function Login() {
     </div>
   );
 }
-

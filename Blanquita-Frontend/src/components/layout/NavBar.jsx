@@ -11,14 +11,6 @@ import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin 
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
-import {
   Sheet,
   SheetTrigger,
   SheetContent,
@@ -366,39 +358,30 @@ export default function NavBar({
           {/* Separador vertical sutil */}
           <div className="hidden sm:block h-6 w-px bg-white/30" />
 
-          {/* Menú de Usuario / Perfil */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="Menú de usuario"
-              className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/15 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <div className="h-9 w-9 rounded-xl bg-white/20 border border-white/30 text-white font-bold flex items-center justify-center text-xs sm:text-sm shadow-2xs">
-                {iniciales || <UserIcon size={16} />}
-              </div>
-              <div className="hidden md:flex flex-col text-left">
-                <span className="text-xs font-semibold text-white leading-tight truncate max-w-[120px]">
-                  {nombreUsuario}
-                </span>
-                <span className="text-[11px] text-white/80 leading-none truncate max-w-[120px]">
-                  {esAdmin ? "Administrador" : rolTexto}
-                </span>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-2xl shadow-xl border border-slate-200 bg-white z-[90]">
-              <DropdownMenuLabel className="px-2.5 py-2">
-                <p className="text-xs font-semibold text-slate-900 truncate">{nombreUsuario}</p>
-                <p className="text-[11px] text-slate-500 font-normal truncate">{rolTexto}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="my-1 border-slate-100" />
-              <DropdownMenuItem
-                onClick={cerrarSesion}
-                className="flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl cursor-pointer transition-colors"
-              >
-                <LogOut size={15} />
-                <span>Cerrar sesión</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Perfil de Usuario Estático y botón directo de salida (máxima estabilidad sin dropdown) */}
+          <div className="flex items-center gap-2.5 p-1 select-none">
+            <div className="h-9 w-9 rounded-xl bg-white/20 border border-white/30 text-white font-bold flex items-center justify-center text-xs sm:text-sm shadow-2xs">
+              {iniciales || <UserIcon size={16} />}
+            </div>
+            <div className="hidden md:flex flex-col text-left">
+              <span className="text-xs font-semibold text-white leading-tight truncate max-w-[120px]">
+                {nombreUsuario}
+              </span>
+              <span className="text-[11px] text-white/80 leading-none truncate max-w-[120px]">
+                {esAdmin ? "Administrador" : rolTexto}
+              </span>
+            </div>
+          </div>
+
+          {/* Botón directo para cerrar sesión */}
+          <button
+            type="button"
+            onClick={cerrarSesion}
+            title="Cerrar sesión"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-red-500/80 text-white border border-white/20 hover:border-red-400 transition-colors cursor-pointer shadow-2xs shrink-0"
+          >
+            <LogOut size={16} />
+          </button>
 
         </div>
       </div>
