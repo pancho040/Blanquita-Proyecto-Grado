@@ -70,14 +70,14 @@ class TesoreriaService:
 
         diferencia = round(dto.SaldoReal - saldo_teorico, 2)
 
-        # RN-03: Conciliación Obligatoria de Cierre de Caja
+        # Conciliación de cierre de caja
         # Si existe descuadre entre saldo teórico y físico, requerir autorización expresa o justificación del Contador
         if abs(diferencia) > 0.05 and not getattr(dto, "AutorizadoPorContador", False):
             justificacion = getattr(dto, "JustificativoDiferencia", None) or dto.Observacion
             if not justificacion or len(justificacion.strip()) < 8:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"RN-03: Descuadre detectado de Bs. {diferencia:.2f} (Teórico: Bs. {saldo_teorico:.2f} vs Real: Bs. {dto.SaldoReal:.2f}). Se requiere autorización expresa o justificación formal del Contador para cerrar la caja."
+                    detail=f"Descuadre detectado de Bs. {diferencia:.2f} (Teórico: Bs. {saldo_teorico:.2f} vs Real: Bs. {dto.SaldoReal:.2f}). Se requiere autorización expresa o justificación formal del Contador para cerrar la caja."
                 )
 
         cierre = self.repo.CerrarCaja(
@@ -97,7 +97,7 @@ class TesoreriaService:
 
         cierre["DesgloseCortes"] = self.repo.ObtenerDesgloseCortes(id_apertura)
 
-        # HU-16: Registrar en AuditLog el cierre de caja formal
+        # Registrar en auditoría el cierre de caja formal
         try:
             from sqlalchemy import text
             sql_audit = '''
@@ -116,7 +116,7 @@ class TesoreriaService:
         return cierre
 
     def ObtenerResumenGerencial(self, id_apertura: int) -> dict:
-        """HU-10: Genera resumen ejecutivo de liquidez diaria para Gerencia General."""
+        """Genera resumen ejecutivo de liquidez diaria para Gerencia General."""
         totales = self.repo.ObtenerTotalesCaja(id_apertura)
         movimientos = self.repo.ListarMovimientosCaja(id_apertura=id_apertura)
         
@@ -172,7 +172,7 @@ class TesoreriaService:
         return mov
 
     def AnularMovimientoCaja(self, id_movimiento: int, id_usuario: int | None, motivo: str = "") -> dict:
-        # RN-04: Inmutabilidad contable (Anulación lógica sin borrado físico)
+        # Anulación lógica sin borrado físico
         mov = self.repo.ObtenerMovimientoCajaPorId(id_movimiento)
         if not mov:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movimiento de caja no encontrado")
@@ -188,13 +188,13 @@ class TesoreriaService:
             delta = -monto if tipo == "Egreso" else monto
             self.repo.ActualizarSaldoCuentaBancaria(mov["IdCuentaBancaria"], delta)
 
-        # RF-03 / HU-16: Registrar en historial de auditoría
+        # Registrar en historial de auditoría
         self.repo.RegistrarAuditLog(
             id_usuario=id_usuario,
             accion="ANULACION",
             tabla="MovimientoCaja",
             id_registro=str(id_movimiento),
-            detalle=f"RN-04: Anulación de movimiento contable ID {id_movimiento} ({mov.get('TipoMovimiento')}, Bs. {mov.get('Monto')}). Motivo: {motivo or 'Ajuste contable'}"
+            detalle=f"Anulación de movimiento contable ID {id_movimiento} ({mov.get('TipoMovimiento')}, Bs. {mov.get('Monto')}). Motivo: {motivo or 'Ajuste contable'}"
         )
 
         return anulado

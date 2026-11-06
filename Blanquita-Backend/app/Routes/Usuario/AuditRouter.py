@@ -10,7 +10,7 @@ from app.Constants.Roles import ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_SUPERVISO
 
 AuditRouter = APIRouter(prefix="/admin/auditoria", tags=["Administración - Auditoría Transaccional"])
 
-# Roles autorizados para consultar logs de auditoría (HU-16, HU-37)
+# Roles autorizados para consultar logs de auditoría
 PERMISOS_AUDITORIA = [ROL_GERENTE_GENERAL, ROL_CONTADOR]
 
 @AuditRouter.get("", response_model=dict)

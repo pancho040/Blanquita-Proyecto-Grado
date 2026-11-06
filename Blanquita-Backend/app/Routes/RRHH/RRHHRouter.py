@@ -49,6 +49,11 @@ def ListarEmpleados(
     service = RRHHService(db)
     return service.ListarEmpleados(busqueda, area, activo)
 
+@RRHHRouter.get("/empleados/simple")
+def ListarEmpleadosSimple(area: str = "", db: Session = Depends(get_db)):
+    service = RRHHService(db)
+    return service.ListarEmpleadosSimple(area)
+
 @RRHHRouter.get("/empleados/{id_usuario}")
 def ObtenerEmpleado(id_usuario: int, db: Session = Depends(get_db)):
     service = RRHHService(db)
@@ -123,8 +128,8 @@ def DesasignarTurno(id_usuario: int, fecha: date, db: Session = Depends(get_db))
 # =============================================================================
 @RRHHRouter.get("/asistencia")
 def ListarAsistencias(
-    fecha_inicio: date,
-    fecha_fin: date,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
     id_usuario: Optional[int] = None,
     area: str = "",
     db: Session = Depends(get_db)

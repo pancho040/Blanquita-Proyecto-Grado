@@ -10,6 +10,12 @@ export async function ObtenerCuentasBancarias(soloActivas = true) {
   return await res.json();
 }
 
+export async function ObtenerCuentasBancariasSimple() {
+  const res = await fetchConCache("/api/tesoreria/bancos/simple", {}, 60000);
+  if (!res.ok) await manejarErrorBackend(res);
+  return await res.json();
+}
+
 export async function CrearCuentaBancaria(datos) {
   const res = await fetch("/api/tesoreria/bancos", {
     method: "POST",

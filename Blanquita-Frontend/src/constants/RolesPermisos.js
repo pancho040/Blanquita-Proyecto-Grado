@@ -1,6 +1,6 @@
 /**
  * Configuración de Roles y Permisos del Sistema Blanquita
- * Inspirado en la arquitectura desacoplada y escalable de front-focus.
+ * Definición centralizada de roles y permisos del sistema.
  */
 
 export const MODULOS_SISTEMA = [

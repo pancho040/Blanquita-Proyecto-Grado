@@ -22,14 +22,28 @@ const OPCIONES_COOKIE = {
 };
 
 const refrescosEnCurso = new Map();
+const tokenVerificationCache = new Map();
 
 export async function verificarAccessToken(token) {
+  const ahora = Date.now();
+  const cached = tokenVerificationCache.get(token);
+  if (cached && ahora < cached.exp) {
+    return cached.payload;
+  }
+
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: ISSUER,
     audience: AUDIENCE,
     algorithms: ALGORITMOS,
     clockTolerance: 60
   });
+
+  const expTokenMs = (payload.exp ? payload.exp * 1000 : ahora + 60000);
+  const cacheExp = Math.min(expTokenMs - 10000, ahora + 60000);
+  if (cacheExp > ahora) {
+    if (tokenVerificationCache.size > 200) tokenVerificationCache.clear();
+    tokenVerificationCache.set(token, { payload, exp: cacheExp });
+  }
 
   return payload;
 }
@@ -90,6 +104,15 @@ export async function obtenerAccessTokenValido(cookies) {
 }
 
 export async function resolverSesion(cookies) {
+  const token = cookies.get("token")?.value;
+  if (token) {
+    try {
+      const payload = await verificarAccessToken(token);
+      const sesion = SesionUsuario(payload);
+      if (sesion.IdUsuario && sesion.IdRol) return sesion;
+    } catch {}
+  }
+
   const accessToken = await obtenerAccessTokenValido(cookies);
   if (!accessToken) return null;
 

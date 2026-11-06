@@ -51,11 +51,11 @@ const ESTADOS = [
 ];
 
 export default function ControlAsistencia() {
-  // Rango de fechas por defecto: últimos 7 días
+  // Rango de fechas por defecto: desde el primer día del mes actual para ver historial reciente
   const [fechaInicio, setFechaInicio] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return d.toISOString().split("T")[0];
+    const primerDia = new Date(d.getFullYear(), d.getMonth(), 1);
+    return primerDia.toISOString().split("T")[0];
   });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split("T")[0]);
 
@@ -79,6 +79,8 @@ export default function ControlAsistencia() {
           setAsistencias(enCache);
           return;
         }
+      } else {
+        cache.invalidate(cacheKey);
       }
       setCargando(true);
       const data = await ObtenerAsistencias(fechaInicio, fechaFin, null, areaFiltro);
@@ -107,8 +109,8 @@ export default function ControlAsistencia() {
       // Filtro de búsqueda (nombre, CI, cargo)
       if (busqueda.trim()) {
         const q = busqueda.toLowerCase();
-        const nombreCompleto = `${item.PrimerNombre || ""} ${item.ApellidoPaterno || ""} ${item.ApellidoMaterno || ""}`.toLowerCase();
-        const ci = String(item.CI || "").toLowerCase();
+        const nombreCompleto = (item.NombreCompleto || `${item.PrimerNombre || ""} ${item.ApellidoPaterno || ""}`).toLowerCase();
+        const ci = String(item.Ci || item.CI || "").toLowerCase();
         const cargo = String(item.Cargo || "").toLowerCase();
         if (!nombreCompleto.includes(q) && !ci.includes(q) && !cargo.includes(q)) {
           return false;
@@ -365,7 +367,7 @@ export default function ControlAsistencia() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={cargarDatos}
+            onClick={() => cargarDatos(true)}
             disabled={cargando}
             className="h-8 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900"
           >
@@ -421,10 +423,10 @@ export default function ControlAsistencia() {
 
                       <td className="py-3 px-4">
                         <div className="font-semibold text-slate-800 dark:text-slate-100">
-                          {a.PrimerNombre} {a.ApellidoPaterno}
+                          {a.NombreCompleto || `${a.PrimerNombre || ""} ${a.ApellidoPaterno || ""}`.trim() || "Personal"}
                         </div>
-                        <div className="text-[11px] text-slate-400 ">
-                          CI: {a.CI || a.IdUsuario}
+                        <div className="text-[11px] text-slate-400">
+                          CI: {a.Ci || a.CI || a.IdUsuario}
                         </div>
                       </td>
 
@@ -489,7 +491,7 @@ export default function ControlAsistencia() {
                       <td className="py-3 px-4 text-center ">
                         {tieneHE ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                            +{Number(a.HorasExtras).toFixed(1)} h
+                            +{Number(a.HorasExtraTrabajadas || a.HorasExtras || 0).toFixed(1)} h
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-600">0</span>
@@ -515,7 +517,7 @@ export default function ControlAsistencia() {
                       </td>
 
                       <td className="py-3 px-4 max-w-xs truncate text-[11px] text-slate-500 dark:text-slate-400" title={a.Justificacion || ""}>
-                        {a.Justificacion || <span className="text-slate-300 dark:text-slate-600 italic">Sin observaciones</span>}
+                        {a.Observacion || a.Justificacion || <span className="text-slate-300 dark:text-slate-600 italic">Sin observaciones</span>}
                       </td>
 
                       <td className="py-3 px-4 text-right">

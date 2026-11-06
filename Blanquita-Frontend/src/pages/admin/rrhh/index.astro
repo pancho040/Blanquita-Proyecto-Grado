@@ -1,3 +1,9 @@
 ---
-return Astro.redirect("/admin/rrhh/empleados");
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import InicioRRHH from "@/components/RRHH/InicioRRHH";
 ---
+
+<Layout title="Dashboard RRHH | Papelera Blanquita">
+  <InicioRRHH client:only="react" usuario={usuario} />
+</Layout>

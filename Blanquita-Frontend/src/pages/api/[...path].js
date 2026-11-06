@@ -35,12 +35,16 @@ export const ALL = async ({ request, params, cookies }) => {
   }
 
   const backendResponse = await fetch(targetUrl, init);
-  const data = await backendResponse.text();
 
-  return new Response(data, {
+  const responseHeaders = {
+    "Content-Type": backendResponse.headers.get("content-type") || "application/json"
+  };
+
+  const cacheControl = backendResponse.headers.get("cache-control");
+  if (cacheControl) responseHeaders["Cache-Control"] = cacheControl;
+
+  return new Response(backendResponse.body, {
     status: backendResponse.status,
-    headers: {
-      "Content-Type": backendResponse.headers.get("content-type") || "application/json"
-    }
+    headers: responseHeaders
   });
 };

@@ -255,7 +255,7 @@ class CuentasCobrarRepository:
         """
         return self.caller.LlamarFuncion(sql)
 
-    # --- RN-01: Verificación de Mora y Límite de Crédito ---
+    # Verificación de mora y límite de crédito
     def VerificarEstadoCreditoCliente(self, id_cliente: int, nuevo_monto: float = 0.0) -> dict:
         sql_cli = '''
             SELECT "IdCliente", "RazonSocial", "NombreComercial", "LimiteCreditoBs", "DiasCredito"
@@ -284,18 +284,18 @@ class CuentasCobrarRepository:
         saldo_deuda = float(res_mora.get("SaldoTotalDeuda", 0.0)) if res_mora else 0.0
         max_mora = int(res_mora.get("MaxDiasMora", 0)) if res_mora else 0
 
-        # RN-01: Bloqueo automático si cliente registra facturas vencidas con más de 15 días
+        # Bloqueo automático si cliente registra facturas vencidas con más de 15 días
         if max_mora > 15:
             return {
                 "Bloqueado": True,
-                "Motivo": f"Cliente bloqueado por mora: registra cuentas pendientes con {max_mora} días de vencimiento (> 15 días según RN-01).",
+                "Motivo": f"Cliente bloqueado por mora: registra cuentas pendientes con {max_mora} días de vencimiento (> 15 días).",
                 "MaxDiasMora": max_mora,
                 "SaldoDeuda": saldo_deuda,
                 "LimiteCredito": limite,
                 "DiasCredito": dias_credito
             }
 
-        # RN-01: Bloqueo si supera límite de crédito configurado
+        # Bloqueo si supera límite de crédito configurado
         if limite > 0 and (saldo_deuda + nuevo_monto) > limite:
             return {
                 "Bloqueado": True,

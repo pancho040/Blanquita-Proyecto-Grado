@@ -224,20 +224,26 @@ export default function GestionBancos({ usuario }) {
 
       {/* Resumen de Fondos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-[#20A7DB] to-[#1479a0] text-white p-5 rounded-2xl shadow-sm">
-          <span className="text-xs uppercase font-semibold text-white/80">Disponibilidad en Bolivianos (BOB)</span>
-          <div className="text-3xl font-extrabold mt-2">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] uppercase font-semibold tracking-wider">Disponibilidad en Bolivianos (BOB)</span>
+            <Landmark className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white mt-2">
             Bs. {totalBOB.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-xs text-white/80 mt-1 block">Consolidado en cuentas nacionales</span>
+          <span className="text-xs text-slate-400 mt-1 block">Consolidado en cuentas nacionales</span>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-5 rounded-2xl shadow-sm">
-          <span className="text-xs uppercase font-semibold text-white/80">Disponibilidad en Dólares (USD)</span>
-          <div className="text-3xl font-extrabold mt-2">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-[11px] uppercase font-semibold tracking-wider">Disponibilidad en Dólares (USD)</span>
+            <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white mt-2">
             $us. {totalUSD.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-xs text-white/80 mt-1 block">Cuentas en moneda extranjera</span>
+          <span className="text-xs text-slate-400 mt-1 block">Cuentas en moneda extranjera</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
@@ -609,3 +615,4 @@ export default function GestionBancos({ usuario }) {
     </div>
   );
 }
+

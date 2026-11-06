@@ -304,7 +304,7 @@ export default function GestionCuentasCobrar({ usuario }) {
       : `https://wa.me/?text=${mensaje}`;
 
     window.open(url, "_blank");
-    // HU-08: Registrar recordatorio de mora en el log de auditoría
+    // Registrar recordatorio de mora en el log de auditoría
     if (cuenta.IdCliente) {
       fetch(`/api/contabilidad/cxc/clientes/${cuenta.IdCliente}/recordatorio-mora`, {
         method: "POST",
@@ -388,11 +388,11 @@ export default function GestionCuentasCobrar({ usuario }) {
           </div>
         </div>
 
-        {/* Cartera Vencida (Alerta RN-01) */}
+        {/* Cartera Vencida */}
         <div className="bg-white p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5" /> Mora &gt; 15 Días (RN-01)
+              <ShieldAlert className="h-3.5 w-3.5" /> Mora &gt; 15 Días
             </span>
           </div>
           <div className="mt-2">
@@ -406,15 +406,15 @@ export default function GestionCuentasCobrar({ usuario }) {
         </div>
 
         {/* Total Abonos del Período */}
-        <div className="bg-gradient-to-br from-[#20A7DB] to-[#1281ab] text-white p-5 rounded-2xl shadow-sm flex flex-col justify-between">
-          <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
             Total Recuperado / Abonos
           </span>
           <div className="mt-2">
-            <div className="text-2xl font-extrabold">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
               Bs. {(resumen?.TotalAbonado || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
             </div>
-            <span className="text-xs text-white/80">Depositado en Banco Unión / BNB</span>
+            <span className="text-xs text-slate-400 mt-1 block">Depositado en Banco Unión / BNB</span>
           </div>
         </div>
       </div>
@@ -1086,3 +1086,4 @@ export default function GestionCuentasCobrar({ usuario }) {
     </div>
   );
 }
+

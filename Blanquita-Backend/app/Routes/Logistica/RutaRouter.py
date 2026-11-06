@@ -134,7 +134,7 @@ def cambiar_estado_repartidor(
     return RutaService(db).CambiarEstadoRepartidor(id_usuario, id_estado)
 
 # -------------------------------------------------------------
-# TELEMETRÍA Y RASTREO EN VIVO (HU-30, HU-33)
+# Telemetría y rastreo en vivo
 # -------------------------------------------------------------
 @RutaRouter.post("/telemetria/ping", response_model=dict)
 def registrar_telemetria(
@@ -178,7 +178,7 @@ def registrar_entrega_parada(
     usuario: dict = Depends(require_role([ROL_AGENTE_REPARTO, ROL_SUPERVISOR, ROL_GERENTE_GENERAL]))
 ):
     """
-    Registra la entrega de un pedido con georreferenciación GPS obligatoria (HU-31, HU-33).
+    Registra la entrega de un pedido con georreferenciación GPS obligatoria .
     """
     return RutaService(db).RegistrarEntregaParada(datos)
 
@@ -189,12 +189,12 @@ def registrar_cobro_parada(
     usuario: dict = Depends(require_role([ROL_AGENTE_REPARTO, ROL_SUPERVISOR, ROL_GERENTE_GENERAL]))
 ):
     """
-    Registra cobro en efectivo o digital con captura obligatoria de GPS (HU-32, HU-33).
+    Registra cobro en efectivo o digital con captura obligatoria de GPS .
     """
     return RutaService(db).RegistrarCobroParada(datos)
 
 # -------------------------------------------------------------
-# LIQUIDACIÓN Y CIERRE DE RUTA (HU-34)
+# Liquidación y cierre de ruta
 # -------------------------------------------------------------
 @RutaRouter.get("/asignaciones/{id_asignacion}/liquidacion", response_model=dict)
 def obtener_liquidacion_ruta(

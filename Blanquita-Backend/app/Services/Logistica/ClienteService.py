@@ -10,6 +10,9 @@ class ClienteService:
     def ListarClientes(self, busqueda: str = "", id_estado: int | None = None) -> list[dict]:
         return self.repo.ListarClientes(busqueda, id_estado)
 
+    def ListarClientesSimple(self) -> list[dict]:
+        return self.repo.ListarClientesSimple()
+
     def ObtenerClienteDetalle(self, id_cliente: int) -> dict:
         cliente = self.repo.ObtenerClientePorId(id_cliente)
         if not cliente:

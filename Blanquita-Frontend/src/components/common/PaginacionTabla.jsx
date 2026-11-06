@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-r
 
 /**
  * Componente de barra de paginación para tablas
- * Estándar visual y funcional idéntico a front-focus DataTable pagination.
+ * Componente de paginación de tablas de datos.
  */
 export default function PaginacionTabla({
   paginaActual,

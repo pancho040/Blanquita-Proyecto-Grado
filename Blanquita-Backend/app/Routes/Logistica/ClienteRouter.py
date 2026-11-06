@@ -13,7 +13,7 @@ from app.Models.Logistica.ClienteModel import (
 
 ClienteRouter = APIRouter(prefix="/logistica/clientes", tags=["Logística - Clientes"])
 
-# Roles permitidos para gestionar clientes: Supervisor, Gerente, Contador y Chofer en Campo (HU-29)
+# Roles permitidos para gestionar clientes: Supervisor, Gerente, Contador y Chofer en Campo
 PERMISOS_LOGISTICA = [ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO]
 
 @ClienteRouter.get("", response_model=list[ClienteResponse])
@@ -24,6 +24,14 @@ def listar_clientes(
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
     return ClienteService(db).ListarClientes(busqueda, id_estado)
+
+@ClienteRouter.get("/simple", response_model=list[dict])
+def listar_clientes_simple(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """Devuelve listado ligero de clientes para selectores rápidos sin sobrecarga."""
+    return ClienteService(db).ListarClientesSimple()
 
 @ClienteRouter.get("/puntos-venta/todos", response_model=list[dict])
 def listar_todos_puntos_venta(

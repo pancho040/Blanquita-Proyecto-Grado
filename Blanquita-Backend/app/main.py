@@ -47,6 +47,10 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.Auth.Limiter import limiter
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from app.Auth.Jwt import precargar_jwks
+from app.Config.supabase import engine
+from sqlalchemy import text
 
 
 
@@ -66,12 +70,26 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.state.limiter = limiter
 app.add_exception_handler(
     RateLimitExceeded,
     _rate_limit_exceeded_handler
 )
+
+@app.on_event("startup")
+def startup_event():
+    """Precarga JWKS y calienta el pool de conexiones a la base de datos."""
+    try:
+        precargar_jwks()
+    except Exception:
+        pass
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        print("[Startup] Error al calentar conexión de base de datos:", e)
 
 
 @app.get("/")

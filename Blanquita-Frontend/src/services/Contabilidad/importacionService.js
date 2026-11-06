@@ -1,4 +1,5 @@
 import { manejarErrorBackend } from "@/utils/validators";
+import { invalidarCache } from "@/lib/api-cache";
 
 function prepararOpciones(file) {
   if (file instanceof File) {
@@ -22,24 +23,32 @@ function prepararOpciones(file) {
 export async function ImportarFlujoCaja(file = null) {
   const res = await fetch("/api/contabilidad/importar/flujo-caja", prepararOpciones(file));
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
+  invalidarCache("/api/reportes/contabilidad");
   return await res.json();
 }
 
 export async function ImportarNotasVenta(file = null) {
   const res = await fetch("/api/contabilidad/importar/notas-venta", prepararOpciones(file));
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  invalidarCache("/api/reportes/contabilidad");
   return await res.json();
 }
 
 export async function ImportarCuentasCobrar(file = null) {
   const res = await fetch("/api/contabilidad/importar/cuentas-cobrar", prepararOpciones(file));
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  invalidarCache("/api/reportes/contabilidad");
   return await res.json();
 }
 
 export async function ImportarProveedores(file = null) {
   const res = await fetch("/api/contabilidad/importar/proveedores", prepararOpciones(file));
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxp");
+  invalidarCache("/api/reportes/contabilidad");
   return await res.json();
 }
 
@@ -48,5 +57,9 @@ export async function ImportarTodasLasTablas() {
     method: "POST",
   });
   if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
+  invalidarCache("/api/cxc");
+  invalidarCache("/api/cxp");
+  invalidarCache("/api/reportes/contabilidad");
   return await res.json();
 }

@@ -22,7 +22,7 @@ export async function ObtenerLogsAuditoria({
   if (busqueda) params.append("busqueda", busqueda);
 
   const url = `/api/admin/auditoria?${params.toString()}`;
-  const response = await fetchConCache(url, {}, 5000);
+  const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }

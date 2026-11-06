@@ -40,6 +40,25 @@ def listar_cuentas_bancarias(
             c["Titular"] = "Shema Asociados S.R.L."
     return cuentas
 
+@TesoreriaRouter.get("/bancos/simple")
+def listar_cuentas_bancarias_simple(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """Listado ligero de cuentas bancarias activas para selectores de pago y cobro."""
+    sql = """
+        SELECT 
+            "IdCuentaBancaria",
+            "NombreBanco",
+            "NumeroCuenta",
+            COALESCE("Moneda", 'BOB') as "Moneda",
+            COALESCE("SaldoActual", 0.00) as "SaldoActual"
+        FROM "CuentaBancariaEmpresa"
+        WHERE COALESCE("Activa", true) = true
+        ORDER BY "NombreBanco" ASC;
+    """
+    return TesoreriaService(db).repo.caller.LlamarFuncion(sql)
+
 @TesoreriaRouter.post("/bancos", response_model=CuentaBancariaResponse)
 def crear_cuenta_bancaria(
     dto: CuentaBancariaCrear,
@@ -247,7 +266,7 @@ def anular_movimiento_caja(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
 ):
-    """RN-04: Anula lógicamente un movimiento de caja con reversión bancaria y registro de auditoría."""
+    """Anula un movimiento de caja con reversión bancaria y registro de auditoría."""
     motivo = datos.get("motivo", "Anulación autorizada por administración")
     return TesoreriaService(db).AnularMovimientoCaja(id_movimiento, usuario["IdUsuario"], motivo)
 
@@ -257,8 +276,8 @@ def eliminar_movimiento_caja(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
 ):
-    """RN-04: Prohíbe la eliminación física y redirige a la anulación contable inmutable."""
-    return TesoreriaService(db).AnularMovimientoCaja(id_movimiento, usuario["IdUsuario"], "Eliminación convertida en anulación lógica según RN-04")
+    """Anulación lógica de movimiento contable."""
+    return TesoreriaService(db).AnularMovimientoCaja(id_movimiento, usuario["IdUsuario"], "Eliminación convertida en anulación lógica por ajuste contable")
 
 
 # ==========================================
@@ -413,26 +432,20 @@ def obtener_dashboard_kpis(
     usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
 ):
     repo = TesoreriaService(db).repo
-    # Totales bancarios
-    cuentas = repo.ListarCuentasBancarias()
-    total_bob = sum(float(c.get("SaldoActual", 0)) for c in cuentas if c.get("Moneda") == "BOB")
-    total_usd = sum(float(c.get("SaldoActual", 0)) for c in cuentas if c.get("Moneda") == "USD")
-
-    # Deuda CxP
-    sql_cxp = 'SELECT COALESCE(SUM("SaldoPendiente"), 0) as "TotalCxP" FROM "CuentaPagarProveedor" WHERE "SaldoPendiente" > 0;'
-    cxp_res = repo.caller.LlamarUnRegistro(sql_cxp)
-    total_cxp = float(cxp_res["TotalCxP"]) if cxp_res else 0.0
-
-    # Cartera CxC
-    sql_cxc = 'SELECT COALESCE(SUM("SaldoPendiente"), 0) as "TotalCxC" FROM "CuentaCobrar" WHERE "SaldoPendiente" > 0;'
-    cxc_res = repo.caller.LlamarUnRegistro(sql_cxc)
-    total_cxc = float(cxc_res["TotalCxC"]) if cxc_res else 0.0
-
+    sql = """
+        SELECT 
+            COALESCE(SUM(CASE WHEN "Moneda" = 'BOB' AND "Activa" = true THEN "SaldoActual" ELSE 0 END), 0) as "TotalBancosBOB",
+            COALESCE(SUM(CASE WHEN "Moneda" = 'USD' AND "Activa" = true THEN "SaldoActual" ELSE 0 END), 0) as "TotalBancosUSD",
+            (SELECT COALESCE(SUM("SaldoPendiente"), 0) FROM "CuentaPagarProveedor" WHERE "SaldoPendiente" > 0) as "TotalCuentasPagar",
+            (SELECT COALESCE(SUM("SaldoPendiente"), 0) FROM "CuentaCobrar" WHERE "SaldoPendiente" > 0) as "TotalCuentasCobrar"
+        FROM "CuentaBancariaEmpresa";
+    """
+    row = repo.caller.LlamarUnRegistro(sql) or {}
     return {
-        "TotalBancosBOB": total_bob,
-        "TotalBancosUSD": total_usd,
-        "TotalCuentasPagar": total_cxp,
-        "TotalCuentasCobrar": total_cxc,
+        "TotalBancosBOB": float(row.get("TotalBancosBOB", 0.0)),
+        "TotalBancosUSD": float(row.get("TotalBancosUSD", 0.0)),
+        "TotalCuentasPagar": float(row.get("TotalCuentasPagar", 0.0)),
+        "TotalCuentasCobrar": float(row.get("TotalCuentasCobrar", 0.0)),
     }
 
 @TesoreriaRouter.get("/cajas/{id_apertura}/resumen-gerencial")
@@ -441,5 +454,5 @@ def obtener_resumen_gerencial_caja(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
 ):
-    """HU-10: Genera el resumen consolidado de liquidez y conciliación para Gerencia General."""
+    """Genera el resumen consolidado de liquidez y conciliación para Gerencia General."""
     return TesoreriaService(db).ObtenerResumenGerencial(id_apertura)

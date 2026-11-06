@@ -153,7 +153,7 @@ export async function CambiarEstadoRepartidor(idUsuario, idEstado) {
 }
 
 // -------------------------------------------------------------
-// TELEMETRÍA Y RASTREO GPS EN VIVO (HU-30, HU-33)
+// Telemetría y rastreo GPS en vivo
 // -------------------------------------------------------------
 export async function ObtenerChoferesEnVivo() {
   const response = await fetchConCache("/api/logistica/telemetria/en-vivo", {}, 3000);
@@ -211,7 +211,7 @@ export async function RegistrarCobroParada(datos) {
 }
 
 // -------------------------------------------------------------
-// LIQUIDACIÓN Y RENDICIÓN DE CUENTAS (HU-34)
+// Liquidación y rendición de cuentas
 // -------------------------------------------------------------
 export async function ObtenerLiquidacionRuta(idAsignacion) {
   const response = await fetchConCache(`/api/logistica/asignaciones/${idAsignacion}/liquidacion`, {}, 5000);

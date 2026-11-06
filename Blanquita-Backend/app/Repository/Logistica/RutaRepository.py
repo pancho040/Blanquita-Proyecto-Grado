@@ -295,7 +295,7 @@ class RutaRepository:
         return self.caller.LlamarUnRegistro(sql, {"id_usuario": id_usuario, "id_estado": id_estado})
 
     # -------------------------------------------------------------
-    # TELEMETRÍA Y RASTREO GPS EN VIVO (HU-30, HU-33)
+    # Telemetría y rastreo GPS en vivo
     # -------------------------------------------------------------
     def RegistrarTelemetriaPing(self, datos: dict) -> dict:
         id_asig = datos.get("IdAsignacionRuta")
@@ -485,7 +485,7 @@ class RutaRepository:
         return asig
 
     # -------------------------------------------------------------
-    # OPERACIONES EN CAMPO Y CIERRE DE RUTA (HU-31, HU-32, HU-33, HU-34)
+    # Operaciones en campo y cierre de ruta
     # -------------------------------------------------------------
     def RegistrarEntregaParada(self, datos: dict) -> dict:
         sql = """

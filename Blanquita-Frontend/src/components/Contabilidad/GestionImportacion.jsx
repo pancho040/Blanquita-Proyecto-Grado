@@ -150,7 +150,7 @@ export default function GestionImportacion({ usuario }) {
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl bg-gradient-to-br ${item.color} text-white shadow-xs`}>
+                    <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                       <Icono className="h-6 w-6" />
                     </div>
                     <div>

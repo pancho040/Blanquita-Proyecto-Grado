@@ -47,6 +47,20 @@ class ClienteRepository:
         """
         return self.caller.LlamarFuncion(sql, params)
 
+    def ListarClientesSimple(self) -> list[dict]:
+        sql = """
+            SELECT 
+                c."IdCliente",
+                c."RazonSocial",
+                c."NombreComercial",
+                c."NitCi",
+                COALESCE(c."CiudadDestino", 'Sucre') as "Ciudad"
+            FROM "Cliente" c
+            WHERE COALESCE(c."IdEstadoCliente", 1) = 1
+            ORDER BY c."RazonSocial" ASC;
+        """
+        return self.caller.LlamarFuncion(sql)
+
     def ObtenerClientePorId(self, id_cliente: int) -> dict | None:
         sql = """
             SELECT 

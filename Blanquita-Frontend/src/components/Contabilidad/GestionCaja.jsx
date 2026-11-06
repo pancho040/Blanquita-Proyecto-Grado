@@ -373,17 +373,17 @@ export default function GestionCaja({ usuario }) {
         </div>
 
         {/* Saldo Teórico Actual */}
-        <div className="bg-gradient-to-br from-[#20A7DB] to-[#1281ab] text-white p-5 rounded-2xl shadow-sm flex flex-col justify-between">
-          <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
             Saldo Teórico en Caja
           </span>
           <div className="mt-2">
-            <div className="text-3xl font-extrabold">
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
               Bs. {(cajaActual?.SaldoFinalTeorico || cajaActual?.SaldoInicial || 0).toLocaleString("es-BO", {
                 minimumFractionDigits: 2,
               })}
             </div>
-            <span className="text-xs text-white/80">Debe coincidir con arqueo físico</span>
+            <span className="text-xs text-slate-400 mt-1 block">Debe coincidir con arqueo físico</span>
           </div>
         </div>
       </div>
@@ -891,3 +891,4 @@ export default function GestionCaja({ usuario }) {
     </div>
   );
 }
+

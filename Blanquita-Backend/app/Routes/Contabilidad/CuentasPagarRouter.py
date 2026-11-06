@@ -31,6 +31,24 @@ def listar_proveedores(
         p["Rubro"] = "Materias Primas e Insumos"
     return provs
 
+@CuentasPagarRouter.get("/proveedores/simple")
+def listar_proveedores_simple(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_CXP))
+):
+    """Listado ultra ligero de proveedores para selectores de compras y CxP."""
+    sql = """
+        SELECT 
+            p."IdProveedor",
+            p."NombreProveedor",
+            COALESCE(p."CelularProveedor", '') as "Telefono",
+            COALESCE(p."CorreoProveedor", '') as "Correo"
+        FROM "Proveedor" p
+        WHERE COALESCE(p."Activo", true) = true
+        ORDER BY p."NombreProveedor" ASC;
+    """
+    return CuentasPagarService(db).repo.caller.LlamarFuncion(sql)
+
 @CuentasPagarRouter.post("/proveedores")
 def crear_proveedor_contabilidad(
     dto: dict,
@@ -64,19 +82,18 @@ def obtener_kpis_cxp(
             COUNT(*) as "TotalCuentas",
             COUNT(CASE WHEN "SaldoPendiente" > 0 THEN 1 END) as "FacturasPendientes",
             COUNT(CASE WHEN "SaldoPendiente" > 0 AND "FechaRecepcion" < CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as "FacturasVencidas",
-            COUNT(DISTINCT CASE WHEN "SaldoPendiente" > 0 THEN "IdProveedor" END) as "ProveedoresConDeuda"
+            COUNT(DISTINCT CASE WHEN "SaldoPendiente" > 0 THEN "IdProveedor" END) as "ProveedoresConDeuda",
+            (SELECT COUNT(*) FROM "Proveedor") as "TotalProveedores"
         FROM "CuentaPagarProveedor";
     """
     res = repo.caller.LlamarUnRegistro(sql)
-    sql_prov = 'SELECT COUNT(*) as "TotalProveedores" FROM "Proveedor";'
-    res_prov = repo.caller.LlamarUnRegistro(sql_prov)
     return {
         "TotalDeuda": float(res.get("TotalDeuda", 0.0)) if res else 0.0,
         "TotalCuentas": int(res.get("TotalCuentas", 0)) if res else 0,
         "FacturasPendientes": int(res.get("FacturasPendientes", 0)) if res else 0,
         "FacturasVencidas": int(res.get("FacturasVencidas", 0)) if res else 0,
         "ProveedoresConDeuda": int(res.get("ProveedoresConDeuda", 0)) if res else 0,
-        "TotalProveedores": int(res_prov.get("TotalProveedores", 0)) if res_prov else 0,
+        "TotalProveedores": int(res.get("TotalProveedores", 0)) if res else 0,
     }
 
 

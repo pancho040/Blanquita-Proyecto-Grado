@@ -13,6 +13,14 @@ export async function ObtenerClientes(busqueda = "", idEstado = null) {
   return await response.json();
 }
 
+export async function ObtenerClientesSimple() {
+  const response = await fetchConCache("/api/logistica/clientes/simple", {}, 60000);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}
+
 export async function ObtenerClienteDetalle(idCliente) {
   const response = await fetchConCache(`/api/logistica/clientes/${idCliente}`, {}, 30000);
   if (!response.ok) {

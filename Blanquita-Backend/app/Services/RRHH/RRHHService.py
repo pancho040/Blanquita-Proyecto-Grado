@@ -77,6 +77,9 @@ class RRHHService:
     def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None) -> list[dict]:
         return self.repository.ListarEmpleados(busqueda, area, activo)
 
+    def ListarEmpleadosSimple(self, area: str = "") -> list[dict]:
+        return self.repository.ListarEmpleadosSimple(area)
+
     def ObtenerEmpleado(self, id_usuario: int) -> dict:
         emp = self.repository.ObtenerEmpleadoPorId(id_usuario)
         if not emp:
@@ -154,7 +157,7 @@ class RRHHService:
     # =========================================================================
     # 4. ASISTENCIA & BIOMÉTRICO (NG-ECO / ZKTECO)
     # =========================================================================
-    def ListarAsistencias(self, fecha_inicio: date, fecha_fin: date, id_usuario: int | None = None, area: str = "") -> list[dict]:
+    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None, id_usuario: int | None = None, area: str = "") -> list[dict]:
         return self.repository.ListarAsistencias(fecha_inicio, fecha_fin, id_usuario, area)
 
     def ActualizarAsistencia(self, id_asistencia: int, datos: dict) -> dict:
@@ -376,7 +379,7 @@ class RRHHService:
             valor_dia = sueldo_basico / Decimal("30")
             descuento_faltas = (Decimal(str(dias_falta)) * valor_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            # RN-02 / RF-10 / HU-24: Cálculo automático de comisiones de reparto sobre cobros efectivos
+            # Cálculo de comisiones de reparto sobre cobros efectivos
             pct_comision = Decimal(str(emp.get("PorcentajeComisionDefault") or 0.0))
             if pct_comision <= Decimal("0.0") and (emp.get("IdRol") == 4 or "repart" in (emp.get("NombreCargo") or "").lower()):
                 pct_comision = Decimal("2.0")  # 2% según política de incentivos de Blanquita
@@ -388,7 +391,7 @@ class RRHHService:
 
             total_bonos = Decimal("0.00")
 
-            # HU-19: Descuento automático de anticipos de sueldo registrados en tesorería
+            # Descuento de anticipos de sueldo registrados en tesorería
             nom_emp = f"{emp.get('PrimerNombre', '')} {emp.get('ApellidoPaterno', '')}".strip()
             total_anticipos = self.repository.ObtenerTotalAnticiposEmpleadoPeriodo(id_u, nom_emp, f_ini, f_fin)
             otras_deducciones = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -461,7 +464,7 @@ class RRHHService:
 
     def AprobarPlanilla(self, id_planilla: int, id_usuario_aprueba: int, observacion: str = "") -> dict:
         res = self.repository.AprobarPlanilla(id_planilla, id_usuario_aprueba, observacion)
-        # HU-12: Generar comprobante de egreso y asiento automático en flujo de caja
+        # Generar comprobante de egreso y asiento en flujo de caja
         try:
             self.repository.CrearAsientoEgresoPlanilla(id_planilla, id_usuario_aprueba)
         except Exception as e:

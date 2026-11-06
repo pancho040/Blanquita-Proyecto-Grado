@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 /**
  * Hook de paginación para datos en memoria
- * Inspirado en usePaginatedQuery de front-focus.
+ * Hook personalizado para cálculo de páginas y navegación de listas.
  *
  * @param {Array} items - Colección de elementos a paginar
  * @param {number} pageSizeInicial - Cantidad de registros por página (default: 10)

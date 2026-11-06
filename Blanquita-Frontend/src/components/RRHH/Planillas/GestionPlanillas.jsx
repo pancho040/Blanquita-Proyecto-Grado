@@ -121,7 +121,10 @@ export default function GestionPlanillas() {
     try {
       setGenerando(true);
       const res = await GenerarPlanilla(periodoSeleccionado.IdPeriodoNomina);
-      toast.success(res.mensaje || "Planilla generada con éxito");
+      if (res && (res.Planilla || res.Detalles)) {
+        setPlanillaData(res);
+      }
+      toast.success(res?.mensaje || "Planilla calculada y consolidada con éxito");
       await cargarPlanillaPeriodo(periodoSeleccionado.IdPeriodoNomina);
     } catch (err) {
       console.error(err);

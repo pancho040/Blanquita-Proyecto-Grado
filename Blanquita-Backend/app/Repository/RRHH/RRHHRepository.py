@@ -62,6 +62,27 @@ class RRHHRepository:
         """
         return self.caller.LlamarFuncion(sql, params)
 
+    def ListarEmpleadosSimple(self, area: str = "") -> list[dict]:
+        params = {}
+        where = ['COALESCE(d."Activo", true) = true']
+        if area and area != "TODAS":
+            where.append('(d."Area" = :area OR d."Area" = ''General'')')
+            params["area"] = area
+
+        sql = f"""
+            SELECT 
+                u."IdUsuario",
+                CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreCompleto",
+                u."Ci",
+                COALESCE(d."Cargo", 'Operador') as "Cargo",
+                COALESCE(d."Area", 'General') as "Area"
+            FROM "Usuario" u
+            LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            WHERE {" AND ".join(where)}
+            ORDER BY u."PrimerNombre" ASC;
+        """
+        return self.caller.LlamarFuncion(sql, params)
+
     def ObtenerEmpleadoPorId(self, id_usuario: int) -> dict | None:
         sql = """
             SELECT 
@@ -281,9 +302,16 @@ class RRHHRepository:
     # =========================================================================
     # 4. CONTROL DE ASISTENCIA Y MARCAS BIOMÉTRICAS
     # =========================================================================
-    def ListarAsistencias(self, fecha_inicio: date, fecha_fin: date, id_usuario: int | None = None, area: str = "") -> list[dict]:
-        params = {"fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin}
-        where = ['a."Fecha" BETWEEN :fecha_inicio AND :fecha_fin']
+    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None, id_usuario: int | None = None, area: str = "") -> list[dict]:
+        params = {}
+        where = ["1=1"]
+
+        if fecha_inicio:
+            where.append('a."Fecha" >= :fecha_inicio')
+            params["fecha_inicio"] = fecha_inicio
+        if fecha_fin:
+            where.append('a."Fecha" <= :fecha_fin')
+            params["fecha_fin"] = fecha_fin
 
         if id_usuario is not None:
             where.append('a."IdUsuario" = :id_usuario')
@@ -298,13 +326,19 @@ class RRHHRepository:
                 a."IdAsistenciaDiaria",
                 a."IdUsuario",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                u."PrimerNombre",
+                u."ApellidoPaterno",
+                COALESCE(u."ApellidoMaterno", '') as "ApellidoMaterno",
                 u."Ci",
+                u."Ci" as "CI",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
                 COALESCE(a."Area", d."Area", 'Rebobinado') as "Area",
                 a."IdTurno",
                 t."NombreTurno",
                 TO_CHAR(t."HoraInicio", 'HH24:MI') as "TurnoHoraInicio",
                 TO_CHAR(t."HoraFin", 'HH24:MI') as "TurnoHoraFin",
+                TO_CHAR(t."HoraInicio", 'HH24:MI') as "TurnoHoraEntrada",
+                TO_CHAR(t."HoraFin", 'HH24:MI') as "TurnoHoraSalida",
                 a."Fecha",
                 TO_CHAR(a."HoraEntrada", 'HH24:MI:SS') as "HoraEntrada",
                 TO_CHAR(a."HoraSalida", 'HH24:MI:SS') as "HoraSalida",
@@ -312,6 +346,11 @@ class RRHHRepository:
                 a."HorasExtraTrabajadas",
                 a."EsFalta",
                 a."FaltaJustificada",
+                CASE 
+                    WHEN a."EsFalta" = true THEN 'FALTA'
+                    WHEN COALESCE(a."MinutosAtraso", 0) > 0 THEN 'ATRASO'
+                    ELSE 'PRESENTE'
+                END as "Estado",
                 a."Observacion"
             FROM "AsistenciaDiaria" a
             JOIN "Usuario" u ON a."IdUsuario" = u."IdUsuario"
@@ -463,6 +502,7 @@ class RRHHRepository:
                 TO_CHAR(p."FechaInicio", 'TMMonth YYYY') as "NombrePeriodo",
                 pl."IdPlanilla",
                 pl."Aprobada",
+                CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
                 pl."TotalLiquido"
             FROM "PeriodoNomina" p
             LEFT JOIN "Planilla" pl ON p."IdPeriodoNomina" = pl."IdPeriodoNomina"
@@ -507,6 +547,7 @@ class RRHHRepository:
                 pl."TotalDeducciones",
                 pl."TotalLiquido",
                 pl."Aprobada",
+                CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
                 pl."IdUsuarioAprueba",
                 CONCAT(ua."PrimerNombre", ' ', ua."ApellidoPaterno") as "AprobadoPor",
                 pl."FechaAprobacion",
@@ -556,7 +597,19 @@ class RRHHRepository:
                 dp."IdDetallePlanilla",
                 dp."IdPlanilla",
                 dp."IdUsuario",
+                u."PrimerNombre",
+                u."ApellidoPaterno",
+                u."ApellidoMaterno",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreEmpleado",
+                CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                u."Ci" as "CI",
+                COALESCE(d."Cargo", 'Operador') as "NombreCargo",
+                dp."SueldoBasico" as "HaberBasico",
+                dp."MontoHorasExtra" as "HorasExtrasMonto",
+                dp."TotalBonos" as "BonoAntiguedad",
+                dp."AporteAFP" as "DescuentoAFP",
+                dp."OtrasDeducciones" as "Anticipos",
+                30 as "DiasTrabajados",
                 u."Ci",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
                 COALESCE(d."Area", 'Rebobinado') as "Area",
@@ -594,7 +647,19 @@ class RRHHRepository:
                 p."FechaInicio",
                 p."FechaFin",
                 dp."IdUsuario",
+                u."PrimerNombre",
+                u."ApellidoPaterno",
+                u."ApellidoMaterno",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreEmpleado",
+                CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                u."Ci" as "CI",
+                COALESCE(d."Cargo", 'Operador') as "NombreCargo",
+                dp."SueldoBasico" as "HaberBasico",
+                dp."MontoHorasExtra" as "HorasExtrasMonto",
+                dp."TotalBonos" as "BonoAntiguedad",
+                dp."AporteAFP" as "DescuentoAFP",
+                dp."OtrasDeducciones" as "Anticipos",
+                30 as "DiasTrabajados",
                 u."Ci",
                 d."FechaIngreso",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
@@ -614,6 +679,7 @@ class RRHHRepository:
                 dp."LiquidoPagable",
                 dp."Observacion",
                 pl."Aprobada",
+                CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
                 pl."FechaAprobacion"
             FROM "DetallePlanilla" dp
             JOIN "Planilla" pl ON dp."IdPlanilla" = pl."IdPlanilla"
@@ -696,10 +762,10 @@ class RRHHRepository:
         return self.caller.LlamarUnRegistro(sql, {}) or {}
 
     # =========================================================================
-    # 8. INTEGRACION CONTABLE Y COMISIONES (RN-02, RF-10, HU-12, HU-19, HU-24)
+    # Integración contable y comisiones
     # =========================================================================
     def ObtenerTotalCobrosRepartidorPeriodo(self, id_usuario: int, fecha_inicio, fecha_fin) -> Decimal:
-        """RN-02 / RF-10: Cómputo de comisiones sobre ventas y entregas efectivamente cobradas en campo."""
+        """Cómputo de comisiones sobre ventas y entregas efectivamente cobradas en campo."""
         # 1. Buscar pagos registrados a través de la app móvil y asignaciones
         sql_pagos = """
             SELECT COALESCE(SUM(pp."Monto"), 0) as total
@@ -718,7 +784,7 @@ class RRHHRepository:
             SELECT COALESCE(SUM(mc."Monto"), 0) as total
             FROM "MovimientoCaja" mc
             JOIN "CategoriaMovimientoCaja" cat ON mc."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
-            WHERE mc."IdUsuarioRegistro" = :id_u
+            WHERE mc."IdUsuario" = :id_u
               AND cat."TipoMovimiento" = 'Ingreso'
               AND (cat."NombreCategoria" ILIKE '%repart%' OR cat."NombreCategoria" ILIKE '%cobranza%')
               AND mc."FechaMovimiento"::date >= :f_ini
@@ -730,7 +796,7 @@ class RRHHRepository:
         return max(total_pagos, total_caja)
 
     def ObtenerTotalAnticiposEmpleadoPeriodo(self, id_usuario: int, nombre_empleado: str, fecha_inicio, fecha_fin) -> Decimal:
-        """HU-19: Descuento automático de anticipos otorgados en caja durante el periodo de nómina."""
+        """Descuento de anticipos otorgados en caja durante el periodo de nómina."""
         sql_ant = """
             SELECT COALESCE(SUM(mc."Monto"), 0) as total
             FROM "MovimientoCaja" mc
@@ -740,7 +806,7 @@ class RRHHRepository:
               AND (
                   mc."Solicitante" ILIKE :nom 
                   OR mc."Descripcion" ILIKE :nom
-                  OR mc."IdUsuarioRegistro" = :id_u
+                  OR mc."IdUsuario" = :id_u
               )
               AND mc."FechaMovimiento"::date >= :f_ini
               AND mc."FechaMovimiento"::date <= :f_fin;
@@ -750,7 +816,7 @@ class RRHHRepository:
         return Decimal(str(res.get("total", 0.0) if res else 0.0))
 
     def CrearAsientoEgresoPlanilla(self, id_planilla: int, id_usuario_aprueba: int) -> dict:
-        """HU-12: Generar asiento contable automático en flujo de caja al aprobar la planilla salarial."""
+        """Generar asiento contable en flujo de caja al aprobar la planilla salarial."""
         # 1. Obtener datos de la planilla
         sql_pl = 'SELECT pl.*, pn."Mes", pn."Anio" FROM "Planilla" pl JOIN "PeriodoNomina" pn ON pl."IdPeriodoNomina" = pn."IdPeriodoNomina" WHERE pl."IdPlanilla" = :id_p;'
         pl = self.caller.LlamarUnRegistro(sql_pl, {"id_p": id_planilla})
@@ -785,11 +851,11 @@ class RRHHRepository:
         # 5. Insertar Movimiento de Caja (Egreso)
         sql_insert = """
             INSERT INTO "MovimientoCaja" (
-                "IdAperturaCierreCaja", "IdCategoriaMovimientoCaja", "TipoMovimiento",
+                "IdAperturaCierreCaja", "IdCategoriaMovimientoCaja",
                 "Monto", "FechaMovimiento", "Solicitante", "Descripcion",
-                "NumeroReferencia", "IdUsuarioRegistro"
+                "NumeroReferencia", "IdUsuario"
             ) VALUES (
-                :id_apertura, :id_cat, 'Egreso',
+                :id_apertura, :id_cat,
                 :monto, NOW(), 'Planilla General de Personal',
                 :desc, :ref, :id_u
             ) RETURNING *;
@@ -804,7 +870,7 @@ class RRHHRepository:
             "id_u": id_usuario_aprueba
         })
 
-        # 6. Registrar en AuditLog (HU-16)
+        # Registrar en auditoría
         try:
             sql_audit = """
                 INSERT INTO "AuditLog" ("IdUsuario", "Accion", "TablaAfectada", "IdRegistroAfectado", "Detalle", "FechaHora")

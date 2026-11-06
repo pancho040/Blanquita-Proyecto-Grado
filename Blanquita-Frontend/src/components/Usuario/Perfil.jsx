@@ -309,7 +309,7 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
           <Button
             onClick={guardar}
             disabled={guardando || !cambios}
-            className="gap-2 bg-gradient-to-r from-c3 to-c4 font-extrabold text-white hover:opacity-90"
+            className="gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium"
           >
             {guardando ? (
               <>
@@ -368,7 +368,7 @@ export default function Perfil() {
         {!cargando && !error && perfil && (
           <div className="space-y-6 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:space-y-0">
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="relative flex h-full flex-col items-center gap-4 bg-gradient-to-br from-c3 to-c4 p-6 text-white sm:flex-row sm:text-left">
+              <div className="relative flex h-full flex-col items-center gap-4 bg-slate-900 p-6 text-white sm:flex-row sm:text-left">
                 <Button
                   onClick={() => setEditando(true)}
                   className="absolute right-4 top-4 h-9 gap-1.5 bg-white/15 font-bold text-white hover:bg-white/25"

@@ -43,7 +43,7 @@ class CuentasCobrarService:
         datos_nota["ImporteNeto"] = max(importe_neto, 0.0)
         
         if dto.EsCredito:
-            # RN-01: Validar bloqueo automático por mora o límite de crédito
+            # Validar bloqueo automático por mora o límite de crédito
             if dto.IdCliente:
                 cred_check = self.repo.VerificarEstadoCreditoCliente(dto.IdCliente, datos_nota["ImporteNeto"])
                 if cred_check.get("Bloqueado"):

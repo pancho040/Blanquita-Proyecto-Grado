@@ -52,8 +52,9 @@ export const RutasAdmin = [
   {
     titulo: "Recursos Humanos",
     icono: Fingerprint,
-    ruta: "admin/rrhh",
-    subrutas: [
+    ruta: "admin/rrhh",
+    subrutas: [
+      { titulo: "Dashboard RRHH", icono: Home, ruta: "inicio" },
       { titulo: "Personal & Sueldos", icono: Users, ruta: "empleados" },
       { titulo: "Cronograma Turnos", icono: Calendar, ruta: "turnos" },
       { titulo: "Control Asistencia", icono: Clock, ruta: "asistencia" },

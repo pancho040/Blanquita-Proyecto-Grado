@@ -95,7 +95,7 @@ export default function GestionEmpleados() {
     });
   }, [empleados, filtroArea, filtroEstado, busqueda]);
 
-  // Paginación optimizada (estándar front-focus)
+  // Paginación de lista de empleados
   const paginacion = usePaginacion(empleadosFiltrados, 10);
 
   // Métricas rápidas

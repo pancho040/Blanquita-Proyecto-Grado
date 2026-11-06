@@ -21,6 +21,14 @@ export async function ObtenerEmpleados(busqueda = "", area = "", activo = null) 
   return await response.json();
 }
 
+export async function ObtenerEmpleadosSimple(area = "") {
+  let url = "/api/rrhh/empleados/simple";
+  if (area && area !== "TODAS") url += `?area=${encodeURIComponent(area)}`;
+  const response = await fetchConCache(url, {}, 60000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
 export async function ObtenerEmpleado(idUsuario) {
   const response = await fetchConCache(`/api/rrhh/empleados/${idUsuario}`, {}, 30000);
   if (!response.ok) await manejarErrorBackend(response);
@@ -119,6 +127,17 @@ export async function DesasignarTurno(idUsuario, fecha) {
 }
 
 // 5. ASISTENCIA & BIOMÉTRICO (NG-ECO)
+export async function ObtenerAsistencia(params = {}) {
+  if (typeof params === "string") {
+    return ObtenerAsistencias(arguments[0], arguments[1], arguments[2], arguments[3]);
+  }
+  const fIni = params.FechaInicio || params.fechaInicio || new Date().toISOString().split("T")[0];
+  const fFin = params.FechaFin || params.fechaFin || fIni;
+  const idU = params.IdUsuario || params.idUsuario || null;
+  const area = params.Area || params.area || "";
+  return ObtenerAsistencias(fIni, fFin, idU, area);
+}
+
 export async function ObtenerAsistencias(fechaInicio, fechaFin, idUsuario = null, area = "") {
   let url = `/api/rrhh/asistencia?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
   if (idUsuario) url += `&id_usuario=${idUsuario}`;

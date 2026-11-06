@@ -1,12 +1,30 @@
 /**
  * Sistema de Caché en Memoria con TTL (Time-To-Live)
- * Inspirado en la arquitectura de caché centralizada de front-focus.
- * Reduce llamadas duplicadas al backend y agiliza la navegación instantánea.
+ * Servicio centralizado de caché en memoria con expiración por TTL.
+ * Sincronizado bidireccionalmente con api-cache para máxima coherencia.
  */
+import { invalidarCache as apiInvalidarCache, onInvalidate } from "./api-cache";
 
 class CacheService {
   constructor() {
     this.store = new Map();
+
+    // Sincronizar automáticamente cuando api-cache invalide
+    if (typeof window !== "undefined") {
+      onInvalidate((prefijo) => {
+        if (!prefijo) {
+          this.store.clear();
+        } else {
+          // Normalizar formato de prefijo (ej. /api/rrhh -> rrhh:)
+          const limpio = prefijo.replace(/^\/api\//, "").replace(/\//g, ":");
+          for (const key of this.store.keys()) {
+            if (key.startsWith(limpio) || key.includes(limpio)) {
+              this.store.delete(key);
+            }
+          }
+        }
+      });
+    }
   }
 
   /**
@@ -50,6 +68,13 @@ class CacheService {
         this.store.delete(key);
       }
     }
+    // Propagar también a api-cache
+    if (keyOrPrefix) {
+      const rutaApi = "/api/" + keyOrPrefix.replace(/:/g, "/").replace(/\/$/, "");
+      apiInvalidarCache(rutaApi);
+    } else {
+      apiInvalidarCache();
+    }
   }
 
   /**
@@ -57,6 +82,7 @@ class CacheService {
    */
   clear() {
     this.store.clear();
+    apiInvalidarCache();
   }
 
   // Helpers de dominio

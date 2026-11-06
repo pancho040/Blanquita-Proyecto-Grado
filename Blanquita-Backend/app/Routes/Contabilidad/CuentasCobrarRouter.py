@@ -267,7 +267,7 @@ def verificar_estado_credito_cliente(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_CXC))
 ):
-    """RN-01: Consulta si un cliente está bloqueado para venta a crédito por mora o límite de crédito."""
+    """Consulta si un cliente está bloqueado para venta a crédito por mora o límite de crédito."""
     return CuentasCobrarService(db).VerificarEstadoCredito(id_cliente, nuevo_monto)
 
 @CuentasCobrarRouter.post("/clientes/{id_cliente}/recordatorio-mora")
@@ -277,7 +277,7 @@ def registrar_recordatorio_mora(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_CXC))
 ):
-    """HU-08: Registra en el log de auditoría el recordatorio de mora enviado al cliente."""
+    """Registra en el log de auditoría el recordatorio de mora enviado al cliente."""
     from sqlalchemy import text
     obs = dto.get("detalle") or f"Recordatorio de mora emitido por {usuario.get('PrimerNombre', 'Contador')} vía mensajería digital."
     sql_audit = """

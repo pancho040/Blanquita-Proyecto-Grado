@@ -9,6 +9,12 @@ export async function ObtenerProveedoresContabilidad(soloActivos = true) {
   return await res.json();
 }
 
+export async function ObtenerProveedoresSimple() {
+  const res = await fetchConCache("/api/cxp/proveedores/simple", {}, 60000);
+  if (!res.ok) await manejarErrorBackend(res);
+  return await res.json();
+}
+
 export async function CrearProveedorContabilidad(datos) {
   const res = await fetch("/api/cxp/proveedores", {
     method: "POST",

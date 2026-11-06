@@ -29,7 +29,7 @@ class PrecioRepository:
     def GuardarPrecio(self, datos: dict, id_usuario: int | None = None) -> dict:
         id_presentacion = datos["IdPresentacion"]
         
-        # Obtener precio anterior para trazabilidad de auditoría (HU-17)
+        # Obtener precio anterior para trazabilidad de auditoría
         sql_ant = 'SELECT "PrecioUnitario", "PrecioMayorista" FROM "PrecioProducto" WHERE "IdPresentacion" = :id_p AND "Activo" = TRUE LIMIT 1;'
         precio_ant = self.caller.LlamarUnRegistro(sql_ant, {"id_p": id_presentacion})
         precio_ant_val = float(precio_ant["PrecioUnitario"]) if precio_ant else 0.0
@@ -52,7 +52,7 @@ class PrecioRepository:
         """
         res = self.caller.LlamarUnRegistro(sql, datos)
 
-        # HU-17: Registrar auditoría de cambio de precio
+        # Registrar auditoría de cambio de precio
         try:
             from sqlalchemy import text
             sql_audit = '''
@@ -71,7 +71,7 @@ class PrecioRepository:
         return res
 
     def ListarHistorialPrecios(self, id_presentacion: int) -> list[dict]:
-        """HU-17: Histórico de precios con fechas de vigencia."""
+        """Histórico de precios con fechas de vigencia."""
         sql = """
             SELECT 
                 pp."IdPrecioProducto",

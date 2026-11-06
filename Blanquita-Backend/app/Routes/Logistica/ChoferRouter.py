@@ -34,7 +34,7 @@ class CobroChoferDTO(BaseModel):
     Observacion: Optional[str] = None
 
 class OperacionOfflineItem(BaseModel):
-    id: str  # id temporal generado por el móvil
+    id: str  # id temporal local del móvil
     tipo: str  # 'ENTREGA' | 'COBRO' | 'NO_ENTREGA' | 'PING_GPS'
     payload: dict
     gps: Optional[dict] = None

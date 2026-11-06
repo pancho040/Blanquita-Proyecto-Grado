@@ -6,21 +6,25 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownLeft,
-  AlertTriangle,
-  CheckCircle2,
-  Lock,
+  Clock,
+  RefreshCw,
   PlusCircle,
   FileSpreadsheet,
   Receipt,
   Truck,
-  TrendingUp,
-  CreditCard,
   Building2,
   Calendar,
+  ChevronRight,
+  ShieldCheck,
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { invalidarCache } from "@/lib/api-cache";
+
 import {
   ObtenerDashboardKPIs,
   ObtenerCajaActual,
@@ -28,28 +32,48 @@ import {
   ObtenerCuentasBancarias,
 } from "@/services/Contabilidad/tesoreriaService";
 import { ObtenerCarteraResumen } from "@/services/Contabilidad/cuentasCobrarService";
+import { ObtenerKpisCxP } from "@/services/Contabilidad/cuentasPagarService";
 
 export default function InicioContador({ usuario }) {
+  const [cargando, setCargando] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
   const [kpis, setKpis] = useState(null);
   const [cajaActual, setCajaActual] = useState(null);
   const [bancos, setBancos] = useState([]);
   const [movimientosRecientes, setMovimientosRecientes] = useState([]);
   const [cartera, setCartera] = useState(null);
-  const [cargando, setCargando] = useState(true);
+  const [cxp, setCxp] = useState(null);
+  const [fechaActual, setFechaActual] = useState("");
 
   useEffect(() => {
+    const f = new Intl.DateTimeFormat("es-BO", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date());
+    setFechaActual(f.charAt(0).toUpperCase() + f.slice(1));
     cargarDashboard();
   }, []);
 
-  const cargarDashboard = async () => {
-    try {
+  const cargarDashboard = async (forzar = false) => {
+    if (forzar) {
+      setRefrescando(true);
+      invalidarCache("/api/tesoreria");
+      invalidarCache("/api/cxc");
+      invalidarCache("/api/cxp");
+    } else {
       setCargando(true);
-      const [kpisRes, cajaRes, bancosRes, movsRes, carteraRes] = await Promise.all([
+    }
+
+    try {
+      const [kpisRes, cajaRes, bancosRes, movsRes, carteraRes, cxpRes] = await Promise.all([
         ObtenerDashboardKPIs().catch(() => null),
         ObtenerCajaActual().catch(() => null),
         ObtenerCuentasBancarias(true).catch(() => []),
-        ObtenerMovimientosCaja({ limit: 8 }).catch(() => []),
+        ObtenerMovimientosCaja({ limit: 7 }).catch(() => []),
         ObtenerCarteraResumen().catch(() => null),
+        ObtenerKpisCxP().catch(() => null),
       ]);
 
       setKpis(kpisRes);
@@ -57,10 +81,13 @@ export default function InicioContador({ usuario }) {
       setBancos(Array.isArray(bancosRes) ? bancosRes : (bancosRes?.items || []));
       setMovimientosRecientes(Array.isArray(movsRes) ? movsRes : (movsRes?.items || []));
       setCartera(carteraRes);
+      setCxp(cxpRes);
     } catch (err) {
-      toast.error("Error al cargar dashboard contable: " + err.message);
+      console.error("Error al cargar dashboard contable:", err);
+      toast.error("Error al sincronizar datos contables.");
     } finally {
       setCargando(false);
+      setRefrescando(false);
     }
   };
 
@@ -72,257 +99,337 @@ export default function InicioContador({ usuario }) {
     .filter((b) => b.TipoMoneda === "USD")
     .reduce((acc, b) => acc + (parseFloat(b.SaldoActual) || 0), 0);
 
+  const totalCaja = parseFloat(cajaActual?.SaldoActual || cajaActual?.TotalEfectivoActual || 0);
+  const totalCartera = parseFloat(cartera?.TotalPorCobrar || cartera?.SaldoPendienteTotal || 0);
+  const totalPagar = parseFloat(cxp?.TotalSaldoPendiente || cxp?.TotalPorPagar || 0);
+
   return (
     <div className="space-y-6">
-      {/* Saludo y Encabezado Ejecutivo */}
-      <div className="bg-gradient-to-r from-[#20A7DB] via-[#35b1e0] to-[#62C1E5] text-white p-6 sm:p-8 rounded-3xl shadow-sm relative overflow-hidden">
-        <div className="relative z-10">
-          <span className="text-xs font-semibold tracking-wider uppercase text-white/80 bg-white/20 px-3 py-1 rounded-full">
-            Contabilidad
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold mt-3">
-            {usuario?.NombreCompleto || "Contador General"}
-          </h1>
-          <p className="text-sm text-white/90 mt-1 max-w-xl">
-            Resumen de liquidez en bancos, cartera, cuentas por pagar y flujo de caja.
-          </p>
+      {/* 1. ENCABEZADO MINIMALISTA CONTABLE */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                <Wallet className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                Tesorería & Contabilidad
+              </span>
+              <span className="text-xs text-slate-400 tabular-nums">
+                {cajaActual?.Cerrado ? "Caja Diaria: Cerrada" : "Caja Diaria: Aperturada"}
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
+              Posición Financiera
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              {fechaActual} · Control de liquidez bancaria, arqueos de caja, cartera y compromisos por pagar.
+            </p>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-3 mt-5">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => cargarDashboard(true)}
+              disabled={refrescando || cargando}
+              className="text-xs border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 h-9 font-medium"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 text-slate-500 ${refrescando ? "animate-spin" : ""}`} />
+              {refrescando ? "Sincronizando..." : "Actualizar"}
+            </Button>
             <a href="/contador/caja">
-              <Button className="bg-white text-[#20A7DB] hover:bg-slate-100 font-bold text-xs shadow-xs">
-                <Wallet className="h-4 w-4 mr-1.5" /> Flujo de Caja
-              </Button>
-            </a>
-            <a href="/contador/cuentas-cobrar">
-              <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <HandCoins className="h-4 w-4 mr-1.5" /> Cuentas por Cobrar
-              </Button>
-            </a>
-            <a href="/contador/cuentas-pagar">
-              <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <Layers className="h-4 w-4 mr-1.5" /> Cuentas por Pagar
-              </Button>
-            </a>
-            <a href="/contador/importacion">
-              <Button className="bg-white/20 hover:bg-white/30 text-white font-semibold text-xs border border-white/30">
-                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Importar Archivos
+              <Button size="sm" className="text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 h-9 font-medium">
+                <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                Libro de Caja
               </Button>
             </a>
           </div>
         </div>
-
-        {/* Círculos decorativos de fondo */}
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
       </div>
 
-      {/* Tarjetas Principales de KPIs */}
+      {/* 2. MATRIZ DE KPIS DE TESORERÍA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 1. Saldo Bancario Consolidado */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Disponibilidad Bancaria
-            </span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Landmark className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-800">
-              Bs. {totalBancosBOB.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
-            </div>
-            {totalBancosUSD > 0 && (
-              <div className="text-xs font-semibold text-emerald-600 mt-0.5">
-                + $us. {totalBancosUSD.toLocaleString("es-BO", { minimumFractionDigits: 2 })} (Cta USD)
+        {/* Total Bancos */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Disponibilidad Bancaria
+              </span>
+              <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <Landmark className="h-4 w-4" />
               </div>
-            )}
-            <span className="text-xs text-slate-400 mt-1 block">Banco Unión, BNB, BMSC</span>
-          </div>
-        </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {cargando ? "---" : `Bs. ${totalBancosBOB.toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <span>{bancos.length} cuentas activas</span>
+                {totalBancosUSD > 0 && (
+                  <span className="tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ${totalBancosUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })} USD
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Fondos en cuenta corriente</span>
+              <a href="/contador/bancos" className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center">
+                Bancos <ChevronRight className="h-3 w-3 ml-0.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* 2. Caja Chica del Día */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Caja Diaria Efectivo
-            </span>
-            {cajaActual ? (
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-xs">
-                Abierta
-              </Badge>
-            ) : (
-              <Badge className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-xs">
-                Cerrada
-              </Badge>
-            )}
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-800">
-              Bs. {(cajaActual?.SaldoFinalTeorico ?? cajaActual?.SaldoInicial ?? 0).toLocaleString("es-BO", {
-                minimumFractionDigits: 2,
-              })}
-            </div>
-            <div className="flex items-center gap-3 text-xs mt-1">
-              <span className="text-emerald-600 font-medium">
-                +{cajaActual?.TotalIngresos || 0} Bs.
+        {/* Caja Física del Día */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Caja Física Operativa
               </span>
-              <span className="text-rose-600 font-medium">
-                -{cajaActual?.TotalEgresos || 0} Bs.
-              </span>
+              <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <Wallet className="h-4 w-4" />
+              </div>
             </div>
-          </div>
-        </div>
-
-        {/* 3. Cuentas por Cobrar Clientes */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Cartera x Cobrar
-            </span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <HandCoins className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-800">
-              Bs. {(cartera?.TotalPorCobrar || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
-            </div>
-            <div className="text-xs mt-0.5">
-              {Number(cartera?.CarteraVencida || 0) > 0 ? (
-                <span className="text-rose-600 font-bold flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Bs. {Number(cartera.CarteraVencida || 0).toFixed(2)} en mora
+            <div className="mt-3">
+              <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {cargando ? "---" : `Bs. ${totalCaja.toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <span>Fondo Inicial: Bs. {parseFloat(cajaActual?.MontoApertura || 0).toFixed(2)}</span>
+                <span className={cajaActual?.Cerrado ? "text-amber-500 font-medium" : "text-emerald-600 font-medium"}>
+                  {cajaActual?.Cerrado ? "Cerrada" : "Abierta"}
                 </span>
-              ) : (
-                <span className="text-emerald-600 font-semibold">Toda la cartera al día</span>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Efectivo en bóveda de planta</span>
+              <a href="/contador/caja" className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center">
+                Movimientos <ChevronRight className="h-3 w-3 ml-0.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* 4. Cuentas por Pagar Proveedores */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Deuda Proveedores (Insumos)
-            </span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-              <Layers className="h-5 w-5" />
+        {/* Cartera por Cobrar */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Cartera por Cobrar
+              </span>
+              <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <HandCoins className="h-4 w-4" />
+              </div>
             </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-800">
-              Bs. {(kpis?.TotalCuentasPagar || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+            <div className="mt-3">
+              <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {cargando ? "---" : `Bs. ${totalCartera.toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <span>{cartera?.TotalClientesConDeuda || 0} clientes deudores</span>
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  {cartera?.FacturasVencidas || 0} en mora
+                </span>
+              </div>
             </div>
-            <span className="text-xs text-slate-400 mt-1 block">Vinto, Derqui, Multiflex, Colmaflex</span>
-          </div>
-        </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Notas de venta pendientes</span>
+              <a href="/contador/cuentas-cobrar" className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center">
+                Cobranzas <ChevronRight className="h-3 w-3 ml-0.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cuentas por Pagar */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Cuentas por Pagar
+              </span>
+              <div className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <Layers className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                {cargando ? "---" : `Bs. ${totalPagar.toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <span>{cxp?.TotalFacturasPendientes || 0} facturas por pagar</span>
+                <span className="text-rose-600 dark:text-rose-400 font-medium">
+                  {cxp?.FacturasVencidas || 0} vencidas
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Proveedores e insumos</span>
+              <a href="/contador/cuentas-pagar" className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center">
+                Proveedores <ChevronRight className="h-3 w-3 ml-0.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Grid de 2 Columnas: Cuentas Bancarias y Últimos Movimientos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna Izquierda: Cuentas Bancarias */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Landmark className="h-5 w-5 text-[#20A7DB]" />
-              <h2 className="font-bold text-slate-800 text-sm">Cuentas Bancarias Empresa</h2>
+      {/* 3. DETALLE DE BANCOS Y MOVIMIENTOS RECIENTES */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Posición de Cuentas Bancarias */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardHeader className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-slate-500" />
+                Cuentas Bancarias Registradas
+              </CardTitle>
+              <a href="/contador/bancos">
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-600 dark:text-slate-400">
+                  Conciliación
+                </Button>
+              </a>
             </div>
-            <a href="/contador/bancos" className="text-xs font-semibold text-[#20A7DB] hover:underline">
-              Ver todas &rarr;
-            </a>
-          </div>
-
-          <div className="space-y-3">
-            {bancos.slice(0, 4).map((b) => (
-              <div
-                key={b.IdCuentaBancaria}
-                className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors flex justify-between items-center"
-              >
-                <div>
-                  <div className="font-bold text-xs text-slate-800">{b.NombreBanco}</div>
-                  <div className="text-[11px] text-slate-400">{b.NumeroCuenta}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-extrabold text-sm text-slate-800">
-                    {b.TipoMoneda === "USD" ? "$us. " : "Bs. "}
-                    {Number(b.SaldoActual || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
-                  </div>
-                  <Badge className="bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0">
-                    {b.TipoMoneda}
-                  </Badge>
-                </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {bancos.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                {cargando ? "Consultando saldos bancarios..." : "No se tienen cuentas bancarias registradas."}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Columna Derecha: Últimos Movimientos de Caja (Libro Diario) */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-[#20A7DB]" />
-              <h2 className="font-bold text-slate-800 text-sm">Últimos Movimientos del Libro Diario</h2>
-            </div>
-            <a href="/contador/caja" className="text-xs font-semibold text-[#20A7DB] hover:underline">
-              Ver Libro Completo &rarr;
-            </a>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-400 border-b border-slate-100">
-                <tr>
-                  <th className="py-2.5 px-3">Fecha</th>
-                  <th className="py-2.5 px-3">Categoría</th>
-                  <th className="py-2.5 px-3">Beneficiario / Glosa</th>
-                  <th className="py-2.5 px-3 text-center">Tipo</th>
-                  <th className="py-2.5 px-3 text-right">Monto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {movimientosRecientes.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="py-6 text-center text-slate-400">
-                      No hay movimientos recientes registrados.
-                    </td>
-                  </tr>
-                ) : (
-                  movimientosRecientes.map((m) => (
-                    <tr key={m.IdMovimiento} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
-                        {m.FechaMovimiento ? new Date(m.FechaMovimiento).toLocaleDateString("es-BO") : "-"}
-                      </td>
-                      <td className="py-2.5 px-3 font-semibold text-slate-700">
-                        {m.NombreCategoria || "General"}
-                      </td>
-                      <td className="py-2.5 px-3 max-w-xs truncate" title={m.Glosa}>
-                        {m.Beneficiario ? <strong className="text-slate-800">{m.Beneficiario} - </strong> : null}
-                        {m.Glosa}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <Badge
-                          className={
-                            m.Tipo === "Ingreso"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px]"
-                              : "bg-rose-50 text-rose-700 border-rose-200 text-[11px]"
-                          }
-                        >
-                          {m.Tipo}
-                        </Badge>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold whitespace-nowrap">
-                        <span className={m.Tipo === "Ingreso" ? "text-emerald-700" : "text-rose-700"}>
-                          Bs. {Number(m.Monto || 0).toFixed(2)}
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {bancos.map((b) => (
+                  <div key={b.IdCuentaBancaria || b.NumeroCuenta} className="p-4 sm:px-5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>{b.NombreBanco}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded tabular-nums">
+                          {b.TipoMoneda}
                         </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                      <div className="text-[11px] text-slate-400 tabular-nums">
+                        {b.TipoCuenta || "Cuenta Operativa"} · {b.NumeroCuenta}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-white">
+                        {b.TipoMoneda === "USD" ? "$us " : "Bs. "}
+                        {parseFloat(b.SaldoActual || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        {b.Titular || "Papelera Blanquita"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Movimientos Recientes de Caja */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-slate-900/60">
+          <CardHeader className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <Clock className="h-4 w-4 text-slate-500" />
+                Flujo de Caja en Tiempo Real
+              </CardTitle>
+              <a href="/contador/caja">
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-600 dark:text-slate-400">
+                  Libro diario
+                </Button>
+              </a>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {movimientosRecientes.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                {cargando ? "Consultando movimientos..." : "No hay movimientos registrados en la sesión actual."}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {movimientosRecientes.map((m) => {
+                  const esIngreso = m.TipoMovimiento === "Ingreso";
+                  return (
+                    <div key={m.IdMovimientoCaja || Math.random()} className="p-3.5 sm:px-5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <div className="space-y-0.5 min-w-0 pr-3">
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                          {m.Descripcion || m.Glosa || "Movimiento de tesorería"}
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center gap-2 tabular-nums">
+                          <span>{m.Categoria || "Operativo"}</span>
+                          <span>·</span>
+                          <span>{m.Solicitante || "Administración"}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className={`text-xs sm:text-sm font-bold tabular-nums ${esIngreso ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                          {esIngreso ? "+ Bs. " : "- Bs. "}
+                          {parseFloat(m.Monto || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <span className="text-[10px] text-slate-400 tabular-nums">
+                          {m.FechaMovimiento ? new Date(m.FechaMovimiento).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }) : "Hoy"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 4. ATRIBUTOS Y ACCESOS RÁPIDOS CONTABLES */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+        <a
+          href="/contador/caja-chica"
+          className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between group"
+        >
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">Caja Chica</div>
+            <div className="text-[10px] text-slate-400">Gastos menores y rendiciones</div>
           </div>
-        </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+        </a>
+
+        <a
+          href="/contador/notas-venta"
+          className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between group"
+        >
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">Notas de Venta</div>
+            <div className="text-[10px] text-slate-400">Facturación y despachos</div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+        </a>
+
+        <a
+          href="/contador/importacion"
+          className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between group"
+        >
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">Importación Extractos</div>
+            <div className="text-[10px] text-slate-400">Conciliación Excel / CSV</div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+        </a>
+
+        <a
+          href="/contador/reportes"
+          className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between group"
+        >
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">Reportes Financieros</div>
+            <div className="text-[10px] text-slate-400">Flujo, antigüedad de saldos</div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+        </a>
       </div>
     </div>
   );
 }
+

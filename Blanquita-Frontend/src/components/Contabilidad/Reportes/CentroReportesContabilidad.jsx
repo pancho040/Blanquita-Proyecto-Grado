@@ -206,7 +206,7 @@ export default function CentroReportesContabilidad() {
         { titulo: "Cartera Total Despachada", valor: m.total_cartera_bs, esMoneda: true, icono: HandCoins, colorText: "text-blue-600", colorBg: "bg-blue-50 dark:bg-blue-950/40" },
         { titulo: "Total Cobrado / Recuperado", valor: m.total_abonado_bs, esMoneda: true, icono: CheckCircle2, colorText: "text-emerald-600", colorBg: "bg-emerald-50 dark:bg-emerald-950/40" },
         { titulo: "Saldo Deudor Pendiente", valor: m.total_pendiente_bs, esMoneda: true, destacado: true, icono: AlertTriangle, colorText: "text-amber-600", colorBg: "bg-amber-50 dark:bg-amber-950/40" },
-        { titulo: "Mora > 15 Días (RN-01)", valor: m.deuda_vencida_15_dias_bs, esMoneda: true, icono: AlertTriangle, colorText: "text-rose-600", colorBg: "bg-rose-50 dark:bg-rose-950/40", subtitulo: `${m.clientes_en_riesgo || 0} clientes bloqueados` },
+        { titulo: "Mora > 15 Días", valor: m.deuda_vencida_15_dias_bs, esMoneda: true, icono: AlertTriangle, colorText: "text-rose-600", colorBg: "bg-rose-50 dark:bg-rose-950/40", subtitulo: `${m.clientes_en_riesgo || 0} clientes bloqueados` },
       ];
     } else if (tabActiva === "cuentas_pagar") {
       return [
