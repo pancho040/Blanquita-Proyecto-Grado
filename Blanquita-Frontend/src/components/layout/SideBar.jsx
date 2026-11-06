@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin } from "@/constants/NavBarRoutes";
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
 import { cerrarSesion } from "@/lib/logout-client";
+import { fetchConCache } from "@/lib/api-cache";
 
 const ANCHO_EXPANDIDO = "17rem";
 const ANCHO_COLAPSADO = "4.5rem";
@@ -90,6 +91,41 @@ function resolverRuta(basePath, prefijo, rutaItem, rutaSub = null) {
   return `/${base}`.replace(/\/+/g, "/").replace(/\/$/, "");
 }
 
+
+const MAPA_PRECARGA = {
+  "/admin": ["/api/tesoreria/dashboard-kpis", "/api/cxc/cartera-resumen"],
+  "/admin/inicio": ["/api/tesoreria/dashboard-kpis", "/api/cxc/cartera-resumen"],
+  "/admin/rrhh": ["/api/rrhh/resumen", "/api/rrhh/empleados"],
+  "/admin/rrhh/inicio": ["/api/rrhh/resumen", "/api/rrhh/empleados"],
+  "/admin/rrhh/empleados": ["/api/rrhh/empleados"],
+  "/admin/rrhh/planillas": ["/api/rrhh/periodos"],
+  "/admin/rrhh/asistencia": ["/api/rrhh/empleados"],
+  "/admin/rrhh/turnos": ["/api/rrhh/turnos"],
+  "/contador/inicio": ["/api/tesoreria/dashboard-kpis", "/api/tesoreria/cajas/actual"],
+  "/contador/caja": ["/api/tesoreria/cajas/actual", "/api/tesoreria/categorias-caja"],
+  "/contador/bancos": ["/api/tesoreria/bancos?solo_activas=true"],
+  "/contador/cuentas-cobrar": ["/api/cxc/cartera-resumen"],
+  "/contador/cuentas-pagar": ["/api/cxp/kpis-resumen"],
+  "/supervisor/inicio": ["/api/logistica/repartidores", "/api/logistica/zonas"],
+  "/supervisor/rutas": ["/api/logistica/rutas", "/api/logistica/zonas"],
+  "/supervisor/clientes": ["/api/logistica/clientes/simple"]
+};
+
+let _timerPrecarga = null;
+function precargarDatosRuta(ruta) {
+  if (typeof window === "undefined" || !ruta) return;
+  if (_timerPrecarga) clearTimeout(_timerPrecarga);
+  _timerPrecarga = setTimeout(() => {
+    const normalizada = normalizarRuta(ruta);
+    const endpoints = MAPA_PRECARGA[normalizada];
+    if (endpoints && Array.isArray(endpoints)) {
+      endpoints.forEach((ep) => {
+        fetchConCache(ep, {}, 45000).catch(() => {});
+      });
+    }
+  }, 40);
+}
+
 const EntradaSimple = React.memo(function EntradaSimple({ item, basePath, prefijo, colapsado, rutaActual }) {
   const rutaFinal = resolverRuta(basePath, prefijo, item.ruta);
   const activo = normalizarRuta(rutaActual) === normalizarRuta(rutaFinal);
@@ -99,6 +135,7 @@ const EntradaSimple = React.memo(function EntradaSimple({ item, basePath, prefij
       <a
         href={rutaFinal}
         data-astro-prefetch="hover"
+        onMouseEnter={() => precargarDatosRuta(rutaFinal)}
         title={item.titulo}
         onClick={guardarScrollSidebar}
         className={cn(
@@ -227,6 +264,7 @@ const GrupoColapsable = React.memo(function GrupoColapsable({
                 <a
                   href={subUrl}
                   data-astro-prefetch="hover"
+                  onMouseEnter={() => precargarDatosRuta(subUrl)}
                   title={sub.titulo}
                   onClick={guardarScrollSidebar}
                   className={cn(
