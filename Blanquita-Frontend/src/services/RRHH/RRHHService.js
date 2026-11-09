@@ -268,3 +268,95 @@ export async function ObtenerBoletaPago(idDetalle) {
   if (!response.ok) await manejarErrorBackend(response);
   return await response.json();
 }
+
+// ==========================================
+// FASE 3: PLANILLAS DUALES, ASISTENCIA Y FINIQUITOS (SUBAGENTE D)
+// ==========================================
+
+export async function ObtenerBoletaPagoDoble(idDetalle) {
+  const response = await fetchConCache(`/api/rrhh/planillas/boleta-doble/${idDetalle}`, {}, 30000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function GenerarPlanillaDual({ idPeriodo, tipoPlanilla = "INTERNA", idSucursal = null }) {
+  const response = await fetch("/api/rrhh/planillas/generar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      IdPeriodoNomina: idPeriodo,
+      TipoPlanilla: tipoPlanilla,
+      IdSucursal: idSucursal,
+    }),
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}
+
+export async function ListarEmpleadosDual({ area = "", asegurado = null, idSucursal = null, busqueda = "" } = {}) {
+  const params = new URLSearchParams();
+  if (area) params.append("area", area);
+  if (asegurado !== null && asegurado !== undefined) params.append("asegurado", asegurado);
+  if (idSucursal) params.append("id_sucursal", idSucursal);
+  if (busqueda) params.append("busqueda", busqueda);
+  const response = await fetchConCache(`/api/rrhh/empleados?${params.toString()}`, {}, 15000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function CalcularFiniquito(datos) {
+  const response = await fetch("/api/rrhh/finiquitos/calcular", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}
+
+export async function ListarFiniquitos(params = {}) {
+  const q = new URLSearchParams(params).toString();
+  const response = await fetchConCache(`/api/rrhh/finiquitos?${q}`, {}, 15000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function ObtenerFiniquito(idFiniquito) {
+  const response = await fetchConCache(`/api/rrhh/finiquitos/${idFiniquito}`, {}, 15000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function RegistrarNoVenta(datos) {
+  const response = await fetch("/api/rrhh/no-venta/registrar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}
+
+export async function ListarNoVenta(mes = null, anio = null) {
+  let url = "/api/rrhh/no-venta";
+  const params = [];
+  if (mes) params.push(`mes=${mes}`);
+  if (anio) params.push(`anio=${anio}`);
+  if (params.length) url += `?${params.join("&")}`;
+  const response = await fetchConCache(url, {}, 15000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function ImportarExcelOsvaldo(formData) {
+  const response = await fetch("/api/rrhh/importar-excel-osvaldo", {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}

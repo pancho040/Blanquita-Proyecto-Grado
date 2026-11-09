@@ -59,7 +59,7 @@ export const RutasAdmin = [
       { titulo: "Personal & Sueldos", icono: Users, ruta: "empleados" },
       { titulo: "Cronograma Turnos", icono: Calendar, ruta: "turnos" },
       { titulo: "Control Asistencia", icono: Clock, ruta: "asistencia" },
-      { titulo: "Planilla de Pagos", icono: DollarSign, ruta: "planillas" },
+      { titulo: "Planilla Dual & Finiquitos", icono: DollarSign, ruta: "planillas" },
       { titulo: "Configuración Laboral", icono: Settings2, ruta: "configuracion" },
       { titulo: "Reportes RRHH", icono: ClipboardList, ruta: "reportes" },
     ],
@@ -90,6 +90,7 @@ export const RutasAdmin = [
     subrutas: [
       { titulo: "Flujo de Caja", icono: Wallet, ruta: "caja" },
       { titulo: "Caja Chica", icono: Receipt, ruta: "caja-chica" },
+      { titulo: "Aprobación Caja Chica (Gerencia)", icono: ShieldCheck, ruta: "aprobacion-caja-chica" },
       { titulo: "Bancos", icono: Landmark, ruta: "bancos" },
       { titulo: "Cuentas por Cobrar", icono: HandCoins, ruta: "cuentas-cobrar" },
       { titulo: "Aprobación Cobros QR", icono: QrCode, ruta: "aprobacion-qr" },
@@ -130,6 +131,11 @@ export const RutasContador = [
     titulo: "Caja Chica",
     icono: Receipt,
     ruta: "caja-chica",
+  },
+  {
+    titulo: "Aprobación Caja Chica",
+    icono: ShieldCheck,
+    ruta: "aprobacion-caja-chica",
   },
   {
     titulo: "Bancos",

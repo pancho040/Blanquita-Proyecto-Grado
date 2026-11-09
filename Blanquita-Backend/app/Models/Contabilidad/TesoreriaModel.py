@@ -202,6 +202,7 @@ class SolicitudCajaChicaCrear(BaseModel):
 
     CodigoSolicitud: Optional[str] = None
     IdCaja: int = 1
+    IdSucursal: Optional[int] = Field(1, validation_alias=AliasChoices("IdSucursal", "id_sucursal"))
     FechaSolicitud: date = Field(default_factory=date.today)
     NombreSolicitante: str = Field(..., validation_alias=AliasChoices("NombreSolicitante", "solicitante"))
     CargoSolicitante: Optional[str] = Field("Producción", validation_alias=AliasChoices("CargoSolicitante", "departamento"))
@@ -212,10 +213,37 @@ class SolicitudCajaChicaCrear(BaseModel):
     IdCategoriaMovimientoCaja: Optional[int] = None
     RespaldoDoc: Optional[str] = None
 
+class EntregaFondosCajaChicaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    MontoEntregado: float = Field(..., gt=0, validation_alias=AliasChoices("MontoEntregado", "monto_entregado"))
+    NombreEntregadoPor: Optional[str] = Field("Caja Central", validation_alias=AliasChoices("NombreEntregadoPor", "entregado_por"))
+
+class DetalleGastoItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    Concepto: str = Field(..., min_length=2, max_length=255, validation_alias=AliasChoices("Concepto", "concepto"))
+    NroFactura: Optional[str] = Field(None, validation_alias=AliasChoices("NroFactura", "nro_factura"))
+    Proveedor: Optional[str] = Field(None, validation_alias=AliasChoices("Proveedor", "proveedor"))
+    Monto: float = Field(..., gt=0, validation_alias=AliasChoices("Monto", "monto"))
+
+class RendicionGastoCajaChicaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    Items: List[DetalleGastoItem] = Field(..., min_length=1, validation_alias=AliasChoices("Items", "items", "detalles"))
+    IdComprobanteArchivo: int = Field(..., validation_alias=AliasChoices("IdComprobanteArchivo", "id_comprobante_archivo", "id_comprobante"))
+    RespaldoDoc: Optional[str] = Field(None, validation_alias=AliasChoices("RespaldoDoc", "respaldo_doc"))
+
+class ResolverAprobacionGerenciaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    Aprobado: bool = Field(..., validation_alias=AliasChoices("Aprobado", "aprobado"))
+    Observaciones: Optional[str] = Field(None, validation_alias=AliasChoices("Observaciones", "observaciones", "motivo"))
+
 class SolicitudCajaChicaActualizarEstado(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    Estado: str = Field(..., description="'Pendiente', 'Aprobada', 'Rendida', 'Rechazada'")
+    Estado: str = Field(..., description="'Pendiente', 'Entregado', 'Rendido', 'Aprobada', 'Rechazada'")
     RespaldoDoc: Optional[str] = None
     GenerarMovimientoCaja: bool = False
     MontoAprobado: Optional[float] = None
@@ -229,21 +257,28 @@ class SolicitudCajaChicaResponse(BaseModel):
     IdSolicitudCajaChica: int
     CodigoSolicitud: str
     IdCaja: int
+    IdSucursal: Optional[int] = 1
     NombreCaja: Optional[str] = None
     FechaSolicitud: date
     NombreSolicitante: str
     CargoSolicitante: Optional[str] = None
     MontoSolicitado: float
+    MontoEntregado: Optional[float] = None
+    MontoGastoReal: Optional[float] = None
+    MontoReintegro: Optional[float] = None
     DestinoJustificacion: str
     NombreEntregadoPor: Optional[str] = None
     NombreAprobadoPor: Optional[str] = None
     Estado: str
+    AprobacionGerencia: str = "PENDIENTE"
+    IdComprobanteArchivo: Optional[int] = None
+    UrlComprobante: Optional[str] = None
     IdCategoriaMovimientoCaja: Optional[int] = None
     NombreCategoria: Optional[str] = None
     RespaldoDoc: Optional[str] = None
     IdMovimientoCaja: Optional[int] = None
     FechaRegistro: Optional[datetime] = None
-    MontoGastado: Optional[float] = None
+    DetallesGasto: List[dict] = Field(default_factory=list)
 
     @property
     def IdSolicitud(self) -> int:

@@ -16,10 +16,13 @@ class EmpleadoActualizar(BaseModel):
     Area: Optional[str] = None
     SueldoBasico: Optional[Decimal] = None
     FechaIngreso: Optional[date] = None
+    FechaRetiro: Optional[date] = None
     PorcentajeComisionDefault: Optional[Decimal] = None
     CuentaBancaria: Optional[str] = None
     Banco: Optional[str] = None
     Activo: Optional[bool] = None
+    EsAsegurado: Optional[bool] = None
+    IdSucursal: Optional[int] = None
 
 class EmpleadoResponse(BaseModel):
     IdUsuario: int
@@ -36,11 +39,14 @@ class EmpleadoResponse(BaseModel):
     Area: Optional[str] = "Rebobinado"
     SueldoBasico: Decimal = Decimal("0.00")
     FechaIngreso: Optional[date] = None
+    FechaRetiro: Optional[date] = None
     PorcentajeComisionDefault: Decimal = Decimal("0.00")
     CuentaBancaria: Optional[str] = None
     Banco: Optional[str] = None
     Activo: bool = True
     IsAdmin: bool = False
+    EsAsegurado: bool = True
+    IdSucursal: Optional[int] = 1
 
 # =============================================================================
 # MODELOS TURNOS Y HORARIOS
@@ -149,6 +155,8 @@ class PeriodoNominaResponse(BaseModel):
 
 class PlanillaGenerarRequest(BaseModel):
     IdPeriodoNomina: int
+    TipoPlanilla: str = Field("INTERNA", description="'OFICIAL' o 'INTERNA'")
+    IdSucursal: Optional[int] = None
 
 class DetallePlanillaActualizar(BaseModel):
     SueldoBasico: Optional[Decimal] = None
@@ -157,6 +165,9 @@ class DetallePlanillaActualizar(BaseModel):
     TotalBonos: Optional[Decimal] = None
     DescuentoAtrasos: Optional[Decimal] = None
     DescuentoFaltas: Optional[Decimal] = None
+    DescuentoNoVenta: Optional[Decimal] = None
+    HorasTrabajadasAJ: Optional[Decimal] = None
+    ValorHora: Optional[Decimal] = None
     AporteAFP: Optional[Decimal] = None
     OtrasDeducciones: Optional[Decimal] = None
     TotalGanado: Optional[Decimal] = None
@@ -166,3 +177,82 @@ class DetallePlanillaActualizar(BaseModel):
 
 class PlanillaAprobarRequest(BaseModel):
     Observacion: Optional[str] = None
+
+
+# =============================================================================
+# FINIQUITOS LABORALES (MINISTERIO DE TRABAJO)
+# =============================================================================
+class FiniquitoCalcularRequest(BaseModel):
+    IdUsuario: int
+    FechaRetiro: date
+    MotivoRetiro: Optional[str] = "Retiro Voluntario"
+    Sueldo1: Optional[Decimal] = None
+    Sueldo2: Optional[Decimal] = None
+    Sueldo3: Optional[Decimal] = None
+    IncluirAguinaldoDuodecimas: bool = True
+    IncluirVacacionDuodecimas: bool = False
+    Deducciones: Optional[Decimal] = Decimal("0.00")
+
+class FiniquitoResponse(BaseModel):
+    IdFiniquito: Optional[int] = None
+    IdUsuario: int
+    NombreCompleto: str
+    Ci: str
+    Cargo: Optional[str] = None
+    FechaIngreso: date
+    FechaRetiro: date
+    MotivoRetiro: str
+    Anios: int
+    Meses: int
+    Dias: int
+    Sueldo1: Decimal
+    Sueldo2: Decimal
+    Sueldo3: Decimal
+    SueldoPromedio: Decimal
+    MontoIndemnizacion: Decimal
+    AguinaldoDuodecimas: Decimal
+    VacacionDuodecimas: Decimal
+    Desahucios: Decimal
+    Deducciones: Decimal
+    MontoTotal: Decimal
+    MontoTotalLiteral: str
+    AprobadoPorGerencia: bool
+    FechaCalculo: datetime
+
+
+# =============================================================================
+# DEDUCCIONES COMPARTIDAS POR NO VENTA Y FALTANTES
+# =============================================================================
+class RegistrarNoVentaRequest(BaseModel):
+    Concepto: str = Field(..., min_length=3, max_length=255)
+    MontoTotal: Decimal = Field(..., gt=0)
+    ResponsablesIds: List[int] = Field(..., min_length=1)
+    FechaIncidente: Optional[date] = None
+    IdSucursal: Optional[int] = None
+
+class DetalleNoVentaItem(BaseModel):
+    IdUsuario: int
+    NombreCompleto: str
+    CuotaDescuento: Decimal
+    Aplicado: bool
+
+class NoVentaResponse(BaseModel):
+    Id: int
+    Concepto: str
+    MontoTotal: Decimal
+    NumResponsables: int
+    CuotaIndividual: Decimal
+    FechaIncidente: date
+    Estado: str
+    Detalles: List[DetalleNoVentaItem]
+
+
+# =============================================================================
+# IMPORTACIÓN EXCEL ASISTENCIA DON OSVALDO
+# =============================================================================
+class ImportacionExcelOsvaldoResponse(BaseModel):
+    TotalFilasProcesadas: int
+    TotalEmpleadosAfectados: int
+    TotalHorasComputadas: Decimal
+    TotalDiasFaltados: int
+    DetallePorEmpleado: List[dict]

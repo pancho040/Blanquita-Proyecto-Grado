@@ -10,7 +10,7 @@ class RRHHRepository:
     # =========================================================================
     # 1. EMPLEADOS & DATOS LABORALES
     # =========================================================================
-    def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None) -> list[dict]:
+    def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None, es_asegurado: bool | None = None, id_sucursal: int | None = None) -> list[dict]:
         params = {}
         where_clauses = []
 
@@ -28,8 +28,16 @@ class RRHHRepository:
             params["area"] = area
 
         if activo is not None:
-            where_clauses.append('d."Activo" = :activo')
+            where_clauses.append('COALESCE(d."Activo", true) = :activo')
             params["activo"] = activo
+
+        if es_asegurado is not None:
+            where_clauses.append('COALESCE(d."EsAsegurado", true) = :es_asegurado')
+            params["es_asegurado"] = es_asegurado
+
+        if id_sucursal is not None:
+            where_clauses.append('COALESCE(d."IdSucursal", 1) = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -50,13 +58,18 @@ class RRHHRepository:
                 COALESCE(d."Area", 'Rebobinado') as "Area",
                 COALESCE(d."SueldoBasico", 2500.00) as "SueldoBasico",
                 d."FechaIngreso",
+                d."FechaRetiro",
                 COALESCE(d."PorcentajeComisionDefault", 0.00) as "PorcentajeComisionDefault",
                 d."CuentaBancaria",
                 d."Banco",
-                COALESCE(d."Activo", true) as "Activo"
+                COALESCE(d."Activo", true) as "Activo",
+                COALESCE(d."EsAsegurado", true) as "EsAsegurado",
+                COALESCE(d."IdSucursal", 1) as "IdSucursal",
+                s."nombre" as "NombreSucursal"
             FROM "Usuario" u
             JOIN "Rol" r ON u."IdRol" = r."IdRol"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", 1) = s."id"
             {where_sql}
             ORDER BY COALESCE(d."Activo", true) DESC, d."Area" ASC, u."PrimerNombre" ASC;
         """
@@ -101,13 +114,18 @@ class RRHHRepository:
                 COALESCE(d."Area", 'Rebobinado') as "Area",
                 COALESCE(d."SueldoBasico", 2500.00) as "SueldoBasico",
                 d."FechaIngreso",
+                d."FechaRetiro",
                 COALESCE(d."PorcentajeComisionDefault", 0.00) as "PorcentajeComisionDefault",
                 d."CuentaBancaria",
                 d."Banco",
-                COALESCE(d."Activo", true) as "Activo"
+                COALESCE(d."Activo", true) as "Activo",
+                COALESCE(d."EsAsegurado", true) as "EsAsegurado",
+                COALESCE(d."IdSucursal", 1) as "IdSucursal",
+                s."nombre" as "NombreSucursal"
             FROM "Usuario" u
             JOIN "Rol" r ON u."IdRol" = r."IdRol"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", 1) = s."id"
             WHERE u."IdUsuario" = :id_usuario;
         """
         return self.caller.LlamarUnRegistro(sql, {"id_usuario": id_usuario})
@@ -530,8 +548,17 @@ class RRHHRepository:
         params = {"mes": mes, "anio": anio, "f_ini": fecha_inicio, "f_fin": fecha_fin}
         return self.caller.LlamarUnRegistro(sql, params)
 
-    def ObtenerPlanillaPorPeriodo(self, id_periodo: int) -> dict | None:
-        sql = """
+    def ObtenerPlanillaPorPeriodo(self, id_periodo: int, tipo_planilla: str | None = None, id_sucursal: int | None = None) -> dict | None:
+        where = ['pl."IdPeriodoNomina" = :id_periodo']
+        params = {"id_periodo": id_periodo}
+        if tipo_planilla:
+            where.append('pl."TipoPlanilla" = :tipo_planilla')
+            params["tipo_planilla"] = tipo_planilla
+        if id_sucursal:
+            where.append('COALESCE(pl."IdSucursal", 1) = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
+
+        sql = f"""
             SELECT 
                 pl."IdPlanilla",
                 pl."IdPeriodoNomina",
@@ -547,6 +574,9 @@ class RRHHRepository:
                 pl."TotalDeducciones",
                 pl."TotalLiquido",
                 pl."Aprobada",
+                COALESCE(pl."TipoPlanilla", 'INTERNA') as "TipoPlanilla",
+                COALESCE(pl."IdSucursal", 1) as "IdSucursal",
+                s."nombre" as "NombreSucursal",
                 CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
                 pl."IdUsuarioAprueba",
                 CONCAT(ua."PrimerNombre", ' ', ua."ApellidoPaterno") as "AprobadoPor",
@@ -556,20 +586,29 @@ class RRHHRepository:
             JOIN "PeriodoNomina" p ON pl."IdPeriodoNomina" = p."IdPeriodoNomina"
             LEFT JOIN "Usuario" ug ON pl."IdUsuarioGenera" = ug."IdUsuario"
             LEFT JOIN "Usuario" ua ON pl."IdUsuarioAprueba" = ua."IdUsuario"
-            WHERE pl."IdPeriodoNomina" = :id_periodo;
+            LEFT JOIN "sucursales" s ON COALESCE(pl."IdSucursal", 1) = s."id"
+            WHERE {" AND ".join(where)}
+            ORDER BY pl."IdPlanilla" DESC;
         """
-        return self.caller.LlamarUnRegistro(sql, {"id_periodo": id_periodo})
+        return self.caller.LlamarUnRegistro(sql, params)
 
-    def CrearPlanillaCabecera(self, id_periodo: int, id_usuario_genera: int) -> dict:
+    def CrearPlanillaCabecera(self, id_periodo: int, id_usuario_genera: int, tipo_planilla: str = "INTERNA", id_sucursal: int | None = None) -> dict:
         sql = """
             INSERT INTO "Planilla" (
                 "IdPeriodoNomina", "IdUsuarioGenera", "FechaGeneracion",
-                "TotalSueldoBruto", "TotalDeducciones", "TotalLiquido", "Aprobada"
+                "TotalSueldoBruto", "TotalDeducciones", "TotalLiquido", "Aprobada",
+                "TipoPlanilla", "IdSucursal"
             ) VALUES (
-                :id_periodo, :id_usuario, now(), 0, 0, 0, false
+                :id_periodo, :id_usuario, now(), 0, 0, 0, false,
+                :tipo_planilla, :id_sucursal
             ) RETURNING "IdPlanilla";
         """
-        return self.caller.LlamarUnRegistro(sql, {"id_periodo": id_periodo, "id_usuario": id_usuario_genera})
+        return self.caller.LlamarUnRegistro(sql, {
+            "id_periodo": id_periodo, 
+            "id_usuario": id_usuario_genera,
+            "tipo_planilla": tipo_planilla,
+            "id_sucursal": id_sucursal
+        })
 
     def EliminarDetallesPlanilla(self, id_planilla: int) -> None:
         sql = 'DELETE FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_planilla;'
@@ -580,11 +619,13 @@ class RRHHRepository:
             INSERT INTO "DetallePlanilla" (
                 "IdPlanilla", "IdUsuario", "SueldoBasico", "MontoHorasExtra",
                 "MontoComisiones", "TotalBonos", "DescuentoAtrasos", "DescuentoFaltas",
+                "DescuentoNoVenta", "HorasTrabajadasAJ", "ValorHora",
                 "AporteAFP", "OtrasDeducciones", "TotalGanado", "TotalDescuento",
                 "LiquidoPagable", "Observacion"
             ) VALUES (
                 :IdPlanilla, :IdUsuario, :SueldoBasico, :MontoHorasExtra,
                 :MontoComisiones, :TotalBonos, :DescuentoAtrasos, :DescuentoFaltas,
+                :DescuentoNoVenta, :HorasTrabajadasAJ, :ValorHora,
                 :AporteAFP, :OtrasDeducciones, :TotalGanado, :TotalDescuento,
                 :LiquidoPagable, :Observacion
             ) RETURNING "IdDetallePlanilla";
@@ -615,12 +656,16 @@ class RRHHRepository:
                 COALESCE(d."Area", 'Rebobinado') as "Area",
                 COALESCE(d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
                 COALESCE(d."Banco", 'Banco Unión') as "Banco",
+                COALESCE(d."EsAsegurado", true) as "EsAsegurado",
                 dp."SueldoBasico",
                 dp."MontoHorasExtra",
                 dp."MontoComisiones",
                 dp."TotalBonos",
                 dp."DescuentoAtrasos",
                 dp."DescuentoFaltas",
+                COALESCE(dp."DescuentoNoVenta", 0.00) as "DescuentoNoVenta",
+                COALESCE(dp."HorasTrabajadasAJ", 0.00) as "HorasTrabajadasAJ",
+                COALESCE(dp."ValorHora", 0.0000) as "ValorHora",
                 dp."AporteAFP",
                 dp."OtrasDeducciones",
                 dp."TotalGanado",
@@ -633,6 +678,7 @@ class RRHHRepository:
             WHERE dp."IdPlanilla" = :id_planilla
             ORDER BY d."Area" ASC, u."PrimerNombre" ASC;
         """
+        return self.caller.LlamarFuncion(sql, {"id_planilla": id_planilla})
         return self.caller.LlamarFuncion(sql, {"id_planilla": id_planilla})
 
     def ObtenerDetallePlanillaPorId(self, id_detalle: int) -> dict | None:
@@ -885,3 +931,148 @@ class RRHHRepository:
             pass
 
         return mov
+
+    # =========================================================================
+    # 8. FINIQUITOS LABORALES (MINISTERIO DE TRABAJO)
+    # =========================================================================
+    def ObtenerUltimos3Sueldos(self, id_usuario: int) -> list[Decimal]:
+        sql = """
+            SELECT dp."TotalGanado"
+            FROM "DetallePlanilla" dp
+            JOIN "Planilla" p ON dp."IdPlanilla" = p."IdPlanilla"
+            WHERE dp."IdUsuario" = :id_u AND p."Aprobada" = true
+            ORDER BY p."IdPeriodoNomina" DESC
+            LIMIT 3;
+        """
+        rows = self.caller.LlamarFuncion(sql, {"id_u": id_usuario})
+        if rows:
+            return [Decimal(str(r["TotalGanado"])) for r in rows]
+        # Si no hay planillas aprobadas previas, consultar sueldo basico del contrato
+        emp = self.ObtenerEmpleadoPorId(id_usuario)
+        sueldo = Decimal(str(emp.get("SueldoBasico") or 2500.00)) if emp else Decimal("2500.00")
+        return [sueldo, sueldo, sueldo]
+
+    def CrearFiniquito(self, datos: dict) -> dict:
+        sql = """
+            INSERT INTO "Finiquito" (
+                "IdUsuario", "FechaIngreso", "FechaRetiro", "MotivoRetiro",
+                "Anios", "Meses", "Dias", "Sueldo1", "Sueldo2", "Sueldo3",
+                "SueldoPromedio", "MontoIndemnizacion", "AguinaldoDuodecimas",
+                "VacacionDuodecimas", "Desahucios", "Deducciones", "MontoTotal",
+                "AprobadoPorGerencia", "FechaCalculo"
+            ) VALUES (
+                :IdUsuario, :FechaIngreso, :FechaRetiro, :MotivoRetiro,
+                :Anios, :Meses, :Dias, :Sueldo1, :Sueldo2, :Sueldo3,
+                :SueldoPromedio, :MontoIndemnizacion, :AguinaldoDuodecimas,
+                :VacacionDuodecimas, :Desahucios, :Deducciones, :MontoTotal,
+                :AprobadoPorGerencia, NOW()
+            ) RETURNING *;
+        """
+        return self.caller.LlamarUnRegistro(sql, datos)
+
+    def ObtenerFiniquitoPorId(self, id_finiquito: int) -> dict | None:
+        sql = """
+            SELECT f.*, 
+                   CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                   u."Ci",
+                   COALESCE(d."Cargo", 'Operador') as "Cargo"
+            FROM "Finiquito" f
+            JOIN "Usuario" u ON f."IdUsuario" = u."IdUsuario"
+            LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            WHERE f."IdFiniquito" = :id_f;
+        """
+        return self.caller.LlamarUnRegistro(sql, {"id_f": id_finiquito})
+
+    def ListarFiniquitos(self, id_usuario: int | None = None) -> list[dict]:
+        params = {}
+        where = ""
+        if id_usuario:
+            where = 'WHERE f."IdUsuario" = :id_u'
+            params["id_u"] = id_usuario
+
+        sql = f"""
+            SELECT f.*, 
+                   CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                   u."Ci",
+                   COALESCE(d."Cargo", 'Operador') as "Cargo"
+            FROM "Finiquito" f
+            JOIN "Usuario" u ON f."IdUsuario" = u."IdUsuario"
+            LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            {where}
+            ORDER BY f."FechaCalculo" DESC, f."IdFiniquito" DESC;
+        """
+        return self.caller.LlamarFuncion(sql, params)
+
+    # =========================================================================
+    # 9. DEDUCCIÓN COMPARTIDA POR NO VENTA Y FALTANTES
+    # =========================================================================
+    def CrearDeudaNoVenta(self, concepto: str, monto_total: Decimal, num_responsables: int, fecha_incidente: date, id_sucursal: int | None = None) -> int:
+        sql = """
+            INSERT INTO "deudas_no_venta" (
+                "concepto", "monto_total", "num_responsables", "fecha_incidente", "estado", "id_sucursal"
+            ) VALUES (
+                :concepto, :monto_total, :num_responsables, :fecha_incidente, 'PENDIENTE', :id_sucursal
+            ) RETURNING id;
+        """
+        res = self.caller.LlamarUnRegistro(sql, {
+            "concepto": concepto,
+            "monto_total": monto_total,
+            "num_responsables": num_responsables,
+            "fecha_incidente": fecha_incidente,
+            "id_sucursal": id_sucursal or 1
+        })
+        return res["id"]
+
+    def CrearDetalleNoVentaEmpleado(self, deuda_id: int, id_usuario: int, cuota: Decimal) -> None:
+        sql = """
+            INSERT INTO "detalles_no_venta_empleado" (
+                "deuda_no_venta_id", "id_usuario", "cuota_descuento", "aplicado"
+            ) VALUES (
+                :deuda_id, :id_u, :cuota, false
+            );
+        """
+        self.caller.LlamarFuncion(sql, {"deuda_id": deuda_id, "id_u": id_usuario, "cuota": cuota})
+
+    def ListarDeudasNoVenta(self, id_sucursal: int | None = None) -> list[dict]:
+        params = {}
+        where = ""
+        if id_sucursal:
+            where = 'WHERE d."id_sucursal" = :id_s'
+            params["id_s"] = id_sucursal
+
+        sql = f"""
+            SELECT d.*, s."nombre" as "NombreSucursal"
+            FROM "deudas_no_venta" d
+            LEFT JOIN "sucursales" s ON d."id_sucursal" = s."id"
+            {where}
+            ORDER BY d."fecha_incidente" DESC, d."id" DESC;
+        """
+        deudas = self.caller.LlamarFuncion(sql, params)
+        for d in deudas:
+            sql_det = """
+                SELECT det.*, CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreCompleto"
+                FROM "detalles_no_venta_empleado" det
+                JOIN "Usuario" u ON det."id_usuario" = u."IdUsuario"
+                WHERE det."deuda_no_venta_id" = :deuda_id;
+            """
+            d["Detalles"] = self.caller.LlamarFuncion(sql_det, {"deuda_id": d["id"]})
+        return deudas
+
+    def ObtenerCuotasNoVentaPendientes(self, id_usuario: int) -> list[dict]:
+        sql = """
+            SELECT det."id", det."cuota_descuento", d."concepto", d."fecha_incidente"
+            FROM "detalles_no_venta_empleado" det
+            JOIN "deudas_no_venta" d ON det."deuda_no_venta_id" = d."id"
+            WHERE det."id_usuario" = :id_u AND det."aplicado" = false;
+        """
+        return self.caller.LlamarFuncion(sql, {"id_u": id_usuario})
+
+    def MarcarCuotasNoVentaAplicadas(self, detalles_ids: list[int], id_planilla: int) -> None:
+        if not detalles_ids:
+            return
+        sql = """
+            UPDATE "detalles_no_venta_empleado"
+            SET "aplicado" = true, "id_planilla_aplicada" = :id_p
+            WHERE "id" = ANY(:ids);
+        """
+        self.caller.LlamarFuncion(sql, {"ids": detalles_ids, "id_p": id_planilla})

@@ -4,8 +4,11 @@ from app.Repository.Contabilidad.TesoreriaRepository import TesoreriaRepository
 from app.Models.Contabilidad.TesoreriaModel import (
     CuentaBancariaCrear, CuentaBancariaActualizar, AperturaCajaCrear,
     CierreCajaCrear, MovimientoCajaCrear, SolicitudCajaChicaCrear,
-    SolicitudCajaChicaActualizarEstado
+    SolicitudCajaChicaActualizarEstado, EntregaFondosCajaChicaRequest,
+    RendicionGastoCajaChicaRequest, ResolverAprobacionGerenciaRequest
 )
+from app.Services.Common.NotificationService import NotificationService
+from app.Services.Usuario.AuditService import AuditService
 
 class TesoreriaService:
     def __init__(self, db: Session):
@@ -214,7 +217,136 @@ class TesoreriaService:
         codigo = dto.CodigoSolicitud or self.repo.GenerarCodigoSolicitud(dto.FechaSolicitud)
         payload = dto.model_dump()
         payload["CodigoSolicitud"] = codigo
+        payload["Estado"] = "PENDIENTE"
+        payload["AprobacionGerencia"] = "PENDIENTE"
         return self.repo.CrearSolicitudCajaChica(payload)
+
+    def EntregarFondosCajaChica(self, id_solicitud: int, dto: EntregaFondosCajaChicaRequest) -> dict:
+        sol = self.ObtenerSolicitudCajaChica(id_solicitud)
+        if sol["Estado"] not in ["PENDIENTE", "Pendiente"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La solicitud ya se encuentra en estado '{sol['Estado']}' y no puede recibir entrega de fondos inicial"
+            )
+
+        updates = {
+            "Estado": "ENTREGADO",
+            "MontoEntregado": float(dto.MontoEntregado),
+            "NombreEntregadoPor": dto.NombreEntregadoPor or "Caja Central"
+        }
+        return self.repo.ActualizarSolicitudCajaChica(id_solicitud, updates)
+
+    def RendirGastoCajaChica(self, id_solicitud: int, dto: RendicionGastoCajaChicaRequest) -> dict:
+        sol = self.ObtenerSolicitudCajaChica(id_solicitud)
+        if sol["Estado"] not in ["ENTREGADO", "Entregado"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solo se pueden rendir cuentas de solicitudes que hayan recibido entrega de fondos ('ENTREGADO')"
+            )
+
+        if not dto.IdComprobanteArchivo:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="La fotografía o archivo del comprobante/factura de respaldo es obligatoria para rendir caja chica"
+            )
+
+        # 1. Registrar cada ítem en DetalleGastoCajaChica y sumar monto real
+        monto_gasto_real = 0.0
+        for item in dto.Items:
+            monto_gasto_real += float(item.Monto)
+            self.repo.InsertarDetalleGastoCajaChica(
+                solicitud_id=id_solicitud,
+                concepto=item.Concepto,
+                nro_factura=item.NroFactura,
+                proveedor=item.Proveedor,
+                monto=float(item.Monto)
+            )
+
+        monto_entregado = float(sol.get("MontoEntregado") or sol.get("MontoSolicitado"))
+        # Cálculo automático de reintegro/cambio devuelto a caja
+        monto_reintegro = round(monto_entregado - monto_gasto_real, 2)
+
+        updates = {
+            "Estado": "RENDIDO",
+            "MontoGastoReal": round(monto_gasto_real, 2),
+            "MontoReintegro": monto_reintegro,
+            "IdComprobanteArchivo": dto.IdComprobanteArchivo,
+            "RespaldoDoc": dto.RespaldoDoc or f"Comprobante digital #{dto.IdComprobanteArchivo}"
+        }
+        sol_actualizada = self.repo.ActualizarSolicitudCajaChica(id_solicitud, updates)
+
+        # 2. Notificar a Don Osvaldo (Gerencia) que el vale está rendido y listo para revisión
+        NotificationService().CrearNotificacion(
+            id_usuario_destinatario=None,
+            tipo_alerta="CAJA_CHICA_RENDIDA",
+            titulo=f"Vale Rendido: {sol['CodigoSolicitud']}",
+            mensaje=f"Kevin rindió el vale {sol['CodigoSolicitud']} por Bs. {monto_gasto_real:.2f} (Reintegro: Bs. {monto_reintegro:.2f}). Pendiente de firma gerencial.",
+            codigo_referencia=id_solicitud
+        )
+
+        return self.ObtenerSolicitudCajaChica(id_solicitud)
+
+    def ResolverAprobacionGerencia(self, id_solicitud: int, dto: ResolverAprobacionGerenciaRequest, id_gerente: int) -> dict:
+        sol = self.ObtenerSolicitudCajaChica(id_solicitud)
+        if sol["Estado"] not in ["RENDIDO", "Rendido", "Rendida"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Gerencia solo puede autorizar o rechazar solicitudes que hayan sido completamente rendidas con sus respaldos"
+            )
+
+        nuevo_estado_gerencia = "APROBADO" if dto.Aprobado else "RECHAZADO"
+        datos_actualizar = {
+            "AprobacionGerencia": nuevo_estado_gerencia,
+            "NombreAprobadoPor": f"GERENCIA (Usuario #{id_gerente})"
+        }
+
+        # Si se aprueba, generar el egreso real en caja por el MontoGastoReal
+        if dto.Aprobado and not sol.get("IdMovimientoCaja"):
+            gasto_neto = float(sol.get("MontoGastoReal") or sol.get("MontoSolicitado"))
+            mov_datos = {
+                "IdCategoriaMovimientoCaja": sol.get("IdCategoriaMovimientoCaja") or 6, # 6 = Egreso Operativo
+                "Monto": gasto_neto,
+                "MetodoPago": "Efectivo",
+                "NotaCodigo": sol["CodigoSolicitud"],
+                "Solicitante": sol["NombreSolicitante"],
+                "Respaldo": sol.get("RespaldoDoc"),
+                "Descripcion": f"Descargo Vale Caja Chica {sol['CodigoSolicitud']} - {sol['DestinoJustificacion']}"
+            }
+            mov = self.RegistrarMovimientoCaja(MovimientoCajaCrear(**mov_datos), id_gerente)
+            datos_actualizar["IdMovimientoCaja"] = mov["IdMovimientoCaja"]
+
+        res = self.repo.ActualizarSolicitudCajaChica(id_solicitud, datos_actualizar)
+
+        AuditService().RegistrarAuditoria(
+            id_usuario=id_gerente,
+            accion="RESOLUCION_GERENCIA_CAJA_CHICA",
+            tabla="SolicitudCajaChica",
+            id_registro=id_solicitud,
+            detalle={
+                "codigo": sol["CodigoSolicitud"],
+                "resolucion": nuevo_estado_gerencia,
+                "monto_gasto_real": sol.get("MontoGastoReal"),
+                "observaciones": dto.Observaciones
+            }
+        )
+        return self.ObtenerSolicitudCajaChica(id_solicitud)
+
+    def ValidarImpresionVale(self, id_solicitud: int) -> dict:
+        sol = self.ObtenerSolicitudCajaChica(id_solicitud)
+        aprobacion = str(sol.get("AprobacionGerencia") or "PENDIENTE").upper()
+        if aprobacion != "APROBADO":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El vale no puede ser impreso ni descargado mientras la aprobación de Gerencia esté pendiente o haya sido rechazada"
+            )
+        return {
+            "PuedeImprimir": True,
+            "Vale": sol,
+            "Detalles": self.repo.ListarDetallesGastoCajaChica(id_solicitud)
+        }
+
+    def ListarPendientesAprobacionGerencia(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarPendientesAprobacionGerencia(id_sucursal)
 
     def ActualizarEstadoSolicitud(self, id_solicitud: int, dto: SolicitudCajaChicaActualizarEstado, id_usuario: int) -> dict:
         sol = self.ObtenerSolicitudCajaChica(id_solicitud)
@@ -227,7 +359,7 @@ class TesoreriaService:
         if dto.GenerarMovimientoCaja and dto.Estado in ["Aprobada", "Rendida"] and not sol.get("IdMovimientoCaja"):
             mov_datos = {
                 "IdCategoriaMovimientoCaja": sol.get("IdCategoriaMovimientoCaja") or 6, # 6 = Egreso Operativo
-                "Monto": float(sol["MontoSolicitado"]),
+                "Monto": float(sol.get("MontoGastoReal") or sol["MontoSolicitado"]),
                 "MetodoPago": "Efectivo",
                 "NotaCodigo": sol["CodigoSolicitud"],
                 "Solicitante": sol["NombreSolicitante"],

@@ -3,6 +3,9 @@ from fastapi import HTTPException, status
 from datetime import date, datetime, timedelta, time
 from decimal import Decimal, ROUND_HALF_UP
 import re
+import calendar
+import io
+import openpyxl
 
 from app.Repository.RRHH.RRHHRepository import RRHHRepository
 
@@ -74,8 +77,8 @@ class RRHHService:
     # =========================================================================
     # 1. EMPLEADOS
     # =========================================================================
-    def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None) -> list[dict]:
-        return self.repository.ListarEmpleados(busqueda, area, activo)
+    def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None, es_asegurado: bool | None = None, id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarEmpleados(busqueda, area, activo, es_asegurado, id_sucursal)
 
     def ListarEmpleadosSimple(self, area: str = "") -> list[dict]:
         return self.repository.ListarEmpleadosSimple(area)
@@ -101,10 +104,13 @@ class RRHHService:
             "Area": datos.get("Area"),
             "SueldoBasico": datos.get("SueldoBasico"),
             "FechaIngreso": datos.get("FechaIngreso"),
+            "FechaRetiro": datos.get("FechaRetiro"),
             "PorcentajeComisionDefault": datos.get("PorcentajeComisionDefault"),
             "CuentaBancaria": datos.get("CuentaBancaria"),
             "Banco": datos.get("Banco"),
             "Activo": datos.get("Activo"),
+            "EsAsegurado": datos.get("EsAsegurado"),
+            "IdSucursal": datos.get("IdSucursal"),
         }
         return self.repository.ActualizarEmpleado(id_usuario, campos_usuario, campos_laborales)
 
@@ -316,8 +322,8 @@ class RRHHService:
     def CrearPeriodo(self, mes: int, anio: int, fecha_inicio: date, fecha_fin: date) -> dict:
         return self.repository.CrearPeriodoNomina(mes, anio, fecha_inicio, fecha_fin)
 
-    def ObtenerPlanillaPeriodo(self, id_periodo: int) -> dict | None:
-        planilla = self.repository.ObtenerPlanillaPorPeriodo(id_periodo)
+    def ObtenerPlanillaPeriodo(self, id_periodo: int, tipo_planilla: str | None = None, id_sucursal: int | None = None) -> dict | None:
+        planilla = self.repository.ObtenerPlanillaPorPeriodo(id_periodo, tipo_planilla, id_sucursal)
         if not planilla:
             return None
         detalles = self.repository.ListarDetallesPlanilla(planilla["IdPlanilla"])
@@ -327,23 +333,24 @@ class RRHHService:
             **planilla
         }
 
-    def GenerarPlanilla(self, id_periodo: int, id_usuario_genera: int) -> dict:
+    def GenerarPlanilla(self, id_periodo: int, id_usuario_genera: int, tipo_planilla: str = "INTERNA", id_sucursal: int | None = None) -> dict:
         periodo = self.repository.ObtenerPeriodoPorId(id_periodo)
         if not periodo:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Periodo de nómina no encontrado")
 
         f_ini = periodo["FechaInicio"]
         f_fin = periodo["FechaFin"]
+        tipo = tipo_planilla.upper()
 
-        # Parametros laborales vigentes
+        # Parámetros laborales vigentes
         recargo_he = self.repository.ObtenerValorConfiguracion("RecargoHoraExtraPorcentaje", Decimal("100")) # 100% recargo
         factor_he = Decimal("1.0") + (recargo_he / Decimal("100")) # ej. 2.0
         porcentaje_afp = self.repository.ObtenerValorConfiguracion("PorcentajeAporteAFPGestora", Decimal("12.71")) # 12.71%
 
         # 1. Obtener o crear cabecera Planilla
-        planilla = self.repository.ObtenerPlanillaPorPeriodo(id_periodo)
+        planilla = self.repository.ObtenerPlanillaPorPeriodo(id_periodo, tipo, id_sucursal)
         if not planilla:
-            res_pl = self.repository.CrearPlanillaCabecera(id_periodo, id_usuario_genera)
+            res_pl = self.repository.CrearPlanillaCabecera(id_periodo, id_usuario_genera, tipo, id_sucursal)
             id_planilla = res_pl["IdPlanilla"]
         else:
             id_planilla = planilla["IdPlanilla"]
@@ -353,75 +360,110 @@ class RRHHService:
         # 2. Limpiar detalles previos para recalcular
         self.repository.EliminarDetallesPlanilla(id_planilla)
 
-        # 3. Para cada empleado activo, calcular haberes y deducciones
-        empleados = self.repository.ListarEmpleados(activo=True)
+        # 3. Filtrar empleados según el tipo de planilla
+        if tipo == "OFICIAL":
+            # Planilla Oficial para Ministerio de Trabajo y Gestora: solo personal Asegurado
+            empleados = self.repository.ListarEmpleados(activo=True, es_asegurado=True, id_sucursal=id_sucursal)
+            for emp in empleados:
+                id_u = emp["IdUsuario"]
+                sueldo_basico = Decimal(str(emp.get("SueldoBasico", 2500.00)))
+                total_ganado = sueldo_basico.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                aporte_afp = (total_ganado * (porcentaje_afp / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                total_descuento = aporte_afp
+                liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                valor_hora = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
-        for emp in empleados:
-            id_u = emp["IdUsuario"]
-            sueldo_basico = Decimal(str(emp.get("SueldoBasico", 2500.00)))
+                self.repository.CrearDetallePlanilla({
+                    "IdPlanilla": id_planilla,
+                    "IdUsuario": id_u,
+                    "SueldoBasico": sueldo_basico,
+                    "MontoHorasExtra": Decimal("0.00"),
+                    "MontoComisiones": Decimal("0.00"),
+                    "TotalBonos": Decimal("0.00"),
+                    "DescuentoAtrasos": Decimal("0.00"),
+                    "DescuentoFaltas": Decimal("0.00"),
+                    "DescuentoNoVenta": Decimal("0.00"),
+                    "HorasTrabajadasAJ": Decimal("0.00"),
+                    "ValorHora": valor_hora,
+                    "AporteAFP": aporte_afp,
+                    "OtrasDeducciones": Decimal("0.00"),
+                    "TotalGanado": total_ganado,
+                    "TotalDescuento": total_descuento,
+                    "LiquidoPagable": liquido_pagable,
+                    "Observacion": "Planilla Oficial Ministerial Gestora 12.71%"
+                })
+        else:
+            # Planilla Interna de Planta: computable completo (sueldo + extras - faltas - permisos - No Venta - anticipos)
+            empleados = self.repository.ListarEmpleados(activo=True, id_sucursal=id_sucursal)
+            for emp in empleados:
+                id_u = emp["IdUsuario"]
+                sueldo_basico = Decimal(str(emp.get("SueldoBasico", 2500.00)))
 
-            # Sumar horas extras acumuladas en el mes
-            asistencias_emp = self.repository.ListarAsistencias(f_ini, f_fin, id_u)
-            total_hrs_extra = sum([Decimal(str(a.get("HorasExtraTrabajadas") or 0)) for a in asistencias_emp])
-            total_min_atraso = sum([int(a.get("MinutosAtraso") or 0) for a in asistencias_emp])
-            dias_falta = sum([1 for a in asistencias_emp if a.get("EsFalta") and not a.get("FaltaJustificada")])
+                asistencias_emp = self.repository.ListarAsistencias(f_ini, f_fin, id_u)
+                total_hrs_extra = sum([Decimal(str(a.get("HorasExtraTrabajadas") or 0)) for a in asistencias_emp])
+                total_min_atraso = sum([int(a.get("MinutosAtraso") or 0) for a in asistencias_emp])
+                dias_falta = sum([1 for a in asistencias_emp if a.get("EsFalta") and not a.get("FaltaJustificada")])
 
-            # Valor hora legal = Sueldo / 240 hrs
-            valor_hora_normal = sueldo_basico / Decimal("240")
-            valor_hora_extra = valor_hora_normal * factor_he
+                # Fórmulas de cálculo de Blanquita
+                valor_hora_normal = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                valor_hora_extra = valor_hora_normal * factor_he
 
-            monto_horas_extra = (total_hrs_extra * valor_hora_extra).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                monto_horas_extra = (total_hrs_extra * valor_hora_extra).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                descuento_atrasos = ((Decimal(str(total_min_atraso)) / Decimal("60")) * valor_hora_normal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            # Descuento atrasos proporcional al valor por hora
-            descuento_atrasos = ((Decimal(str(total_min_atraso)) / Decimal("60")) * valor_hora_normal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                # Descuento de faltas: (Sueldo / 30) * Días de falta
+                valor_dia = sueldo_basico / Decimal("30")
+                descuento_faltas = (Decimal(str(dias_falta)) * valor_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            # Descuento faltas = días de falta * (Sueldo / 30)
-            valor_dia = sueldo_basico / Decimal("30")
-            descuento_faltas = (Decimal(str(dias_falta)) * valor_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                # Deducciones pendientes de No Venta imputadas
+                cuotas_no_venta = self.repository.ObtenerCuotasNoVentaPendientes(id_u)
+                descuento_no_venta = sum([Decimal(str(c["cuota_descuento"])) for c in cuotas_no_venta]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                if cuotas_no_venta:
+                    self.repository.MarcarCuotasNoVentaAplicadas([c["id"] for c in cuotas_no_venta], id_planilla)
 
-            # Cálculo de comisiones de reparto sobre cobros efectivos
-            pct_comision = Decimal(str(emp.get("PorcentajeComisionDefault") or 0.0))
-            if pct_comision <= Decimal("0.0") and (emp.get("IdRol") == 4 or "repart" in (emp.get("NombreCargo") or "").lower()):
-                pct_comision = Decimal("2.0")  # 2% según política de incentivos de Blanquita
+                # Comisiones de ventas / reparto
+                pct_comision = Decimal(str(emp.get("PorcentajeComisionDefault") or 0.0))
+                if pct_comision <= Decimal("0.0") and (emp.get("IdRol") == 4 or "repart" in (emp.get("NombreCargo") or "").lower()):
+                    pct_comision = Decimal("2.0")
 
-            monto_comisiones = Decimal("0.00")
-            if pct_comision > Decimal("0.0"):
-                total_cobrado_ruta = self.repository.ObtenerTotalCobrosRepartidorPeriodo(id_u, f_ini, f_fin)
-                monto_comisiones = (total_cobrado_ruta * (pct_comision / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                monto_comisiones = Decimal("0.00")
+                if pct_comision > Decimal("0.0"):
+                    total_cobrado_ruta = self.repository.ObtenerTotalCobrosRepartidorPeriodo(id_u, f_ini, f_fin)
+                    monto_comisiones = (total_cobrado_ruta * (pct_comision / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            total_bonos = Decimal("0.00")
+                total_bonos = Decimal("0.00")
+                nom_emp = f"{emp.get('PrimerNombre', '')} {emp.get('ApellidoPaterno', '')}".strip()
+                total_anticipos = self.repository.ObtenerTotalAnticiposEmpleadoPeriodo(id_u, nom_emp, f_ini, f_fin)
+                otras_deducciones = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            # Descuento de anticipos de sueldo registrados en tesorería
-            nom_emp = f"{emp.get('PrimerNombre', '')} {emp.get('ApellidoPaterno', '')}".strip()
-            total_anticipos = self.repository.ObtenerTotalAnticiposEmpleadoPeriodo(id_u, nom_emp, f_ini, f_fin)
-            otras_deducciones = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                total_ganado = (sueldo_basico + monto_horas_extra + monto_comisiones + total_bonos).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                aporte_afp = (total_ganado * (porcentaje_afp / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                total_descuento = (descuento_atrasos + descuento_faltas + aporte_afp + otras_deducciones + descuento_no_venta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-            total_ganado = (sueldo_basico + monto_horas_extra + monto_comisiones + total_bonos).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            aporte_afp = (total_ganado * (porcentaje_afp / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                self.repository.CrearDetallePlanilla({
+                    "IdPlanilla": id_planilla,
+                    "IdUsuario": id_u,
+                    "SueldoBasico": sueldo_basico,
+                    "MontoHorasExtra": monto_horas_extra,
+                    "MontoComisiones": monto_comisiones,
+                    "TotalBonos": total_bonos,
+                    "DescuentoAtrasos": descuento_atrasos,
+                    "DescuentoFaltas": descuento_faltas,
+                    "DescuentoNoVenta": descuento_no_venta,
+                    "HorasTrabajadasAJ": Decimal("0.00"),
+                    "ValorHora": valor_hora_normal,
+                    "AporteAFP": aporte_afp,
+                    "OtrasDeducciones": otras_deducciones,
+                    "TotalGanado": total_ganado,
+                    "TotalDescuento": total_descuento,
+                    "LiquidoPagable": liquido_pagable,
+                    "Observacion": f"{total_hrs_extra}h extras, {total_min_atraso}m atraso, {dias_falta} faltas, NoVenta Bs. {descuento_no_venta}"
+                })
 
-            total_descuento = (descuento_atrasos + descuento_faltas + aporte_afp + otras_deducciones).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-            self.repository.CrearDetallePlanilla({
-                "IdPlanilla": id_planilla,
-                "IdUsuario": id_u,
-                "SueldoBasico": sueldo_basico,
-                "MontoHorasExtra": monto_horas_extra,
-                "MontoComisiones": monto_comisiones,
-                "TotalBonos": total_bonos,
-                "DescuentoAtrasos": descuento_atrasos,
-                "DescuentoFaltas": descuento_faltas,
-                "AporteAFP": aporte_afp,
-                "OtrasDeducciones": otras_deducciones,
-                "TotalGanado": total_ganado,
-                "TotalDescuento": total_descuento,
-                "LiquidoPagable": liquido_pagable,
-                "Observacion": f"{total_hrs_extra}h extras, {total_min_atraso}m atraso, {dias_falta} faltas"
-            })
-
-        # 4. Recalcular totales de la cabecera
+        # 4. Recalcular totales de cabecera
         self.repository.RecalcularTotalesPlanilla(id_planilla)
-        return self.ObtenerPlanillaPeriodo(id_periodo)
+        return self.ObtenerPlanillaPeriodo(id_periodo, tipo, id_sucursal)
 
     def EditarDetallePlanilla(self, id_detalle: int, datos: dict) -> dict:
         det = self.repository.ObtenerDetallePlanillaPorId(id_detalle)
@@ -537,3 +579,307 @@ class RRHHService:
     # =========================================================================
     def ObtenerResumenKPIs(self) -> dict:
         return self.repository.ObtenerKPIsResumenRRHH()
+
+    # =========================================================================
+    # 8. FINIQUITOS LABORALES (MINISTERIO DE TRABAJO)
+    # =========================================================================
+    @staticmethod
+    def calcular_antiguedad_calendario(f_inicio: date, f_fin: date):
+        if f_fin < f_inicio:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La fecha de retiro debe ser posterior a la fecha de ingreso"
+            )
+        anios = f_fin.year - f_inicio.year
+        meses = f_fin.month - f_inicio.month
+        dias = f_fin.day - f_inicio.day
+
+        if dias < 0:
+            meses -= 1
+            mes_ant = f_fin.month - 1 if f_fin.month > 1 else 12
+            anio_ant = f_fin.year if f_fin.month > 1 else f_fin.year - 1
+            dias_en_mes_ant = calendar.monthrange(anio_ant, mes_ant)[1]
+            dias += dias_en_mes_ant
+
+        if meses < 0:
+            anios -= 1
+            meses += 12
+
+        return anios, meses, dias
+
+    def CalcularYRegistrarFiniquito(self, dto) -> dict:
+        emp = self.repository.ObtenerEmpleadoPorId(dto.IdUsuario)
+        if not emp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empleado no encontrado")
+
+        f_ingreso = emp.get("FechaIngreso")
+        if not f_ingreso:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El empleado no tiene registrada su fecha de ingreso laboral"
+            )
+        f_retiro = dto.FechaRetiro
+
+        # Regla legal: Elegibilidad continua >= 90 días (3 meses)
+        dias_totales = (f_retiro - f_ingreso).days
+        if dias_totales < 90:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El empleado no cumple la antigüedad mínima legal de 3 meses (90 días) para percibir indemnización"
+            )
+
+        anios, meses, dias = self.calcular_antiguedad_calendario(f_ingreso, f_retiro)
+
+        # Sueldos últimos 3 meses
+        if dto.Sueldo1 is not None and dto.Sueldo2 is not None and dto.Sueldo3 is not None:
+            s1, s2, s3 = Decimal(str(dto.Sueldo1)), Decimal(str(dto.Sueldo2)), Decimal(str(dto.Sueldo3))
+        else:
+            sueldos = self.repository.ObtenerUltimos3Sueldos(dto.IdUsuario)
+            s1 = sueldos[0] if len(sueldos) > 0 else Decimal(str(emp.get("SueldoBasico", 2500)))
+            s2 = sueldos[1] if len(sueldos) > 1 else s1
+            s3 = sueldos[2] if len(sueldos) > 2 else s2
+
+        sueldo_promedio = ((s1 + s2 + s3) / Decimal("3")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        # Indemnización legal Art. 13 LGT: (Promedio * Años) + (Promedio / 12 * Meses) + (Promedio / 360 * Días)
+        ind_anios = (sueldo_promedio * Decimal(str(anios))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        ind_meses = ((sueldo_promedio / Decimal("12")) * Decimal(str(meses))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        ind_dias = ((sueldo_promedio / Decimal("360")) * Decimal(str(dias))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        monto_indemnizacion = ind_anios + ind_meses + ind_dias
+
+        # Duodécimas de Aguinaldo (enero a mes/día de retiro en el año corriente)
+        aguinaldo_duodecimas = Decimal("0.00")
+        if dto.IncluirAguinaldoDuodecimas:
+            meses_anio = f_retiro.month - 1
+            dias_anio = f_retiro.day
+            aguinaldo_duodecimas = (
+                ((sueldo_promedio / Decimal("12")) * Decimal(str(meses_anio))) +
+                ((sueldo_promedio / Decimal("360")) * Decimal(str(dias_anio)))
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        # Duodécimas de Vacaciones
+        vacacion_duodecimas = Decimal("0.00")
+        if dto.IncluirVacacionDuodecimas:
+            dias_vac = Decimal("15.0")
+            valor_dia = sueldo_promedio / Decimal("30")
+            vacacion_duodecimas = (valor_dia * (Decimal(str(meses)) / Decimal("12")) * dias_vac).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        desahucios = Decimal("0.00")
+        if (dto.MotivoRetiro or "").upper() == "DESPIDO INTEMPESTIVO":
+            desahucios = (sueldo_promedio * Decimal("3")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        deducciones = Decimal(str(dto.Deducciones or "0.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        monto_total = (monto_indemnizacion + aguinaldo_duodecimas + vacacion_duodecimas + desahucios - deducciones).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        literal = numero_a_palabras_bob(monto_total)
+
+        datos_finiquito = {
+            "IdUsuario": dto.IdUsuario,
+            "FechaIngreso": f_ingreso,
+            "FechaRetiro": f_retiro,
+            "MotivoRetiro": dto.MotivoRetiro or "Retiro Voluntario",
+            "Anios": anios,
+            "Meses": meses,
+            "Dias": dias,
+            "Sueldo1": s1,
+            "Sueldo2": s2,
+            "Sueldo3": s3,
+            "SueldoPromedio": sueldo_promedio,
+            "MontoIndemnizacion": monto_indemnizacion,
+            "AguinaldoDuodecimas": aguinaldo_duodecimas,
+            "VacacionDuodecimas": vacacion_duodecimas,
+            "Desahucios": desahucios,
+            "Deducciones": deducciones,
+            "MontoTotal": monto_total,
+            "AprobadoPorGerencia": False
+        }
+
+        creado = self.repository.CrearFiniquito(datos_finiquito)
+        creado["NombreCompleto"] = emp["NombreCompleto"]
+        creado["Ci"] = emp["Ci"]
+        creado["Cargo"] = emp["Cargo"]
+        creado["MontoTotalLiteral"] = literal
+
+        # Actualizar fecha de retiro en datos laborales
+        self.repository.ActualizarEmpleado(dto.IdUsuario, {}, {"FechaRetiro": f_retiro, "Activo": False})
+        return creado
+
+    def ListarFiniquitos(self, id_usuario: int | None = None) -> list[dict]:
+        return self.repository.ListarFiniquitos(id_usuario)
+
+    def ObtenerFiniquito(self, id_finiquito: int) -> dict:
+        fin = self.repository.ObtenerFiniquitoPorId(id_finiquito)
+        if not fin:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Liquidación de finiquito no encontrada")
+        fin["MontoTotalLiteral"] = numero_a_palabras_bob(Decimal(str(fin["MontoTotal"])))
+        return fin
+
+    # =========================================================================
+    # 9. DEDUCCIÓN COMPARTIDA POR NO VENTA Y FALTANTES
+    # =========================================================================
+    def RegistrarNoVenta(self, dto) -> dict:
+        num_resp = len(dto.ResponsablesIds)
+        if num_resp == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debe asignar al menos un empleado responsable")
+
+        monto_total = Decimal(str(dto.MontoTotal)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        cuota_ind = (monto_total / Decimal(str(num_resp))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        fecha_inc = dto.FechaIncidente or date.today()
+
+        deuda_id = self.repository.CrearDeudaNoVenta(
+            dto.Concepto, monto_total, num_resp, fecha_inc, dto.IdSucursal
+        )
+
+        detalles = []
+        for id_u in dto.ResponsablesIds:
+            emp = self.repository.ObtenerEmpleadoPorId(id_u)
+            nom = emp["NombreCompleto"] if emp else f"Empleado #{id_u}"
+            self.repository.CrearDetalleNoVentaEmpleado(deuda_id, id_u, cuota_ind)
+            detalles.append({
+                "IdUsuario": id_u,
+                "NombreCompleto": nom,
+                "CuotaDescuento": cuota_ind,
+                "Aplicado": False
+            })
+
+        return {
+            "Id": deuda_id,
+            "Concepto": dto.Concepto,
+            "MontoTotal": monto_total,
+            "NumResponsables": num_resp,
+            "CuotaIndividual": cuota_ind,
+            "FechaIncidente": fecha_inc,
+            "Estado": "PENDIENTE",
+            "Detalles": detalles
+        }
+
+    def ListarDeudasNoVenta(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarDeudasNoVenta(id_sucursal)
+
+    # =========================================================================
+    # 10. IMPORTADOR DE ASISTENCIA EXCEL DE DON OSVALDO (COLUMNA AJ)
+    # =========================================================================
+    def ImportarAsistenciaExcelOsvaldo(self, file_bytes: bytes, mes: int, anio: int, id_sucursal: int | None = None) -> dict:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+        ws = wb.active
+
+        # Ubicar columna AJ (columna 36 en base 1)
+        col_aj_idx = 36
+        # Escaneo de cabecera en fila 1 y 2 por si hay rótulo explícito
+        for row in range(1, 4):
+            for col in range(1, ws.max_column + 1):
+                val = str(ws.cell(row=row, column=col).value or "").strip().upper()
+                if "HORAS TRABAJADAS" in val or val == "AJ" or "TOTAL HORAS" in val:
+                    col_aj_idx = col
+                    break
+
+        filas_procesadas = 0
+        empleados_afectados = 0
+        total_horas = Decimal("0.00")
+        total_dias_falta = 0
+        detalles = []
+
+        empleados_map = {str(emp["Ci"]).strip(): emp for emp in self.repository.ListarEmpleados(activo=True, id_sucursal=id_sucursal)}
+        # También mapeo por nombre
+        nombres_map = {emp["PrimerNombre"].strip().upper(): emp for emp in self.repository.ListarEmpleados(activo=True, id_sucursal=id_sucursal)}
+
+        for r in range(2, ws.max_row + 1):
+            val_ident = ws.cell(row=r, column=1).value or ws.cell(row=r, column=2).value
+            if not val_ident:
+                continue
+
+            str_ident = str(val_ident).strip()
+            val_aj = ws.cell(row=r, column=col_aj_idx).value
+
+            emp_match = empleados_map.get(str_ident) or nombres_map.get(str_ident.upper())
+            if not emp_match:
+                # Intentar buscar por coincidencia en NombreCompleto
+                for emp in empleados_map.values():
+                    if str_ident.upper() in emp["NombreCompleto"].upper():
+                        emp_match = emp
+                        break
+
+            if emp_match and val_aj is not None:
+                try:
+                    num_aj = Decimal(str(val_aj))
+                except Exception:
+                    continue
+
+                filas_procesadas += 1
+                id_u = emp_match["IdUsuario"]
+                fecha_ref = date(anio, mes, 1)
+
+                if num_aj < 0:
+                    # Número negativo representa días de falta injustificada
+                    dias_f = abs(int(num_aj))
+                    total_dias_falta += dias_f
+                    for d in range(1, min(dias_f + 1, 29)):
+                        self.repository.RegistrarAsistenciaDiaria({
+                            "IdUsuario": id_u,
+                            "IdTurno": 1,
+                            "Fecha": date(anio, mes, d),
+                            "HoraEntrada": None,
+                            "HoraSalida": None,
+                            "MinutosAtraso": 0,
+                            "HorasExtraTrabajadas": Decimal("0.00"),
+                            "EsFalta": True,
+                            "FaltaJustificada": False,
+                            "Observacion": f"Falta registrada vía importador de asistencia Don Osvaldo ({num_aj} días)",
+                            "Area": emp_match.get("Area") or "Planta"
+                        })
+                    detalles.append({
+                        "IdUsuario": id_u,
+                        "NombreCompleto": emp_match["NombreCompleto"],
+                        "Tipo": "FALTAS",
+                        "Valor": dias_f
+                    })
+                else:
+                    # Número positivo representa horas trabajadas a liquidar
+                    total_horas += num_aj
+                    self.repository.RegistrarAsistenciaDiaria({
+                        "IdUsuario": id_u,
+                        "IdTurno": 1,
+                        "Fecha": fecha_ref,
+                        "HoraEntrada": time(8, 0),
+                        "HoraSalida": time(16, 0),
+                        "MinutosAtraso": 0,
+                        "HorasExtraTrabajadas": num_aj,
+                        "EsFalta": False,
+                        "FaltaJustificada": False,
+                        "Observacion": f"Horas columna AJ Don Osvaldo: {num_aj} hrs",
+                        "Area": emp_match.get("Area") or "Planta"
+                    })
+                    detalles.append({
+                        "IdUsuario": id_u,
+                        "NombreCompleto": emp_match["NombreCompleto"],
+                        "Tipo": "HORAS_TRABAJADAS",
+                        "Valor": float(num_aj)
+                    })
+                empleados_afectados += 1
+
+        return {
+            "TotalFilasProcesadas": filas_procesadas,
+            "TotalEmpleadosAfectados": empleados_afectados,
+            "TotalHorasComputadas": total_horas,
+            "TotalDiasFaltados": total_dias_falta,
+            "DetallePorEmpleado": detalles
+        }
+
+    # =========================================================================
+    # 11. PAPELETA DE PAGO FORMAL (2 COPIAS POR HOJA)
+    # =========================================================================
+    def GenerarPapeletaPagoDoble(self, id_detalle: int) -> dict:
+        boleta_base = self.GenerarBoletaPago(id_detalle)
+        copia_trabajador = dict(boleta_base)
+        copia_trabajador["Ejemplar"] = "COPIA DEL TRABAJADOR"
+        copia_trabajador["PieFirma"] = "Recibí conforme el importe líquido indicado en la presente boleta."
+
+        copia_empresa = dict(boleta_base)
+        copia_empresa["Ejemplar"] = "COPIA DE LA EMPRESA (ARCHIVO RRHH)"
+        copia_empresa["PieFirma"] = "Firma del Trabajador: ____________________________  CI: ________________"
+
+        return {
+            "Formato": "2_COPIAS_POR_HOJA",
+            "CopiaTrabajador": copia_trabajador,
+            "CopiaEmpresa": copia_empresa,
+            "Metadatos": boleta_base["Metadatos"]
+        }

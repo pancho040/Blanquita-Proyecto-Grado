@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from datetime import date
 from typing import Optional
@@ -19,7 +19,9 @@ from app.Models.RRHH.RRHHModel import (
     PeriodoNominaCrear,
     PlanillaGenerarRequest,
     DetallePlanillaActualizar,
-    PlanillaAprobarRequest
+    PlanillaAprobarRequest,
+    FiniquitoCalcularRequest,
+    RegistrarNoVentaRequest
 )
 
 RRHHRouter = APIRouter(
@@ -44,10 +46,12 @@ def ListarEmpleados(
     busqueda: str = "",
     area: str = "",
     activo: Optional[bool] = None,
+    es_asegurado: Optional[bool] = None,
+    id_sucursal: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     service = RRHHService(db)
-    return service.ListarEmpleados(busqueda, area, activo)
+    return service.ListarEmpleados(busqueda, area, activo, es_asegurado, id_sucursal)
 
 @RRHHRouter.get("/empleados/simple")
 def ListarEmpleadosSimple(area: str = "", db: Session = Depends(get_db)):
@@ -203,9 +207,14 @@ def CrearPeriodo(datos: PeriodoNominaCrear, db: Session = Depends(get_db)):
     return service.CrearPeriodo(datos.Mes, datos.Anio, datos.FechaInicio, datos.FechaFin)
 
 @RRHHRouter.get("/planillas/{id_periodo}")
-def ObtenerPlanilla(id_periodo: int, db: Session = Depends(get_db)):
+def ObtenerPlanilla(
+    id_periodo: int,
+    tipo_planilla: Optional[str] = None,
+    id_sucursal: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
     service = RRHHService(db)
-    pl = service.ObtenerPlanillaPeriodo(id_periodo)
+    pl = service.ObtenerPlanillaPeriodo(id_periodo, tipo_planilla, id_sucursal)
     if not pl:
         return {"mensaje": "No se ha generado planilla para este periodo aún", "generada": False}
     return pl
@@ -217,7 +226,12 @@ def GenerarPlanilla(
     db: Session = Depends(get_db)
 ):
     service = RRHHService(db)
-    return service.GenerarPlanilla(datos.IdPeriodoNomina, usuario_actual["IdUsuario"])
+    return service.GenerarPlanilla(
+        datos.IdPeriodoNomina,
+        usuario_actual["IdUsuario"],
+        datos.TipoPlanilla,
+        datos.IdSucursal
+    )
 
 @RRHHRouter.put("/planillas/detalle/{id_detalle}")
 def EditarDetallePlanilla(
@@ -242,3 +256,72 @@ def AprobarPlanilla(
 def ObtenerBoletaPago(id_detalle: int, db: Session = Depends(get_db)):
     service = RRHHService(db)
     return service.GenerarBoletaPago(id_detalle)
+
+@RRHHRouter.get("/planillas/boleta/{id_detalle}/doble")
+def ObtenerBoletaPagoDoble(id_detalle: int, db: Session = Depends(get_db)):
+    service = RRHHService(db)
+    return service.GenerarPapeletaPagoDoble(id_detalle)
+
+
+# =============================================================================
+# FINIQUITOS LABORALES (MINISTERIO DE TRABAJO)
+# =============================================================================
+@RRHHRouter.post("/finiquitos/calcular")
+def CalcularFiniquito(
+    datos: FiniquitoCalcularRequest,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.CalcularYRegistrarFiniquito(datos)
+
+@RRHHRouter.get("/finiquitos")
+def ListarFiniquitos(
+    id_usuario: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ListarFiniquitos(id_usuario)
+
+@RRHHRouter.get("/finiquitos/{id_finiquito}")
+def ObtenerFiniquito(
+    id_finiquito: int,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ObtenerFiniquito(id_finiquito)
+
+
+# =============================================================================
+# DEDUCCIONES COMPARTIDAS POR NO VENTA Y FALTANTES
+# =============================================================================
+@RRHHRouter.post("/no-venta")
+def RegistrarNoVenta(
+    datos: RegistrarNoVentaRequest,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.RegistrarNoVenta(datos)
+
+@RRHHRouter.get("/no-venta")
+def ListarNoVenta(
+    id_sucursal: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ListarDeudasNoVenta(id_sucursal)
+
+
+# =============================================================================
+# IMPORTACIÓN EXCEL ASISTENCIA DON OSVALDO
+# =============================================================================
+@RRHHRouter.post("/asistencias/importar-excel-osvaldo")
+async def ImportarExcelOsvaldo(
+    file: UploadFile = File(...),
+    mes: int = Query(..., ge=1, le=12),
+    anio: int = Query(..., ge=2020, le=2100),
+    id_sucursal: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    contenido = await file.read()
+    return service.ImportarAsistenciaExcelOsvaldo(contenido, mes, anio, id_sucursal)

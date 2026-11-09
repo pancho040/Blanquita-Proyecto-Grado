@@ -137,41 +137,41 @@
 
 ### Subagente D: Módulo 2 (Personal, Planillas Duales, Biométrico y Finiquitos)
 - **Dependencias:** Fase 1 terminada.
-- **Tablas Propias:** `DatosLaboralesEmpleado`, `PeriodoNomina`, `Planilla`, `DetallePlanilla`, `AsistenciaDiaria`, `ConfiguracionLaboral`.
+- **Tablas Propias:** `DatosLaboralesEmpleado`, `PeriodoNomina`, `Planilla`, `DetallePlanilla`, `AsistenciaDiaria`, `ConfiguracionLaboral`, `Finiquito`, `deudas_no_venta`, `detalles_no_venta_empleado`.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Gestión de personal diferenciada en pestañas: `Asegurado` (oficial) y `Externo` (eventual).
-    - [ ] Generación de Planilla Oficial (Ministerio de Trabajo / Gestora con porcentajes configurables).
-    - [ ] Generación de Planilla Interna (sueldo base + horas extra fábrica - faltas - permisos - adelantos - faltantes - descuento "No venta" compartido).
-    - [ ] Importador del Excel de asistencia de Don Osvaldo (lectura de columna AJ, horas y días faltados negativos).
-    - [ ] Emisión de Papeletas de Pago en formato formal imprimible en 2 copias por hoja.
-    - [ ] Módulo de Finiquitos con activación para antigüedad >= 3 meses y cálculo exacto por diferencia de fechas calendario.
-  - [ ] **Frontend:**
-    - [ ] Interfaz de personal con pestañas Asegurados / Externos y filtros por sucursal.
-    - [ ] Pantalla de procesamiento de planillas con switch de vista Oficial / Interna.
-    - [ ] Asistente de importación de asistencia de Don Osvaldo con vista previa de errores.
-    - [ ] Módulo y modal de cálculo y emisión de Finiquito en formato oficial del Ministerio.
-  - [ ] **Tests:**
-    - [ ] Test: fórmula de valor hora (`sueldo / 30 / 8`) y descuento de faltas.
-    - [ ] Test: descuento compartido de "No venta" prorrateado entre 2 vendedores.
-    - [ ] Test: finiquito de empleado con 11 meses y 12 días calcula exactamente el monto ministerial.
+  - [x] **Backend:**
+    - [x] Gestión de personal diferenciada en pestañas: `Asegurado` (oficial) y `Externo` (eventual).
+    - [x] Generación de Planilla Oficial (Ministerio de Trabajo / Gestora con porcentajes configurables).
+    - [x] Generación de Planilla Interna (sueldo base + horas extra fábrica - faltas - permisos - adelantos - faltantes - descuento "No venta" compartido).
+    - [x] Importador del Excel de asistencia de Don Osvaldo (lectura de columna AJ, horas y días faltados negativos).
+    - [x] Emisión de Papeletas de Pago en formato formal imprimible en 2 copias por hoja.
+    - [x] Módulo de Finiquitos con activación para antigüedad >= 3 meses y cálculo exacto por diferencia de fechas calendario.
+  - [x] **Frontend:**
+    - [x] Interfaz de personal con pestañas Asegurados / Externos y filtros por sucursal.
+    - [x] Pantalla de procesamiento de planillas con switch de vista Oficial / Interna.
+    - [x] Asistente de importación de asistencia de Don Osvaldo con vista previa de errores.
+    - [x] Módulo y modal de cálculo y emisión de Finiquito en formato oficial del Ministerio.
+  - [x] **Tests:**
+    - [x] Test: fórmula de valor hora (`sueldo / 30 / 8`) y descuento de faltas.
+    - [x] Test: descuento compartido de "No venta" prorrateado entre 2 vendedores.
+    - [x] Test: finiquito de empleado con 11 meses y 12 días calcula exactamente el monto ministerial.
 
 ### Subagente E: Módulo 5 (Caja Chica con Ciclo Operativo y Aprobación Gerencial)
 - **Dependencias:** Fase 1 terminada.
 - **Tablas Propias:** `SolicitudCajaChica`, `DetalleGastoCajaChica`, `RendicionCajaChica`.
 - **Resolución de Contradicción:** Flujo operativo (`PENDIENTE` -> `ENTREGADO` -> `RENDIDO`) desacoplado de `aprobacion_gerencia` (`PENDIENTE`/`APROBADO`/`RECHAZADO`). Don Osvaldo aprueba viendo el gasto final rendido con sus comprobantes; impresión bloqueada hasta su aprobación.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Flujo completo de solicitud exclusivo para Kevin.
-    - [ ] Registro de entrega de fondos (ej. 700 Bs), gasto real rendido (ej. 600 Bs) y cálculo automático de reintegro/cambio (100 Bs).
-    - [ ] Asignación de comprobante digital obligatorio (depuración a 60 días).
-    - [ ] Bloqueo de impresión de vale mientras no esté aprobado por Don Osvaldo.
-  - [ ] **Frontend:**
-    - [ ] Pantalla de gestión de caja chica para Kevin con cálculo automático de vuelto.
-    - [ ] Vista simplificada para Don Osvaldo: visualiza únicamente monto final rendido, concepto y comprobante para firmar con un clic.
-  - [ ] **Tests:**
-    - [ ] Test: entrega de 700 Bs con gasto de 600 Bs exige reintegro de 100 Bs y registra egreso de 600 Bs.
-    - [ ] Test: vale no permite impresión ni descarga mientras `aprobacion_gerencia != 'APROBADO'`.
+  - [x] **Backend:**
+    - [x] Flujo completo de solicitud exclusivo para Kevin.
+    - [x] Registro de entrega de fondos (ej. 700 Bs), gasto real rendido (ej. 600 Bs) y cálculo automático de reintegro/cambio (100 Bs).
+    - [x] Asignación de comprobante digital obligatorio (depuración a 60 días).
+    - [x] Bloqueo de impresión de vale mientras no esté aprobado por Don Osvaldo.
+  - [x] **Frontend:**
+    - [x] Pantalla de gestión de caja chica para Kevin con cálculo automático de vuelto.
+    - [x] Vista simplificada para Don Osvaldo: visualiza únicamente monto final rendido, concepto y comprobante para firmar con un clic.
+  - [x] **Tests:**
+    - [x] Test: entrega de 700 Bs con gasto de 600 Bs exige reintegro de 100 Bs y registra egreso de 600 Bs.
+    - [x] Test: vale no permite impresión ni descarga mientras `aprobacion_gerencia != 'APROBADO'`.
 
 ---
 

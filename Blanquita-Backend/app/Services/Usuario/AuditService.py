@@ -21,9 +21,22 @@ class AuditService:
         id_usuario: int,
         accion: str,
         tabla: str,
-        id_registro: str,
-        detalles: Optional[Dict[str, Any]] = None
+        id_registro: Any,
+        detalles: Optional[Dict[str, Any]] = None,
+        detalle: Optional[Any] = None,
+        **kwargs
     ) -> int:
+        datos_detalle = detalles if detalles is not None else detalle
+        if isinstance(datos_detalle, dict):
+            detalle_json = json.dumps(datos_detalle, default=str)
+            datos_dict = datos_detalle
+        elif isinstance(datos_detalle, str):
+            detalle_json = datos_detalle
+            datos_dict = {"detalle": datos_detalle}
+        else:
+            detalle_json = json.dumps(datos_detalle or {}, default=str)
+            datos_dict = datos_detalle if isinstance(datos_detalle, dict) else None
+
         if self.session:
             return self.registrar_evento(
                 session=self.session,
@@ -32,11 +45,28 @@ class AuditService:
                 rol="Operador",
                 modulo_tabla=tabla,
                 accion=accion,
-                id_registro=id_registro,
-                detalle=json.dumps(detalles or {}),
-                datos_nuevos=detalles
+                id_registro=str(id_registro),
+                detalle=detalle_json,
+                datos_nuevos=datos_dict
             )
-        return 0
+        else:
+            from app.Config.supabase import SessionLocal
+            with SessionLocal() as s:
+                res = self.registrar_evento(
+                    session=s,
+                    id_usuario=id_usuario,
+                    usuario_nombre="Usuario Sistema",
+                    rol="Operador",
+                    modulo_tabla=tabla,
+                    accion=accion,
+                    id_registro=str(id_registro),
+                    detalle=detalle_json,
+                    datos_nuevos=datos_dict
+                )
+                s.commit()
+                return res
+
+    RegistrarAuditoria = RegistrarAccion
 
     @staticmethod
     def registrar_evento(

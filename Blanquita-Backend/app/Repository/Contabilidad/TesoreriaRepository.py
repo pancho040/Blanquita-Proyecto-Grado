@@ -277,40 +277,57 @@ class TesoreriaRepository:
             print(f"Error al registrar log de auditoría: {e}")
 
     # --- Solicitudes de Caja Chica ---
-    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None, fecha_fin = None) -> list[dict]:
+    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None, fecha_fin = None, id_sucursal: int | None = None) -> list[dict]:
         where_clauses = []
         params = {}
         if estado:
-            where_clauses.append('s."Estado" = :estado')
-            params["estado"] = estado
+            where_clauses.append('s."Estado" ILIKE :estado')
+            params["estado"] = f"%{estado}%"
         if fecha_inicio:
             where_clauses.append('s."FechaSolicitud" >= :fecha_inicio')
             params["fecha_inicio"] = fecha_inicio
         if fecha_fin:
             where_clauses.append('s."FechaSolicitud" <= :fecha_fin')
             params["fecha_fin"] = fecha_fin
+        if id_sucursal:
+            where_clauses.append('COALESCE(s."IdSucursal", 1) = :id_s')
+            params["id_s"] = id_sucursal
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
         sql = f"""
-            SELECT s.*, c."NombreCaja", cat."NombreCategoria"
+            SELECT s.*, c."NombreCaja", cat."NombreCategoria",
+                   comp."UrlArchivo" as "UrlComprobante",
+                   COALESCE(s."AprobacionGerencia", 'PENDIENTE') as "AprobacionGerencia",
+                   s."MontoEntregado", s."MontoGastoReal", s."MontoReintegro"
             FROM "SolicitudCajaChica" s
             JOIN "Caja" c ON s."IdCaja" = c."IdCaja"
             LEFT JOIN "CategoriaMovimientoCaja" cat ON s."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            LEFT JOIN "ComprobanteArchivo" comp ON s."IdComprobanteArchivo" = comp."IdComprobante"
             {where_sql}
             ORDER BY s."FechaSolicitud" DESC, s."IdSolicitudCajaChica" DESC;
         """
-        return self.caller.LlamarFuncion(sql, params)
+        solicitudes = self.caller.LlamarFuncion(sql, params)
+        for s in solicitudes:
+            s["DetallesGasto"] = self.ListarDetallesGastoCajaChica(s["IdSolicitudCajaChica"])
+        return solicitudes
 
     def ObtenerSolicitudCajaChicaPorId(self, id_solicitud: int) -> dict | None:
         sql = """
-            SELECT s.*, c."NombreCaja", cat."NombreCategoria"
+            SELECT s.*, c."NombreCaja", cat."NombreCategoria",
+                   comp."UrlArchivo" as "UrlComprobante",
+                   COALESCE(s."AprobacionGerencia", 'PENDIENTE') as "AprobacionGerencia",
+                   s."MontoEntregado", s."MontoGastoReal", s."MontoReintegro"
             FROM "SolicitudCajaChica" s
             JOIN "Caja" c ON s."IdCaja" = c."IdCaja"
             LEFT JOIN "CategoriaMovimientoCaja" cat ON s."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            LEFT JOIN "ComprobanteArchivo" comp ON s."IdComprobanteArchivo" = comp."IdComprobante"
             WHERE s."IdSolicitudCajaChica" = :id_solicitud;
         """
-        return self.caller.LlamarUnRegistro(sql, {"id_solicitud": id_solicitud})
+        sol = self.caller.LlamarUnRegistro(sql, {"id_solicitud": id_solicitud})
+        if sol:
+            sol["DetallesGasto"] = self.ListarDetallesGastoCajaChica(id_solicitud)
+        return sol
 
     def GenerarCodigoSolicitud(self, fecha_solicitud) -> str:
         # Generar formato SC + YYMM + Correlativo de 2 dígitos, ej: SC260801
@@ -333,21 +350,72 @@ class TesoreriaRepository:
         return f"{prefijo}01"
 
     def CrearSolicitudCajaChica(self, datos: dict) -> dict:
+        if "IdSucursal" not in datos:
+            datos["IdSucursal"] = 1
+        if "AprobacionGerencia" not in datos:
+            datos["AprobacionGerencia"] = "PENDIENTE"
+
         sql = """
             INSERT INTO "SolicitudCajaChica" (
-                "CodigoSolicitud", "IdCaja", "FechaSolicitud", "NombreSolicitante",
+                "CodigoSolicitud", "IdCaja", "IdSucursal", "FechaSolicitud", "NombreSolicitante",
                 "CargoSolicitante", "MontoSolicitado", "DestinoJustificacion",
                 "NombreEntregadoPor", "NombreAprobadoPor", "Estado",
-                "IdCategoriaMovimientoCaja", "RespaldoDoc"
+                "AprobacionGerencia", "IdCategoriaMovimientoCaja", "RespaldoDoc"
             ) VALUES (
-                :CodigoSolicitud, :IdCaja, :FechaSolicitud, :NombreSolicitante,
+                :CodigoSolicitud, :IdCaja, :IdSucursal, :FechaSolicitud, :NombreSolicitante,
                 :CargoSolicitante, :MontoSolicitado, :DestinoJustificacion,
                 :NombreEntregadoPor, :NombreAprobadoPor, :Estado,
-                :IdCategoriaMovimientoCaja, :RespaldoDoc
+                :AprobacionGerencia, :IdCategoriaMovimientoCaja, :RespaldoDoc
             )
             RETURNING *;
         """
         return self.caller.LlamarUnRegistro(sql, datos)
+
+    def InsertarDetalleGastoCajaChica(self, solicitud_id: int, concepto: str, nro_factura: str | None, proveedor: str | None, monto: float) -> dict:
+        sql = """
+            INSERT INTO "DetalleGastoCajaChica" (
+                "solicitud_id", "concepto", "nro_factura", "proveedor", "monto", "created_at"
+            ) VALUES (
+                :solicitud_id, :concepto, :nro_factura, :proveedor, :monto, NOW()
+            ) RETURNING *;
+        """
+        return self.caller.LlamarUnRegistro(sql, {
+            "solicitud_id": solicitud_id,
+            "concepto": concepto,
+            "nro_factura": nro_factura,
+            "proveedor": proveedor,
+            "monto": monto
+        })
+
+    def ListarDetallesGastoCajaChica(self, solicitud_id: int) -> list[dict]:
+        sql = """
+            SELECT * FROM "DetalleGastoCajaChica"
+            WHERE "solicitud_id" = :solicitud_id
+            ORDER BY "id" ASC;
+        """
+        return self.caller.LlamarFuncion(sql, {"solicitud_id": solicitud_id})
+
+    def ListarPendientesAprobacionGerencia(self, id_sucursal: int | None = None) -> list[dict]:
+        params = {}
+        where_sucursal = ""
+        if id_sucursal:
+            where_sucursal = 'AND COALESCE(s."IdSucursal", 1) = :id_s'
+            params["id_s"] = id_sucursal
+
+        sql = f"""
+            SELECT s.*, c."NombreCaja", comp."UrlArchivo" as "UrlComprobante",
+                   COALESCE(s."AprobacionGerencia", 'PENDIENTE') as "AprobacionGerencia"
+            FROM "SolicitudCajaChica" s
+            JOIN "Caja" c ON s."IdCaja" = c."IdCaja"
+            LEFT JOIN "ComprobanteArchivo" comp ON s."IdComprobanteArchivo" = comp."IdComprobante"
+            WHERE s."Estado" = 'RENDIDO' AND COALESCE(s."AprobacionGerencia", 'PENDIENTE') = 'PENDIENTE'
+            {where_sucursal}
+            ORDER BY s."FechaSolicitud" DESC;
+        """
+        solicitudes = self.caller.LlamarFuncion(sql, params)
+        for s in solicitudes:
+            s["DetallesGasto"] = self.ListarDetallesGastoCajaChica(s["IdSolicitudCajaChica"])
+        return solicitudes
 
     def ActualizarSolicitudCajaChica(self, id_solicitud: int, datos: dict) -> dict | None:
         set_clauses = [f'"{k}" = :{k}' for k in datos.keys()]

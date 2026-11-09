@@ -237,3 +237,52 @@ export async function ObtenerDashboardKPIs() {
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
+
+// ==========================================
+// FASE 3: CAJA CHICA OPERATIVA & GERENCIA (SUBAGENTE E)
+// ==========================================
+
+export async function EntregarFondosCajaChica(idSolicitud, datos) {
+  const res = await fetch(`/api/tesoreria/caja-chica/${idSolicitud}/entregar-fondos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
+  return await res.json();
+}
+
+export async function RendirGastoCajaChica(idSolicitud, datos) {
+  const res = await fetch(`/api/tesoreria/caja-chica/${idSolicitud}/rendir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
+  return await res.json();
+}
+
+export async function ResolverAprobacionGerencial(idSolicitud, datos) {
+  const res = await fetch(`/api/tesoreria/caja-chica/${idSolicitud}/resolver-gerencia`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/tesoreria");
+  return await res.json();
+}
+
+export async function ImprimirValeCajaChica(idSolicitud) {
+  const res = await fetch(`/api/tesoreria/caja-chica/${idSolicitud}/imprimir`);
+  if (!res.ok) await manejarErrorBackend(res);
+  return await res.json();
+}
+
+export async function ListarPendientesGerencia() {
+  const res = await fetchConCache("/api/tesoreria/caja-chica/pendientes-gerencia", {}, 10000);
+  if (!res.ok) await manejarErrorBackend(res);
+  return await res.json();
+}

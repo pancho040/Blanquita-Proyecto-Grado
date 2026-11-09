@@ -11,7 +11,8 @@ from app.Models.Contabilidad.TesoreriaModel import (
     CuentaBancariaCrear, CuentaBancariaActualizar, CuentaBancariaResponse,
     AperturaCajaCrear, CierreCajaCrear, AperturaCierreCajaResponse,
     CategoriaMovimientoResponse, MovimientoCajaCrear, MovimientoCajaResponse,
-    SolicitudCajaChicaCrear, SolicitudCajaChicaActualizarEstado, SolicitudCajaChicaResponse
+    SolicitudCajaChicaCrear, SolicitudCajaChicaActualizarEstado, SolicitudCajaChicaResponse,
+    EntregaFondosCajaChicaRequest, RendicionGastoCajaChicaRequest, ResolverAprobacionGerenciaRequest
 )
 
 TesoreriaRouter = APIRouter(prefix="/tesoreria", tags=["Contabilidad - Tesorería y Caja"])
@@ -319,6 +320,7 @@ def listar_solicitudes_caja_chica(
     fecha_hasta: Optional[date] = Query(None),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
+    id_sucursal: Optional[int] = Query(None),
     busqueda: Optional[str] = Query(None),
     limit: int = Query(25),
     offset: int = Query(0),
@@ -331,7 +333,7 @@ def listar_solicitudes_caja_chica(
 
     f_ini = fecha_desde or fecha_inicio
     f_fin = fecha_hasta or fecha_fin
-    sols = TesoreriaService(db).ListarSolicitudesCajaChica(estado, f_ini, f_fin)
+    sols = TesoreriaService(db).repo.ListarSolicitudesCajaChica(estado, f_ini, f_fin, id_sucursal)
     
     resultado = []
     for s in sols:
@@ -421,6 +423,55 @@ def descargar_solicitud(
         DetalleDescargo=datos.get("detalle_descargo")
     )
     return TesoreriaService(db).ActualizarEstadoSolicitud(id_solicitud, dto, usuario["IdUsuario"])
+
+# --- ENDPOINTS FASE 3: CICLO OPERATIVO Y APROBACIÓN GERENCIAL ---
+@TesoreriaRouter.post("/caja-chica/{id_solicitud}/entregar-fondos")
+def entregar_fondos_caja_chica(
+    id_solicitud: int,
+    dto: EntregaFondosCajaChicaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """Pasa la solicitud de PENDIENTE a ENTREGADO registrando el monto entregado en efectivo."""
+    return TesoreriaService(db).EntregarFondosCajaChica(id_solicitud, dto)
+
+@TesoreriaRouter.post("/caja-chica/{id_solicitud}/rendir")
+def rendir_gasto_caja_chica(
+    id_solicitud: int,
+    dto: RendicionGastoCajaChicaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """Pasa el vale a RENDIDO calculando automáticamente reintegro y registrando ítems y comprobante."""
+    return TesoreriaService(db).RendirGastoCajaChica(id_solicitud, dto)
+
+@TesoreriaRouter.post("/caja-chica/{id_solicitud}/resolver-gerencia")
+def resolver_aprobacion_gerencial(
+    id_solicitud: int,
+    dto: ResolverAprobacionGerenciaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL]))
+):
+    """Don Osvaldo aprueba o rechaza el vale rendido generando el egreso neto real en caja."""
+    return TesoreriaService(db).ResolverAprobacionGerencia(id_solicitud, dto, usuario["IdUsuario"])
+
+@TesoreriaRouter.get("/caja-chica/{id_solicitud}/imprimir")
+def imprimir_vale_caja_chica(
+    id_solicitud: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_TESORERIA))
+):
+    """Valida que la aprobación gerencial esté concedida antes de permitir la impresión formal."""
+    return TesoreriaService(db).ValidarImpresionVale(id_solicitud)
+
+@TesoreriaRouter.get("/caja-chica/pendientes-gerencia")
+def listar_pendientes_gerencia(
+    id_sucursal: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL]))
+):
+    """Vista ejecutiva simplificada para Don Osvaldo con vales rendidos listos para firma."""
+    return TesoreriaService(db).ListarPendientesAprobacionGerencia(id_sucursal)
 
 
 # ==========================================

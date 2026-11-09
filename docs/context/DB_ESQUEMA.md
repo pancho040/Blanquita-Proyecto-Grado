@@ -407,11 +407,71 @@ erDiagram
   - `precio_unitario`: NUMERIC(12,2) NOT NULL
   - `subtotal`: NUMERIC(12,2) NOT NULL
 
-### 4.4 Subagente D (Personal, Planillas y Finiquitos)
-*(Espacio reservado para las adiciones de la Fase 3: campos `EsAsegurado`, `DescuentoNoVenta`, tabla `Finiquito`)*
+### 4.4 Subagente D (Personal, Planillas Duales, Asistencia Biométrica y Finiquitos) - IMPLEMENTADO EN FASE 3
+- **`public.DatosLaboralesEmpleado` (Columnas Aditivas):**
+  - `FechaRetiro`: DATE NULL (para cómputo formal de finiquitos por liquidación o desvinculación)
+- **`public.Planilla` (Columnas Aditivas):**
+  - `TipoPlanilla`: VARCHAR(20) NOT NULL DEFAULT 'INTERNA' ('OFICIAL', 'INTERNA')
+  - `IdSucursal`: INT NULL REFERENCES public.sucursales(id) ON DELETE SET NULL
+- **`public.DetallePlanilla` (Columnas Aditivas):**
+  - `DescuentoNoVenta`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `HorasTrabajadasAJ`: NUMERIC(6,2) NULL (horas leídas de la columna AJ del Excel de Don Osvaldo)
+  - `ValorHora`: NUMERIC(10,4) NULL (fórmula legal estricta `SueldoBase / 240`)
+- **`public.Finiquito` (Nueva Tabla para Art. 13 LGT):**
+  - `IdFiniquito`: SERIAL PRIMARY KEY
+  - `IdUsuario`: INT NOT NULL REFERENCES public.Usuario(IdUsuario) ON DELETE RESTRICT
+  - `FechaIngreso`: DATE NOT NULL
+  - `FechaRetiro`: DATE NOT NULL
+  - `MotivoRetiro`: VARCHAR(60) NOT NULL ('DESPIDO_INJUSTIFICADO', 'RETIRO_VOLUNTARIO', 'CONCLUSION_CONTRATO')
+  - `AniosServicio`: INT NOT NULL DEFAULT 0
+  - `MesesServicio`: INT NOT NULL DEFAULT 0
+  - `DiasServicio`: INT NOT NULL DEFAULT 0
+  - `SueldoMes1`: NUMERIC(12,2) NOT NULL
+  - `SueldoMes2`: NUMERIC(12,2) NOT NULL
+  - `SueldoMes3`: NUMERIC(12,2) NOT NULL
+  - `SueldoPromedio`: NUMERIC(12,2) NOT NULL
+  - `IndemnizacionLegal`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `AguinaldoDuodecimas`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `VacacionCompensable`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `OtrosBeneficios`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalBeneficios`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `Deducciones`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `LiquidoPagable`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `Estado`: VARCHAR(30) NOT NULL DEFAULT 'CALCULADO'
+  - `CalculadoPor`: INT NULL REFERENCES public.Usuario(IdUsuario)
+  - `FechaCalculo`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+- **`public.deudas_no_venta` (Nueva Tabla Prorrateo Compartido):**
+  - `id`: SERIAL PRIMARY KEY
+  - `monto_total`: NUMERIC(12,2) NOT NULL
+  - `concepto`: VARCHAR(200) NOT NULL
+  - `mes_aplicacion`: INT NOT NULL
+  - `anio_aplicacion`: INT NOT NULL
+  - `estado`: VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE'
+  - `created_at`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+- **`public.detalles_no_venta_empleado` (Nueva Tabla de Cuotas):**
+  - `id`: SERIAL PRIMARY KEY
+  - `deuda_no_venta_id`: INT NOT NULL REFERENCES public.deudas_no_venta(id) ON DELETE CASCADE
+  - `id_usuario`: INT NOT NULL REFERENCES public.Usuario(IdUsuario) ON DELETE RESTRICT
+  - `cuota_asignada`: NUMERIC(12,2) NOT NULL
+  - `aplicado`: BOOLEAN NOT NULL DEFAULT FALSE
 
-### 4.5 Subagente E (Caja Chica y Vueltos)
-*(Espacio reservado para las adiciones de la Fase 3: `AprobacionGerencia`, `MontoReintegro`, `MontoGastoReal` en `SolicitudCajaChica`)*
+### 4.5 Subagente E (Caja Chica, Ciclo Operativo Desacoplado y Aprobación Gerencial) - IMPLEMENTADO EN FASE 3
+- **`public.SolicitudCajaChica` (Columnas Aditivas y Ajuste de Estados):**
+  - `MontoEntregado`: NUMERIC(12,2) NULL (fondos físicos entregados al solicitante, ej. 700 Bs)
+  - `MontoGastoReal`: NUMERIC(12,2) NULL (suma real de comprobantes rendidos, ej. 600 Bs)
+  - `IdComprobanteArchivo`: INT NULL REFERENCES public.ComprobanteArchivo(IdComprobante) ON DELETE SET NULL
+  - `AprobacionGerencia`: VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE' ('PENDIENTE', 'APROBADO', 'RECHAZADO')
+  - `NombreAprobadoPor`: VARCHAR(100) NULL
+  - *Restricción de Estado Operativo:* `CHECK ("Estado" IN ('PENDIENTE', 'ENTREGADO', 'RENDIDO', 'APROBADO', 'RECHAZADO', 'Pendiente', 'Entregado', 'Rendido', 'Aprobada', 'Rechazada'))`
+- **`public.DetalleGastoCajaChica` (Nueva Tabla de Desglose de Facturas y Recibos):**
+  - `IdDetalleGasto`: SERIAL PRIMARY KEY
+  - `IdSolicitudCajaChica`: INT NOT NULL REFERENCES public.SolicitudCajaChica(IdSolicitudCajaChica) ON DELETE CASCADE
+  - `Concepto`: VARCHAR(200) NOT NULL
+  - `NroFactura`: VARCHAR(50) NULL
+  - `Proveedor`: VARCHAR(120) NULL
+  - `Monto`: NUMERIC(12,2) NOT NULL
+  - `FechaGasto`: DATE NOT NULL DEFAULT CURRENT_DATE
+  - `CreatedAt`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 
 ### 4.6 Subagente F (Panel Gerencial, Buscador y Bancos)
 *(Espacio reservado para las adiciones de la Fase 4: vistas analíticas gerenciales y extensiones a `CuentaBancariaEmpresa`)*

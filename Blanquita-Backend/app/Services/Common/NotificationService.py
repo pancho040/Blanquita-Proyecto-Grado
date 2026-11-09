@@ -17,15 +17,24 @@ class NotificationService:
 
     def CrearNotificacion(
         self,
-        id_usuario_destino: Optional[int],
-        titulo: str,
-        mensaje: str,
+        id_usuario_destino: Optional[int] = None,
+        titulo: str = "",
+        mensaje: str = "",
         tipo: str = "INFO",
-        codigo_referencia: Optional[int] = None
+        codigo_referencia: Optional[int] = None,
+        id_usuario_destinatario: Optional[int] = None,
+        tipo_alerta: Optional[str] = None
     ) -> int:
+        dest = id_usuario_destinatario if id_usuario_destinatario is not None else id_usuario_destino
+        t = tipo_alerta or tipo
         if self.session:
-            return self.crear_notificacion(self.session, titulo, mensaje, tipo, id_usuario_destino, codigo_referencia)
-        return 0
+            return self.crear_notificacion(self.session, titulo, mensaje, t, dest, codigo_referencia)
+        else:
+            from app.Config.supabase import SessionLocal
+            with SessionLocal() as s:
+                res = self.crear_notificacion(s, titulo, mensaje, t, dest, codigo_referencia)
+                s.commit()
+                return res
 
     @staticmethod
     def crear_notificacion(

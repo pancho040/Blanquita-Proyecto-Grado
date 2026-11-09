@@ -1,9 +1,9 @@
 ---
 import Layout from '@/layouts/Layout.astro';
 const { usuario } = Astro.locals;
-import GestionSolicitudesCajaChica from '@/components/Contabilidad/GestionSolicitudesCajaChica';
+import GestionCajaChicaOperativa from '@/components/Contabilidad/GestionCajaChicaOperativa';
 ---
 
-<Layout title="Caja Chica | Papelera Blanquita">
-  <GestionSolicitudesCajaChica client:only="react" usuario={usuario} />
+<Layout title="Caja Chica Operativa | Papelera Blanquita">
+  <GestionCajaChicaOperativa client:only="react" usuario={usuario} modo="operativo" />
 </Layout>
