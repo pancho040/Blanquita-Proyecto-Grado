@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.Config.supabase import get_db
@@ -11,12 +11,16 @@ PrecioRouter = APIRouter(prefix="/logistica/precios", tags=["Logística - Precio
 
 PERMISOS_LOGISTICA = [ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR]
 
+
 @PrecioRouter.get("", response_model=list[PrecioProductoResponse])
 def listar_precios(
+    id_sucursal: int = Query(1, description="ID de la sucursal a consultar"),
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
-    return PrecioService(db).ListarPreciosVigentes()
+    """Lista precios vigentes filtrados por sucursal."""
+    return PrecioService(db).ListarPreciosVigentes(id_sucursal)
+
 
 @PrecioRouter.post("", response_model=dict)
 def guardar_precio(
@@ -24,14 +28,16 @@ def guardar_precio(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
-    """Modificar precio unitario con registro de auditoría."""
+    """Modificar precio unitario por sucursal con trigger de revalorización y auditoría."""
     return PrecioService(db).GuardarPrecio(dto, usuario["IdUsuario"])
+
 
 @PrecioRouter.get("/{id_presentacion}/historial")
 def listar_historial_precios(
     id_presentacion: int,
+    id_sucursal: int = Query(1, description="ID de la sucursal"),
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
-    """Consulta el historial de precios anteriores y fechas de vigencia."""
-    return PrecioService(db).ListarHistorialPrecios(id_presentacion)
+    """Consulta el historial de precios anteriores y fechas de vigencia por sucursal."""
+    return PrecioService(db).ListarHistorialPrecios(id_presentacion, id_sucursal)

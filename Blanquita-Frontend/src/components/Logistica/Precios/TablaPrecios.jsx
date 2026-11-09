@@ -16,6 +16,14 @@ export default function TablaPrecios() {
   const [precios, setPrecios] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [sucursalId, setSucursalId] = useState(() => {
+    if (typeof window !== "undefined") {
+      const g = localStorage.getItem("blanquita_sucursal_activa");
+      return (g && g !== "todas") ? Number(g) : 1;
+    }
+    return 1;
+  });
+
   // Modal edición precio
   const [modalAbierto, setModalAbierto] = useState(false);
   const [itemEditar, setItemEditar] = useState(null);
@@ -27,8 +35,9 @@ export default function TablaPrecios() {
     VigenteDesde: new Date().toISOString().split("T")[0]
   });
 
-  const cargarPrecios = async (forzar = false) => {
-    const cacheKey = "logistica:precios";
+  const cargarPrecios = async (sid = sucursalId, forzar = false) => {
+    const sActual = (sid && sid !== "todas") ? Number(sid) : 1;
+    const cacheKey = `logistica:precios:sucursal:${sActual}`;
     try {
       if (!forzar) {
         const enCache = cache.get(cacheKey);
@@ -39,10 +48,10 @@ export default function TablaPrecios() {
         }
       }
       setLoading(true);
-      const data = await ObtenerPrecios();
+      const data = await ObtenerPrecios(sActual);
       const lista = data || [];
       setPrecios(lista);
-      cache.set(cacheKey, lista, 300);
+      cache.set(cacheKey, lista, 30);
     } catch (err) {
       toast.error(err.message || "Error al cargar catálogo de precios");
     } finally {
@@ -51,7 +60,16 @@ export default function TablaPrecios() {
   };
 
   useEffect(() => {
-    cargarPrecios();
+    cargarPrecios(sucursalId);
+
+    const handler = (e) => {
+      const sid = e.detail?.sucursalId || "1";
+      const numSid = sid !== "todas" ? Number(sid) : 1;
+      setSucursalId(numSid);
+      cargarPrecios(numSid, true);
+    };
+    window.addEventListener("sucursal_cambiada", handler);
+    return () => window.removeEventListener("sucursal_cambiada", handler);
   }, []);
 
   // Paginación optimizada
@@ -78,15 +96,16 @@ export default function TablaPrecios() {
       setGuardando(true);
       await GuardarPrecio({
         IdPresentacion: itemEditar.IdPresentacion,
+        IdSucursal: sucursalId,
         PrecioUnitario: Number(formPrecio.PrecioUnitario),
         PrecioMayorista: formPrecio.PrecioMayorista ? Number(formPrecio.PrecioMayorista) : null,
         CantidadMinimaMayorista: Number(formPrecio.CantidadMinimaMayorista) || 10,
         VigenteDesde: formPrecio.VigenteDesde
       });
-      cache.invalidate("logistica:precios");
-      toast.success("Precio actualizado exitosamente");
+      cache.invalidate(`logistica:precios:sucursal:${sucursalId}`);
+      toast.success("Precio actualizado exitosamente con auditoría y revalorización.");
       setModalAbierto(false);
-      cargarPrecios(true);
+      cargarPrecios(sucursalId, true);
     } catch (err) {
       toast.error(err.message || "Error al guardar precio");
     } finally {

@@ -74,6 +74,8 @@ export const RutasAdmin = [
       { titulo: "Rastreo", icono: Radio, ruta: "rutas/rastreo" },
       { titulo: "Despachos", icono: Truck, ruta: "asignaciones" },
       { titulo: "Precios", icono: Tag, ruta: "precios" },
+      { titulo: "Inventario Comercial", icono: Boxes, ruta: "inventario-comercial" },
+      { titulo: "Envíos y Remisiones", icono: Truck, ruta: "envios" },
       { titulo: "Reportes Logística", icono: ClipboardList, ruta: "reportes" },
     ],
   },
@@ -189,6 +191,16 @@ export const RutasSupervisor = [
     titulo: "Precios",
     icono: Tag,
     ruta: "precios",
+  },
+  {
+    titulo: "Inventario Comercial",
+    icono: Boxes,
+    ruta: "inventario-comercial",
+  },
+  {
+    titulo: "Envíos y Remisiones",
+    icono: Truck,
+    ruta: "envios",
   },
   {
     titulo: "Reportes",

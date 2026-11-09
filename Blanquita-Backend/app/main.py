@@ -34,6 +34,9 @@ from app.Routes.Logistica.ClienteRouter import ClienteRouter
 from app.Routes.Logistica.RutaRouter import RutaRouter
 from app.Routes.Logistica.PrecioRouter import PrecioRouter
 from app.Routes.Logistica.ChoferRouter import ChoferRouter
+from app.Routes.Logistica.SucursalRouter import SucursalRouter, PlantaRouter
+from app.Routes.Logistica.EnvioRouter import EnvioRouter
+from app.Routes.Logistica.InventarioComercialRouter import InventarioComercialRouter
 
 from app.Routes.Contabilidad.TesoreriaRouter import TesoreriaRouter
 from app.Routes.Contabilidad.CuentasCobrarRouter import CuentasCobrarRouter
@@ -146,6 +149,14 @@ app.include_router(ClienteRouter)
 app.include_router(RutaRouter)
 app.include_router(PrecioRouter)
 app.include_router(ChoferRouter)
+app.include_router(SucursalRouter)
+app.include_router(SucursalRouter, prefix="/api")
+app.include_router(PlantaRouter)
+app.include_router(PlantaRouter, prefix="/api")
+app.include_router(EnvioRouter)
+app.include_router(EnvioRouter, prefix="/api")
+app.include_router(InventarioComercialRouter)
+app.include_router(InventarioComercialRouter, prefix="/api")
 
 #ROUTERS CONTABILIDAD Y TESORERIA
 app.include_router(TesoreriaRouter)

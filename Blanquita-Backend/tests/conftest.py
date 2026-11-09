@@ -7,9 +7,17 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 import pytest
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from app.main import app
 from app.Auth.Dependencies import get_current_user, require_admin_db
+
+def _deny_admin_access():
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Requiere permisos de administrador"
+    )
+
 from app.Constants.Roles import (
     ROL_GERENTE_GENERAL,
     ROL_CONTADOR,
@@ -68,6 +76,7 @@ def client_admin(user_admin):
 @pytest.fixture
 def client_contador(user_contador):
     app.dependency_overrides[get_current_user] = lambda: user_contador
+    app.dependency_overrides[require_admin_db] = _deny_admin_access
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
@@ -75,6 +84,7 @@ def client_contador(user_contador):
 @pytest.fixture
 def client_supervisor(user_supervisor):
     app.dependency_overrides[get_current_user] = lambda: user_supervisor
+    app.dependency_overrides[require_admin_db] = _deny_admin_access
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
@@ -82,6 +92,7 @@ def client_supervisor(user_supervisor):
 @pytest.fixture
 def client_chofer(user_chofer):
     app.dependency_overrides[get_current_user] = lambda: user_chofer
+    app.dependency_overrides[require_admin_db] = _deny_admin_access
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()

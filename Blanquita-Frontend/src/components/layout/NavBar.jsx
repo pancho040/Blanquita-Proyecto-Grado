@@ -5,6 +5,7 @@ import {
   LogOut,
   User as UserIcon,
   ShieldCheck,
+  MapPin,
 } from "lucide-react";
 import { cerrarSesion } from "@/lib/logout-client";
 import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin } from "@/constants/NavBarRoutes";
@@ -109,6 +110,34 @@ export default function NavBar({
 }) {
   // Inicialización idéntica en SSR y en el cliente para prevenir Hydration Mismatch
   const [esAdmin, setEsAdmin] = useState(() => Boolean(esAdminProp));
+  const [sucursalActiva, setSucursalActiva] = useState("1");
+  const [sucursales, setSucursales] = useState([
+    { id: 1, nombre: "Sucre" },
+    { id: 2, nombre: "Potosí" }
+  ]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const guardada = localStorage.getItem("blanquita_sucursal_activa") || "1";
+      setSucursalActiva(guardada);
+      fetch("/api/sucursales?solo_activas=true")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setSucursales(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  const cambiarSucursal = (nuevaId) => {
+    setSucursalActiva(nuevaId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("blanquita_sucursal_activa", nuevaId);
+      window.dispatchEvent(new CustomEvent("sucursal_cambiada", { detail: { sucursalId: nuevaId } }));
+    }
+  };
 
   useEffect(() => {
     if (esAdminProp !== undefined) {
@@ -345,6 +374,31 @@ export default function NavBar({
         {/* LADO DERECHO: Rol Badge + Modo Oscuro + Perfil Dropdown */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           
+          {/* Selector Global de Sucursal (Activo para Gerencia/Admin, Fijo para Sucursal) */}
+          {esAdmin || idRol === Roles.Supervisor || idRol === Roles.GerenteGeneral ? (
+            <div className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 border border-white/30 rounded-xl px-2.5 py-1 text-white shadow-2xs transition-colors">
+              <MapPin size={13} className="text-amber-300 shrink-0" />
+              <select
+                value={sucursalActiva}
+                onChange={(e) => cambiarSucursal(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer pr-1"
+                aria-label="Seleccionar Sucursal Activa"
+              >
+                <option value="todas" className="text-slate-800 bg-white">Todas las Sedes</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={String(s.id)} className="text-slate-800 bg-white">
+                    📍 {s.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-1.5 bg-white/15 border border-white/25 rounded-xl px-2.5 py-1 text-white text-xs font-medium shadow-2xs">
+              <MapPin size={13} className="text-amber-300" />
+              <span>{sucursales.find((s) => String(s.id) === String(sucursalActiva))?.nombre || "Sucre"}</span>
+            </div>
+          )}
+
           {/* Badge de Rol Ejecutivo Unificado */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-white/30 bg-white/15 text-white shadow-2xs backdrop-blur-xs">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />

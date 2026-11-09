@@ -1,8 +1,9 @@
 import { manejarErrorBackend } from "@/utils/validators";
 import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
-export async function ObtenerPrecios() {
-  const response = await fetchConCache("/api/logistica/precios", {}, 45000);
+export async function ObtenerPrecios(idSucursal = 1) {
+  const url = `/api/logistica/precios?id_sucursal=${idSucursal}`;
+  const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }

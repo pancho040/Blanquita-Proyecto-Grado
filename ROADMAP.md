@@ -9,7 +9,7 @@
 | Fase | Enfoque / Módulos | Estado | Responsable |
 | :---: | :--- | :---: | :--- |
 | **Fase 0** | Análisis profundo, introspección de BD y documentación maestra | `[x] COMPLETADO` | Agente Principal |
-| **Fase 1** | Cimiento Prioritario: Multi-Sucursal, Precios, Inventarios y Servicios | `[ ] PENDIENTE` | Agente Principal |
+| **Fase 1** | Cimiento Prioritario: Multi-Sucursal, Precios, Inventarios y Servicios | `[x] COMPLETADO` | Agente Principal |
 | **Fase 2** | Repartidores, Cierre Diario, Ventas, CXC, QR y Distribuidores | `[ ] PENDIENTE` | Subagentes A, B, C |
 | **Fase 3** | Personal, Planillas Duales, Finiquito y Caja Chica de 3 Estados | `[ ] PENDIENTE` | Subagentes D, E |
 | **Fase 4** | Panel Gerencial de Don Osvaldo, Buscador por Código y Bancos | `[ ] PENDIENTE` | Subagente F |
@@ -37,40 +37,40 @@
 - **Dueño:** Agente Principal.
 - **Tablas Propias:** `Sucursal`, `InventarioSucursal`, `InventarioChofer`, `EnvioFabricaSucursal`, `DetalleEnvioFabrica`, `PrecioProducto` (extensión), `RevalorizacionInventarioChofer`, `ProductoConfigComercial`, `NotificacionInterna`, `ComprobanteArchivo`.
 - **Entregables:**
-  - [ ] **Tablas y Migraciones SQL:**
-    - [ ] Crear tabla `Sucursal` y precargar Sucre (`IdSucursal=1`) y Potosí (`IdSucursal=2`).
-    - [ ] Agregar `IdSucursal` a `Usuario`, `PrecioProducto`, `Cliente`, `RutaDistribucion`, `NotaVenta`, `Caja`, `CuentaCobrar`, `CuentaPagarProveedor` con migración aditiva y backfill a Sucre.
-    - [ ] Crear tabla satélite `ProductoConfigComercial` vinculada a `Producto` (con `EsBandeo`, `ValorBandeo`).
-    - [ ] Crear tablas `InventarioSucursal`, `InventarioChofer`, `EnvioFabricaSucursal` y `DetalleEnvioFabrica`.
-    - [ ] Extender `PrecioProducto` con `FechaVigenciaDesde` y crear `RevalorizacionInventarioChofer`.
-  - [ ] **Servicios Transversales Base:**
-    - [ ] Implementar `FileStorageService` (límite 5MB, JPG/PNG/PDF, compresión y metadatos en `ComprobanteArchivo`).
-    - [ ] Diseñar cron job de depuración a los 60 días para comprobantes con `archivo_eliminado = true`.
-    - [ ] Implementar componente frontend `FirmaDigital.jsx` (canvas táctil móvil con metadatos).
-    - [ ] Implementar `FabricioLegacyAdapter` (implementando `InventarioProductoTerminadoPort`) para descuento atómico en planta Sucre sin inventario duplicado.
-    - [ ] Configurar interruptor `DESCONTAR_PLANTA_ACTIVO` y columna `descuento_planta_aplicado` en envíos, con script CLI de conciliación pendiente.
-    - [ ] Implementar `NotificationService` (campana de alertas para gerencia y choferes).
-    - [ ] Implementar `PlantaDataReader` (capa de lectura estricta para saldos y catálogo sin escribir en planta).
-    - [ ] Reforzar `AuditLogService` para trazabilidad de precios y revalorizaciones.
-    - [ ] Implementar script de guardia automática de zona protegida (`docs/scripts/verificar_zona_protegida.py` con AST y regex).
-  - [ ] **Endpoints Backend:**
-    - [ ] CRUD y conmutación de Sucursales (`/api/sucursales`) y catálogo de Plantas (`/api/plantas`).
-    - [ ] Gestión de Precios por Sucursal indexados por presentación (`/api/logistica/precios`) y trigger de revalorización automática de choferes.
-    - [ ] Notificación automática en rojo (24 horas) para cambios de precio.
-    - [ ] Módulo polimórfico de Envíos de Inventario (`/api/logistica/envios`) con ciclo de vida (`PENDIENTE` -> `EN_TRANSITO` -> `RECEPCIONADO` / `ANULADO`) y control de mermas en recepción.
-    - [ ] Reporte de inventario valorizado actual e histórico a fecha arbitraria (ej. 31 de octubre).
-  - [ ] **Pantallas Frontend:**
-    - [ ] Selector global de sucursal en Navbar para Gerencia/Admin y bloqueo fijo para sucursal.
-    - [ ] Pantalla de Administración de Precios por Sucursal con fecha de vigencia y alertas.
-    - [ ] Pantalla de Inventario Comercial de Sucursal y Carga a Choferes.
-    - [ ] Reporte valorizado de inventario con selector de fecha histórica y exportación formal.
-  - [ ] **Diseño del Script de Limpieza:**
-    - [ ] Script de limpieza selectiva de datos de prueba para módulos de Kevin (diseñado, no ejecutado).
-  - [ ] **Tests Unitarios e Integración:**
-    - [ ] Test: crear tercera sucursal con 2 choferes sin tocar código fuente.
-    - [ ] Test: cambiar precio en Potosí no altera precios en Sucre.
-    - [ ] Test: revalorización automática del inventario de choferes y cálculo de ajuste de valor.
-    - [ ] Test: usuario de Potosí no puede leer datos de Sucre (aislamiento estricto).
+  - [x] **Tablas y Migraciones SQL:**
+    - [x] Crear tabla `Sucursal` y precargar Sucre (`IdSucursal=1`) y Potosí (`IdSucursal=2`).
+    - [x] Agregar `IdSucursal` a `Usuario`, `PrecioProducto`, `Cliente`, `RutaDistribucion`, `NotaVenta`, `Caja`, `CuentaCobrar`, `CuentaPagarProveedor` con migración aditiva y backfill a Sucre.
+    - [x] Crear tabla satélite `ProductoConfigComercial` vinculada a `Producto` (con `EsBandeo`, `ValorBandeo`).
+    - [x] Crear tablas `InventarioSucursal`, `InventarioChofer`, `EnvioFabricaSucursal` y `DetalleEnvioFabrica`.
+    - [x] Extender `PrecioProducto` con `FechaVigenciaDesde` y crear `RevalorizacionInventarioChofer`.
+  - [x] **Servicios Transversales Base:**
+    - [x] Implementar `FileStorageService` (límite 5MB, JPG/PNG/PDF, compresión y metadatos en `ComprobanteArchivo`).
+    - [x] Diseñar cron job de depuración a los 60 días para comprobantes con `archivo_eliminado = true`.
+    - [x] Implementar componente frontend `FirmaDigital.jsx` (canvas táctil móvil con metadatos).
+    - [x] Implementar `FabricioLegacyAdapter` (implementando `InventarioProductoTerminadoPort`) para descuento atómico en planta Sucre sin inventario duplicado.
+    - [x] Configurar interruptor `DESCONTAR_PLANTA_ACTIVO` y columna `descuento_planta_aplicado` en envíos, con script CLI de conciliación pendiente.
+    - [x] Implementar `NotificationService` (campana de alertas para gerencia y choferes).
+    - [x] Implementar `PlantaDataReader` (capa de lectura estricta para saldos y catálogo sin escribir en planta).
+    - [x] Reforzar `AuditLogService` para trazabilidad de precios y revalorizaciones.
+    - [x] Implementar script de guardia automática de zona protegida (`docs/scripts/verificar_zona_protegida.py` con AST y regex).
+  - [x] **Endpoints Backend:**
+    - [x] CRUD y conmutación de Sucursales (`/api/sucursales`) y catálogo de Plantas (`/api/plantas`).
+    - [x] Gestión de Precios por Sucursal indexados por presentación (`/api/logistica/precios`) y trigger de revalorización automática de choferes.
+    - [x] Notificación automática en rojo (24 horas) para cambios de precio.
+    - [x] Módulo polimórfico de Envíos de Inventario (`/api/logistica/envios`) con ciclo de vida (`PENDIENTE` -> `EN_TRANSITO` -> `RECEPCIONADO` / `ANULADO`) y control de mermas en recepción.
+    - [x] Reporte de inventario valorizado actual e histórico a fecha arbitraria (ej. 31 de octubre).
+  - [x] **Pantallas Frontend:**
+    - [x] Selector global de sucursal en Navbar para Gerencia/Admin y bloqueo fijo para sucursal.
+    - [x] Pantalla de Administración de Precios por Sucursal con fecha de vigencia y alertas.
+    - [x] Pantalla de Inventario Comercial de Sucursal y Carga a Choferes.
+    - [x] Reporte valorizado de inventario con selector de fecha histórica y exportación formal.
+  - [x] **Diseño del Script de Limpieza:**
+    - [x] Script de limpieza selectiva de datos de prueba para módulos de Kevin (diseñado, no ejecutado).
+  - [x] **Tests Unitarios e Integración:**
+    - [x] Test: crear tercera sucursal con 2 choferes sin tocar código fuente.
+    - [x] Test: cambiar precio en Potosí no altera precios en Sucre.
+    - [x] Test: revalorización automática del inventario de choferes y cálculo de ajuste de valor.
+    - [x] Test: usuario de Potosí no puede leer datos de Sucre (aislamiento estricto).
 
 ---
 

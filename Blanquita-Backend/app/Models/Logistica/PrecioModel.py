@@ -4,6 +4,7 @@ from datetime import date
 
 class PrecioProductoBase(BaseModel):
     IdPresentacion: int
+    IdSucursal: Optional[int] = 1
     PrecioUnitario: float
     PrecioMayorista: Optional[float] = None
     CantidadMinimaMayorista: int = 10
@@ -17,6 +18,7 @@ class PrecioProductoCrear(PrecioProductoBase):
 class PrecioProductoResponse(BaseModel):
     IdPrecioProducto: Optional[int] = None
     IdPresentacion: int
+    IdSucursal: Optional[int] = 1
     NombreProducto: str
     TipoContenedor: str
     CantidadRollosUnidades: Optional[int] = None
