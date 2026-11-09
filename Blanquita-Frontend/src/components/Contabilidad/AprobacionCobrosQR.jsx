@@ -76,7 +76,7 @@ export default function AprobacionCobrosQR({ usuario }) {
                   </Badge>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Chofer: <span className="font-medium text-slate-700">{abono.ChoferNombre || "Luis Repartidor"}</span> • Ref: {abono.NumeroReferencia || "S/Ref"}
+                  Chofer: <span className="font-medium text-slate-700">{abono.ChoferNombre || "Repartidor Asignado"}</span> • Ref: {abono.NumeroReferencia || "S/Ref"}
                 </p>
                 <p className="text-xs text-slate-400">
                   Saldo deudor actual: Bs. {Number(abono.SaldoPendiente || 0).toFixed(2)}

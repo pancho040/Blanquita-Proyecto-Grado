@@ -24,17 +24,17 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
   const [observacionDist, setObservacionDist] = useState("");
   const [enviandoPedido, setEnviandoPedido] = useState(false);
 
-  // Modal Ajuste Kevin
+  // Modal Ajuste Supervisión
   const [modalAjuste, setModalAjuste] = useState(null);
   const [cantidadesAjustadas, setCantidadesAjustadas] = useState({});
-  const [obsKevin, setObsKevin] = useState("");
+  const [obsSupervision, setObsSupervision] = useState("");
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
 
   // Modal Subir Boleta
   const [modalBoleta, setModalBoleta] = useState(null);
   const [subiendoBoleta, setSubiendoBoleta] = useState(false);
 
-  const esKevinOAdmin = usuario?.IsAdmin || usuario?.IdRol === 1 || usuario?.IdRol === 2;
+  const esSupervisorOAdmin = usuario?.IsAdmin || usuario?.IdRol === 1 || usuario?.IdRol === 2;
 
   useEffect(() => {
     cargarDatos();
@@ -108,7 +108,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
       cantInit[d.id] = d.cantidad_aprobada ?? d.cantidad_solicitada;
     });
     setCantidadesAjustadas(cantInit);
-    setObsKevin(pedido.observacion_kevin || "");
+    setObsSupervision(pedido.observacion_kevin || "");
   };
 
   const handleGuardarAjuste = async () => {
@@ -121,7 +121,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
 
       await AjustarPedidoKevin(modalAjuste.id, {
         detalles_ajuste: itemsAjuste,
-        observacion_kevin: obsKevin
+        observacion_kevin: obsSupervision
       });
       toast.success("Proforma y cantidades ajustadas con éxito");
       setModalAjuste(null);
@@ -236,7 +236,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t">
-                  {esKevinOAdmin && ped.estado === "PENDIENTE_REVISION" && (
+                  {esSupervisorOAdmin && ped.estado === "PENDIENTE_REVISION" && (
                     <Button size="sm" onClick={() => abrirModalAjuste(ped)} className="text-xs bg-amber-600 hover:bg-amber-700">
                       Revisar y Ajustar Cantidades
                     </Button>
@@ -251,7 +251,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
                       Ver Boleta
                     </a>
                   )}
-                  {esKevinOAdmin && ped.estado === "COMPROBANTE_SUBIDO" && (
+                  {esSupervisorOAdmin && ped.estado === "COMPROBANTE_SUBIDO" && (
                     <Button size="sm" onClick={() => handleAprobarDespacho(ped.id)} className="text-xs bg-emerald-600 hover:bg-emerald-700 gap-1">
                       <Check className="w-4 h-4" /> Autorizar Despacho
                     </Button>
@@ -333,11 +333,11 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
         </div>
       )}
 
-      {/* Modal Ajuste Kevin */}
+      {/* Modal Ajuste Supervisión */}
       <Dialog open={!!modalAjuste} onOpenChange={() => setModalAjuste(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold">Ajustar Proforma Mayorista (Kevin)</DialogTitle>
+            <DialogTitle className="text-sm font-bold">Ajustar Proforma de Pedido</DialogTitle>
           </DialogHeader>
           {modalAjuste && (
             <div className="space-y-4 pt-2 text-xs">
@@ -362,8 +362,8 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
               </div>
               <Input
                 placeholder="Observación de ajuste para el distribuidor"
-                value={obsKevin}
-                onChange={(e) => setObsKevin(e.target.value)}
+                value={obsSupervision}
+                onChange={(e) => setObsSupervision(e.target.value)}
                 className="text-xs"
               />
               <Button onClick={handleGuardarAjuste} disabled={guardandoAjuste} className="w-full bg-sky-600 hover:bg-sky-700 text-xs">

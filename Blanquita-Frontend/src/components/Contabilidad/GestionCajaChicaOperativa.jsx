@@ -237,7 +237,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
     const estadoGerencia = sol.AprobacionGerencia || "PENDIENTE";
     if (estadoGerencia !== "APROBADO") {
       toast.error(
-        "ACCESO DENEGADO (403): La impresión formal está bloqueada hasta contar con la firma y aprobación de Don Osvaldo (Gerencia)."
+        "ACCESO DENEGADO (403): La impresión formal requiere la aprobación y firma previa de Gerencia."
       );
       return;
     }
@@ -262,15 +262,15 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
           </span>
           <div>
             <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">
-              Administración de Caja Chica Desacoplada
+              Administración de Caja Chica
             </h1>
             <p className="text-xs text-slate-500">
-              Ciclo Operativo: Solicitud → Entrega Fondos → Rendición con Respaldos → Aprobación Don Osvaldo → Egreso en Caja
+              Ciclo Operativo: Solicitud → Entrega Fondos → Rendición con Respaldos → Aprobación Gerencial → Egreso en Caja
             </p>
           </div>
         </div>
 
-        {/* Selector de Vista: Operativa (Kevin) vs Gerencial (Don Osvaldo) */}
+        {/* Selector de Vista: Operativa vs Gerencial */}
         <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold">
           <button
             onClick={() => setVista("solicitudes")}
@@ -280,7 +280,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                 : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
             }`}
           >
-            Bandeja Operativa (Kevin)
+            Bandeja Operativa
           </button>
           <button
             onClick={() => setVista("gerencial")}
@@ -291,7 +291,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
             }`}
           >
             <ShieldCheck className="h-3.5 w-3.5" />
-            Aprobación Don Osvaldo (Gerencia)
+            Aprobación de Gerencia
           </button>
         </div>
       </div>
@@ -490,7 +490,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
       )}
 
       {/* ========================================================================= */}
-      {/* VISTA GERENCIAL (DON OSVALDO) */}
+      {/* VISTA GERENCIAL */}
       {/* ========================================================================= */}
       {vista === "gerencial" && (
         <div className="space-y-4">
@@ -501,10 +501,10 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
               </span>
               <div>
                 <h3 className="font-bold text-sm text-purple-900 dark:text-purple-200">
-                  Bandeja Ejecutiva de Don Osvaldo
+                  Bandeja de Autorización Gerencial
                 </h3>
                 <p className="text-xs text-purple-700 dark:text-purple-300">
-                  Vales rendidos por Kevin pendientes de revisión y firma gerencial para su registro contable en caja.
+                  Vales rendidos pendientes de revisión y firma gerencial para su registro contable en caja.
                 </p>
               </div>
             </div>
@@ -520,7 +520,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
               </div>
             ) : pendientesGerencia.length === 0 ? (
               <div className="col-span-2 p-12 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-xl border">
-                🎉 No hay vales de caja chica pendientes de aprobación gerencial.
+                No hay vales de caja chica pendientes de aprobación gerencial.
               </div>
             ) : (
               pendientesGerencia.map((sol) => (
@@ -538,7 +538,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                       </p>
                     </div>
                     <Badge className="bg-blue-100 text-blue-800 font-bold">
-                      RENDIDO POR KEVIN
+                      RENDICIÓN PRESENTADA
                     </Badge>
                   </div>
 
@@ -841,14 +841,14 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL RESOLUCIÓN GERENCIAL (DON OSVALDO) */}
+      {/* MODAL RESOLUCIÓN GERENCIAL */}
       {/* ========================================================================= */}
       <Dialog open={modalGerenciaOpen} onOpenChange={setModalGerenciaOpen}>
         <DialogContent className="w-full sm:max-w-md p-6 bg-white dark:bg-slate-900 rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-purple-600" />
-              Aprobación Gerencial - Don Osvaldo
+              Aprobación de Gerencia
             </DialogTitle>
           </DialogHeader>
 
@@ -865,7 +865,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
 
             <div>
               <label className="font-semibold text-slate-700 block mb-1">
-                Observaciones Gerenciales (Opcional):
+                Observaciones de Gerencia (Opcional):
               </label>
               <Input
                 placeholder="Aprobado y verificado conforme por Gerencia General"
@@ -881,7 +881,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                 disabled={resolviendoGerencia}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9"
               >
-                {resolviendoGerencia ? "Registrando Asiento..." : "Firmar & Aprobar Egreso"}
+                {resolviendoGerencia ? "Registrando Asiento..." : "Firmar y Aprobar Egreso"}
               </Button>
               <Button
                 variant="outline"
@@ -920,13 +920,13 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                 <div><span className="text-slate-400">Monto Entregado:</span> <span>Bs. {Number(datosImpresion.MontoEntregado || 0).toFixed(2)}</span></div>
                 <div><span className="text-slate-400">Gasto Real Asentado:</span> <span className="font-bold text-blue-600">Bs. {Number(datosImpresion.MontoGastoReal || 0).toFixed(2)}</span></div>
                 <div><span className="text-slate-400">Reintegro a Caja:</span> <span className="font-bold text-emerald-600">Bs. {Number(datosImpresion.MontoReintegro || 0).toFixed(2)}</span></div>
-                <div><span className="text-slate-400">Aprobado por:</span> <span className="font-bold text-purple-700">DON OSVALDO (GERENCIA)</span></div>
+                <div><span className="text-slate-400">Aprobado por:</span> <span className="font-bold text-purple-700">GERENCIA GENERAL</span></div>
               </div>
 
               <div className="pt-8 grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="border-t border-slate-400 pt-1">Firma Solicitante</div>
                 <div className="border-t border-slate-400 pt-1">Firma Tesorería</div>
-                <div className="border-t border-slate-400 pt-1 font-bold">Firma Don Osvaldo</div>
+                <div className="border-t border-slate-400 pt-1 font-bold">Firma Gerencia</div>
               </div>
             </div>
           )}

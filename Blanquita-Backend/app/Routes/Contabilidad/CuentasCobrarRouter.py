@@ -152,7 +152,7 @@ def ajustar_nota_venta_kevin(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_CXC))
 ):
-    """Permite exclusivamente a Kevin/Admin ajustar importes de una nota con notificación al chofer."""
+    """Permite a Supervisión o Administrador ajustar importes de una nota con notificación al chofer."""
     return CuentasCobrarService(db).AjustarNotaVentaKevin(id_nota, dto, usuario["IdUsuario"])
 
 @CuentasCobrarRouter.post("/chofer/cierre-turno")
@@ -179,7 +179,7 @@ def listar_abonos_pendientes(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_CXC))
 ):
-    """Bandeja para Kevin con los abonos QR / transferencias pendientes de verificación."""
+    """Bandeja de verificación de abonos QR y transferencias bancarias pendientes de conciliación."""
     return CuentasCobrarService(db).ListarAbonosPendientes(id_sucursal)
 
 @CuentasCobrarRouter.put("/abonos/{id_abono}/resolver")
@@ -189,7 +189,7 @@ def resolver_abono_kevin(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_CXC))
 ):
-    """Kevin aprueba o rechaza el cobro. Al aprobar, descuenta formalmente el saldo deudor."""
+    """Supervisión aprueba o rechaza el cobro. Al aprobar, descuenta formalmente el saldo deudor."""
     aprobado = bool(dto.get("aprobado", False))
     obs = str(dto.get("observacion", ""))
     return CuentasCobrarService(db).ResolverAbonoKevin(id_abono, aprobado, usuario["IdUsuario"], obs)

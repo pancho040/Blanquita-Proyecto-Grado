@@ -452,7 +452,7 @@ def resolver_aprobacion_gerencial(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL]))
 ):
-    """Don Osvaldo aprueba o rechaza el vale rendido generando el egreso neto real en caja."""
+    """Gerencia General aprueba o rechaza el vale rendido generando el egreso neto real en caja."""
     return TesoreriaService(db).ResolverAprobacionGerencia(id_solicitud, dto, usuario["IdUsuario"])
 
 @TesoreriaRouter.get("/caja-chica/{id_solicitud}/imprimir")
@@ -470,7 +470,7 @@ def listar_pendientes_gerencia(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL]))
 ):
-    """Vista ejecutiva simplificada para Don Osvaldo con vales rendidos listos para firma."""
+    """Bandeja de vales rendidos pendientes de autorización gerencial."""
     return TesoreriaService(db).ListarPendientesAprobacionGerencia(id_sucursal)
 
 

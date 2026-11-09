@@ -54,7 +54,7 @@ def despachar_envio(
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
 ):
     """
-    Despacha el camión (pasa a EN_TRANSITO). Descuenta atómicamente de planta de Fabricio
+    Despacha el camión (pasa a EN_TRANSITO). Descuenta atómicamente de inventario de planta
     o sucursal origen mediante transacción atómica indivisible.
     """
     return EnviosService(db).despachar_envio(envio_id, usuario["IdUsuario"])

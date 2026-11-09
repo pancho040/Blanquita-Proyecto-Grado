@@ -16,16 +16,16 @@ from app.Models.Gerencia.GerenciaModel import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/gerencia", tags=["Gerencia General - Don Osvaldo"])
+router = APIRouter(prefix="/gerencia", tags=["Gerencia General"])
 
 
 @router.get("/buscar-reporte", response_model=BuscadorGlobalResponse)
 def buscar_reporte_global(
-    codigo: str = Query(..., description="Código de 4 dígitos o texto (ej. 2208, NV-501, VALE-10)"),
+    codigo: str = Query(..., description="Código numérico o identificador de documento"),
     db: Session = Depends(get_db)
 ):
     """
-    Buscador Global Rápido para Don Osvaldo.
+    Buscador Global Rápido por Código.
     Localiza al instante el documento exacto (nota de venta, vale de caja chica, abono de cliente o pedido mayorista).
     """
     service = GerenciaService(db)
@@ -37,7 +37,7 @@ def obtener_kpis_ejecutivos(
     db: Session = Depends(get_db)
 ):
     """
-    Panel de Control Ejecutivo para Don Osvaldo.
+    Panel de Control Ejecutivo de Gerencia.
     Consolida en tiempo real ventas del día, mora de clientes, vales de caja chica por autorizar y saldos bancarios.
     """
     service = GerenciaService(db)
@@ -47,7 +47,7 @@ def obtener_kpis_ejecutivos(
 @router.post("/firmar-documento", response_model=FirmaSelloResponse)
 def firmar_documento_gerencial(
     datos: RegistrarFirmaSelloRequest,
-    id_gerente: int = Query(1, description="ID del usuario Gerente (Don Osvaldo)"),
+    id_gerente: int = Query(1, description="ID del usuario Gerente"),
     db: Session = Depends(get_db)
 ):
     """
@@ -64,7 +64,7 @@ def listar_firmas_historial(
     db: Session = Depends(get_db)
 ):
     """
-    Historial de firmas y autorizaciones emitidas por Don Osvaldo.
+    Historial de firmas y autorizaciones emitidas por Gerencia.
     """
     service = GerenciaService(db)
     return service.ListarFirmasHistorial(limit)
@@ -75,7 +75,7 @@ def listar_bancos_referenciales(
     db: Session = Depends(get_db)
 ):
     """
-    Listado y estado de conciliación de los 3 bancos de la empresa (MSC, Banco Unión, BNB).
+    Listado y estado de conciliación de las cuentas bancarias de la empresa.
     """
     service = GerenciaService(db)
     kpis = service.ObtenerKPIsEjecutivos()
@@ -86,7 +86,7 @@ def listar_bancos_referenciales(
 def conciliar_banco_referencial(
     id_cuenta: int,
     datos: ConciliarBancoRequest,
-    id_usuario: int = Query(1, description="ID del usuario que concilia (Don Osvaldo)"),
+    id_usuario: int = Query(1, description="ID del usuario que realiza la conciliación"),
     db: Session = Depends(get_db)
 ):
     """

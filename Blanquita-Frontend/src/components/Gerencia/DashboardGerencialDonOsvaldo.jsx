@@ -182,9 +182,9 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
             </span>
             <div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                Centro de Comando Gerencial
+                Panel de Gerencia
                 <Badge className="bg-indigo-500/30 text-indigo-200 border-indigo-400/30 text-[10px]">
-                  DON OSVALDO
+                  GERENCIA GENERAL
                 </Badge>
               </h1>
               <p className="text-xs text-indigo-200/80">
@@ -218,11 +218,11 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
             </Button>
           </div>
           <span className="text-[10px] text-indigo-300/60 mt-1 block pl-1">
-            💡 Introduce el número del vale, nota de venta o recibo para acceder directamente sin navegar menús.
+            Ingrese el número de vale, nota de venta o recibo para acceder directamente al documento.
           </span>
         </form>
 
-        {/* NAVEGACIÓN DE PESTAÑAS EJECUTIVAS */}
+        {/* NAVEGACIÓN DE PESTAÑAS */}
         <div className="flex flex-wrap gap-2 pt-2 border-t border-indigo-800/40">
           <button
             onClick={() => setSeccion("resumen")}
@@ -232,7 +232,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                 : "bg-slate-800/60 text-indigo-200 hover:bg-slate-800"
             }`}
           >
-            1. Resumen Ejecutivo
+            Resumen General
           </button>
           <button
             onClick={() => {
@@ -244,7 +244,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                 : "bg-slate-800/60 text-indigo-200 hover:bg-slate-800"
             }`}
           >
-            2. Los 3 Bancos Referenciales
+            Cuentas Bancarias
           </button>
           <button
             onClick={() => {
@@ -257,7 +257,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                 : "bg-slate-800/60 text-indigo-200 hover:bg-slate-800"
             }`}
           >
-            3. Consolidación de Planta (Solo Lectura)
+            Inventario en Planta
           </button>
           <button
             onClick={() => {
@@ -270,7 +270,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                 : "bg-slate-800/60 text-indigo-200 hover:bg-slate-800"
             }`}
           >
-            4. Firmas & Sellos Emitidos
+            Firmas y Autorizaciones
           </button>
         </div>
       </div>
@@ -436,10 +436,10 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex justify-between items-center">
             <div>
               <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">
-                Registro y Conciliación Manual de Bancos (Módulo 9)
+                Conciliación y Control de Cuentas Bancarias
               </h3>
               <p className="text-xs text-slate-500">
-                1. BMSC (Choferes) • 2. Banco Unión (Distribuidores y Supermercados) • 3. BNB (Institucional)
+                BMSC (Recaudación Choferes) • Banco Unión (Distribuidores y Clientes) • BNB (Institucional)
               </p>
             </div>
             <Button
@@ -650,10 +650,10 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
           <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex justify-between items-center">
             <div>
               <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">
-                Historial de Autorizaciones, Firmas y Sellos Digitales
+                Historial de Autorizaciones y Firmas Digitales
               </h3>
               <p className="text-xs text-slate-500">
-                Registro inmutable de decretos y aprobaciones emitidas por Don Osvaldo
+                Registro auditable de aprobaciones emitidas por Gerencia General
               </p>
             </div>
             <Button size="sm" onClick={cargarFirmas} className="text-xs h-8">
@@ -688,7 +688,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                       <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
                         {f.CodigoReferencia || `ID-${f.IdRegistroDocumento}`}
                       </td>
-                      <td className="p-3">{f.NombreUsuario || "Don Osvaldo"}</td>
+                      <td className="p-3">{f.NombreUsuario || "Gerencia General"}</td>
                       <td className="p-3 text-slate-600 max-w-xs truncate">{f.Observaciones || "-"}</td>
                       <td className="p-3 text-center">
                         <Badge className="bg-emerald-100 text-emerald-800 gap-1 text-[10px]">
@@ -705,7 +705,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL RESULTADO DE BÚSQUEDA GLOBAL NUMÉRICA (CÓDIGO 2208) */}
+      {/* MODAL RESULTADO DE BÚSQUEDA GLOBAL */}
       {/* ========================================================================= */}
       <Dialog open={modalBusquedaOpen} onOpenChange={setModalBusquedaOpen}>
         <DialogContent className="w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 bg-white dark:bg-slate-900 rounded-xl">
@@ -759,7 +759,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                     </div>
                   </div>
 
-                  {/* Acciones Rápidas para Don Osvaldo */}
+                  {/* Acciones Rápidas */}
                   <div className="flex gap-2 pt-2">
                     <Button
                       size="sm"
@@ -770,7 +770,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                       className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 gap-1"
                     >
                       <ShieldCheck className="h-4 w-4" />
-                      Firmar & Autorizar Documento
+                      Firmar y Autorizar
                     </Button>
                     <a
                       href={doc.ruta_acceso}
@@ -779,7 +779,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
                       className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 rounded text-xs font-semibold flex items-center gap-1 text-slate-800 dark:text-slate-200"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Ver Ficha
+                      Ver Detalle
                     </a>
                   </div>
                 </div>
@@ -790,14 +790,14 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL FIRMA Y SELLO DIGITAL DE DON OSVALDO */}
+      {/* MODAL FIRMA Y SELLO DIGITAL DE GERENCIA */}
       {/* ========================================================================= */}
       <Dialog open={modalFirmarOpen} onOpenChange={setModalFirmarOpen}>
         <DialogContent className="w-full sm:max-w-md p-6 bg-white dark:bg-slate-900 rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-600" />
-              Emitir Firma y Sello Gerencial
+              Autorización y Firma Digital
             </DialogTitle>
           </DialogHeader>
 
@@ -812,7 +812,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
 
             <div>
               <label className="font-semibold text-slate-700 block mb-1">
-                Decreto u Observaciones de Don Osvaldo:
+                Observaciones de Autorización:
               </label>
               <Input
                 placeholder="Aprobado y autorizado formalmente por Gerencia General"
@@ -828,7 +828,7 @@ export default function DashboardGerencialDonOsvaldo({ usuario }) {
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 gap-1.5"
             >
               <ShieldCheck className="h-4 w-4" />
-              {firmando ? "Registrando Sello Digital..." : "Confirmar Firma & Autorización"}
+              {firmando ? "Registrando Firma..." : "Confirmar Autorización"}
             </Button>
           </div>
         </DialogContent>

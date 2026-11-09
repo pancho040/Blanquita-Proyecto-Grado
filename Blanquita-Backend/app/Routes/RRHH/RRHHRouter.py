@@ -312,8 +312,9 @@ def ListarNoVenta(
 
 
 # =============================================================================
-# IMPORTACIÓN EXCEL ASISTENCIA DON OSVALDO
+# IMPORTACIÓN EXCEL ASISTENCIA MENSUAL
 # =============================================================================
+@RRHHRouter.post("/asistencias/importar-excel")
 @RRHHRouter.post("/asistencias/importar-excel-osvaldo")
 async def ImportarExcelOsvaldo(
     file: UploadFile = File(...),

@@ -26,7 +26,7 @@ from sqlalchemy import text
 
 def seed_all():
     db = SessionLocal()
-    print("🌱 Iniciando Sembrado Integral de Datos de Prueba...")
+    print("[INFO] Iniciando Sembrado Integral de Datos de Prueba...")
 
     try:
         # =========================================================================
@@ -589,11 +589,11 @@ def seed_all():
         """))
 
         db.commit()
-        print("✅ ¡Sembrado Integral completado exitosamente sin errores!")
+        print("[EXITO] Sembrado Integral completado exitosamente sin errores.")
 
     except Exception as e:
         db.rollback()
-        print(f"❌ Error durante el sembrado integral: {e}")
+        print(f"[ERROR] Error durante el sembrado integral: {e}")
         raise
     finally:
         db.close()

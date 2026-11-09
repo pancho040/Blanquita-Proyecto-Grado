@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Truck, CheckCircle2, QrCode, Banknote, ShieldAlert, FileText, UserCheck, PackagePlus } from "lucide-react";
+import { Truck, CheckCircle2, QrCode, Banknote, ShieldAlert, FileText, UserCheck, PackagePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -226,7 +226,7 @@ export default function EntregaChoferMovil({ usuario }) {
                 />
                 {lineas.length > 1 && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => eliminarLinea(idx)} className="text-red-500 h-8 px-2">
-                    ✕
+                    <X className="w-3.5 h-3.5" />
                   </Button>
                 )}
               </div>
@@ -268,7 +268,7 @@ export default function EntregaChoferMovil({ usuario }) {
                 className="text-xs text-slate-600"
               />
               {subiendoQR && <p className="text-xs text-amber-700 animate-pulse">Subiendo imagen...</p>}
-              {archivoQR && <p className="text-xs text-emerald-700 font-medium">✓ Archivo: {archivoQR}</p>}
+              {archivoQR && <p className="text-xs text-emerald-700 font-medium">Archivo: {archivoQR}</p>}
             </div>
           )}
 

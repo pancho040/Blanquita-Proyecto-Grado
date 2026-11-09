@@ -45,10 +45,10 @@ def conciliar_envios():
         envios_pendientes = db.execute(stmt_pendientes).fetchall()
 
         if not envios_pendientes:
-            print("✅ No hay envíos pendientes de conciliar con la Planta Sucre.")
+            print("[INFO] No hay envíos pendientes de conciliar con la Planta Sucre.")
             return
 
-        print(f"📦 Se encontraron {len(envios_pendientes)} envíos pendientes de descuento en planta.")
+        print(f"[INFO] Se encontraron {len(envios_pendientes)} envíos pendientes de descuento en planta.")
         procesados = 0
 
         for env in envios_pendientes:
@@ -98,15 +98,15 @@ def conciliar_envios():
 
             db.commit()
             procesados += 1
-            print(f"     ✓ Envío {guia} reconciliado con éxito.")
+            print(f"     [OK] Envío {guia} reconciliado con éxito.")
 
         print("=" * 70)
-        print(f"🎉 Reconciliación finalizada: {procesados} envíos regularizados en la planta Sucre.")
+        print(f"[EXITO] Reconciliación finalizada: {procesados} envíos regularizados en la planta Sucre.")
         print("=" * 70)
 
     except Exception as e:
         db.rollback()
-        print(f"❌ Error durante la reconciliación: {e}")
+        print(f"[ERROR] Error durante la reconciliación: {e}")
         sys.exit(1)
     finally:
         db.close()

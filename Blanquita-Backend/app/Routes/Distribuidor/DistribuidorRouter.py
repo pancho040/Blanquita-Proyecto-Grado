@@ -71,7 +71,7 @@ def ajustar_pedido_kevin(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_INTERNOS))
 ):
-    """Kevin revisa y ajusta cantidades pactadas en la proforma."""
+    """Supervisión revisa y ajusta cantidades pactadas en la proforma."""
     return DistribuidorService(db).AjustarPedidoKevin(pedido_id, dto, usuario["IdUsuario"])
 
 @DistribuidorRouter.post("/pedidos/{pedido_id}/comprobante")
@@ -91,6 +91,6 @@ def aprobar_despacho_kevin(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_INTERNOS))
 ):
-    """Kevin confirma el depósito bancario y autoriza el despacho mayorista."""
+    """Supervisión confirma el depósito bancario y autoriza el despacho mayorista."""
     obs = dto.get("observacion")
     return DistribuidorService(db).AprobarDespachoKevin(pedido_id, usuario["IdUsuario"], obs)

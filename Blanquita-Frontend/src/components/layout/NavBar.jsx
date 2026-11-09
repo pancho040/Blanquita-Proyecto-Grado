@@ -45,7 +45,7 @@ function IconoItem({ item, size = 18 }) {
 
 function resolverRuta(basePath, prefijo, rutaItem, rutaSub = null) {
   let base = rutaItem;
-  const prefijosConocidos = ["admin", "supervisor", "contador", "encargado", "operador"];
+  const prefijosConocidos = ["admin", "supervisor", "contador", "encargado", "operador", "gerencia"];
   const tienePrefijo = prefijosConocidos.some((p) => rutaItem.startsWith(p));
 
   if (!tienePrefijo) {
@@ -387,7 +387,7 @@ export default function NavBar({
                 <option value="todas" className="text-slate-800 bg-white">Todas las Sedes</option>
                 {sucursales.map((s) => (
                   <option key={s.id} value={String(s.id)} className="text-slate-800 bg-white">
-                    📍 {s.nombre}
+                    {s.nombre}
                   </option>
                 ))}
               </select>

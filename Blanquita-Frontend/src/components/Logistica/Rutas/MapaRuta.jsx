@@ -428,7 +428,7 @@ export default function MapaRuta({
         <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-xl shadow-lg border border-slate-200 text-xs text-slate-700 z-10 space-y-1.5 max-w-xs transition-all pointer-events-auto">
           <div className="font-bold text-slate-900 border-b border-slate-100 pb-1 flex items-center justify-between">
             <span>Guía del Mapa GPS</span>
-            <button onClick={() => setMostrarLeyenda(false)} className="text-slate-400 hover:text-slate-600 text-xs">✕</button>
+            <button onClick={() => setMostrarLeyenda(false)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">X</button>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-[#0284c7] text-white flex items-center justify-center font-bold text-[10px] shrink-0">1</span>

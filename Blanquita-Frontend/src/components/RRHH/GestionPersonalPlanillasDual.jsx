@@ -323,10 +323,10 @@ export default function GestionPersonalPlanillasDual() {
             </span>
             <div>
               <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">
-                Gestión de Personal & Planillas Duales
+                Gestión de Personal y Planillas
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Planilla Oficial vs Interna, Asistencia Biométrica (columna AJ), Prorrateo No Venta y Finiquitos LGT
+                Planilla Oficial vs Interna, Control de Asistencia, Deducción No Venta y Finiquitos
               </p>
             </div>
           </div>
@@ -342,7 +342,7 @@ export default function GestionPersonalPlanillasDual() {
                 : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
             }`}
           >
-            1. Personal Dual
+            1. Nómina de Personal
           </button>
           <button
             onClick={() => setPestañaActiva("planillas")}
@@ -362,7 +362,7 @@ export default function GestionPersonalPlanillasDual() {
                 : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
             }`}
           >
-            3. Excel Don Osvaldo (Col. AJ)
+            3. Importar Asistencia
           </button>
           <button
             onClick={() => setPestañaActiva("finiquitos")}
@@ -697,10 +697,10 @@ export default function GestionPersonalPlanillasDual() {
               </span>
               <div>
                 <h3 className="font-bold text-slate-800 dark:text-slate-100">
-                  Importador de Asistencia Mensual de Don Osvaldo
+                  Importador de Asistencia Mensual
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Lectura directa de la columna AJ para horas trabajadas y números negativos como faltas
+                  Procesamiento de horas trabajadas y cálculo automático de deducciones por faltas
                 </p>
               </div>
             </div>
@@ -724,14 +724,14 @@ export default function GestionPersonalPlanillasDual() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 gap-2"
               >
                 <UploadCloud className="h-4 w-4" />
-                {subiendoExcel ? "Procesando Columna AJ..." : "Importar y Aplicar Faltas"}
+                {subiendoExcel ? "Procesando Asistencia..." : "Importar y Aplicar Faltas"}
               </Button>
             </form>
 
             {resultadoExcel && (
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 rounded-lg text-xs space-y-1">
                 <p className="font-bold text-emerald-800 dark:text-emerald-300">
-                  ✅ Procesamiento Exitoso:
+                  Procesamiento Exitoso:
                 </p>
                 <p className="text-emerald-700 dark:text-emerald-400">
                   • Empleados identificados y procesados: {resultadoExcel.empleados_procesados || 0}
@@ -981,7 +981,7 @@ export default function GestionPersonalPlanillasDual() {
               {/* LÍNEA DE CORTE */}
               <div className="border-t-2 border-dashed border-slate-400 my-2 text-center relative">
                 <span className="bg-white dark:bg-slate-900 px-3 text-[10px] text-slate-400 -top-2.5 relative font-mono">
-                  ✂ - - - - - - - - - CORTAR AQUÍ (2 COPIAS POR HOJA) - - - - - - - - - ✂
+                  - - - - - - CORTAR AQUÍ (COPIA EMPRESA / TRABAJADOR) - - - - - -
                 </span>
               </div>
 
