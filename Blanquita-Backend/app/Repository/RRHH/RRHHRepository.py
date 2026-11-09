@@ -510,21 +510,24 @@ class RRHHRepository:
     # =========================================================================
     def ListarPeriodosNomina(self) -> list[dict]:
         sql = """
-            SELECT 
-                p."IdPeriodoNomina",
-                p."Mes",
-                p."Anio",
-                p."FechaInicio",
-                p."FechaFin",
-                p."Cerrado",
-                TO_CHAR(p."FechaInicio", 'TMMonth YYYY') as "NombrePeriodo",
-                pl."IdPlanilla",
-                pl."Aprobada",
-                CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
-                pl."TotalLiquido"
-            FROM "PeriodoNomina" p
-            LEFT JOIN "Planilla" pl ON p."IdPeriodoNomina" = pl."IdPeriodoNomina"
-            ORDER BY p."Anio" DESC, p."Mes" DESC;
+            SELECT * FROM (
+                SELECT DISTINCT ON (p."IdPeriodoNomina")
+                    p."IdPeriodoNomina",
+                    p."Mes",
+                    p."Anio",
+                    p."FechaInicio",
+                    p."FechaFin",
+                    p."Cerrado",
+                    TO_CHAR(p."FechaInicio", 'TMMonth YYYY') as "NombrePeriodo",
+                    pl."IdPlanilla",
+                    pl."Aprobada",
+                    CASE WHEN pl."Aprobada" THEN 'APROBADA' ELSE 'BORRADOR' END as "Estado",
+                    pl."TotalLiquido"
+                FROM "PeriodoNomina" p
+                LEFT JOIN "Planilla" pl ON p."IdPeriodoNomina" = pl."IdPeriodoNomina"
+                ORDER BY p."IdPeriodoNomina" DESC, pl."IdPlanilla" DESC
+            ) sub
+            ORDER BY sub."Anio" DESC, sub."Mes" DESC;
         """
         return self.caller.LlamarFuncion(sql, {})
 

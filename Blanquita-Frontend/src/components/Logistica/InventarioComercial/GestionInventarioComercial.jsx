@@ -17,6 +17,8 @@ import {
   ObtenerReporteInventarioValorizado,
   CargarChofer
 } from "@/services/Logistica/InventarioComercialService";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 
 export default function GestionInventarioComercial() {
   const [sucursalId, setSucursalId] = useState(() => {
@@ -109,6 +111,7 @@ export default function GestionInventarioComercial() {
     return texto.includes(busqueda.toLowerCase());
   });
 
+  const paginacion = usePaginacion(itemsFiltrados, 10);
   const totalValorSucursal = itemsInventario.reduce((acc, curr) => acc + (Number(curr.valor_total_disponible) || 0), 0);
 
   return (
@@ -235,8 +238,8 @@ export default function GestionInventarioComercial() {
                       </td>
                     </tr>
                   ) : (
-                    itemsFiltrados.map((it) => (
-                      <tr key={it.id} className="hover:bg-slate-50/80 transition-colors">
+                    paginacion.itemsPaginados.map((it, idx) => (
+                      <tr key={`${it.id}-${it.presentacion_id || idx}`} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4 font-mono font-semibold text-slate-900">{it.codigo_presentacion}</td>
                         <td className="py-3 px-4 font-medium">{it.nombre_producto}</td>
                         <td className="py-3 px-4">
@@ -262,6 +265,7 @@ export default function GestionInventarioComercial() {
                 </tbody>
               </table>
             </div>
+            {itemsFiltrados.length > 0 && <PaginacionTabla {...paginacion} />}
           </div>
         </div>
       )}

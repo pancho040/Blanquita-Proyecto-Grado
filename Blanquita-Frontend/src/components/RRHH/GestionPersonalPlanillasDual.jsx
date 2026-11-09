@@ -36,6 +36,8 @@ import {
   ObtenerPlanilla,
   ObtenerBoletaPagoDoble
 } from "@/services/RRHH/RRHHService";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 
 export default function GestionPersonalPlanillasDual() {
   const [pestañaActiva, setPestañaActiva] = useState("personal"); // personal | planillas | excel | finiquitos | noventa
@@ -106,6 +108,10 @@ export default function GestionPersonalPlanillasDual() {
   });
   const [guardandoNoVenta, setGuardandoNoVenta] = useState(false);
 
+  // Paginación
+  const paginacionPersonal = usePaginacion(empleados, 10);
+  const paginacionPlanilla = usePaginacion(planillaActual?.Detalles || [], 15);
+
   // Cargar datos iniciales
   useEffect(() => {
     cargarPersonal();
@@ -139,9 +145,18 @@ export default function GestionPersonalPlanillasDual() {
     try {
       const data = await ObtenerPeriodosNomina();
       const items = Array.isArray(data) ? data : (data.items || []);
-      setPeriodos(items);
-      if (items.length > 0 && !periodoSeleccionado) {
-        setPeriodoSeleccionado(items[0].IdPeriodoNomina || items[0].id);
+      const unicos = [];
+      const vistos = new Set();
+      for (const it of items) {
+        const id = it.IdPeriodoNomina || it.id;
+        if (!vistos.has(id)) {
+          vistos.add(id);
+          unicos.push(it);
+        }
+      }
+      setPeriodos(unicos);
+      if (unicos.length > 0 && !periodoSeleccionado) {
+        setPeriodoSeleccionado(unicos[0].IdPeriodoNomina || unicos[0].id);
       }
     } catch (err) {
       console.error(err);
@@ -474,8 +489,8 @@ export default function GestionPersonalPlanillasDual() {
                       </td>
                     </tr>
                   ) : (
-                    empleados.map((emp) => (
-                      <tr key={emp.IdUsuario || emp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                    paginacionPersonal.itemsPaginados.map((emp, idx) => (
+                      <tr key={`emp-${emp.IdUsuario || emp.id || idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                         <td className="p-3 font-bold text-slate-800 dark:text-slate-100">
                           {emp.NombreCompleto || `${emp.Nombres || ""} ${emp.Apellidos || ""}`}
                         </td>
@@ -512,6 +527,7 @@ export default function GestionPersonalPlanillasDual() {
                 </tbody>
               </table>
             </div>
+            {empleados.length > 0 && <PaginacionTabla {...paginacionPersonal} />}
           </div>
         </div>
       )}
@@ -535,11 +551,14 @@ export default function GestionPersonalPlanillasDual() {
                   }}
                   className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
                 >
-                  {periodos.map((p) => (
-                    <option key={p.IdPeriodoNomina || p.id} value={p.IdPeriodoNomina || p.id}>
-                      {p.NombrePeriodo || `${p.Mes}/${p.Anio}`}
-                    </option>
-                  ))}
+                  {periodos.map((p, idx) => {
+                    const val = p.IdPeriodoNomina || p.id;
+                    return (
+                      <option key={`periodo-${val}-${idx}`} value={val}>
+                        {p.NombrePeriodo || `${p.Mes}/${p.Anio}`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -630,8 +649,8 @@ export default function GestionPersonalPlanillasDual() {
                       </td>
                     </tr>
                   ) : (
-                    planillaActual.Detalles.map((det) => (
-                      <tr key={det.IdDetallePlanilla} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                    paginacionPlanilla.itemsPaginados.map((det, idx) => (
+                      <tr key={`det-${det.IdDetallePlanilla || idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                         <td className="p-3 font-semibold text-slate-800 dark:text-slate-100">
                           {det.NombreCompleto || det.Empleado?.NombreCompleto || `Empleado #${det.IdUsuario}`}
                         </td>
@@ -681,6 +700,7 @@ export default function GestionPersonalPlanillasDual() {
                 </tbody>
               </table>
             </div>
+            {planillaActual?.Detalles?.length > 0 && <PaginacionTabla {...paginacionPlanilla} />}
           </div>
         </div>
       )}

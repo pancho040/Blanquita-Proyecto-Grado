@@ -13,26 +13,29 @@ class InventarioComercialRepository:
 
     def listar_inventario_sucursal(self, sucursal_id: int) -> List[Dict[str, Any]]:
         sql = """
-            SELECT 
-                inv.id,
-                inv.sucursal_id,
-                inv.presentacion_id,
-                p."CodigoPresentacion" as codigo_presentacion,
-                prod."NombreProducto" as nombre_producto,
-                p."TipoContenedor" as tipo_contenedor,
-                inv.cantidad_disponible,
-                inv.cantidad_reservada,
-                COALESCE(pp."PrecioUnitario", 0) as precio_unitario_vigente,
-                ROUND(inv.cantidad_disponible * COALESCE(pp."PrecioUnitario", 0), 2) as valor_total_disponible,
-                inv.updated_at
-            FROM public.inventario_sucursal inv
-            JOIN public."PresentacionProducto" p ON inv.presentacion_id = p."IdPresentacion"
-            JOIN public."Producto" prod ON p."IdProducto" = prod."IdProducto"
-            LEFT JOIN public."PrecioProducto" pp ON p."IdPresentacion" = pp."IdPresentacion"
-                 AND (pp."IdSucursal" = inv.sucursal_id OR pp."IdSucursal" IS NULL)
-                 AND pp."Activo" = TRUE
-            WHERE inv.sucursal_id = :sid
-            ORDER BY prod."NombreProducto", p."CodigoPresentacion";
+            SELECT * FROM (
+                SELECT DISTINCT ON (inv.id)
+                    inv.id,
+                    inv.sucursal_id,
+                    inv.presentacion_id,
+                    p."CodigoPresentacion" as codigo_presentacion,
+                    prod."NombreProducto" as nombre_producto,
+                    p."TipoContenedor" as tipo_contenedor,
+                    inv.cantidad_disponible,
+                    inv.cantidad_reservada,
+                    COALESCE(pp."PrecioUnitario", 0) as precio_unitario_vigente,
+                    ROUND(inv.cantidad_disponible * COALESCE(pp."PrecioUnitario", 0), 2) as valor_total_disponible,
+                    inv.updated_at
+                FROM public.inventario_sucursal inv
+                JOIN public."PresentacionProducto" p ON inv.presentacion_id = p."IdPresentacion"
+                JOIN public."Producto" prod ON p."IdProducto" = prod."IdProducto"
+                LEFT JOIN public."PrecioProducto" pp ON p."IdPresentacion" = pp."IdPresentacion"
+                     AND (pp."IdSucursal" = inv.sucursal_id OR pp."IdSucursal" IS NULL)
+                     AND pp."Activo" = TRUE
+                WHERE inv.sucursal_id = :sid
+                ORDER BY inv.id, (pp."IdSucursal" IS NOT NULL) DESC, pp."IdPrecioProducto" DESC
+            ) sub
+            ORDER BY sub.nombre_producto, sub.codigo_presentacion;
         """
         return self.caller.LlamarFuncion(sql, {"sid": sucursal_id})
 

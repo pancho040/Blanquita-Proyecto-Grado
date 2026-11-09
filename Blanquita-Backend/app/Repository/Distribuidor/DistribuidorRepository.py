@@ -12,7 +12,7 @@ class DistribuidorRepository:
         where = 'WHERE "activo" = :activo' if activo is not None else ''
         params = {"activo": activo} if activo is not None else {}
         sql = f"""
-            SELECT d.*, u."Correo" as "CorreoUsuario"
+            SELECT d.*, TRIM(CONCAT(COALESCE(u."PrimerNombre", ''), ' ', COALESCE(u."ApellidoPaterno", ''))) as "NombreUsuario"
             FROM "distribuidores_externos" d
             LEFT JOIN "Usuario" u ON d."id_usuario" = u."IdUsuario"
             {where}

@@ -308,8 +308,27 @@ class TesoreriaRepository:
             ORDER BY s."FechaSolicitud" DESC, s."IdSolicitudCajaChica" DESC;
         """
         solicitudes = self.caller.LlamarFuncion(sql, params)
+        if not solicitudes:
+            return []
+
+        ids = [s["IdSolicitudCajaChica"] for s in solicitudes if s.get("IdSolicitudCajaChica")]
+        detalles_por_solicitud = {}
+        if ids:
+            sql_detalles = """
+                SELECT * FROM "DetalleGastoCajaChica"
+                WHERE "solicitud_id" = ANY(:ids)
+                ORDER BY "id" ASC;
+            """
+            detalles = self.caller.LlamarFuncion(sql_detalles, {"ids": ids})
+            for d in detalles:
+                sid = d.get("solicitud_id")
+                if sid not in detalles_por_solicitud:
+                    detalles_por_solicitud[sid] = []
+                detalles_por_solicitud[sid].append(d)
+
         for s in solicitudes:
-            s["DetallesGasto"] = self.ListarDetallesGastoCajaChica(s["IdSolicitudCajaChica"])
+            s["DetallesGasto"] = detalles_por_solicitud.get(s.get("IdSolicitudCajaChica"), [])
+
         return solicitudes
 
     def ObtenerSolicitudCajaChicaPorId(self, id_solicitud: int) -> dict | None:
@@ -413,8 +432,27 @@ class TesoreriaRepository:
             ORDER BY s."FechaSolicitud" DESC;
         """
         solicitudes = self.caller.LlamarFuncion(sql, params)
+        if not solicitudes:
+            return []
+
+        ids = [s["IdSolicitudCajaChica"] for s in solicitudes if s.get("IdSolicitudCajaChica")]
+        detalles_por_solicitud = {}
+        if ids:
+            sql_detalles = """
+                SELECT * FROM "DetalleGastoCajaChica"
+                WHERE "solicitud_id" = ANY(:ids)
+                ORDER BY "id" ASC;
+            """
+            detalles = self.caller.LlamarFuncion(sql_detalles, {"ids": ids})
+            for d in detalles:
+                sid = d.get("solicitud_id")
+                if sid not in detalles_por_solicitud:
+                    detalles_por_solicitud[sid] = []
+                detalles_por_solicitud[sid].append(d)
+
         for s in solicitudes:
-            s["DetallesGasto"] = self.ListarDetallesGastoCajaChica(s["IdSolicitudCajaChica"])
+            s["DetallesGasto"] = detalles_por_solicitud.get(s.get("IdSolicitudCajaChica"), [])
+
         return solicitudes
 
     def ActualizarSolicitudCajaChica(self, id_solicitud: int, datos: dict) -> dict | None:

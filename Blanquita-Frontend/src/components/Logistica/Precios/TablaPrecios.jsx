@@ -78,8 +78,8 @@ export default function TablaPrecios() {
   const abrirEditar = (item) => {
     setItemEditar(item);
     setFormPrecio({
-      PrecioUnitario: item.PrecioUnitario || "",
-      PrecioMayorista: item.PrecioMayorista || "",
+      PrecioUnitario: item.PrecioUnitario != null ? String(item.PrecioUnitario) : "",
+      PrecioMayorista: item.PrecioMayorista != null ? String(item.PrecioMayorista) : "",
       CantidadMinimaMayorista: item.CantidadMinimaMayorista || 10,
       VigenteDesde: new Date().toISOString().split("T")[0]
     });
@@ -161,10 +161,10 @@ export default function TablaPrecios() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginacion.itemsPaginados.map((p) => {
+                  {paginacion.itemsPaginados.map((p, idx) => {
                     const tienePrecio = p.PrecioUnitario !== null;
                     return (
-                      <tr key={p.IdPresentacion} className="hover:bg-slate-50/70">
+                      <tr key={`${p.IdPrecioProducto || p.IdPresentacion}-${p.IdSucursal || ''}-${idx}`} className="hover:bg-slate-50/70">
                         <td className="px-4 py-3 text-xs text-slate-600">
                           {p.CodigoPresentacion}
                         </td>

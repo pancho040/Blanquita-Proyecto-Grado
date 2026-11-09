@@ -163,13 +163,16 @@ app.include_router(InventarioComercialRouter, prefix="/api")
 #ROUTERS CONTABILIDAD Y TESORERIA
 app.include_router(TesoreriaRouter)
 app.include_router(TesoreriaRouter, prefix="/contabilidad")
+app.include_router(TesoreriaRouter, prefix="/api")
 app.include_router(CuentasCobrarRouter)
 app.include_router(CuentasCobrarRouter, prefix="/contabilidad")
 app.include_router(CuentasCobrarRouter, prefix="/api")
 app.include_router(CuentasPagarRouter)
 app.include_router(CuentasPagarRouter, prefix="/contabilidad")
+app.include_router(CuentasPagarRouter, prefix="/api")
 app.include_router(ImportacionRouter)
 app.include_router(ImportacionRouter, prefix="/contabilidad")
+app.include_router(ImportacionRouter, prefix="/api")
 
 #ROUTERS DISTRIBUIDORES MAYORISTAS EXTERNOS
 app.include_router(DistribuidorRouter)

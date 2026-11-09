@@ -450,7 +450,7 @@ class CuentasCobrarRepository:
                 cxc."SaldoPendiente",
                 c."RazonSocial" as "ClienteNombre",
                 ca."UrlArchivo" as "UrlComprobante",
-                u."NombreCompleto" as "ChoferNombre"
+                TRIM(CONCAT(COALESCE(u."PrimerNombre", ''), ' ', COALESCE(u."ApellidoPaterno", ''))) as "ChoferNombre"
             FROM "AbonoCuentaCobrar" a
             JOIN "CuentaCobrar" cxc ON a."IdCuentaCobrar" = cxc."IdCuentaCobrar"
             JOIN "Cliente" c ON cxc."IdCliente" = c."IdCliente"

@@ -36,6 +36,8 @@ import {
   ImprimirValeCajaChica,
   ListarPendientesGerencia
 } from "@/services/Contabilidad/tesoreriaService";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 
 export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" }) {
   // modo: "operativo" (Kevin) | "gerencial" (Don Osvaldo)
@@ -44,6 +46,10 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
   const [pendientesGerencia, setPendientesGerencia] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
+
+  // Paginación
+  const paginacionSolicitudes = usePaginacion(solicitudes, 10);
+  const paginacionGerencia = usePaginacion(pendientesGerencia, 6);
 
   // Modales
   const [modalNuevaOpen, setModalNuevaOpen] = useState(false);
@@ -359,13 +365,13 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                       </td>
                     </tr>
                   ) : (
-                    solicitudes.map((sol) => {
-                      const idSol = sol.IdSolicitudCajaChica || sol.id;
+                    paginacionSolicitudes.itemsPaginados.map((sol, idx) => {
+                      const idSol = sol.IdSolicitudCajaChica || sol.id || idx;
                       const estado = sol.Estado || "PENDIENTE";
                       const estadoGerencia = sol.AprobacionGerencia || "PENDIENTE";
 
                       return (
-                        <tr key={idSol} className="hover:bg-slate-50/50">
+                        <tr key={`sol-${idSol}-${idx}`} className="hover:bg-slate-50/50">
                           <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-100">
                             {sol.CodigoSolicitud || `VALE-${idSol}`}
                             <span className="block font-normal text-[10px] text-slate-400">
@@ -485,6 +491,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                 </tbody>
               </table>
             </div>
+            {solicitudes.length > 0 && <PaginacionTabla {...paginacionSolicitudes} />}
           </div>
         </div>
       )}
@@ -523,9 +530,9 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                 No hay vales de caja chica pendientes de aprobación gerencial.
               </div>
             ) : (
-              pendientesGerencia.map((sol) => (
+              paginacionGerencia.itemsPaginados.map((sol, idx) => (
                 <div
-                  key={sol.IdSolicitudCajaChica}
+                  key={`ger-${sol.IdSolicitudCajaChica || idx}`}
                   className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4"
                 >
                   <div className="flex justify-between items-start border-b pb-3">
@@ -603,6 +610,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
               ))
             )}
           </div>
+          {pendientesGerencia.length > 0 && <PaginacionTabla {...paginacionGerencia} />}
         </div>
       )}
 

@@ -10,6 +10,8 @@ import {
   CrearPedidoDistribuidor, AjustarPedidoKevin, SubirBoletaPago, AprobarDespachoKevin
 } from "@/services/Distribuidor/distribuidorService";
 import { SubirArchivoComprobante } from "@/services/Logistica/EnvioService";
+import { usePaginacion } from "@/hooks/usePaginacion";
+import PaginacionTabla from "@/components/common/PaginacionTabla";
 
 export default function GestionDistribuidoresMayoristas({ usuario }) {
   const [tabActiva, setTabActiva] = useState("pedidos"); // 'pedidos' | 'nuevo_pedido' | 'catalogo'
@@ -17,6 +19,10 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
   const [catalogo, setCatalogo] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // Paginación
+  const paginacionPedidos = usePaginacion(pedidos, 8);
+  const paginacionCatalogo = usePaginacion(catalogo, 9);
 
   // Formulario nuevo pedido
   const [distribuidorId, setDistribuidorId] = useState("");
@@ -195,8 +201,8 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
               No hay pedidos mayoristas registrados.
             </div>
           ) : (
-            pedidos.map((ped) => (
-              <div key={ped.id} className="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
+            paginacionPedidos.itemsPaginados.map((ped, idx) => (
+              <div key={`ped-${ped.id || idx}`} className="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2">
@@ -260,6 +266,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
               </div>
             ))
           )}
+          {pedidos.length > 0 && <PaginacionTabla {...paginacionPedidos} />}
         </div>
       ) : tabActiva === "nuevo_pedido" ? (
         <form onSubmit={handleCrearPedido} className="bg-white p-6 rounded-2xl border shadow-sm space-y-6">
@@ -319,17 +326,18 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
           </Button>
         </form>
       ) : (
-        <div className="bg-white p-6 rounded-2xl border shadow-sm">
-          <h2 className="text-sm font-bold text-slate-800 mb-4">Stock Físico de Planta Sucre (Solo Lectura)</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {catalogo.map(c => (
-              <div key={c.presentacion_id} className="p-4 bg-slate-50 rounded-xl border">
+        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
+          <h2 className="text-sm font-bold text-slate-800">Stock Físico de Planta Sucre (Solo Lectura)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {paginacionCatalogo.itemsPaginados.map((c, idx) => (
+              <div key={`cat-${c.presentacion_id || idx}`} className="p-4 bg-slate-50 rounded-xl border">
                 <p className="font-semibold text-slate-800 text-sm">{c.producto_nombre}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{c.tipo_contenedor}</p>
                 <p className="text-xl font-bold text-sky-700 mt-2">{c.stock_disponible} paq.</p>
               </div>
             ))}
           </div>
+          {catalogo.length > 0 && <PaginacionTabla {...paginacionCatalogo} />}
         </div>
       )}
 
