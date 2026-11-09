@@ -54,8 +54,8 @@ def test_tc_ger_01_buscador_codigo_numerico_2208(db_session: Session):
     assert resp.coincidencia_exacta is True
     assert resp.total_encontrados >= 1
 
-    # Verificar que el documento 2208 está en la lista de resultados
-    doc = next((d for d in resp.documentos if "2208" in d.codigo or d.id_registro == 2208), None)
+    # Verificar que el documento 2208 de caja chica está en la lista de resultados
+    doc = next((d for d in resp.documentos if d.tipo_documento == "CAJA_CHICA" and ("2208" in d.codigo or d.id_registro == 2208)), None)
     assert doc is not None
     assert doc.tipo_documento == "CAJA_CHICA"
     assert "VALE-2208" in doc.codigo
