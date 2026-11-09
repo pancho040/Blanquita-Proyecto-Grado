@@ -46,6 +46,7 @@ from app.Routes.Distribuidor.DistribuidorRouter import DistribuidorRouter
 from app.Routes.RRHH.RRHHRouter import RRHHRouter
 from app.Routes.Usuario.AuditRouter import AuditRouter
 from app.Routes.Reportes.ReportesRouter import ReportesRouter
+from app.Routes.Gerencia.GerenciaRouter import router as GerenciaRouter
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -185,4 +186,8 @@ app.include_router(AuditRouter, prefix="/api")
 # ROUTERS REPORTES Y ANALÍTICA
 app.include_router(ReportesRouter)
 app.include_router(ReportesRouter, prefix="/api")
+
+# ROUTERS GERENCIA GENERAL Y PANEL DON OSVALDO
+app.include_router(GerenciaRouter)
+app.include_router(GerenciaRouter, prefix="/api")
 

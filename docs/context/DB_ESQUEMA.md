@@ -473,5 +473,28 @@ erDiagram
   - `FechaGasto`: DATE NOT NULL DEFAULT CURRENT_DATE
   - `CreatedAt`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 
-### 4.6 Subagente F (Panel Gerencial, Buscador y Bancos)
-*(Espacio reservado para las adiciones de la Fase 4: vistas analíticas gerenciales y extensiones a `CuentaBancariaEmpresa`)*
+### 4.6 Subagente F (Panel Gerencial, Buscador y Bancos) - IMPLEMENTADO EN FASE 4
+- **`public.CuentaBancariaEmpresa` (Columnas Aditivas para Propósito y Conciliación):**
+  - `Proposito`: VARCHAR(50) NULL ('RECAUDACION_CHOFERES', 'DISTRIBUIDORES_MAYORISTAS', 'OPERACIONES_INSTITUCIONALES')
+  - `SaldoConciliado`: NUMERIC(14,2) NOT NULL DEFAULT 0.00
+  - `FechaUltimaConciliacion`: TIMESTAMP WITH TIME ZONE NULL
+  - `ObservacionesConciliacion`: TEXT NULL
+- **`public.FirmaDigitalDocumento` (Nueva Tabla de Firmas y Sellos Gerenciales):**
+  - `IdFirma`: SERIAL PRIMARY KEY
+  - `IdUsuario`: INT NOT NULL REFERENCES public.Usuario(IdUsuario) ON DELETE RESTRICT
+  - `TipoDocumento`: VARCHAR(50) NOT NULL ('SOLICITUD_CAJA_CHICA', 'PEDIDO_DISTRIBUIDOR', 'NOTA_VENTA', 'PLANILLA', 'OTRO')
+  - `IdRegistroDocumento`: INT NOT NULL
+  - `CodigoReferencia`: VARCHAR(100) NULL
+  - `UrlFotoFirmaSello`: VARCHAR(500) NOT NULL
+  - `Observaciones`: TEXT NULL
+  - `FechaFirma`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  - *Índices:* `ix_firma_tipo_doc_id` en `(TipoDocumento, IdRegistroDocumento)` e `ix_firma_cod_referencia` en `CodigoReferencia`
+- **`public.ConciliacionBancariaHistorial` (Nueva Tabla de Historial de Conciliaciones):**
+  - `IdConciliacion`: SERIAL PRIMARY KEY
+  - `IdCuentaBancaria`: INT NOT NULL REFERENCES public.CuentaBancariaEmpresa(IdCuentaBancaria) ON DELETE RESTRICT
+  - `SaldoAnterior`: NUMERIC(14,2) NOT NULL DEFAULT 0.00
+  - `SaldoNuevo`: NUMERIC(14,2) NOT NULL DEFAULT 0.00
+  - `Diferencia`: NUMERIC(14,2) NOT NULL DEFAULT 0.00
+  - `IdUsuario`: INT NOT NULL REFERENCES public.Usuario(IdUsuario) ON DELETE RESTRICT
+  - `Observacion`: TEXT NULL
+  - `FechaConciliacion`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

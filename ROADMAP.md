@@ -179,21 +179,21 @@
 
 ### Subagente F: Módulo 6 (Panel Gerencial Don Osvaldo) y Módulo 9 (Bancos y Saldos)
 - **Dependencias:** Fases 1, 2 y 3 completadas.
-- **Tablas Propias:** `CuentaBancariaEmpresa`, `FirmaDigitalDocumento`, vistas analíticas gerenciales.
+- **Tablas Propias:** `CuentaBancariaEmpresa`, `FirmaDigitalDocumento`, `ConciliacionBancariaHistorial`, vistas analíticas gerenciales.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Panel de control gerencial optimizado de alto rendimiento para Don Osvaldo.
-    - [ ] Buscador numérico global (`/api/gerencia/buscar-reporte?codigo=2208`).
-    - [ ] Registro de firma/sello digital de Gerencia para autorizaciones masivas.
-    - [ ] Registro referencial de movimientos en los 3 bancos de la empresa (MSC para choferes, Unión para distribuidores/supermercados, BNB).
-    - [ ] Reporte financiero consolidado con saldos de materia prima y producto terminado (vía `PlantaDataReader` en solo lectura).
-  - [ ] **Frontend:**
-    - [ ] Dashboard gerencial minimalista, rápido y con tarjetas ejecutivas.
-    - [ ] Buscador prominente por código numérico.
-    - [ ] Módulo referencial de bancos y saldos conciliados.
-  - [ ] **Tests:**
-    - [ ] Test: búsqueda por código 2208 retorna de inmediato el reporte o comprobante exacto.
-    - [ ] Test: consolidación de saldos de planta se genera sin emitir sentencias de escritura.
+  - [x] **Backend:**
+    - [x] Panel de control gerencial optimizado de alto rendimiento para Don Osvaldo.
+    - [x] Buscador numérico global (`/api/gerencia/buscar-reporte?codigo=2208`).
+    - [x] Registro de firma/sello digital de Gerencia para autorizaciones masivas.
+    - [x] Registro referencial de movimientos en los 3 bancos de la empresa (MSC para choferes, Unión para distribuidores/supermercados, BNB).
+    - [x] Reporte financiero consolidado con saldos de materia prima y producto terminado (vía `PlantaDataReader` en solo lectura).
+  - [x] **Frontend:**
+    - [x] Dashboard gerencial minimalista, rápido y con tarjetas ejecutivas.
+    - [x] Buscador prominente por código numérico.
+    - [x] Módulo referencial de bancos y saldos conciliados.
+  - [x] **Tests:**
+    - [x] Test: búsqueda por código 2208 retorna de inmediato el reporte o comprobante exacto.
+    - [x] Test: consolidación de saldos de planta se genera sin emitir sentencias de escritura.
 
 ---
 

@@ -41,6 +41,11 @@ export const RutasAdmin = [
     ruta: "admin/inicio",
   },
   {
+    titulo: "Comando Gerencial (Don Osvaldo)",
+    icono: ShieldCheck,
+    ruta: "gerencia/inicio",
+  },
+  {
     titulo: "Usuarios y Seguridad",
     icono: ShieldCheck,
     ruta: "admin",

@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const { usuario } = Astro.locals;
+import DashboardGerencialDonOsvaldo from "@/components/Gerencia/DashboardGerencialDonOsvaldo";
+---
+
+<Layout title="Centro de Comando Gerencial | Don Osvaldo">
+  <DashboardGerencialDonOsvaldo client:only="react" usuario={usuario} />
+</Layout>
