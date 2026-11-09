@@ -1,0 +1,9 @@
+---
+import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import CierreTurnoChoferComponent from '@/components/Logistica/Reparto/CierreTurnoChofer';
+---
+
+<Layout title="Cierre de Turno | Papelera Blanquita">
+  <CierreTurnoChoferComponent client:only="react" usuario={usuario} />
+</Layout>

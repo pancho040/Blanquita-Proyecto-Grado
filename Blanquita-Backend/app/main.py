@@ -42,6 +42,7 @@ from app.Routes.Contabilidad.TesoreriaRouter import TesoreriaRouter
 from app.Routes.Contabilidad.CuentasCobrarRouter import CuentasCobrarRouter
 from app.Routes.Contabilidad.CuentasPagarRouter import CuentasPagarRouter
 from app.Routes.Contabilidad.ImportacionRouter import ImportacionRouter
+from app.Routes.Distribuidor.DistribuidorRouter import DistribuidorRouter
 from app.Routes.RRHH.RRHHRouter import RRHHRouter
 from app.Routes.Usuario.AuditRouter import AuditRouter
 from app.Routes.Reportes.ReportesRouter import ReportesRouter
@@ -163,10 +164,15 @@ app.include_router(TesoreriaRouter)
 app.include_router(TesoreriaRouter, prefix="/contabilidad")
 app.include_router(CuentasCobrarRouter)
 app.include_router(CuentasCobrarRouter, prefix="/contabilidad")
+app.include_router(CuentasCobrarRouter, prefix="/api")
 app.include_router(CuentasPagarRouter)
 app.include_router(CuentasPagarRouter, prefix="/contabilidad")
 app.include_router(ImportacionRouter)
 app.include_router(ImportacionRouter, prefix="/contabilidad")
+
+#ROUTERS DISTRIBUIDORES MAYORISTAS EXTERNOS
+app.include_router(DistribuidorRouter)
+app.include_router(DistribuidorRouter, prefix="/api")
 
 #ROUTERS RECURSOS HUMANOS Y BIOMETRICO (SOLO ADMIN)
 app.include_router(RRHHRouter)

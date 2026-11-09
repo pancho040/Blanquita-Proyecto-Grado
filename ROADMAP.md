@@ -81,55 +81,55 @@
 - **Tablas Propias:** `RendicionRuta`, `AsignacionRuta` (extensión), `NotaVenta` (extensión), `DetalleNotaVenta` (extensión).
 - **Puntos de Choque con Subagente B:** `NotaVenta` y pagos con saldo a crédito (`CuentaCobrar`). Regla: Subagente A genera la `NotaVenta` y emite el evento/registro inicial; Subagente B gestiona el ciclo de vida del saldo en `CuentaCobrar`.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Control de cierre de turno diario: comparativa stock cargado vs ventas vs stock devuelto físico.
-    - [ ] Registro inmediato de mermas y faltantes imputables al chofer en el cierre diario.
-    - [ ] Emisión de Nota de Venta NV-501 con datos de chofer, camión, precios automáticos y bandera de bandeo.
-    - [ ] Soporte de pagos mixtos (Efectivo + QR + Saldo a crédito).
-    - [ ] Motor de promociones automáticas (1 Megarrollo = 1 Servilleta de regalo).
-    - [ ] Endpoint de edición de nota para Kevin con registro de ajuste (ej. -10 Bs) y notificación al chofer.
-  - [ ] **Frontend:**
-    - [ ] Pantalla móvil de entrega para chofer con firma digital obligatoria en canvas táctil.
-    - [ ] Pantalla de Cierre de Turno y Rendición Diaria con conciliación de efectivo y comprobantes.
-    - [ ] Interfaz de visualización y edición controlada de Notas de Venta para Kevin.
-  - [ ] **Tests:**
-    - [ ] Test: cierre de turno detecta discrepancia de stock físico y genera registro de faltante.
-    - [ ] Test: nota de venta aplica promoción de bandeo sin alterar tablas de planta.
+  - [x] **Backend:**
+    - [x] Control de cierre de turno diario: comparativa stock cargado vs ventas vs stock devuelto físico.
+    - [x] Registro inmediato de mermas y faltantes imputables al chofer en el cierre diario.
+    - [x] Emisión de Nota de Venta NV-501 con datos de chofer, camión, precios automáticos y bandera de bandeo.
+    - [x] Soporte de pagos mixtos (Efectivo + QR + Saldo a crédito).
+    - [x] Motor de promociones automáticas (1 Megarrollo = 1 Servilleta de regalo).
+    - [x] Endpoint de edición de nota para Kevin con registro de ajuste (ej. -10 Bs) y notificación al chofer.
+  - [x] **Frontend:**
+    - [x] Pantalla móvil de entrega para chofer con firma digital obligatoria en canvas táctil.
+    - [x] Pantalla de Cierre de Turno y Rendición Diaria con conciliación de efectivo y comprobantes.
+    - [x] Interfaz de visualización y edición controlada de Notas de Venta para Kevin.
+  - [x] **Tests:**
+    - [x] Test: cierre de turno detecta discrepancia de stock físico y genera registro de faltante.
+    - [x] Test: nota de venta aplica promoción de bandeo sin alterar tablas de planta.
 
 ### Subagente B: Módulo 4 (Cuentas por Cobrar, QR y Cobranzas)
 - **Dependencias:** Fase 1 terminada.
 - **Tablas Propias:** `CuentaCobrar`, `PlanPago`, `AbonoCuentaCobrar`, `ComprobanteArchivo` (uso).
 - **Puntos de Choque con Subagente A:** Recepción de abonos iniciales de notas de venta.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Flujo de aprobación: todo cobro/abono registrado por chofer nace `PENDIENTE_APROBACION`.
-    - [ ] Validación estricta de foto de comprobante QR obligatoria (usando `FileStorageService`).
-    - [ ] Registro de abonos manuales individuales y carga masiva por planilla Excel.
-    - [ ] Motor de alertas de mora para créditos vencidos (ej. supermercados a 30 días).
-  - [ ] **Frontend:**
-    - [ ] Bandeja de aprobación de cobros QR para Kevin y encargados de sucursal.
-    - [ ] Visor de comprobantes con drag & drop y zoom rápido.
-    - [ ] Módulo de cobranzas y cartera de clientes con indicador de días de mora.
-  - [ ] **Tests:**
-    - [ ] Test: intento de registrar cobro QR sin foto es rechazado con error 422.
-    - [ ] Test: abono de chofer no reduce saldo deudor hasta ser aprobado por Kevin.
+  - [x] **Backend:**
+    - [x] Flujo de aprobación: todo cobro/abono registrado por chofer nace `PENDIENTE_APROBACION`.
+    - [x] Validación estricta de foto de comprobante QR obligatoria (usando `FileStorageService`).
+    - [x] Registro de abonos manuales individuales y carga masiva por planilla Excel.
+    - [x] Motor de alertas de mora para créditos vencidos (ej. supermercados a 30 días).
+  - [x] **Frontend:**
+    - [x] Bandeja de aprobación de cobros QR para Kevin y encargados de sucursal.
+    - [x] Visor de comprobantes con drag & drop y zoom rápido.
+    - [x] Módulo de cobranzas y cartera de clientes con indicador de días de mora.
+  - [x] **Tests:**
+    - [x] Test: intento de registrar cobro QR sin foto es rechazado con error 422.
+    - [x] Test: abono de chofer no reduce saldo deudor hasta ser aprobado por Kevin.
 
 ### Subagente C: Módulo 8 (Distribuidores Externos: Oruro, Tarija, La Paz, Tupiza)
 - **Dependencias:** Fase 1 terminada.
 - **Tablas Propias:** `DistribuidorExterno`, `PedidoDistribuidor`, `DetallePedidoDistribuidor`.
 - **Integración con Planta:** Lectura obligatoria de stock real mediante `PlantaDataReader`.
 - **Entregables:**
-  - [ ] **Backend:**
-    - [ ] Portal/Endpoints para Distribuidores Externos con visualización exclusiva de stock disponible.
-    - [ ] Bloqueo estricto de pedidos que superen el stock real de producto terminado.
-    - [ ] Endpoint para que Kevin edite cantidades del pedido y confirme la proforma.
-    - [ ] Subida de comprobante de depósito/transferencia bancaria por el distribuidor.
-  - [ ] **Frontend:**
-    - [ ] Vista simplificada para distribuidores (catálogo, carrito de pedidos y carga de boleta).
-    - [ ] Panel de Kevin para revisión, ajuste y aprobación de despachos a distribuidores.
-  - [ ] **Tests:**
-    - [ ] Test: pedido de distribuidor por encima del stock de planta es bloqueado automáticamente.
-    - [ ] Test: Kevin ajusta cantidad y el monto total se recalcula con precisión decimal.
+  - [x] **Backend:**
+    - [x] Portal/Endpoints para Distribuidores Externos con visualización exclusiva de stock disponible.
+    - [x] Bloqueo estricto de pedidos que superen el stock real de producto terminado.
+    - [x] Endpoint para que Kevin edite cantidades del pedido y confirme la proforma.
+    - [x] Subida de comprobante de depósito/transferencia bancaria por el distribuidor.
+  - [x] **Frontend:**
+    - [x] Vista simplificada para distribuidores (catálogo, carrito de pedidos y carga de boleta).
+    - [x] Panel de Kevin para revisión, ajuste y aprobación de despachos a distribuidores.
+  - [x] **Tests:**
+    - [x] Test: pedido de distribuidor por encima del stock de planta es bloqueado automáticamente.
+    - [x] Test: Kevin ajusta cantidad y el monto total se recalcula con precisión decimal.
 
 ---
 

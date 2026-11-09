@@ -119,6 +119,36 @@ class InventarioComercialRepository:
 
         return {"chofer_inventario_id": res_ch[0], "nuevo_remanente": Decimal(str(res_ch[1]))}
 
+    def descontar_stock_chofer(self, sucursal_id: int, chofer_id: int, presentacion_id: int, cantidad: float) -> None:
+        stmt = text("""
+            UPDATE public.inventario_chofer
+            SET cantidad_remanente = GREATEST(cantidad_remanente - :cant, 0),
+                cantidad_vendida = cantidad_vendida + :cant
+            WHERE sucursal_id = :sid AND chofer_id = :cid AND presentacion_id = :pid;
+        """)
+        self.db.execute(stmt, {
+            "sid": sucursal_id,
+            "cid": chofer_id,
+            "pid": presentacion_id,
+            "cant": cantidad
+        })
+
+    def DescontarStockChofer(self, sucursal_id: int, chofer_id: int, presentacion_id: int, cantidad: float) -> None:
+        self.descontar_stock_chofer(sucursal_id, chofer_id, presentacion_id, cantidad)
+
+    def incrementar_stock_sucursal(self, sucursal_id: int, presentacion_id: int, cantidad: float) -> None:
+        stmt = text("""
+            INSERT INTO public.inventario_sucursal (sucursal_id, presentacion_id, cantidad_disponible, updated_at)
+            VALUES (:sid, :pid, :cant, NOW())
+            ON CONFLICT (sucursal_id, presentacion_id) DO UPDATE SET
+                cantidad_disponible = public.inventario_sucursal.cantidad_disponible + EXCLUDED.cantidad_disponible,
+                updated_at = NOW();
+        """)
+        self.db.execute(stmt, {"sid": sucursal_id, "pid": presentacion_id, "cant": cantidad})
+
+    def IncrementarStockSucursal(self, sucursal_id: int, presentacion_id: int, cantidad: float) -> None:
+        self.incrementar_stock_sucursal(sucursal_id, presentacion_id, cantidad)
+
     def generar_reporte_inventario_valorizado(self, sucursal_id: int, fecha_corte: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Calcula el valor total del inventario comercial por sucursal a la fecha de corte.

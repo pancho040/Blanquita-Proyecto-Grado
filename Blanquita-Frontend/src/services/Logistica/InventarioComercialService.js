@@ -16,6 +16,8 @@ export async function ObtenerInventarioChofer(choferId) {
   return await response.json();
 }
 
+export const ListarInventarioChofer = ObtenerInventarioChofer;
+
 export async function CargarChofer(dto) {
   const response = await fetch("/api/logistica/inventario/cargar-chofer", {
     method: "POST",

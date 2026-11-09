@@ -103,6 +103,71 @@ export async function RegistrarAbono(datos) {
   return await res.json();
 }
 
+export async function RegistrarAbonoChofer(datos) {
+  const res = await fetch("/api/cxc/abonos/chofer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  return await res.json();
+}
+
+export async function ObtenerAbonosPendientes(idSucursal = null) {
+  const url = idSucursal ? `/api/cxc/abonos/pendientes?id_sucursal=${idSucursal}` : "/api/cxc/abonos/pendientes";
+  const res = await fetch(url);
+  if (!res.ok) await manejarErrorBackend(res);
+  return await res.json();
+}
+
+export async function ResolverAbonoKevin(idAbono, { aprobado, observacion = "" }) {
+  const res = await fetch(`/api/cxc/abonos/${idAbono}/resolver`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aprobado, observacion }),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  return await res.json();
+}
+
+export async function ProcesarAbonosMasivos(abonos) {
+  const res = await fetch("/api/cxc/abonos/masivos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Abonos: abonos }),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  return await res.json();
+}
+
+// ==========================================
+// AJUSTES Y CIERRE DE TURNO (FASE 2)
+// ==========================================
+export async function AjustarNotaVentaKevin(idNota, datosAjuste) {
+  const res = await fetch(`/api/cxc/notas-venta/${idNota}/ajuste-kevin`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datosAjuste),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  return await res.json();
+}
+
+export async function CierreTurnoChofer(datosCierre) {
+  const res = await fetch("/api/cxc/chofer/cierre-turno", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datosCierre),
+  });
+  if (!res.ok) await manejarErrorBackend(res);
+  invalidarCache("/api/cxc");
+  return await res.json();
+}
+
 export async function ObtenerCarteraResumen() {
   const res = await fetchConCache("/api/cxc/cartera-resumen", {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);

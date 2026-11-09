@@ -1,0 +1,9 @@
+---
+import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import GestionDistribuidoresMayoristas from '@/components/Distribuidor/GestionDistribuidoresMayoristas';
+---
+
+<Layout title="Distribuidores Mayoristas | Papelera Blanquita">
+  <GestionDistribuidoresMayoristas client:only="react" usuario={usuario} />
+</Layout>

@@ -25,6 +25,7 @@ import {
   Clock,
   ShieldCheck,
   Radio,
+  QrCode,
 } from "lucide-react";
 import { toiletRoll } from "@lucide/lab";
 
@@ -76,6 +77,9 @@ export const RutasAdmin = [
       { titulo: "Precios", icono: Tag, ruta: "precios" },
       { titulo: "Inventario Comercial", icono: Boxes, ruta: "inventario-comercial" },
       { titulo: "Envíos y Remisiones", icono: Truck, ruta: "envios" },
+      { titulo: "Entrega Móvil (Chofer)", icono: Truck, ruta: "entrega-chofer" },
+      { titulo: "Cierre de Turno", icono: Clock, ruta: "cierre-turno" },
+      { titulo: "Distribuidores Mayoristas", icono: Factory, ruta: "distribuidores" },
       { titulo: "Reportes Logística", icono: ClipboardList, ruta: "reportes" },
     ],
   },
@@ -88,6 +92,7 @@ export const RutasAdmin = [
       { titulo: "Caja Chica", icono: Receipt, ruta: "caja-chica" },
       { titulo: "Bancos", icono: Landmark, ruta: "bancos" },
       { titulo: "Cuentas por Cobrar", icono: HandCoins, ruta: "cuentas-cobrar" },
+      { titulo: "Aprobación Cobros QR", icono: QrCode, ruta: "aprobacion-qr" },
       { titulo: "Cuentas por Pagar", icono: Layers, ruta: "cuentas-pagar" },
       { titulo: "Notas de Venta", icono: Truck, ruta: "notas-venta" },
       { titulo: "Reportes Contables", icono: ClipboardList, ruta: "reportes" },

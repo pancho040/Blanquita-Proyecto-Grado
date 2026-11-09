@@ -349,14 +349,63 @@ erDiagram
 
 ## 4. SECCIONES RESERVADAS PARA SUBAGENTES
 
-### 4.1 Subagente A (Repartidores, Cierres Diarios y Notas de Venta)
-*(Espacio reservado para las adiciones de la Fase 2: extensiones a `RendicionRuta`, campos de firma digital y validación de bandeo en `NotaVenta`)*
+### 4.1 Subagente A (Repartidores, Cierres Diarios y Notas de Venta) - IMPLEMENTADO EN FASE 2
+- **`public.NotaVenta` (Columnas Aditivas):**
+  - `FirmaDigitalUrl`: TEXT NULL (URL de la firma táctil capturada en canvas)
+  - `AjustadoPorKevin`: BOOLEAN NOT NULL DEFAULT FALSE
+  - `MotivoAjusteKevin`: TEXT NULL
+  - `MontoAjusteKevin`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `MontoOriginal`: NUMERIC(12,2) NULL
+- **`public.DetalleNotaVenta` (Columnas Aditivas):**
+  - `EsBandeoPromocional`: BOOLEAN NOT NULL DEFAULT FALSE
+  - `PrecioOriginalUnitario`: NUMERIC(12,2) NULL
+- **`public.RendicionRuta` (Columnas Aditivas):**
+  - `TotalMermas`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalFaltantes`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalSobrantes`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalVentaCredito`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalVentaEfectivo`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `TotalVentaQR`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `DetalleDiferencias`: TEXT NULL
+  - `EstadoRendicion`: VARCHAR(30) NOT NULL DEFAULT 'CERRADO'
 
-### 4.2 Subagente B (Cuentas por Cobrar y Cobros QR)
-*(Espacio reservado para las adiciones de la Fase 2: `EstadoAprobacion` en `AbonoCuentaCobrar`, campos de mora)*
+### 4.2 Subagente B (Cuentas por Cobrar y Cobros QR) - IMPLEMENTADO EN FASE 2
+- **`public.AbonoCuentaCobrar` (Columnas Aditivas):**
+  - `EstadoAprobacion`: VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE_APROBACION' ('PENDIENTE_APROBACION', 'APROBADO', 'RECHAZADO')
+  - `IdComprobante`: INT NULL REFERENCES public.ComprobanteArchivo(IdComprobante) ON DELETE SET NULL
+  - `AprobadoPor`: INT NULL REFERENCES public.Usuario(IdUsuario) ON DELETE SET NULL
+  - `FechaAprobacion`: TIMESTAMP WITH TIME ZONE NULL
+  - `MotivoRechazo`: TEXT NULL
+  - `EsCargaMasiva`: BOOLEAN NOT NULL DEFAULT FALSE
 
-### 4.3 Subagente C (Distribuidores Externos)
-*(Espacio reservado para las adiciones de la Fase 2: `DistribuidorExterno`, `PedidoDistribuidor`, `DetallePedidoDistribuidor`)*
+### 4.3 Subagente C (Distribuidores Externos) - IMPLEMENTADO EN FASE 2
+- **`public.distribuidores_externos` (Nueva Tabla):**
+  - `id`: SERIAL PRIMARY KEY
+  - `nombre_comercial`: VARCHAR(120) NOT NULL
+  - `contacto`: VARCHAR(100) NULL
+  - `telefono`: VARCHAR(30) NULL
+  - `ciudad`: VARCHAR(60) NOT NULL (ej. 'Oruro', 'Tarija', 'La Paz', 'Tupiza')
+  - `activo`: BOOLEAN NOT NULL DEFAULT TRUE
+  - `created_at`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+- **`public.pedidos_distribuidores` (Nueva Tabla):**
+  - `id`: SERIAL PRIMARY KEY
+  - `distribuidor_id`: INT NOT NULL REFERENCES public.distribuidores_externos(id) ON DELETE RESTRICT
+  - `planta_id`: INT NOT NULL REFERENCES public.plantas(id) ON DELETE RESTRICT
+  - `estado`: VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE' ('PENDIENTE', 'AJUSTADO', 'APROBADO_DESPACHO', 'DESPACHADO', 'RECHAZADO')
+  - `monto_total`: NUMERIC(12,2) NOT NULL DEFAULT 0.00
+  - `comprobante_deposito_id`: INT NULL REFERENCES public.ComprobanteArchivo(IdComprobante) ON DELETE SET NULL
+  - `ajustado_por_kevin`: BOOLEAN NOT NULL DEFAULT FALSE
+  - `observaciones_kevin`: TEXT NULL
+  - `fecha_pedido`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  - `updated_at`: TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+- **`public.detalles_pedido_distribuidor` (Nueva Tabla):**
+  - `id`: SERIAL PRIMARY KEY
+  - `pedido_id`: INT NOT NULL REFERENCES public.pedidos_distribuidores(id) ON DELETE CASCADE
+  - `presentacion_id`: INT NOT NULL
+  - `cantidad_solicitada`: NUMERIC(12,2) NOT NULL
+  - `cantidad_confirmada`: NUMERIC(12,2) NOT NULL
+  - `precio_unitario`: NUMERIC(12,2) NOT NULL
+  - `subtotal`: NUMERIC(12,2) NOT NULL
 
 ### 4.4 Subagente D (Personal, Planillas y Finiquitos)
 *(Espacio reservado para las adiciones de la Fase 3: campos `EsAsegurado`, `DescuentoNoVenta`, tabla `Finiquito`)*

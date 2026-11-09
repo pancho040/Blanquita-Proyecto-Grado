@@ -1,0 +1,9 @@
+---
+import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import AprobacionCobrosQR from '@/components/Contabilidad/AprobacionCobrosQR';
+---
+
+<Layout title="Aprobación Cobros QR | Papelera Blanquita">
+  <AprobacionCobrosQR client:only="react" usuario={usuario} />
+</Layout>

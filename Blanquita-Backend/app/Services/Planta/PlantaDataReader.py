@@ -1,6 +1,6 @@
 import logging
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -12,6 +12,19 @@ class PlantaDataReader:
     Capa oficial de SOLO LECTURA para inspeccionar el estado físico y saldos
     de los módulos de planta y producción de Fabricio sin alterar ninguna tabla.
     """
+
+    def __init__(self, session: Optional[Session] = None):
+        self.session = session
+
+    def get_stock_disponible(self, planta_id: int, presentacion_id: int) -> float:
+        if self.session:
+            return float(self.obtener_stock_producto_terminado(self.session, presentacion_id))
+        return 0.0
+
+    def get_catalogo_productos(self) -> List[Dict[str, Any]]:
+        if self.session:
+            return self.obtener_catalogo_productos(self.session)
+        return []
 
     @staticmethod
     def obtener_stock_producto_terminado(session: Session, presentacion_id: int) -> Decimal:

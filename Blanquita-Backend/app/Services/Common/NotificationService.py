@@ -12,6 +12,21 @@ class NotificationService:
     y soporte del buscador numérico gerencial de Don Osvaldo.
     """
 
+    def __init__(self, session: Optional[Session] = None):
+        self.session = session
+
+    def CrearNotificacion(
+        self,
+        id_usuario_destino: Optional[int],
+        titulo: str,
+        mensaje: str,
+        tipo: str = "INFO",
+        codigo_referencia: Optional[int] = None
+    ) -> int:
+        if self.session:
+            return self.crear_notificacion(self.session, titulo, mensaje, tipo, id_usuario_destino, codigo_referencia)
+        return 0
+
     @staticmethod
     def crear_notificacion(
         session: Session,

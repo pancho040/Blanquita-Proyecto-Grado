@@ -13,6 +13,31 @@ class AuditService:
     (cambios de precios vigentes, revalorización de choferes, ediciones de notas y caja).
     """
 
+    def __init__(self, session: Optional[Session] = None):
+        self.session = session
+
+    def RegistrarAccion(
+        self,
+        id_usuario: int,
+        accion: str,
+        tabla: str,
+        id_registro: str,
+        detalles: Optional[Dict[str, Any]] = None
+    ) -> int:
+        if self.session:
+            return self.registrar_evento(
+                session=self.session,
+                id_usuario=id_usuario,
+                usuario_nombre="Usuario Sistema",
+                rol="Operador",
+                modulo_tabla=tabla,
+                accion=accion,
+                id_registro=id_registro,
+                detalle=json.dumps(detalles or {}),
+                datos_nuevos=detalles
+            )
+        return 0
+
     @staticmethod
     def registrar_evento(
         session: Session,
@@ -28,40 +53,28 @@ class AuditService:
     ) -> int:
         stmt = text("""
             INSERT INTO public."AuditLog" (
-                fecha_hora,
-                id_usuario,
-                usuario_nombre,
-                rol,
-                modulo_tabla,
-                accion,
-                id_registro,
-                detalle,
-                datos_anteriores,
-                datos_nuevos
+                "FechaHora",
+                "IdUsuario",
+                "Accion",
+                "TablaAfectada",
+                "IdRegistroAfectado",
+                "Detalle"
             ) VALUES (
                 NOW(),
                 :uid,
-                :unombre,
-                :rol,
-                :tabla,
                 :accion,
+                :tabla,
                 :id_reg,
-                :detalle,
-                :ant::jsonb,
-                :nuev::jsonb
-            ) RETURNING id;
+                :detalle
+            ) RETURNING "IdAuditLog";
         """)
 
         row = session.execute(stmt, {
             "uid": id_usuario,
-            "unombre": usuario_nombre,
-            "rol": rol,
-            "tabla": modulo_tabla,
             "accion": accion,
+            "tabla": modulo_tabla,
             "id_reg": str(id_registro),
-            "detalle": detalle,
-            "ant": json.dumps(datos_anteriores) if datos_anteriores else None,
-            "nuev": json.dumps(datos_nuevos) if datos_nuevos else None
+            "detalle": detalle
         }).fetchone()
 
-        return row[0]
+        return row[0] if row else 0

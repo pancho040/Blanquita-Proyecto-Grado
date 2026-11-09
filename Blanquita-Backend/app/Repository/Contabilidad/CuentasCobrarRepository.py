@@ -61,30 +61,47 @@ class CuentasCobrarRepository:
         sql = """
             INSERT INTO "NotaVenta" (
                 "NumeroNotaVenta", "NumeroNotaEntrega", "FechaVenta", "IdCliente",
-                "ClienteNombreLibre", "DestinoDepartamento", "Chofer", "PlacaCamion",
+                "ClienteNombreLibre", "DestinoDepartamento", "IdChofer", "Chofer", "PlacaCamion",
                 "CantidadCamiones", "TotalVentaBruto", "DescuentoBonificacion",
                 "Promocion", "ImporteNeto", "SaldoAnterior", "TotalCancelado",
-                "SaldoPendiente", "EstadoCobranza", "Observacion", "IdUsuarioRegistro"
+                "SaldoPendiente", "EstadoCobranza", "Observacion", "IdUsuarioRegistro",
+                "IdSucursal", "MetodoPago", "MontoEfectivo", "MontoQR", "MontoCredito",
+                "FirmaDigitalUrl", "FirmaNombre", "FirmaCi", "FirmaFecha", "ComprobanteQRArchivoId"
             ) VALUES (
                 :NumeroNotaVenta, :NumeroNotaEntrega, :FechaVenta, :IdCliente,
-                :ClienteNombreLibre, :DestinoDepartamento, :Chofer, :PlacaCamion,
+                :ClienteNombreLibre, :DestinoDepartamento, :IdChofer, :Chofer, :PlacaCamion,
                 :CantidadCamiones, :TotalVentaBruto, :DescuentoBonificacion,
                 :Promocion, :ImporteNeto, :SaldoAnterior, :TotalCancelado,
-                :SaldoPendiente, :EstadoCobranza, :Observacion, :IdUsuarioRegistro
+                :SaldoPendiente, :EstadoCobranza, :Observacion, :IdUsuarioRegistro,
+                :IdSucursal, :MetodoPago, :MontoEfectivo, :MontoQR, :MontoCredito,
+                :FirmaDigitalUrl, :FirmaNombre, :FirmaCi, :FirmaFecha, :ComprobanteQRArchivoId
             )
             RETURNING *;
         """
         payload = dict(datos)
         payload["IdUsuarioRegistro"] = id_usuario
+        payload.setdefault("IdChofer", None)
+        payload.setdefault("IdSucursal", 1)
+        payload.setdefault("MetodoPago", "Efectivo")
+        payload.setdefault("MontoEfectivo", 0.0)
+        payload.setdefault("MontoQR", 0.0)
+        payload.setdefault("MontoCredito", 0.0)
+        payload.setdefault("FirmaDigitalUrl", None)
+        payload.setdefault("FirmaNombre", None)
+        payload.setdefault("FirmaCi", None)
+        payload.setdefault("FirmaFecha", None)
+        payload.setdefault("ComprobanteQRArchivoId", None)
         return self.caller.LlamarUnRegistro(sql, payload)
 
     def CrearDetalleNotaVenta(self, id_nota: int, items: list[dict]):
         for item in items:
             sql = """
                 INSERT INTO "DetalleNotaVenta" (
-                    "IdNotaVenta", "IdPresentacion", "NombreProducto", "Cantidad", "PrecioUnitario", "Subtotal"
+                    "IdNotaVenta", "IdPresentacion", "NombreProducto", "Cantidad",
+                    "PrecioUnitario", "Subtotal", "EsBonificacionBandeo"
                 ) VALUES (
-                    :id_nota, :IdPresentacion, :NombreProducto, :Cantidad, :PrecioUnitario, :Subtotal
+                    :id_nota, :IdPresentacion, :NombreProducto, :Cantidad,
+                    :PrecioUnitario, :Subtotal, :EsBonificacionBandeo
                 );
             """
             self.caller.LlamarFuncion(sql, {
@@ -93,8 +110,38 @@ class CuentasCobrarRepository:
                 "NombreProducto": item["NombreProducto"],
                 "Cantidad": item["Cantidad"],
                 "PrecioUnitario": item.get("PrecioUnitario", 0),
-                "Subtotal": item.get("Subtotal", 0)
+                "Subtotal": item.get("Subtotal", 0),
+                "EsBonificacionBandeo": bool(item.get("EsBonificacionBandeo", False))
             })
+
+    def AjustarNotaVentaKevin(self, id_nota: int, observacion: str, nuevo_neto: float | None = None,
+                              nuevo_cancelado: float | None = None, nuevo_saldo: float | None = None) -> dict | None:
+        set_clauses = ['"EditadoPorKevin" = TRUE', '"ObservacionAjuste" = :observacion']
+        params = {"id_nota": id_nota, "observacion": observacion}
+
+        if nuevo_neto is not None:
+            set_clauses.append('"ImporteNeto" = :nuevo_neto')
+            params["nuevo_neto"] = nuevo_neto
+        if nuevo_cancelado is not None:
+            set_clauses.append('"TotalCancelado" = :nuevo_cancelado')
+            params["nuevo_cancelado"] = nuevo_cancelado
+        if nuevo_saldo is not None:
+            set_clauses.append('"SaldoPendiente" = :nuevo_saldo')
+            params["nuevo_saldo"] = nuevo_saldo
+            set_clauses.append("""
+                "EstadoCobranza" = CASE 
+                    WHEN :nuevo_saldo <= 0 THEN 'Liquidado'
+                    ELSE 'Crédito Pendiente'
+                END
+            """)
+
+        sql = f"""
+            UPDATE "NotaVenta"
+            SET {", ".join(set_clauses)}
+            WHERE "IdNotaVenta" = :id_nota
+            RETURNING *;
+        """
+        return self.caller.LlamarUnRegistro(sql, params)
 
     def ListarDetallesNotaVenta(self, id_nota: int) -> list[dict]:
         sql = """
@@ -314,3 +361,123 @@ class CuentasCobrarRepository:
             "LimiteCredito": limite,
             "DiasCredito": dias_credito
         }
+
+    # =========================================================================
+    # CIERRE DE TURNO Y RENDICIÓN DE CHOFERES (Subagente A - Módulo 3)
+    # =========================================================================
+    def RegistrarRendicionRuta(self, datos: dict) -> dict:
+        sql = """
+            INSERT INTO "RendicionRuta" (
+                "IdUsuarioRepartidor", "IdAperturaCierreCaja", "IdAsignacionRuta",
+                "MontoTotalCobradoRuta", "MontoEfectivoEntregado",
+                "MontoTransferenciaReportada", "MontoQrReportado",
+                "MontoFaltante", "CantidadMerma", "ObservacionesCierre",
+                "EstadoConciliacion", "IdSucursal", "FechaRendicion"
+            ) VALUES (
+                :IdUsuarioRepartidor, :IdAperturaCierreCaja, :IdAsignacionRuta,
+                :MontoTotalCobradoRuta, :MontoEfectivoEntregado,
+                :MontoTransferenciaReportada, :MontoQrReportado,
+                :MontoFaltante, :CantidadMerma, :ObservacionesCierre,
+                :EstadoConciliacion, :IdSucursal, now()
+            )
+            RETURNING *;
+        """
+        payload = dict(datos)
+        payload.setdefault("IdAperturaCierreCaja", 1)
+        payload.setdefault("MontoTotalCobradoRuta", 0.0)
+        payload.setdefault("MontoEfectivoEntregado", 0.0)
+        payload.setdefault("MontoTransferenciaReportada", 0.0)
+        payload.setdefault("MontoQrReportado", 0.0)
+        payload.setdefault("MontoFaltante", 0.0)
+        payload.setdefault("CantidadMerma", 0.0)
+        payload.setdefault("ObservacionesCierre", None)
+        payload.setdefault("EstadoConciliacion", "PENDIENTE")
+        payload.setdefault("IdSucursal", 1)
+        return self.caller.LlamarUnRegistro(sql, payload)
+
+    def ObtenerConfigBandeoProducto(self, id_presentacion: int) -> dict | None:
+        sql = """
+            SELECT pc.* 
+            FROM "ProductoConfigComercial" pc
+            JOIN "PresentacionProducto" pp ON pc."IdProducto" = pp."IdProducto"
+            WHERE pp."IdPresentacion" = :id_presentacion AND pc."EsBandeo" = TRUE;
+        """
+        return self.caller.LlamarUnRegistro(sql, {"id_presentacion": id_presentacion})
+
+    # =========================================================================
+    # GESTIÓN Y APROBACIÓN DE ABONOS QR Y MORA (Subagente B - Módulo 4)
+    # =========================================================================
+    def RegistrarAbonoChofer(self, datos: dict, id_usuario: int | None = None) -> dict:
+        sql = """
+            INSERT INTO "AbonoCuentaCobrar" (
+                "IdCuentaCobrar", "IdNotaVenta", "IdMetodoPago", "MetodoPago",
+                "MontoAbonado", "FechaAbono", "BancoSigla", "Depositante",
+                "NumeroReferencia", "IdComprobanteArchivo", "Observacion",
+                "IdUsuario", "EstadoAprobacion"
+            ) VALUES (
+                :IdCuentaCobrar, :IdNotaVenta, :IdMetodoPago, :MetodoPago,
+                :MontoAbonado, :FechaAbono, :BancoSigla, :Depositante,
+                :NumeroReferencia, :IdComprobanteArchivo, :Observacion,
+                :IdUsuario, 'PENDIENTE_APROBACION'
+            )
+            RETURNING *;
+        """
+        payload = dict(datos)
+        payload["IdUsuario"] = id_usuario
+        payload.setdefault("IdNotaVenta", None)
+        payload.setdefault("IdMetodoPago", 2 if payload.get("MetodoPago") == "QR" else 1)
+        payload.setdefault("MetodoPago", "Efectivo")
+        payload.setdefault("BancoSigla", None)
+        payload.setdefault("Depositante", None)
+        payload.setdefault("NumeroReferencia", None)
+        payload.setdefault("IdComprobanteArchivo", None)
+        payload.setdefault("Observacion", None)
+        payload.setdefault("FechaAbono", "now()")
+        return self.caller.LlamarUnRegistro(sql, payload)
+
+    def ListarAbonosPendientes(self, id_sucursal: int | None = None) -> list[dict]:
+        where_clauses = ['a."EstadoAprobacion" = \'PENDIENTE_APROBACION\'']
+        params = {}
+        if id_sucursal:
+            where_clauses.append('cxc."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
+
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT 
+                a.*,
+                cxc."NumeroNotaVenta",
+                cxc."SaldoPendiente",
+                c."RazonSocial" as "ClienteNombre",
+                ca."UrlArchivo" as "UrlComprobante",
+                u."NombreCompleto" as "ChoferNombre"
+            FROM "AbonoCuentaCobrar" a
+            JOIN "CuentaCobrar" cxc ON a."IdCuentaCobrar" = cxc."IdCuentaCobrar"
+            JOIN "Cliente" c ON cxc."IdCliente" = c."IdCliente"
+            LEFT JOIN "ComprobanteArchivo" ca ON a."IdComprobanteArchivo" = ca."IdComprobante"
+            LEFT JOIN "Usuario" u ON a."IdUsuario" = u."IdUsuario"
+            {where_sql}
+            ORDER BY a."FechaAbono" ASC;
+        """
+        return self.caller.LlamarFuncion(sql, params)
+
+    def ResolverAbono(self, id_abono: int, aprobado: bool, id_usuario_kevin: int, observacion: str = "") -> dict | None:
+        estado_nuevo = "APROBADO" if aprobado else "RECHAZADO"
+        sql = """
+            UPDATE "AbonoCuentaCobrar"
+            SET "EstadoAprobacion" = :estado,
+                "AprobadoPor" = :id_kevin,
+                "FechaAprobacion" = now(),
+                "Observacion" = CASE 
+                    WHEN :obs != '' THEN COALESCE("Observacion", '') || ' | ' || :obs
+                    ELSE "Observacion"
+                END
+            WHERE "IdAbonoCuentaCobrar" = :id_abono
+            RETURNING *;
+        """
+        return self.caller.LlamarUnRegistro(sql, {
+            "id_abono": id_abono,
+            "estado": estado_nuevo,
+            "id_kevin": id_usuario_kevin,
+            "obs": observacion
+        })
