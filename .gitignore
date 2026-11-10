@@ -29,3 +29,10 @@ archivos_contabilidad/
 .DS_Store
 Thumbs.db
 *.log
+
+# Documentación interna de agentes y desarrollo local (solo local)
+AGENTS.md
+AGENT_RULES.md
+ARCHITECTURE.md
+ROADMAP.md
+docs/

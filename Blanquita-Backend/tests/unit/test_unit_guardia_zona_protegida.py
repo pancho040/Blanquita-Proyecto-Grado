@@ -3,14 +3,23 @@ from pathlib import Path
 import sys
 
 # Asegurar import de verificar_zona_protegida
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "docs" / "scripts"))
+TESTS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(TESTS_DIR))
 
-from verificar_zona_protegida import (
-    verificar_ddl_en_archivos,
-    verificar_ast_dml_producto_terminado,
-    verificar_git_diff
-)
+try:
+    from verificar_zona_protegida import (
+        verificar_ddl_en_archivos,
+        verificar_ast_dml_producto_terminado,
+        verificar_git_diff
+    )
+except ImportError:
+    REPO_ROOT = TESTS_DIR.parent.parent
+    sys.path.insert(0, str(REPO_ROOT / "docs" / "scripts"))
+    from verificar_zona_protegida import (
+        verificar_ddl_en_archivos,
+        verificar_ast_dml_producto_terminado,
+        verificar_git_diff
+    )
 
 
 def test_guardia_zona_protegida_ddl():

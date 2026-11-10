@@ -12,7 +12,8 @@ import ast
 import subprocess
 from pathlib import Path
 
-# Directorio raíz del repositorio
+# Directorio raíz del repositorio:
+# Desde Blanquita-Backend/tests/verificar_zona_protegida.py -> parent.parent.parent = Blanquita-Proyecto-Grado
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Carpetas y archivos estrictamente protegidos (prohibido modificar)
@@ -77,7 +78,6 @@ def verificar_git_diff() -> list[str]:
     """Verifica si en git diff se modificaron rutas protegidas."""
     errores = []
     try:
-        # Intenta contra origin/main o HEAD~1
         cmd = ["git", "diff", "--name-only", "HEAD~1"]
         res = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
         if res.returncode != 0:
@@ -116,7 +116,7 @@ def verificar_ddl_en_archivos() -> list[str]:
     
     for path in iter_code_files(REPO_ROOT, {".sql", ".py"}):
         ruta_str = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
-        if "docs/scripts/" in ruta_str or "bd.sql" in ruta_str or "bd_contabilidad" in ruta_str or "bd_modulos" in ruta_str:
+        if "docs/scripts/" in ruta_str or "tests/verificar_zona_protegida.py" in ruta_str or "bd.sql" in ruta_str or "bd_contabilidad" in ruta_str or "bd_modulos" in ruta_str:
             continue
         try:
             contenido = path.read_text(encoding="utf-8", errors="ignore")
@@ -183,13 +183,13 @@ def main():
     
     print("-" * 70)
     if errores:
-        print("❌ FALLO DE SEGURIDAD: Se detectaron violaciones en la Zona Protegida:")
+        print("FALLO DE SEGURIDAD: Se detectaron violaciones en la Zona Protegida:")
         for err in errores:
             print(f"  - {err}")
         print("=" * 70)
         sys.exit(1)
     else:
-        print("✅ ÉXITO: Zona protegida 100% íntegra. No se detectaron violaciones.")
+        print("ÉXITO: Zona protegida 100% íntegra. No se detectaron violaciones.")
         print("=" * 70)
         sys.exit(0)
 
