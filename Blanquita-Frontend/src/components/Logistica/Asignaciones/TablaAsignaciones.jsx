@@ -34,13 +34,16 @@ import {
   Users,
   FileText,
   Printer,
-  Radio
+  Radio,
+  Receipt
 } from "lucide-react";
 import MapaRuta from "../Rutas/MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
 import KpiCard from "../Common/KpiCard";
 import GestionChoferesModal from "./GestionChoferesModal";
 import HojaDeRutaModal from "./HojaDeRutaModal";
+import EntregaChoferMovil from "../Reparto/EntregaChoferMovil";
+import CierreTurnoChoferComponent from "../Reparto/CierreTurnoChofer";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
@@ -52,11 +55,25 @@ const FLOTA_VEHICULOS = [
   { value: "Moto #4 (1298-XYZ)", label: "Moto #4 (1298-XYZ)" }
 ];
 
-export default function TablaAsignaciones() {
+export default function TablaAsignaciones({ usuario = null, vistaInicial = "despachos" }) {
   const hoyStr = new Date().toISOString().split("T")[0];
   const [fecha, setFecha] = useState(hoyStr);
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Vistas unificadas del hub de reparto
+  const [vistaActiva, setVistaActiva] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "entregas" || tabParam === "entrega") return "entregas";
+      if (tabParam === "cierre" || tabParam === "turnos") return "cierre";
+    }
+    return vistaInicial;
+  });
+  const [modalEntregaAbierto, setModalEntregaAbierto] = useState(false);
+  const [modalCierreAbierto, setModalCierreAbierto] = useState(false);
+  const [choferAccionRapida, setChoferAccionRapida] = useState(null);
 
   // Catálogos precargados en memoria para apertura INSTANTÁNEA (0 ms)
   const [rutas, setRutas] = useState([]);
@@ -325,12 +342,16 @@ export default function TablaAsignaciones() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header con botón principal */}
+      {/* 1. Header con botón principal y pestañas unificadas */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900">
-            Despachos
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Truck className="h-6 w-6 text-[#20A7DB]" />
+            <span>Reparto y Despachos</span>
           </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Gestión integral de flota, itinerarios de ruta, entregas en calle y liquidación diaria
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
           <a
@@ -361,6 +382,74 @@ export default function TablaAsignaciones() {
         </div>
       </div>
 
+      {/* Pestañas de Navegación del Hub de Reparto */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setVistaActiva("despachos")}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            vistaActiva === "despachos"
+              ? "bg-[#20A7DB] text-white shadow-xs"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          <Truck className="h-4 w-4" />
+          <span>Despachos y Salidas</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${vistaActiva === "despachos" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+            {asignaciones.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setVistaActiva("entregas")}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            vistaActiva === "entregas"
+              ? "bg-sky-600 text-white shadow-xs"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          <Receipt className="h-4 w-4" />
+          <span>Entregas en Ruta (Notas de Venta)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setVistaActiva("cierre")}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            vistaActiva === "cierre"
+              ? "bg-slate-900 text-white shadow-xs"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          <Clock className="h-4 w-4" />
+          <span>Cierre de Turno y Rendición</span>
+        </button>
+      </div>
+
+      {vistaActiva === "entregas" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-5 shadow-xs">
+          <EntregaChoferMovil
+            usuario={usuario}
+            choferPreseleccionado={choferAccionRapida?.idChofer}
+            asignacionPreseleccionada={choferAccionRapida?.asignacion}
+            alCompletar={() => cargarAsignaciones(true)}
+          />
+        </div>
+      )}
+
+      {vistaActiva === "cierre" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-5 shadow-xs">
+          <CierreTurnoChoferComponent
+            usuario={usuario}
+            choferPreseleccionado={choferAccionRapida?.idChofer}
+            alCompletar={() => cargarAsignaciones(true)}
+          />
+        </div>
+      )}
+
+      {vistaActiva === "despachos" && (
+        <>
       {/* 2. Tarjetas KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
@@ -591,6 +680,42 @@ export default function TablaAsignaciones() {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => {
+                                setChoferAccionRapida({
+                                  idChofer: a.IdUsuarioRepartidor,
+                                  nombreChofer: a.NombreRepartidor,
+                                  asignacion: a
+                                });
+                                setModalEntregaAbierto(true);
+                              }}
+                              className="h-8 px-2.5 text-xs text-sky-700 border-sky-200 hover:bg-sky-50 shadow-2xs gap-1"
+                              title={`Registrar entrega / Nota de Venta para ${a.NombreRepartidor}`}
+                            >
+                              <Receipt className="h-3.5 w-3.5 text-sky-600" />
+                              <span>Entrega</span>
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setChoferAccionRapida({
+                                  idChofer: a.IdUsuarioRepartidor,
+                                  nombreChofer: a.NombreRepartidor,
+                                  asignacion: a
+                                });
+                                setModalCierreAbierto(true);
+                              }}
+                              className="h-8 px-2.5 text-xs text-slate-800 border-slate-300 hover:bg-slate-100 shadow-2xs gap-1"
+                              title={`Cierre de jornada y rendición para ${a.NombreRepartidor}`}
+                            >
+                              <Clock className="h-3.5 w-3.5 text-slate-600" />
+                              <span>Cierre</span>
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => setHojaRutaAsignacion(a)}
                               className="h-8 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs gap-1"
                               title="Imprimir Hoja de Ruta Oficial para el Chofer"
@@ -634,6 +759,8 @@ export default function TablaAsignaciones() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* ============================================================== */}
       {/* MODAL 1: PROGRAMAR DESPACHO (AMPLIO, CON BUSCADORSELECT)       */}
@@ -907,6 +1034,43 @@ export default function TablaAsignaciones() {
           abierto={hojaRutaAsignacion !== null}
           onCerrar={() => setHojaRutaAsignacion(null)}
         />
+      )}
+
+      {/* MODAL ENTREGA Y NOTA DE VENTA */}
+      {modalEntregaAbierto && (
+        <Dialog open={modalEntregaAbierto} onOpenChange={setModalEntregaAbierto}>
+          <DialogContent className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto p-3 sm:p-5">
+            <EntregaChoferMovil
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              asignacionPreseleccionada={choferAccionRapida?.asignacion}
+              enModal={true}
+              alCompletar={() => {
+                setModalEntregaAbierto(false);
+                cargarAsignaciones(true);
+              }}
+              onCerrar={() => setModalEntregaAbierto(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL CIERRE DE TURNO Y ARQUEO */}
+      {modalCierreAbierto && (
+        <Dialog open={modalCierreAbierto} onOpenChange={setModalCierreAbierto}>
+          <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-3 sm:p-5">
+            <CierreTurnoChoferComponent
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              enModal={true}
+              alCompletar={() => {
+                setModalCierreAbierto(false);
+                cargarAsignaciones(true);
+              }}
+              onCerrar={() => setModalCierreAbierto(false)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

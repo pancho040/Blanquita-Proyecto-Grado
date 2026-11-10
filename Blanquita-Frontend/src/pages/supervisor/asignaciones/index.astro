@@ -4,6 +4,6 @@ const { usuario } = Astro.locals;
 import TablaAsignaciones from '@/components/Logistica/Asignaciones/TablaAsignaciones';
 ---
 
-<Layout title="Despachos | Papelera Blanquita">
-  <TablaAsignaciones client:only="react" />
+<Layout title="Reparto y Despachos | Papelera Blanquita">
+  <TablaAsignaciones client:only="react" usuario={usuario} vistaInicial="despachos" />
 </Layout>

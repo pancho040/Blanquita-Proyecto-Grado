@@ -13,25 +13,28 @@ class PrecioRepository:
 
     def ListarPreciosVigentes(self, id_sucursal: int = 1) -> list[dict]:
         sql = """
-            SELECT 
-                p."IdPresentacion",
-                prod."NombreProducto",
-                p."TipoContenedor",
-                p."CantidadRollosUnidades",
-                p."CodigoPresentacion",
-                pp."IdPrecioProducto",
-                pp."PrecioUnitario",
-                pp."PrecioMayorista",
-                pp."CantidadMinimaMayorista",
-                pp."VigenteDesde",
-                COALESCE(pp."IdSucursal", :id_sucursal) as "IdSucursal",
-                COALESCE(pp."Activo", FALSE) as "Activo"
-            FROM "PresentacionProducto" p
-            JOIN "Producto" prod ON p."IdProducto" = prod."IdProducto"
-            LEFT JOIN "PrecioProducto" pp ON p."IdPresentacion" = pp."IdPresentacion" 
-                 AND (pp."IdSucursal" = :id_sucursal OR pp."IdSucursal" IS NULL)
-                 AND pp."Activo" = TRUE
-            ORDER BY prod."NombreProducto", p."TipoContenedor";
+            SELECT * FROM (
+                SELECT DISTINCT ON (p."IdPresentacion")
+                    p."IdPresentacion",
+                    prod."NombreProducto",
+                    p."TipoContenedor",
+                    p."CantidadRollosUnidades",
+                    p."CodigoPresentacion",
+                    pp."IdPrecioProducto",
+                    pp."PrecioUnitario",
+                    pp."PrecioMayorista",
+                    pp."CantidadMinimaMayorista",
+                    pp."VigenteDesde",
+                    COALESCE(pp."IdSucursal", :id_sucursal) as "IdSucursal",
+                    COALESCE(pp."Activo", FALSE) as "Activo"
+                FROM "PresentacionProducto" p
+                JOIN "Producto" prod ON p."IdProducto" = prod."IdProducto"
+                LEFT JOIN "PrecioProducto" pp ON p."IdPresentacion" = pp."IdPresentacion" 
+                     AND (pp."IdSucursal" = :id_sucursal OR pp."IdSucursal" IS NULL)
+                     AND pp."Activo" = TRUE
+                ORDER BY p."IdPresentacion", (pp."IdSucursal" = :id_sucursal) DESC, pp."IdPrecioProducto" DESC
+            ) sub
+            ORDER BY sub."NombreProducto", sub."TipoContenedor";
         """
         return self.caller.LlamarFuncion(sql, {"id_sucursal": id_sucursal})
 
@@ -181,6 +184,9 @@ class PrecioRepository:
             SELECT 
                 pp."IdPrecioProducto",
                 pp."IdPresentacion",
+                p."CodigoPresentacion",
+                prod."NombreProducto",
+                p."TipoContenedor",
                 COALESCE(pp."IdSucursal", :id_sucursal) as "IdSucursal",
                 pp."PrecioUnitario",
                 pp."PrecioMayorista",
@@ -188,6 +194,8 @@ class PrecioRepository:
                 pp."VigenteDesde",
                 pp."Activo"
             FROM "PrecioProducto" pp
+            JOIN "PresentacionProducto" p ON pp."IdPresentacion" = p."IdPresentacion"
+            JOIN "Producto" prod ON p."IdProducto" = prod."IdProducto"
             WHERE pp."IdPresentacion" = :id_p
               AND (pp."IdSucursal" = :id_sucursal OR pp."IdSucursal" IS NULL)
             ORDER BY pp."VigenteDesde" DESC, pp."IdPrecioProducto" DESC;

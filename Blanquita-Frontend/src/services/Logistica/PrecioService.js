@@ -22,3 +22,12 @@ export async function GuardarPrecio(precio) {
   invalidarCache("/api/logistica/precios");
   return await response.json();
 }
+
+export async function ObtenerHistorialPrecios(idPresentacion, idSucursal = 1) {
+  const url = `/api/logistica/precios/${idPresentacion}/historial?id_sucursal=${idSucursal}`;
+  const response = await fetchConCache(url, {}, 10000);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}

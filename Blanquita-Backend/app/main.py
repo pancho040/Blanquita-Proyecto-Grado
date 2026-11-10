@@ -148,9 +148,13 @@ app.include_router(qrRouter)
 
 #ROUTERS LOGISTICA
 app.include_router(ClienteRouter)
+app.include_router(ClienteRouter, prefix="/api")
 app.include_router(RutaRouter)
+app.include_router(RutaRouter, prefix="/api")
 app.include_router(PrecioRouter)
+app.include_router(PrecioRouter, prefix="/api")
 app.include_router(ChoferRouter)
+app.include_router(ChoferRouter, prefix="/api")
 app.include_router(SucursalRouter)
 app.include_router(SucursalRouter, prefix="/api")
 app.include_router(PlantaRouter)

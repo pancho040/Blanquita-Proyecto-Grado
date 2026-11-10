@@ -1,9 +1,9 @@
 ---
 import Layout from '@/layouts/Layout.astro';
 const { usuario } = Astro.locals;
-import CierreTurnoChoferComponent from '@/components/Logistica/Reparto/CierreTurnoChofer';
+import TablaAsignaciones from '@/components/Logistica/Asignaciones/TablaAsignaciones';
 ---
 
 <Layout title="Cierre de Turno | Papelera Blanquita">
-  <CierreTurnoChoferComponent client:only="react" usuario={usuario} />
+  <TablaAsignaciones client:only="react" usuario={usuario} vistaInicial="cierre" />
 </Layout>
