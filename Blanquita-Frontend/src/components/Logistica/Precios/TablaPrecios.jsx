@@ -3,15 +3,14 @@ import { ObtenerPrecios, GuardarPrecio, ObtenerHistorialPrecios } from "@/servic
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import StatusBadge from "@/components/common/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Tag, Edit2, Loader2, Package, CheckCircle2, History, Clock, Search, Sparkles, Filter, Building } from "lucide-react";
+import { Tag, Edit2, Loader2, Package, CheckCircle2, History, Clock, Search, Sparkles, Building } from "lucide-react";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
-import { esUsuarioGeneral, obtenerSucursalActiva } from "@/lib/sucursalContext";
+import { esUsuarioGeneral } from "@/lib/sucursalContext";
 
 export default function TablaPrecios({ usuario }) {
   const esGeneral = esUsuarioGeneral(usuario);
@@ -100,7 +99,6 @@ export default function TablaPrecios({ usuario }) {
     if (!p.VigenteDesde) return false;
     const t = new Date(p.VigenteDesde).getTime();
     if (isNaN(t)) return false;
-    // Si coincide con la fecha más reciente o tiene menos de 30 días
     if (fechaUltimoCambioGlobal && t === fechaUltimoCambioGlobal) return true;
     const hace30dias = Date.now() - 30 * 24 * 60 * 60 * 1000;
     return t >= hace30dias;
@@ -183,27 +181,27 @@ export default function TablaPrecios({ usuario }) {
   const totalSinPrecio = precios.length - totalConPrecio;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-800">Catálogo de Precios Oficiales</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Catálogo de Precios Oficiales</h2>
+          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
             Gestión de tarifas unitarias, mayoristas y control cronológico de vigencias por sucursal.
           </p>
         </div>
 
         {/* Conmutador o distintivo de sucursal */}
         {esGeneral ? (
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200 shadow-2xs">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded border border-slate-200">
             <button
               type="button"
               onClick={() => {
                 setSucursalId(1);
                 cargarPrecios(1, true);
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                 sucursalId === 1
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white text-slate-900 border border-slate-200"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -215,9 +213,9 @@ export default function TablaPrecios({ usuario }) {
                 setSucursalId(2);
                 cargarPrecios(2, true);
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                 sucursalId === 2
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white text-slate-900 border border-slate-200"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -225,67 +223,65 @@ export default function TablaPrecios({ usuario }) {
             </button>
           </div>
         ) : (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-200 bg-sky-50 text-sky-800 text-xs font-semibold">
-            <Building className="h-3.5 w-3.5 text-sky-600" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-sky-200 bg-sky-50 text-sky-900 text-xs font-semibold">
+            <Building className="h-3.5 w-3.5 text-[#1C96C5]" />
             <span>Sede de Operación: {sucursalId === 2 ? "Sucursal Potosí" : "Sucursal Sucre (Central)"}</span>
           </div>
         )}
       </div>
 
       {/* Tarjetas de Resumen Rápido */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white p-4 rounded border border-slate-200 flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase">Total Presentaciones</span>
-            <p className="text-2xl font-bold text-slate-800">{precios.length}</p>
+            <span className="text-xs text-slate-600 font-semibold uppercase">Total Presentaciones</span>
+            <p className="text-2xl font-bold font-mono text-slate-900 tabular-nums">{precios.length}</p>
           </div>
-          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
-            <Package className="h-5 w-5" />
+          <div className="p-2 bg-slate-100 text-slate-700 rounded">
+            <Package className="h-4 w-4" />
           </div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 rounded border border-slate-200 flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase">Con Tarifa Vigente</span>
-            <p className="text-2xl font-bold text-emerald-700">{totalConPrecio}</p>
+            <span className="text-xs text-slate-600 font-semibold uppercase">Con Tarifa Vigente</span>
+            <p className="text-2xl font-bold font-mono text-emerald-700 tabular-nums">{totalConPrecio}</p>
           </div>
-          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-            <CheckCircle2 className="h-5 w-5" />
+          <div className="p-2 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+            <CheckCircle2 className="h-4 w-4" />
           </div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 rounded border border-slate-200 flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase">Pendientes de Asignar</span>
-            <p className="text-2xl font-bold text-amber-600">{totalSinPrecio}</p>
+            <span className="text-xs text-slate-600 font-semibold uppercase">Pendientes de Asignar</span>
+            <p className="text-2xl font-bold font-mono text-amber-700 tabular-nums">{totalSinPrecio}</p>
           </div>
-          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
-            <Tag className="h-5 w-5" />
+          <div className="p-2 bg-amber-50 text-amber-700 rounded border border-amber-200">
+            <Tag className="h-4 w-4" />
           </div>
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="p-4 border-b border-slate-100 space-y-3">
+      <div className="border border-slate-200 bg-white rounded overflow-hidden">
+        <div className="p-4 border-b border-slate-200 space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Tag className="h-4 w-4 text-[#20A7DB]" />
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Tag className="h-4 w-4 text-[#1C96C5]" />
               <span>Lista de Precios Vigente</span>
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">
-                Mostrando {preciosFiltrados.length} de {precios.length} presentaciones
-              </span>
-            </div>
+            </h3>
+            <span className="text-xs text-slate-600">
+              Mostrando <strong className="text-slate-900 font-mono">{preciosFiltrados.length}</strong> de {precios.length} presentaciones
+            </span>
           </div>
 
           {/* Filtros y Buscador */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
             <div className="relative w-full sm:w-72">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
               <Input
                 placeholder="Buscar por producto o código..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-8 text-xs h-9 bg-slate-50 focus:bg-white"
+                className="pl-8 text-xs h-8 bg-white border-slate-300 rounded"
               />
             </div>
 
@@ -294,7 +290,7 @@ export default function TablaPrecios({ usuario }) {
                 variant={filtroTipo === "TODOS" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFiltroTipo("TODOS")}
-                className={`text-xs h-8 ${filtroTipo === "TODOS" ? "bg-[#20A7DB] hover:bg-[#1B92C0] text-white" : ""}`}
+                className={`text-xs h-8 rounded ${filtroTipo === "TODOS" ? "bg-[#1C96C5] hover:bg-[#157A9E] text-white" : "border-slate-300 text-slate-700"}`}
               >
                 Todos
               </Button>
@@ -302,7 +298,7 @@ export default function TablaPrecios({ usuario }) {
                 variant={filtroTipo === "RECIENTES" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFiltroTipo("RECIENTES")}
-                className={`text-xs h-8 gap-1.5 ${filtroTipo === "RECIENTES" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}`}
+                className={`text-xs h-8 gap-1.5 rounded ${filtroTipo === "RECIENTES" ? "bg-amber-700 hover:bg-amber-800 text-white" : "border-slate-300 text-slate-700"}`}
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Editados Recientes
@@ -311,38 +307,38 @@ export default function TablaPrecios({ usuario }) {
                 variant={filtroTipo === "SIN_PRECIO" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFiltroTipo("SIN_PRECIO")}
-                className={`text-xs h-8 ${filtroTipo === "SIN_PRECIO" ? "bg-slate-700 text-white" : ""}`}
+                className={`text-xs h-8 rounded ${filtroTipo === "SIN_PRECIO" ? "bg-slate-800 text-white" : "border-slate-300 text-slate-700"}`}
               >
                 Sin Tarifa
               </Button>
             </div>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-0">
+        <div>
           {loading ? (
             <div className="flex justify-center items-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
+              <Loader2 className="h-7 w-7 animate-spin text-[#1C96C5]" />
             </div>
           ) : preciosFiltrados.length === 0 ? (
             <div className="text-center py-16 px-4">
-              <Package className="mx-auto h-12 w-12 text-slate-300 mb-2" />
-              <p className="text-slate-600 font-medium">No se encontraron productos con los filtros seleccionados</p>
+              <Package className="mx-auto h-10 w-10 text-slate-400 mb-2" />
+              <p className="text-slate-700 font-medium text-xs">No se encontraron productos con los filtros seleccionados</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left border-collapse">
-                <thead className="bg-slate-50 text-xs text-slate-600 uppercase font-semibold border-b border-slate-200">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="sticky top-0 bg-slate-50 text-slate-700 text-xs uppercase font-medium border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3">Código</th>
-                    <th className="px-4 py-3">Producto / Presentación</th>
-                    <th className="px-4 py-3">Contenedor / Unidades</th>
-                    <th className="px-4 py-3 text-right">Precio Unitario</th>
-                    <th className="px-4 py-3 text-right">Precio Mayorista</th>
-                    <th className="px-4 py-3 text-center">Cant. Mínima</th>
-                    <th className="px-4 py-3 text-center">Última Vigencia</th>
-                    <th className="px-4 py-3 text-center">Estado</th>
-                    <th className="px-4 py-3 text-right">Acciones</th>
+                    <th className="px-3 py-2.5 font-semibold">Código</th>
+                    <th className="px-3 py-2.5 font-semibold">Producto / Presentación</th>
+                    <th className="px-3 py-2.5 font-semibold">Contenedor / Unidades</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Precio Unitario</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Precio Mayorista</th>
+                    <th className="px-3 py-2.5 font-semibold text-center">Cant. Mínima</th>
+                    <th className="px-3 py-2.5 font-semibold text-center">Última Vigencia</th>
+                    <th className="px-3 py-2.5 font-semibold text-center">Estado</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -353,65 +349,59 @@ export default function TablaPrecios({ usuario }) {
                     return (
                       <tr
                         key={`${p.IdPrecioProducto || p.IdPresentacion}-${p.IdSucursal || ''}-${idx}`}
-                        className={`hover:bg-slate-50/70 transition-colors ${esReciente ? "bg-amber-50/30" : ""}`}
+                        className={`hover:bg-slate-50 transition-colors ${esReciente ? "bg-amber-50/20" : ""}`}
                       >
-                        <td className="px-4 py-3 text-xs font-mono font-semibold text-slate-600">
+                        <td className="px-3 py-2.5 text-xs font-mono font-semibold text-slate-700">
                           {p.CodigoPresentacion}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-slate-900">{p.NombreProducto}</span>
                             {esReciente && (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1 text-[10px] font-bold px-1.5 py-0">
+                              <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-medium px-1.5 py-0.2 rounded inline-flex items-center gap-1">
                                 <Sparkles className="h-2.5 w-2.5" />
-                                Editado Reciente
-                              </Badge>
+                                Editado
+                              </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600 text-xs">
+                        <td className="px-3 py-2.5 text-slate-600 text-xs">
                           {p.TipoContenedor} {p.CantidadRollosUnidades ? `(${p.CantidadRollosUnidades} un.)` : ""}
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-900">
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums font-bold text-slate-900">
                           {tienePrecio ? `Bs. ${Number(p.PrecioUnitario).toFixed(2)}` : (
-                            <span className="text-xs text-amber-500 font-normal italic">Sin precio</span>
+                            <span className="text-xs text-amber-700 font-normal italic">Sin precio</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right text-emerald-700 font-semibold">
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-emerald-700 font-semibold">
                           {p.PrecioMayorista ? `Bs. ${Number(p.PrecioMayorista).toFixed(2)}` : "—"}
                         </td>
-                        <td className="px-4 py-3 text-center text-slate-600 text-xs">
+                        <td className="px-3 py-2.5 text-center text-slate-600 text-xs font-mono tabular-nums">
                           {p.PrecioMayorista ? `≥ ${p.CantidadMinimaMayorista || 10} un.` : "—"}
                         </td>
-                        <td className="px-4 py-3 text-center text-xs text-slate-500 font-mono">
+                        <td className="px-3 py-2.5 text-center text-xs text-slate-600 font-mono">
                           {p.VigenteDesde ? (
                             <div className="flex items-center justify-center gap-1">
-                              <Clock className="h-3 w-3 text-slate-400" />
+                              <Clock className="h-3 w-3 text-slate-500" />
                               <span>{String(p.VigenteDesde).split("T")[0]}</span>
                             </div>
                           ) : (
                             "—"
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          {tienePrecio ? (
-                            <Badge className="bg-emerald-500 text-white gap-1 text-[11px]">
-                              <CheckCircle2 className="h-3 w-3" />
-                              <span>Vigente</span>
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-amber-600 border-amber-300">
-                              Pendiente
-                            </Badge>
-                          )}
+                        <td className="px-3 py-2.5 text-center">
+                          <StatusBadge
+                            estado={tienePrecio ? "VIGENTE" : "PENDIENTE"}
+                            variant={tienePrecio ? "success" : "warning"}
+                          />
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => abrirHistorial(p)}
-                              className="h-8 gap-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                              className="h-7 text-xs text-slate-600 hover:text-slate-900 rounded"
                               title="Ver historial de cambios de precio"
                             >
                               <History className="h-3.5 w-3.5 text-slate-500" />
@@ -421,7 +411,7 @@ export default function TablaPrecios({ usuario }) {
                               size="sm"
                               variant="outline"
                               onClick={() => abrirEditar(p)}
-                              className="h-8 gap-1.5 text-[#20A7DB] border-[#20A7DB] hover:bg-sky-50"
+                              className="h-7 text-xs gap-1 text-[#1C96C5] border-sky-300 hover:bg-sky-50 rounded"
                             >
                               <Edit2 className="h-3.5 w-3.5" />
                               <span>{tienePrecio ? "Modificar" : "Asignar"}</span>
@@ -436,31 +426,31 @@ export default function TablaPrecios({ usuario }) {
             </div>
           )}
           {preciosFiltrados.length > 0 && <PaginacionTabla {...paginacion} />}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Modal Fijar / Modificar Precio */}
       {modalAbierto && (
         <Dialog open={modalAbierto} onOpenChange={setModalAbierto}>
-          <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-[#20A7DB] flex items-center gap-2">
-                <Tag className="h-5 w-5" />
-                <span>Establecer Precio de Venta</span>
+          <DialogContent className="w-full sm:max-w-2xl p-5 sm:p-6 rounded border border-slate-200">
+            <DialogHeader className="border-b border-slate-200 pb-2">
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Tag className="h-4 w-4 text-[#1C96C5]" />
+                <span>Establecer Precio de Venta Oficial</span>
               </DialogTitle>
             </DialogHeader>
 
             {itemEditar && (
-              <form onSubmit={handleGuardar} className="space-y-4 pt-2">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <p className="font-semibold text-sm text-slate-800">{itemEditar.NombreProducto}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {itemEditar.TipoContenedor} - Código: {itemEditar.CodigoPresentacion}
+              <form onSubmit={handleGuardar} className="space-y-3 pt-2">
+                <div className="p-3 rounded bg-slate-50 border border-slate-200">
+                  <p className="font-semibold text-xs text-slate-900">{itemEditar.NombreProducto}</p>
+                  <p className="text-[11px] text-slate-600">
+                    {itemEditar.TipoContenedor} - Código: <span className="font-mono">{itemEditar.CodigoPresentacion}</span>
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="PrecioUnitario">Precio Unitario (Bs) *</Label>
+                  <Label htmlFor="PrecioUnitario" className="text-xs font-semibold text-slate-800">Precio Unitario (Bs) *</Label>
                   <Input
                     id="PrecioUnitario"
                     type="number"
@@ -470,12 +460,13 @@ export default function TablaPrecios({ usuario }) {
                     value={formPrecio.PrecioUnitario}
                     onChange={(e) => setFormPrecio({ ...formPrecio, PrecioUnitario: e.target.value })}
                     required
+                    className="mt-1 h-8 text-xs font-mono font-bold rounded"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="PrecioMayorista">Precio Mayorista (Bs)</Label>
+                    <Label htmlFor="PrecioMayorista" className="text-xs font-semibold text-slate-800">Precio Mayorista (Bs)</Label>
                     <Input
                       id="PrecioMayorista"
                       type="number"
@@ -484,35 +475,40 @@ export default function TablaPrecios({ usuario }) {
                       placeholder="Ej. 16.00"
                       value={formPrecio.PrecioMayorista}
                       onChange={(e) => setFormPrecio({ ...formPrecio, PrecioMayorista: e.target.value })}
+                      className="mt-1 h-8 text-xs font-mono rounded"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="CantidadMinimaMayorista">Cantidad Mínima</Label>
+                    <Label htmlFor="CantidadMinimaMayorista" className="text-xs font-semibold text-slate-800">Cantidad Mínima</Label>
                     <Input
                       id="CantidadMinimaMayorista"
                       type="number"
                       min="1"
                       value={formPrecio.CantidadMinimaMayorista}
                       onChange={(e) => setFormPrecio({ ...formPrecio, CantidadMinimaMayorista: e.target.value })}
+                      className="mt-1 h-8 text-xs font-mono rounded"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="VigenteDesde">Vigente a partir de</Label>
+                  <Label htmlFor="VigenteDesde" className="text-xs font-semibold text-slate-800">Vigente a partir de</Label>
                   <Input
                     id="VigenteDesde"
                     type="date"
                     value={formPrecio.VigenteDesde}
                     onChange={(e) => setFormPrecio({ ...formPrecio, VigenteDesde: e.target.value })}
                     required
+                    className="mt-1 h-8 text-xs rounded"
                   />
                 </div>
 
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setModalAbierto(false)}>Cancelar</Button>
-                  <Button type="submit" className="bg-[#20A7DB] text-white" disabled={guardando}>
-                    {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <DialogFooter className="pt-2 border-t border-slate-200">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setModalAbierto(false)} className="rounded h-8 text-xs">
+                    Cancelar
+                  </Button>
+                  <Button type="submit" size="sm" className="bg-[#1C96C5] hover:bg-[#157A9E] text-white rounded h-8 text-xs font-semibold" disabled={guardando}>
+                    {guardando && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                     Guardar Precio
                   </Button>
                 </DialogFooter>
@@ -525,42 +521,42 @@ export default function TablaPrecios({ usuario }) {
       {/* Modal Historial de Precios */}
       {modalHistorialAbierto && (
         <Dialog open={modalHistorialAbierto} onOpenChange={setModalHistorialAbierto}>
-          <DialogContent className="w-full sm:max-w-2xl p-6">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <History className="h-5 w-5 text-indigo-600" />
+          <DialogContent className="w-full sm:max-w-2xl p-5 rounded border border-slate-200">
+            <DialogHeader className="border-b border-slate-200 pb-2">
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <History className="h-4 w-4 text-[#1C96C5]" />
                 <span>Historial Cronológico de Precios</span>
               </DialogTitle>
             </DialogHeader>
 
             {itemHistorial && (
-              <div className="space-y-4 pt-2">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200">
+              <div className="space-y-3 pt-1">
+                <div className="p-3 bg-slate-50 rounded border border-slate-200">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="font-bold text-slate-800">{itemHistorial.NombreProducto}</p>
-                      <p className="text-xs text-slate-500">
-                        {itemHistorial.TipoContenedor} • Código: {itemHistorial.CodigoPresentacion}
+                      <p className="font-bold text-xs text-slate-900">{itemHistorial.NombreProducto}</p>
+                      <p className="text-[11px] text-slate-600">
+                        {itemHistorial.TipoContenedor} • Código: <span className="font-mono">{itemHistorial.CodigoPresentacion}</span>
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-xs font-mono">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-700">
                       Presentación #{itemHistorial.IdPresentacion}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
 
                 {cargandoHistorial ? (
-                  <div className="flex justify-center items-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-6 w-6 animate-spin text-[#1C96C5]" />
                   </div>
                 ) : historialItems.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 border rounded-xl">
+                  <div className="p-6 text-center text-xs text-slate-600 border border-dashed rounded">
                     No se registran cambios históricos de precio para este producto.
                   </div>
                 ) : (
-                  <div className="border rounded-xl overflow-hidden shadow-xs">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-100 text-slate-700 font-semibold uppercase text-[11px] border-b">
+                  <div className="border border-slate-200 rounded overflow-hidden">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-[11px] border-b border-slate-200">
                         <tr>
                           <th className="p-2.5">Fecha de Vigencia</th>
                           <th className="p-2.5 text-right">Precio Unitario</th>
@@ -571,29 +567,24 @@ export default function TablaPrecios({ usuario }) {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {historialItems.map((h, i) => (
-                          <tr key={`hist-${h.IdPrecioProducto || i}`} className={`hover:bg-slate-50/70 ${i === 0 ? "bg-emerald-50/40" : ""}`}>
+                          <tr key={`hist-${h.IdPrecioProducto || i}-${i}`} className={`hover:bg-slate-50 ${i === 0 ? "bg-emerald-50/20" : ""}`}>
                             <td className="p-2.5 font-mono text-slate-700 font-medium">
                               {h.VigenteDesde ? String(h.VigenteDesde).split("T")[0] : "—"}
                             </td>
-                            <td className="p-2.5 text-right font-bold text-slate-900">
+                            <td className="p-2.5 text-right font-mono tabular-nums font-bold text-slate-900">
                               Bs. {Number(h.PrecioUnitario || 0).toFixed(2)}
                             </td>
-                            <td className="p-2.5 text-right text-emerald-700 font-semibold">
+                            <td className="p-2.5 text-right font-mono tabular-nums text-emerald-700 font-semibold">
                               {h.PrecioMayorista ? `Bs. ${Number(h.PrecioMayorista).toFixed(2)}` : "—"}
                             </td>
-                            <td className="p-2.5 text-center text-slate-600">
+                            <td className="p-2.5 text-center text-slate-600 font-mono tabular-nums">
                               {h.CantidadMinimaMayorista ? `≥ ${h.CantidadMinimaMayorista} un.` : "—"}
                             </td>
                             <td className="p-2.5 text-center">
-                              {h.Activo ? (
-                                <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                  Vigente Actual
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-slate-500 border-slate-300 text-[10px]">
-                                  Histórico
-                                </Badge>
-                              )}
+                              <StatusBadge
+                                estado={h.Activo ? "VIGENTE" : "HISTÓRICO"}
+                                variant={h.Activo ? "success" : "neutral"}
+                              />
                             </td>
                           </tr>
                         ))}
@@ -602,8 +593,8 @@ export default function TablaPrecios({ usuario }) {
                   </div>
                 )}
 
-                <DialogFooter className="pt-2">
-                  <Button variant="outline" size="sm" onClick={() => setModalHistorialAbierto(false)}>
+                <DialogFooter className="pt-2 border-t border-slate-200">
+                  <Button variant="outline" size="sm" onClick={() => setModalHistorialAbierto(false)} className="rounded h-8 text-xs">
                     Cerrar
                   </Button>
                 </DialogFooter>

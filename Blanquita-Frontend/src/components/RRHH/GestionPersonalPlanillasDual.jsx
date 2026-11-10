@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import StatusBadge from "@/components/common/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
@@ -329,18 +330,18 @@ export default function GestionPersonalPlanillasDual() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+      {/* Encabezado Industrial */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg">
-              <Users className="h-6 w-6" />
+            <span className="p-2 bg-slate-100 text-slate-700 rounded border border-slate-200">
+              <Users className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">
                 Gestión de Personal y Planillas
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-600">
                 Planilla Oficial vs Interna, Control de Asistencia, Deducción No Venta y Finiquitos
               </p>
             </div>
@@ -348,53 +349,53 @@ export default function GestionPersonalPlanillasDual() {
         </div>
 
         {/* Pestañas Principales */}
-        <div className="flex flex-wrap gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+        <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded border border-slate-200 text-xs font-medium">
           <button
             onClick={() => setPestañaActiva("personal")}
-            className={`px-3 py-1.5 rounded-md transition-all ${
+            className={`px-3 py-1.5 rounded transition-colors ${
               pestañaActiva === "personal"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             1. Nómina de Personal
           </button>
           <button
             onClick={() => setPestañaActiva("planillas")}
-            className={`px-3 py-1.5 rounded-md transition-all ${
+            className={`px-3 py-1.5 rounded transition-colors ${
               pestañaActiva === "planillas"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             2. Planillas de Sueldos
           </button>
           <button
             onClick={() => setPestañaActiva("excel")}
-            className={`px-3 py-1.5 rounded-md transition-all ${
+            className={`px-3 py-1.5 rounded transition-colors ${
               pestañaActiva === "excel"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             3. Importar Asistencia
           </button>
           <button
             onClick={() => setPestañaActiva("finiquitos")}
-            className={`px-3 py-1.5 rounded-md transition-all ${
+            className={`px-3 py-1.5 rounded transition-colors ${
               pestañaActiva === "finiquitos"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             4. Finiquitos (LGT)
           </button>
           <button
             onClick={() => setPestañaActiva("noventa")}
-            className={`px-3 py-1.5 rounded-md transition-all ${
+            className={`px-3 py-1.5 rounded transition-colors ${
               pestañaActiva === "noventa"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             5. No Venta Prorrateada
@@ -407,15 +408,15 @@ export default function GestionPersonalPlanillasDual() {
       {/* ========================================================================= */}
       {pestañaActiva === "personal" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3.5 rounded border border-slate-200">
             {/* Sub-pestañas: Asegurado vs Externo */}
             <div className="flex gap-2">
               <Button
                 variant={subPestañaPersonal === "asegurados" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSubPestañaPersonal("asegurados")}
-                className={`text-xs font-semibold gap-1.5 ${
-                  subPestañaPersonal === "asegurados" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""
+                className={`text-xs font-medium gap-1.5 h-8 rounded ${
+                  subPestañaPersonal === "asegurados" ? "bg-slate-900 text-white hover:bg-slate-800" : "border-slate-300"
                 }`}
               >
                 <ShieldCheck className="h-4 w-4" />
@@ -425,8 +426,8 @@ export default function GestionPersonalPlanillasDual() {
                 variant={subPestañaPersonal === "externos" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSubPestañaPersonal("externos")}
-                className={`text-xs font-semibold gap-1.5 ${
-                  subPestañaPersonal === "externos" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+                className={`text-xs font-medium gap-1.5 h-8 rounded ${
+                  subPestañaPersonal === "externos" ? "bg-slate-900 text-white hover:bg-slate-800" : "border-slate-300"
                 }`}
               >
                 <ShieldAlert className="h-4 w-4" />
@@ -439,7 +440,7 @@ export default function GestionPersonalPlanillasDual() {
               <select
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                className="text-xs px-2.5 h-8 rounded border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
               >
                 <option value="">Todas las Sucursales</option>
                 <option value="1">Sucursal Sucre</option>
@@ -453,73 +454,66 @@ export default function GestionPersonalPlanillasDual() {
                   value={busquedaPersonal}
                   onChange={(e) => setBusquedaPersonal(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && cargarPersonal()}
-                  className="pl-8 text-xs h-8"
+                  className="pl-8 text-xs h-8 rounded border-slate-300"
                 />
               </div>
             </div>
           </div>
 
           {/* Tabla de Empleados */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-semibold uppercase text-[11px] border-b border-slate-200 dark:border-slate-700">
+                <thead className="sticky top-0 bg-slate-50 text-slate-700 font-semibold uppercase text-[11px] border-b border-slate-200">
                   <tr>
-                    <th className="p-3">Empleado</th>
-                    <th className="p-3">Cédula</th>
-                    <th className="p-3">Cargo / Área</th>
-                    <th className="p-3">Sucursal</th>
-                    <th className="p-3">Sueldo Base</th>
-                    <th className="p-3">Régimen</th>
-                    <th className="p-3">Fecha Ingreso</th>
-                    <th className="p-3 text-center">Estado</th>
+                    <th className="py-2.5 px-3">Empleado</th>
+                    <th className="py-2.5 px-3">Cédula</th>
+                    <th className="py-2.5 px-3">Cargo / Área</th>
+                    <th className="py-2.5 px-3">Sucursal</th>
+                    <th className="py-2.5 px-3 text-right">Sueldo Base</th>
+                    <th className="py-2.5 px-3">Régimen</th>
+                    <th className="py-2.5 px-3">Fecha Ingreso</th>
+                    <th className="py-2.5 px-3 text-center">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100">
                   {cargandoPersonal ? (
                     <tr>
-                      <td colSpan="8" className="p-8 text-center text-slate-400">
+                      <td colSpan="8" className="p-8 text-center text-slate-500">
                         Cargando personal...
                       </td>
                     </tr>
                   ) : empleados.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="p-8 text-center text-slate-400">
+                      <td colSpan="8" className="p-8 text-center text-slate-500">
                         No se encontraron empleados para este filtro.
                       </td>
                     </tr>
                   ) : (
                     paginacionPersonal.itemsPaginados.map((emp, idx) => (
-                      <tr key={`emp-${emp.IdUsuario || emp.id || idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                        <td className="p-3 font-bold text-slate-800 dark:text-slate-100">
+                      <tr key={`emp-${emp.IdUsuario || emp.id || idx}`} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
                           {emp.NombreCompleto || `${emp.Nombres || ""} ${emp.Apellidos || ""}`}
                         </td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">{emp.CI || "-"}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">
+                        <td className="py-2.5 px-3 font-mono tabular-nums text-slate-600">{emp.CI || "-"}</td>
+                        <td className="py-2.5 px-3 text-slate-600">
                           {emp.Cargo || "Operador"} ({emp.Area || "Planta"})
                         </td>
-                        <td className="p-3">
-                          <span className="font-semibold text-slate-700 dark:text-slate-200">
-                            {emp.NombreSucursal || (emp.IdSucursal === 2 ? "Potosí" : "Sucre")}
-                          </span>
+                        <td className="py-2.5 px-3 font-medium text-slate-700">
+                          {emp.NombreSucursal || (emp.IdSucursal === 2 ? "Potosí" : "Sucre")}
                         </td>
-                        <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
                           Bs. {Number(emp.SueldoBase || 0).toFixed(2)}
                         </td>
-                        <td className="p-3">
-                          {emp.EsAsegurado ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
-                              Asegurado (Oficial)
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                              Externo (Interno)
-                            </Badge>
-                          )}
+                        <td className="py-2.5 px-3">
+                          <StatusBadge
+                            estado={emp.EsAsegurado ? "APROBADO" : "OBSERVADO"}
+                            label={emp.EsAsegurado ? "Asegurado (Oficial)" : "Externo (Interno)"}
+                          />
                         </td>
-                        <td className="p-3 text-slate-500">{emp.FechaIngreso || "-"}</td>
-                        <td className="p-3 text-center">
-                          <span className={`inline-block w-2 h-2 rounded-full ${emp.Activo !== false ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <td className="py-2.5 px-3 font-mono tabular-nums text-slate-500">{emp.FechaIngreso || "-"}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <StatusBadge estado={emp.Activo !== false ? "ACTIVO" : "INACTIVO"} />
                         </td>
                       </tr>
                     ))
@@ -537,10 +531,10 @@ export default function GestionPersonalPlanillasDual() {
       {/* ========================================================================= */}
       {pestañaActiva === "planillas" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3.5 rounded border border-slate-200">
             <div className="flex flex-wrap items-center gap-3">
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase block mb-1">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
                   Periodo de Nómina:
                 </label>
                 <select
@@ -549,7 +543,7 @@ export default function GestionPersonalPlanillasDual() {
                     setPeriodoSeleccionado(e.target.value);
                     cargarPlanilla(e.target.value, tipoPlanilla);
                   }}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
+                  className="text-xs px-2.5 h-8 rounded border border-slate-300 bg-white text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-slate-900"
                 >
                   {periodos.map((p, idx) => {
                     const val = p.IdPeriodoNomina || p.id;
@@ -564,19 +558,19 @@ export default function GestionPersonalPlanillasDual() {
 
               {/* Selector de Planilla Dual */}
               <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase block mb-1">
+                <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">
                   Tipo de Planilla:
                 </label>
-                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded border border-slate-200">
                   <button
                     onClick={() => {
                       setTipoPlanilla("OFICIAL");
                       cargarPlanilla(periodoSeleccionado, "OFICIAL");
                     }}
-                    className={`text-xs px-3 py-1 rounded-md font-semibold transition-all ${
+                    className={`text-xs px-2.5 py-1 rounded transition-colors ${
                       tipoPlanilla === "OFICIAL"
-                        ? "bg-white dark:bg-slate-900 text-blue-600 shadow-xs font-bold"
-                        : "text-slate-500 hover:text-slate-900"
+                        ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     Oficial (Gestora / Min. Trabajo)
@@ -586,10 +580,10 @@ export default function GestionPersonalPlanillasDual() {
                       setTipoPlanilla("INTERNA");
                       cargarPlanilla(periodoSeleccionado, "INTERNA");
                     }}
-                    className={`text-xs px-3 py-1 rounded-md font-semibold transition-all ${
+                    className={`text-xs px-2.5 py-1 rounded transition-colors ${
                       tipoPlanilla === "INTERNA"
-                        ? "bg-white dark:bg-slate-900 text-emerald-600 shadow-xs font-bold"
-                        : "text-slate-500 hover:text-slate-900"
+                        ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     Interna de Planta (Real)
@@ -601,96 +595,98 @@ export default function GestionPersonalPlanillasDual() {
             <Button
               onClick={handleGenerarPlanilla}
               disabled={generandoPlanilla || !periodoSeleccionado}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 h-9 gap-1.5"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3 h-8 gap-1.5 rounded"
             >
-              <Calculator className="h-4 w-4" />
+              <Calculator className="h-3.5 w-3.5" />
               {generandoPlanilla ? "Calculando..." : `Generar Planilla ${tipoPlanilla}`}
             </Button>
           </div>
 
           {/* Tabla de la Planilla */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-semibold uppercase text-[11px] border-b border-slate-200 dark:border-slate-700">
+                <thead className="sticky top-0 bg-slate-50 text-slate-700 font-semibold uppercase text-[11px] border-b border-slate-200">
                   <tr>
-                    <th className="p-3">Empleado</th>
-                    <th className="p-3 text-right">Sueldo Base</th>
+                    <th className="py-2.5 px-3">Empleado</th>
+                    <th className="py-2.5 px-3 text-right">Sueldo Base</th>
                     {tipoPlanilla === "INTERNA" ? (
                       <>
-                        <th className="p-3 text-right">Horas Extras</th>
-                        <th className="p-3 text-right text-red-600">Dcto. Faltas (30d)</th>
-                        <th className="p-3 text-right text-red-600">Dcto. No Venta</th>
-                        <th className="p-3 text-right text-red-600">Anticipos</th>
+                        <th className="py-2.5 px-3 text-right text-emerald-700">Horas Extras</th>
+                        <th className="py-2.5 px-3 text-right text-red-700">Dcto. Faltas (30d)</th>
+                        <th className="py-2.5 px-3 text-right text-red-700">Dcto. No Venta</th>
+                        <th className="py-2.5 px-3 text-right text-red-700">Anticipos</th>
                       </>
                     ) : (
                       <>
-                        <th className="p-3 text-right text-red-600">Aporte AFP (12.71%)</th>
-                        <th className="p-3 text-right text-red-600">RC-IVA</th>
+                        <th className="py-2.5 px-3 text-right text-red-700">Aporte AFP (12.71%)</th>
+                        <th className="py-2.5 px-3 text-right text-red-700">RC-IVA</th>
                       </>
                     )}
-                    <th className="p-3 text-right font-bold text-slate-900 dark:text-white">
+                    <th className="py-2.5 px-3 text-right font-bold text-slate-900">
                       Líquido Pagable
                     </th>
-                    <th className="p-3 text-center">Boleta 2 Copias</th>
+                    <th className="py-2.5 px-3 text-center">Boleta 2 Copias</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100">
                   {cargandoPlanilla ? (
                     <tr>
-                      <td colSpan="8" className="p-8 text-center text-slate-400">
+                      <td colSpan="8" className="p-8 text-center text-slate-500">
                         Cargando planilla...
                       </td>
                     </tr>
                   ) : !planillaActual || !planillaActual.Detalles || planillaActual.Detalles.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="p-8 text-center text-slate-400">
+                      <td colSpan="8" className="p-8 text-center text-slate-500">
                         No hay planilla calculada para este periodo. Presione "Generar Planilla".
                       </td>
                     </tr>
                   ) : (
                     paginacionPlanilla.itemsPaginados.map((det, idx) => (
-                      <tr key={`det-${det.IdDetallePlanilla || idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                        <td className="p-3 font-semibold text-slate-800 dark:text-slate-100">
+                      <tr key={`det-${det.IdDetallePlanilla || idx}`} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
                           {det.NombreCompleto || det.Empleado?.NombreCompleto || `Empleado #${det.IdUsuario}`}
                         </td>
-                        <td className="p-3 text-right">Bs. {Number(det.SueldoBase || 0).toFixed(2)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700">
+                          Bs. {Number(det.SueldoBase || 0).toFixed(2)}
+                        </td>
                         {tipoPlanilla === "INTERNA" ? (
                           <>
-                            <td className="p-3 text-right text-emerald-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-emerald-700">
                               +Bs. {Number(det.MontoHorasExtras || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 text-right text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700">
                               -Bs. {Number(det.DescuentoFaltas || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 text-right text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700">
                               -Bs. {Number(det.DescuentoNoVenta || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 text-right text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700">
                               -Bs. {Number(det.Anticipos || 0).toFixed(2)}
                             </td>
                           </>
                         ) : (
                           <>
-                            <td className="p-3 text-right text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700">
                               -Bs. {Number(det.AporteAFP || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 text-right text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700">
                               -Bs. {Number(det.RCIVA || 0).toFixed(2)}
                             </td>
                           </>
                         )}
-                        <td className="p-3 text-right font-extrabold text-blue-600 dark:text-blue-400">
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
                           Bs. {Number(det.LiquidoPagable || 0).toFixed(2)}
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => handleVerBoletaDoble(det.IdDetallePlanilla)}
-                            className="h-7 text-xs font-semibold text-indigo-600 hover:text-indigo-800 gap-1"
+                            className="h-7 text-xs font-medium text-slate-700 hover:bg-slate-50 border-slate-300 gap-1 rounded"
                           >
-                            <Printer className="h-3.5 w-3.5" />
+                            <Printer className="h-3 w-3" />
                             2 Copias
                           </Button>
                         </td>
@@ -710,16 +706,16 @@ export default function GestionPersonalPlanillasDual() {
       {/* ========================================================================= */}
       {pestañaActiva === "excel" && (
         <div className="max-w-2xl mx-auto space-y-6">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="bg-white p-5 sm:p-6 rounded border border-slate-200 space-y-4">
             <div className="flex items-center gap-3">
-              <span className="p-2.5 bg-green-50 dark:bg-green-950/50 text-green-600 rounded-lg">
-                <FileSpreadsheet className="h-6 w-6" />
+              <span className="p-2.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                <FileSpreadsheet className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-100">
+                <h3 className="font-bold text-slate-900 text-sm">
                   Importador de Asistencia Mensual
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-600">
                   Procesamiento de horas trabajadas y cálculo automático de deducciones por faltas
                 </p>
               </div>
@@ -727,21 +723,21 @@ export default function GestionPersonalPlanillasDual() {
 
             <form onSubmit={handleSubirExcel} className="space-y-4 pt-2">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Seleccionar archivo Excel (.xlsx / .xls):
                 </label>
                 <Input
                   type="file"
                   accept=".xlsx, .xls"
                   onChange={(e) => setArchivoExcel(e.target.files[0])}
-                  className="text-xs cursor-pointer"
+                  className="text-xs cursor-pointer h-9 rounded border-slate-300"
                 />
               </div>
 
               <Button
                 type="submit"
                 disabled={subiendoExcel || !archivoExcel}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 gap-2"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs h-8 gap-2 rounded"
               >
                 <UploadCloud className="h-4 w-4" />
                 {subiendoExcel ? "Procesando Asistencia..." : "Importar y Aplicar Faltas"}
@@ -749,17 +745,17 @@ export default function GestionPersonalPlanillasDual() {
             </form>
 
             {resultadoExcel && (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 rounded-lg text-xs space-y-1">
-                <p className="font-bold text-emerald-800 dark:text-emerald-300">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
+                <p className="font-bold text-slate-900">
                   Procesamiento Exitoso:
                 </p>
-                <p className="text-emerald-700 dark:text-emerald-400">
+                <p className="text-slate-700 font-mono tabular-nums">
                   • Empleados identificados y procesados: {resultadoExcel.empleados_procesados || 0}
                 </p>
-                <p className="text-emerald-700 dark:text-emerald-400">
+                <p className="text-slate-700 font-mono tabular-nums">
                   • Total de horas efectivas leídas: {resultadoExcel.total_horas_leidas || 0} hrs
                 </p>
-                <p className="text-emerald-700 dark:text-emerald-400">
+                <p className="text-slate-700 font-mono tabular-nums">
                   • Faltas (valores negativos) registradas: {resultadoExcel.total_faltas_registradas || 0}
                 </p>
               </div>
@@ -773,74 +769,74 @@ export default function GestionPersonalPlanillasDual() {
       {/* ========================================================================= */}
       {pestañaActiva === "finiquitos" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex justify-between items-center bg-white p-3.5 sm:p-4 rounded border border-slate-200">
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">
                 Liquidaciones y Finiquitos Laborales (Ley General del Trabajo)
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 Cálculo exacto por diferencia de fechas calendario. Requiere antigüedad mínima de 3 meses (≥ 90 días).
               </p>
             </div>
             <Button
               onClick={() => setModalNuevoFiniquito(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold gap-1.5"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium gap-1.5 h-8 rounded"
             >
-              <Calculator className="h-4 w-4" />
+              <Calculator className="h-3.5 w-3.5" />
               Nuevo Cálculo Ministerial
             </Button>
           </div>
 
           {/* Listado de Finiquitos */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 uppercase text-[11px] border-b">
+              <thead className="sticky top-0 bg-slate-50 text-slate-700 uppercase text-[11px] font-semibold border-b border-slate-200">
                 <tr>
-                  <th className="p-3">Trabajador</th>
-                  <th className="p-3">Periodo Laboral</th>
-                  <th className="p-3">Antigüedad Calendario</th>
-                  <th className="p-3">Sueldo Promedio</th>
-                  <th className="p-3">Indemnización (Art. 13)</th>
-                  <th className="p-3 text-right">Líquido Finiquito</th>
-                  <th className="p-3 text-center">Estado</th>
+                  <th className="py-2.5 px-3">Trabajador</th>
+                  <th className="py-2.5 px-3">Periodo Laboral</th>
+                  <th className="py-2.5 px-3">Antigüedad Calendario</th>
+                  <th className="py-2.5 px-3 text-right">Sueldo Promedio</th>
+                  <th className="py-2.5 px-3 text-right">Indemnización (Art. 13)</th>
+                  <th className="py-2.5 px-3 text-right">Líquido Finiquito</th>
+                  <th className="py-2.5 px-3 text-center">Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-100">
                 {cargandoFiniquitos ? (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-slate-400">
+                    <td colSpan="7" className="p-8 text-center text-slate-500">
                       Cargando finiquitos...
                     </td>
                   </tr>
                 ) : finiquitosList.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-slate-400">
+                    <td colSpan="7" className="p-8 text-center text-slate-500">
                       No hay registros de finiquitos procesados.
                     </td>
                   </tr>
                 ) : (
-                  finiquitosList.map((f) => (
-                    <tr key={f.IdFiniquito || f.id} className="hover:bg-slate-50/50">
-                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-100">
+                  finiquitosList.map((f, idx) => (
+                    <tr key={`fin-${f.IdFiniquito || f.id || idx}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 font-semibold text-slate-900">
                         {f.NombreEmpleado || `Empleado #${f.IdUsuario}`}
                       </td>
-                      <td className="p-3 text-slate-600">
+                      <td className="py-2.5 px-3 font-mono tabular-nums text-slate-600">
                         {f.FechaIngreso} al {f.FechaRetiro}
                       </td>
-                      <td className="p-3 font-medium text-slate-700">
+                      <td className="py-2.5 px-3 font-mono tabular-nums text-slate-700">
                         {f.AniosServicio}a {f.MesesServicio}m {f.DiasServicio}d
                       </td>
-                      <td className="p-3">Bs. {Number(f.SueldoPromedio || 0).toFixed(2)}</td>
-                      <td className="p-3 font-semibold text-emerald-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700">
+                        Bs. {Number(f.SueldoPromedio || 0).toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-emerald-700 font-medium">
                         Bs. {Number(f.IndemnizacionLegal || 0).toFixed(2)}
                       </td>
-                      <td className="p-3 text-right font-extrabold text-blue-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
                         Bs. {Number(f.LiquidoPagable || 0).toFixed(2)}
                       </td>
-                      <td className="p-3 text-center">
-                        <Badge className="bg-emerald-100 text-emerald-800">
-                          {f.Estado || "CALCULADO"}
-                        </Badge>
+                      <td className="py-2.5 px-3 text-center">
+                        <StatusBadge estado={f.Estado || "CALCULADO"} />
                       </td>
                     </tr>
                   ))
@@ -856,64 +852,62 @@ export default function GestionPersonalPlanillasDual() {
       {/* ========================================================================= */}
       {pestañaActiva === "noventa" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex justify-between items-center bg-white p-3.5 sm:p-4 rounded border border-slate-200">
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">
                 Deducción Compartida de "No Venta"
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 Prorrateo en partes iguales entre los trabajadores involucrados para descontar en la planilla interna
               </p>
             </div>
             <Button
               onClick={() => setModalNuevaNoVenta(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold gap-1.5"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium gap-1.5 h-8 rounded"
             >
-              <DollarSign className="h-4 w-4" />
+              <DollarSign className="h-3.5 w-3.5" />
               Registrar Deuda Compartida
             </Button>
           </div>
 
           {/* Listado de No Venta */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 uppercase text-[11px] border-b">
+              <thead className="sticky top-0 bg-slate-50 text-slate-700 uppercase text-[11px] font-semibold border-b border-slate-200">
                 <tr>
-                  <th className="p-3">Concepto</th>
-                  <th className="p-3">Periodo Aplicación</th>
-                  <th className="p-3">Monto Global</th>
-                  <th className="p-3">Trabajadores</th>
-                  <th className="p-3">Cuota Individual</th>
-                  <th className="p-3 text-center">Estado</th>
+                  <th className="py-2.5 px-3">Concepto</th>
+                  <th className="py-2.5 px-3">Periodo Aplicación</th>
+                  <th className="py-2.5 px-3 text-right">Monto Global</th>
+                  <th className="py-2.5 px-3">Trabajadores</th>
+                  <th className="py-2.5 px-3 text-right">Cuota Individual</th>
+                  <th className="py-2.5 px-3 text-center">Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-100">
                 {deudasNoVenta.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="p-8 text-center text-slate-400">
+                    <td colSpan="6" className="p-8 text-center text-slate-500">
                       No hay registros de "No Venta" pendientes de deducción.
                     </td>
                   </tr>
                 ) : (
-                  deudasNoVenta.map((nv) => (
-                    <tr key={nv.id} className="hover:bg-slate-50/50">
-                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-100">
+                  deudasNoVenta.map((nv, idx) => (
+                    <tr key={`nv-${nv.id || idx}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 font-semibold text-slate-900">
                         {nv.concepto}
                       </td>
-                      <td className="p-3 text-slate-600">
+                      <td className="py-2.5 px-3 font-mono tabular-nums text-slate-600">
                         {nv.mes_aplicacion}/{nv.anio_aplicacion}
                       </td>
-                      <td className="p-3 font-bold text-red-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-red-700 font-medium">
                         Bs. {Number(nv.monto_total || 0).toFixed(2)}
                       </td>
-                      <td className="p-3 text-slate-600">{nv.cantidad_empleados || 0} personas</td>
-                      <td className="p-3 font-semibold text-amber-600">
-                        Bs. {Number(nv.cuota_individual || 0).toFixed(2)} / persona
+                      <td className="py-2.5 px-3 font-mono tabular-nums text-slate-600">{nv.cantidad_empleados || 0} personas</td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
+                        Bs. {Number(nv.cuota_individual || 0).toFixed(2)} / pers.
                       </td>
-                      <td className="p-3 text-center">
-                        <Badge className="bg-amber-100 text-amber-800">
-                          {nv.estado || "PENDIENTE"}
-                        </Badge>
+                      <td className="py-2.5 px-3 text-center">
+                        <StatusBadge estado={nv.estado || "PENDIENTE"} />
                       </td>
                     </tr>
                   ))
@@ -928,16 +922,16 @@ export default function GestionPersonalPlanillasDual() {
       {/* MODAL BOLETA DOBLE (2 COPIAS POR HOJA: COPIA TRABAJADOR Y COPIA EMPRESA) */}
       {/* ========================================================================= */}
       <Dialog open={modalBoletaOpen} onOpenChange={setModalBoletaOpen}>
-        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 bg-white dark:bg-slate-900 border shadow-xl rounded-xl">
-          <DialogHeader className="border-b pb-3 flex flex-row items-center justify-between">
-            <DialogTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Printer className="h-5 w-5 text-indigo-600" />
+        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
+          <DialogHeader className="border-b border-slate-200 pb-3 flex flex-row items-center justify-between">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Printer className="h-4 w-4 text-slate-700" />
               Papeleta de Pago - 2 Copias por Hoja
             </DialogTitle>
             <Button
               onClick={() => window.print()}
               disabled={cargandoBoleta || !boletaDobleData}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold gap-1.5 h-8"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium gap-1.5 h-8 rounded"
             >
               <Printer className="h-3.5 w-3.5" />
               Imprimir Duplicado Oficial
@@ -945,37 +939,37 @@ export default function GestionPersonalPlanillasDual() {
           </DialogHeader>
 
           {cargandoBoleta ? (
-            <div className="py-12 text-center text-slate-400">Cargando boleta en formato dual...</div>
+            <div className="py-12 text-center text-slate-500">Cargando boleta en formato dual...</div>
           ) : !boletaDobleData ? (
-            <div className="py-12 text-center text-slate-400">No se encontraron datos.</div>
+            <div className="py-12 text-center text-slate-500">No se encontraron datos.</div>
           ) : (
             <div className="space-y-6 print:m-0 print:p-0">
               {/* COPIA 1: TRABAJADOR */}
-              <div className="p-5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs space-y-3 bg-white dark:bg-slate-950">
-                <div className="flex justify-between items-start border-b pb-2">
+              <div className="p-4 border border-slate-300 rounded text-xs space-y-3 bg-white print:border-black">
+                <div className="flex justify-between items-start border-b border-slate-200 pb-2 print:border-black">
                   <div>
-                    <h4 className="font-extrabold text-sm uppercase text-slate-900 dark:text-white">
+                    <h4 className="font-bold text-sm uppercase text-slate-900 print:text-black">
                       PAPELERA BLANQUITA (SHEMA ASOCIADOS S.R.L.)
                     </h4>
-                    <p className="text-[10px] text-slate-500">NIT: 1028475024 | Sucre - Bolivia</p>
+                    <p className="text-[10px] text-slate-600 font-mono print:text-black">NIT: 1028475024 | Sucre - Bolivia</p>
                   </div>
-                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 uppercase font-bold text-[10px]">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase border border-slate-300 bg-slate-50 text-slate-700 print:border-black print:text-black">
                     COPIA 1: TRABAJADOR
-                  </Badge>
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded text-[11px]">
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200 text-[11px] print:bg-transparent print:border-black">
                   <div>
-                    <span className="text-slate-400 block">Trabajador:</span>
-                    <span className="font-bold">{boletaDobleData.Empleado?.NombreCompleto}</span>
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">Trabajador:</span>
+                    <span className="font-bold text-slate-900">{boletaDobleData.Empleado?.NombreCompleto}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">CI:</span>
-                    <span className="font-semibold">{boletaDobleData.Empleado?.CI}</span>
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">CI:</span>
+                    <span className="font-mono tabular-nums text-slate-800">{boletaDobleData.Empleado?.CI}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Líquido Pagable:</span>
-                    <span className="font-extrabold text-blue-600">
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">Líquido Pagable:</span>
+                    <span className="font-mono tabular-nums font-bold text-slate-900">
                       Bs. {Number(boletaDobleData.LiquidoPagable || 0).toFixed(2)}
                     </span>
                   </div>
@@ -983,54 +977,54 @@ export default function GestionPersonalPlanillasDual() {
 
                 <div className="grid grid-cols-2 gap-4 text-[11px] pt-1">
                   <div>
-                    <span className="font-semibold text-emerald-700 block mb-1">Total Haberes:</span>
-                    <p>Bs. {Number(boletaDobleData.TotalGanado || 0).toFixed(2)}</p>
+                    <span className="font-semibold text-emerald-800 block mb-1">Total Haberes:</span>
+                    <p className="font-mono tabular-nums text-slate-900">Bs. {Number(boletaDobleData.TotalGanado || 0).toFixed(2)}</p>
                   </div>
                   <div>
-                    <span className="font-semibold text-red-700 block mb-1">Total Descuentos:</span>
-                    <p>Bs. {Number(boletaDobleData.TotalDescuentos || 0).toFixed(2)}</p>
+                    <span className="font-semibold text-red-800 block mb-1">Total Descuentos:</span>
+                    <p className="font-mono tabular-nums text-slate-900">Bs. {Number(boletaDobleData.TotalDescuentos || 0).toFixed(2)}</p>
                   </div>
                 </div>
 
                 <div className="pt-6 grid grid-cols-2 gap-8 text-center text-[10px]">
-                  <div className="border-t border-slate-400 pt-1">Firma Empleador</div>
-                  <div className="border-t border-slate-400 pt-1">Firma Trabajador</div>
+                  <div className="border-t border-slate-400 pt-1 font-medium text-slate-700 print:border-black print:text-black">Firma Empleador</div>
+                  <div className="border-t border-slate-400 pt-1 font-medium text-slate-700 print:border-black print:text-black">Firma Trabajador</div>
                 </div>
               </div>
 
               {/* LÍNEA DE CORTE */}
-              <div className="border-t-2 border-dashed border-slate-400 my-2 text-center relative">
-                <span className="bg-white dark:bg-slate-900 px-3 text-[10px] text-slate-400 -top-2.5 relative font-mono">
+              <div className="border-t-2 border-dashed border-slate-400 my-2 text-center relative print:border-black">
+                <span className="bg-white px-3 text-[10px] text-slate-500 -top-2.5 relative font-mono print:text-black">
                   - - - - - - CORTAR AQUÍ (COPIA EMPRESA / TRABAJADOR) - - - - - -
                 </span>
               </div>
 
               {/* COPIA 2: EMPRESA */}
-              <div className="p-5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs space-y-3 bg-white dark:bg-slate-950">
-                <div className="flex justify-between items-start border-b pb-2">
+              <div className="p-4 border border-slate-300 rounded text-xs space-y-3 bg-white print:border-black">
+                <div className="flex justify-between items-start border-b border-slate-200 pb-2 print:border-black">
                   <div>
-                    <h4 className="font-extrabold text-sm uppercase text-slate-900 dark:text-white">
+                    <h4 className="font-bold text-sm uppercase text-slate-900 print:text-black">
                       PAPELERA BLANQUITA (SHEMA ASOCIADOS S.R.L.)
                     </h4>
-                    <p className="text-[10px] text-slate-500">NIT: 1028475024 | Sucre - Bolivia</p>
+                    <p className="text-[10px] text-slate-600 font-mono print:text-black">NIT: 1028475024 | Sucre - Bolivia</p>
                   </div>
-                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 uppercase font-bold text-[10px]">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase border border-slate-300 bg-slate-50 text-slate-700 print:border-black print:text-black">
                     COPIA 2: EMPRESA (ARCHIVO RRHH)
-                  </Badge>
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded text-[11px]">
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200 text-[11px] print:bg-transparent print:border-black">
                   <div>
-                    <span className="text-slate-400 block">Trabajador:</span>
-                    <span className="font-bold">{boletaDobleData.Empleado?.NombreCompleto}</span>
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">Trabajador:</span>
+                    <span className="font-bold text-slate-900">{boletaDobleData.Empleado?.NombreCompleto}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">CI:</span>
-                    <span className="font-semibold">{boletaDobleData.Empleado?.CI}</span>
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">CI:</span>
+                    <span className="font-mono tabular-nums text-slate-800">{boletaDobleData.Empleado?.CI}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Líquido Pagable:</span>
-                    <span className="font-extrabold text-blue-600">
+                    <span className="text-slate-600 block text-[10px] uppercase font-semibold">Líquido Pagable:</span>
+                    <span className="font-mono tabular-nums font-bold text-slate-900">
                       Bs. {Number(boletaDobleData.LiquidoPagable || 0).toFixed(2)}
                     </span>
                   </div>
@@ -1038,18 +1032,18 @@ export default function GestionPersonalPlanillasDual() {
 
                 <div className="grid grid-cols-2 gap-4 text-[11px] pt-1">
                   <div>
-                    <span className="font-semibold text-emerald-700 block mb-1">Total Haberes:</span>
-                    <p>Bs. {Number(boletaDobleData.TotalGanado || 0).toFixed(2)}</p>
+                    <span className="font-semibold text-emerald-800 block mb-1">Total Haberes:</span>
+                    <p className="font-mono tabular-nums text-slate-900">Bs. {Number(boletaDobleData.TotalGanado || 0).toFixed(2)}</p>
                   </div>
                   <div>
-                    <span className="font-semibold text-red-700 block mb-1">Total Descuentos:</span>
-                    <p>Bs. {Number(boletaDobleData.TotalDescuentos || 0).toFixed(2)}</p>
+                    <span className="font-semibold text-red-800 block mb-1">Total Descuentos:</span>
+                    <p className="font-mono tabular-nums text-slate-900">Bs. {Number(boletaDobleData.TotalDescuentos || 0).toFixed(2)}</p>
                   </div>
                 </div>
 
                 <div className="pt-6 grid grid-cols-2 gap-8 text-center text-[10px]">
-                  <div className="border-t border-slate-400 pt-1">Firma Empleador</div>
-                  <div className="border-t border-slate-400 pt-1">Firma Trabajador (Recibí Conforme)</div>
+                  <div className="border-t border-slate-400 pt-1 font-medium text-slate-700 print:border-black print:text-black">Firma Empleador</div>
+                  <div className="border-t border-slate-400 pt-1 font-medium text-slate-700 print:border-black print:text-black">Firma Trabajador (Recibí Conforme)</div>
                 </div>
               </div>
             </div>
@@ -1061,18 +1055,18 @@ export default function GestionPersonalPlanillasDual() {
       {/* MODAL NUEVO FINIQUITO (MINISTERIAL ART. 13 LGT) */}
       {/* ========================================================================= */}
       <Dialog open={modalNuevoFiniquito} onOpenChange={setModalNuevoFiniquito}>
-        <DialogContent className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto p-6 bg-white dark:bg-slate-900 rounded-xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-indigo-600" />
+        <DialogContent className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
+          <DialogHeader className="border-b border-slate-200 pb-3">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Calculator className="h-4 w-4 text-slate-700" />
               Cálculo de Finiquito según Art. 13 LGT
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleCalcularFiniquito} className="space-y-4">
+          <form onSubmit={handleCalcularFiniquito} className="space-y-4 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1">
                   Empleado:
                 </label>
                 <select
@@ -1089,11 +1083,11 @@ export default function GestionPersonalPlanillasDual() {
                     });
                   }}
                   required
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                  className="w-full px-2.5 h-8 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
                 >
                   <option value="">Seleccione un empleado...</option>
-                  {empleados.map((emp) => (
-                    <option key={emp.IdUsuario || emp.id} value={emp.IdUsuario || emp.id}>
+                  {empleados.map((emp, idx) => (
+                    <option key={`opt-fin-emp-${emp.IdUsuario || emp.id || idx}-${idx}`} value={emp.IdUsuario || emp.id}>
                       {emp.NombreCompleto || `${emp.Nombres} ${emp.Apellidos}`} (CI: {emp.CI})
                     </option>
                   ))}
@@ -1101,13 +1095,13 @@ export default function GestionPersonalPlanillasDual() {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1">
                   Motivo de Retiro:
                 </label>
                 <select
                   value={formFiniquito.motivo}
                   onChange={(e) => setFormFiniquito({ ...formFiniquito, motivo: e.target.value })}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                  className="w-full px-2.5 h-8 rounded border border-slate-300 bg-white text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
                 >
                   <option value="DESPIDO_INJUSTIFICADO">Despido Intempestivo / Injustificado</option>
                   <option value="RETIRO_VOLUNTARIO">Retiro Voluntario</option>
@@ -1116,7 +1110,7 @@ export default function GestionPersonalPlanillasDual() {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1">
                   Fecha de Ingreso:
                 </label>
                 <Input
@@ -1124,12 +1118,12 @@ export default function GestionPersonalPlanillasDual() {
                   value={formFiniquito.fecha_ingreso}
                   onChange={(e) => setFormFiniquito({ ...formFiniquito, fecha_ingreso: e.target.value })}
                   required
-                  className="text-xs h-8"
+                  className="text-xs h-8 rounded border-slate-300"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1">
                   Fecha de Retiro:
                 </label>
                 <Input
@@ -1137,47 +1131,47 @@ export default function GestionPersonalPlanillasDual() {
                   value={formFiniquito.fecha_retiro}
                   onChange={(e) => setFormFiniquito({ ...formFiniquito, fecha_retiro: e.target.value })}
                   required
-                  className="text-xs h-8"
+                  className="text-xs h-8 rounded border-slate-300"
                 />
               </div>
             </div>
 
-            <div className="border-t pt-3 space-y-2">
+            <div className="border-t border-slate-200 pt-3 space-y-2">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                 Últimos 3 Sueldos Percibidos (Base Promedio):
               </span>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-500">Mes 1 (Bs):</label>
+                  <label className="text-[10px] text-slate-600 block mb-0.5">Mes 1 (Bs):</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formFiniquito.sueldo_mes_1}
                     onChange={(e) => setFormFiniquito({ ...formFiniquito, sueldo_mes_1: e.target.value })}
                     required
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono tabular-nums text-right"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500">Mes 2 (Bs):</label>
+                  <label className="text-[10px] text-slate-600 block mb-0.5">Mes 2 (Bs):</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formFiniquito.sueldo_mes_2}
                     onChange={(e) => setFormFiniquito({ ...formFiniquito, sueldo_mes_2: e.target.value })}
                     required
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono tabular-nums text-right"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500">Mes 3 (Bs):</label>
+                  <label className="text-[10px] text-slate-600 block mb-0.5">Mes 3 (Bs):</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formFiniquito.sueldo_mes_3}
                     onChange={(e) => setFormFiniquito({ ...formFiniquito, sueldo_mes_3: e.target.value })}
                     required
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono tabular-nums text-right"
                   />
                 </div>
               </div>
@@ -1186,31 +1180,31 @@ export default function GestionPersonalPlanillasDual() {
             <Button
               type="submit"
               disabled={calculandoFiniquito}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs h-9"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs h-8 rounded"
             >
               {calculandoFiniquito ? "Calculando..." : "Calcular Beneficios Sociales"}
             </Button>
           </form>
 
           {resultadoCalculoFiniquito && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-xs space-y-2 mt-2">
-              <div className="flex justify-between items-center border-b pb-2">
-                <span className="font-bold text-slate-800 dark:text-slate-100">
+            <div className="p-3.5 bg-slate-50 rounded border border-slate-200 text-xs space-y-2 mt-2">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-900">
                   Antigüedad Calculada:
                 </span>
-                <span className="font-bold text-indigo-600">
+                <span className="font-bold font-mono tabular-nums text-slate-900">
                   {resultadoCalculoFiniquito.AniosServicio} años, {resultadoCalculoFiniquito.MesesServicio} meses, {resultadoCalculoFiniquito.DiasServicio} días
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+              <div className="grid grid-cols-2 gap-2 text-slate-700 font-mono tabular-nums">
                 <div>• Sueldo Promedio: Bs. {Number(resultadoCalculoFiniquito.SueldoPromedio || 0).toFixed(2)}</div>
                 <div>• Indemnización: Bs. {Number(resultadoCalculoFiniquito.IndemnizacionLegal || 0).toFixed(2)}</div>
                 <div>• Aguinaldo Duodécimas: Bs. {Number(resultadoCalculoFiniquito.AguinaldoDuodecimas || 0).toFixed(2)}</div>
                 <div>• Vacación Pendiente: Bs. {Number(resultadoCalculoFiniquito.VacacionCompensable || 0).toFixed(2)}</div>
               </div>
-              <div className="border-t pt-2 flex justify-between items-center text-sm font-extrabold text-blue-600">
+              <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-bold text-slate-900">
                 <span>TOTAL A LIQUIDAR:</span>
-                <span>Bs. {Number(resultadoCalculoFiniquito.LiquidoPagable || 0).toFixed(2)}</span>
+                <span className="font-mono tabular-nums">Bs. {Number(resultadoCalculoFiniquito.LiquidoPagable || 0).toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -1221,15 +1215,15 @@ export default function GestionPersonalPlanillasDual() {
       {/* MODAL NUEVA NO VENTA COMPARTIDA */}
       {/* ========================================================================= */}
       <Dialog open={modalNuevaNoVenta} onOpenChange={setModalNuevaNoVenta}>
-        <DialogContent className="w-full sm:max-w-md p-6 bg-white dark:bg-slate-900 rounded-xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-amber-600" />
+        <DialogContent className="w-full sm:max-w-md p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
+          <DialogHeader className="border-b border-slate-200 pb-3">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-slate-700" />
               Prorrateo de "No Venta" Compartida
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleCrearNoVenta} className="space-y-4">
+          <form onSubmit={handleCrearNoVenta} className="space-y-4 pt-2">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Monto Total a Descontar (Bs):
@@ -1241,7 +1235,7 @@ export default function GestionPersonalPlanillasDual() {
                 value={formNoVenta.monto_total}
                 onChange={(e) => setFormNoVenta({ ...formNoVenta, monto_total: e.target.value })}
                 required
-                className="text-xs h-8"
+                className="text-xs h-8 rounded border-slate-300 font-mono tabular-nums text-right"
               />
             </div>
 
@@ -1254,7 +1248,7 @@ export default function GestionPersonalPlanillasDual() {
                 value={formNoVenta.concepto}
                 onChange={(e) => setFormNoVenta({ ...formNoVenta, concepto: e.target.value })}
                 required
-                className="text-xs h-8"
+                className="text-xs h-8 rounded border-slate-300"
               />
             </div>
 
@@ -1262,12 +1256,12 @@ export default function GestionPersonalPlanillasDual() {
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Seleccionar Trabajadores Responsables:
               </label>
-              <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 space-y-1.5 text-xs">
-                {empleados.map((emp) => {
+              <div className="max-h-40 overflow-y-auto border border-slate-300 rounded p-2 space-y-1.5 text-xs">
+                {empleados.map((emp, idx) => {
                   const idEmp = emp.IdUsuario || emp.id;
                   const seleccionado = formNoVenta.empleados_seleccionados.includes(idEmp);
                   return (
-                    <label key={idEmp} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                    <label key={`lbl-nv-emp-${idEmp}-${idx}`} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
                       <input
                         type="checkbox"
                         checked={seleccionado}
@@ -1278,7 +1272,7 @@ export default function GestionPersonalPlanillasDual() {
                           setFormNoVenta({ ...formNoVenta, empleados_seleccionados: nuevo });
                         }}
                       />
-                      <span>{emp.NombreCompleto || `${emp.Nombres} ${emp.Apellidos}`}</span>
+                      <span className="text-slate-800">{emp.NombreCompleto || `${emp.Nombres} ${emp.Apellidos}`}</span>
                     </label>
                   );
                 })}
@@ -1286,7 +1280,7 @@ export default function GestionPersonalPlanillasDual() {
             </div>
 
             {formNoVenta.monto_total && formNoVenta.empleados_seleccionados.length > 0 && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs font-semibold text-amber-800 font-mono tabular-nums">
                 Cuota por trabajador: Bs.{" "}
                 {(
                   parseFloat(formNoVenta.monto_total) /
@@ -1299,7 +1293,7 @@ export default function GestionPersonalPlanillasDual() {
             <Button
               type="submit"
               disabled={guardandoNoVenta}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs h-9"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs h-8 rounded"
             >
               {guardandoNoVenta ? "Guardando..." : "Asignar Deducciones"}
             </Button>
