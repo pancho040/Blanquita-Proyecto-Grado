@@ -38,9 +38,13 @@ import {
 } from "@/services/Contabilidad/tesoreriaService";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { esUsuarioGeneral, obtenerSucursalActiva } from "@/lib/sucursalContext";
 
 export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" }) {
   // modo: "operativo" (Kevin) | "gerencial" (Don Osvaldo)
+  const esGeneral = esUsuarioGeneral(usuario);
+  const sucursalUsuario = usuario?.IdSucursal ? Number(usuario.IdSucursal) : (obtenerSucursalActiva() || 1);
+
   const [vista, setVista] = useState(modo === "gerencial" ? "gerencial" : "solicitudes");
   const [solicitudes, setSolicitudes] = useState([]);
   const [pendientesGerencia, setPendientesGerencia] = useState([]);
@@ -67,7 +71,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
     departamento: "Contabilidad",
     monto_solicitado: "",
     justificacion: "",
-    IdSucursal: 1
+    IdSucursal: sucursalUsuario
   });
 
   // Formulario Entrega de Fondos
@@ -134,7 +138,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
         departamento: "Contabilidad",
         monto_solicitado: "",
         justificacion: "",
-        IdSucursal: 1
+        IdSucursal: sucursalUsuario
       });
       await cargarDatos();
     } catch (err) {
@@ -652,14 +656,21 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
               </div>
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Sucursal:</label>
-                <select
-                  value={formNueva.IdSucursal}
-                  onChange={(e) => setFormNueva({ ...formNueva, IdSucursal: e.target.value })}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                >
-                  <option value="1">Sucursal Sucre</option>
-                  <option value="2">Sucursal Potosí</option>
-                </select>
+                {esGeneral ? (
+                  <select
+                    value={formNueva.IdSucursal}
+                    onChange={(e) => setFormNueva({ ...formNueva, IdSucursal: Number(e.target.value) })}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  >
+                    <option value={1}>Sucursal Sucre</option>
+                    <option value={2}>Sucursal Potosí</option>
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-semibold">
+                    <Building size={13} className="text-[#20A7DB]" />
+                    <span>{Number(usuario?.IdSucursal) === 2 ? "Sucursal Potosí" : "Sucursal Central Sucre"}</span>
+                  </div>
+                )}
               </div>
             </div>
 

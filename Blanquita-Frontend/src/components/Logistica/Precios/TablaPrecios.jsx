@@ -7,18 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Tag, Edit2, Loader2, Package, CheckCircle2, History, Clock, Search, Sparkles, Filter } from "lucide-react";
+import { Tag, Edit2, Loader2, Package, CheckCircle2, History, Clock, Search, Sparkles, Filter, Building } from "lucide-react";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
+import { esUsuarioGeneral, obtenerSucursalActiva } from "@/lib/sucursalContext";
 
-export default function TablaPrecios() {
+export default function TablaPrecios({ usuario }) {
+  const esGeneral = esUsuarioGeneral(usuario);
+  const sucursalFija = (!esGeneral && usuario?.IdSucursal) ? Number(usuario.IdSucursal) : null;
+
   const [precios, setPrecios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("TODOS"); // "TODOS" | "RECIENTES" | "SIN_PRECIO"
 
   const [sucursalId, setSucursalId] = useState(() => {
+    if (sucursalFija) return sucursalFija;
     if (typeof window !== "undefined") {
       const g = localStorage.getItem("blanquita_sucursal_activa");
       return (g && g !== "todas") ? Number(g) : 1;
@@ -68,9 +73,11 @@ export default function TablaPrecios() {
   };
 
   useEffect(() => {
-    cargarPrecios(sucursalId);
+    const sEfectiva = sucursalFija || sucursalId;
+    cargarPrecios(sEfectiva);
 
     const handler = (e) => {
+      if (sucursalFija) return; // Usuario de sede fija no cambia de sede
       const sid = e.detail?.sucursalId || "1";
       const numSid = sid !== "todas" ? Number(sid) : 1;
       setSucursalId(numSid);
@@ -78,7 +85,7 @@ export default function TablaPrecios() {
     };
     window.addEventListener("sucursal_cambiada", handler);
     return () => window.removeEventListener("sucursal_cambiada", handler);
-  }, []);
+  }, [sucursalFija]);
 
   // Identificar fecha de cambio más reciente en el catálogo
   const fechaUltimoCambioGlobal = useMemo(() => {
@@ -184,6 +191,45 @@ export default function TablaPrecios() {
             Gestión de tarifas unitarias, mayoristas y control cronológico de vigencias por sucursal.
           </p>
         </div>
+
+        {/* Conmutador o distintivo de sucursal */}
+        {esGeneral ? (
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => {
+                setSucursalId(1);
+                cargarPrecios(1, true);
+              }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                sucursalId === 1
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Sucursal Sucre
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSucursalId(2);
+                cargarPrecios(2, true);
+              }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                sucursalId === 2
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Sucursal Potosí
+            </button>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-200 bg-sky-50 text-sky-800 text-xs font-semibold">
+            <Building className="h-3.5 w-3.5 text-sky-600" />
+            <span>Sede de Operación: {sucursalId === 2 ? "Sucursal Potosí" : "Sucursal Sucre (Central)"}</span>
+          </div>
+        )}
       </div>
 
       {/* Tarjetas de Resumen Rápido */}

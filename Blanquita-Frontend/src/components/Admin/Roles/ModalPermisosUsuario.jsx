@@ -32,6 +32,7 @@ export default function ModalPermisosUsuario({
 }) {
   if (!abierto || !usuario) return null;
   const [rolSeleccionado, setRolSeleccionado] = useState(3);
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
   const [personalizado, setPersonalizado] = useState(false);
   const [permisos, setPermisos] = useState({});
   const [guardando, setGuardando] = useState(false);
@@ -39,6 +40,7 @@ export default function ModalPermisosUsuario({
   useEffect(() => {
     if (usuario) {
       setRolSeleccionado(usuario.idRol || 3);
+      setSucursalSeleccionada(usuario.idSucursal !== undefined ? usuario.idSucursal : null);
       setPersonalizado(Boolean(usuario.personalizado));
 
       if (usuario.personalizado && usuario.permisosPersonalizados) {
@@ -101,13 +103,26 @@ export default function ModalPermisosUsuario({
   const handleGuardar = async () => {
     setGuardando(true);
     try {
-      await onGuardar({
+      const datosActualizados = {
         ...usuario,
         idRol: rolSeleccionado,
+        idSucursal: sucursalSeleccionada,
         personalizado,
         permisosPersonalizados: personalizado ? permisos : null,
-      });
-      toast.success("Permisos y rol actualizados con éxito", {
+      };
+
+      // Si existe el usuario en la base de datos, sincronizar sucursal
+      if (usuario.id) {
+        try {
+          const sidParam = sucursalSeleccionada !== null ? `id_sucursal=${sucursalSeleccionada}` : "";
+          await fetch(`/api/Usuario/${usuario.id}/sucursal?${sidParam}`, { method: "PUT" });
+        } catch {
+          /* Fallback local */
+        }
+      }
+
+      await onGuardar(datosActualizados);
+      toast.success("Rol y sucursal de operación actualizados con éxito", {
         description: `Usuario: ${usuario.nombre}`,
       });
       onCerrar();
@@ -153,7 +168,7 @@ export default function ModalPermisosUsuario({
         </DialogHeader>
 
         <div className="space-y-5 py-3">
-          {/* SELECCIÓN DE ROL */}
+          {/* SELECCIÓN DE ROL Y SUCURSAL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">
@@ -162,7 +177,7 @@ export default function ModalPermisosUsuario({
               <select
                 value={rolSeleccionado}
                 onChange={(e) => handleCambiarRol(Number(e.target.value))}
-                className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#20A7DB]"
               >
                 {ROLES_CONFIG.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -175,7 +190,27 @@ export default function ModalPermisosUsuario({
               </p>
             </div>
 
-            <div className="flex flex-col justify-center">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Sucursal de Operación Asignada
+              </label>
+              <select
+                value={sucursalSeleccionada === null || sucursalSeleccionada === "todas" ? "todas" : String(sucursalSeleccionada)}
+                onChange={(e) => setSucursalSeleccionada(e.target.value === "todas" ? null : Number(e.target.value))}
+                className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#20A7DB]"
+              >
+                <option value="todas">Multisede / General (Todas las Sedes)</option>
+                <option value="1">Sucursal Central Sucre</option>
+                <option value="2">Sucursal Potosí</option>
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {sucursalSeleccionada === null || sucursalSeleccionada === "todas"
+                  ? "Acceso global; conmutador en barra superior disponible."
+                  : `Operará exclusivamente con datos de ${sucursalSeleccionada === 2 ? "Potosí" : "Sucre"}.`}
+              </p>
+            </div>
+
+            <div className="md:col-span-2 pt-2 border-t border-slate-200 flex flex-col justify-center">
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Modo de Permisos
               </label>

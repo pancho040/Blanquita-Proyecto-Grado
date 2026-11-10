@@ -14,6 +14,7 @@ class UsuarioCreate(BaseModel):
     Celular: str = Field(..., pattern=r"^[67]\d{7}$")
     Clave: str = Field(..., min_length=8, max_length=64)
     IsAdmin: bool = False
+    IdSucursal: int | None = Field(default=1)
 
 
 class UsuarioResponse(BaseModel):
@@ -28,6 +29,7 @@ class UsuarioResponse(BaseModel):
     NombreCompleto: str = Field(..., validation_alias="NombreCompletoOut")
     Celular: str = Field(..., validation_alias="CelularOut")
     IsAdmin: bool = Field(..., validation_alias="IsAdminOut")
+    IdSucursal: int | None = Field(default=None, validation_alias="IdSucursalOut")
     FechaRegistro: datetime = Field(..., validation_alias="FechaRegistroOut")
 
 

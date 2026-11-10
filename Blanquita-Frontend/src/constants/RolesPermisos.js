@@ -134,6 +134,7 @@ export const USUARIOS_INICIALES = [
     usuario: "admin",
     correo: "admin@blanquita.bo",
     idRol: 3,
+    idSucursal: null, // Multisede General (acceso a todas las sucursales)
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,
@@ -144,6 +145,7 @@ export const USUARIOS_INICIALES = [
     usuario: "contador",
     correo: "r.flores@blanquita.bo",
     idRol: 4,
+    idSucursal: 1, // Sucre
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,
@@ -154,6 +156,7 @@ export const USUARIOS_INICIALES = [
     usuario: "supervisor",
     correo: "m.soto@blanquita.bo",
     idRol: 5,
+    idSucursal: 1, // Sucre
     activo: true,
     personalizado: true,
     permisosPersonalizados: {
@@ -170,6 +173,7 @@ export const USUARIOS_INICIALES = [
     usuario: "encargado",
     correo: "c.mendoza@blanquita.bo",
     idRol: 2,
+    idSucursal: 1, // Sucre
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,
@@ -180,6 +184,7 @@ export const USUARIOS_INICIALES = [
     usuario: "operador1",
     correo: "j.quispe@blanquita.bo",
     idRol: 1,
+    idSucursal: 1, // Sucre
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,
@@ -190,6 +195,18 @@ export const USUARIOS_INICIALES = [
     usuario: "repartidor1",
     correo: "d.fernandez@blanquita.bo",
     idRol: 6,
+    idSucursal: 1, // Sucre
+    activo: true,
+    personalizado: false,
+    permisosPersonalizados: null,
+  },
+  {
+    id: 7,
+    nombre: "Marcos Condori Potosí",
+    usuario: "chofer_potosi",
+    correo: "m.condori@blanquita.bo",
+    idRol: 6,
+    idSucursal: 2, // Potosí
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,

@@ -51,3 +51,29 @@ def EditarPerfil(
     usuario_actual: dict = Depends(get_current_user),
 ):
     return service.EditarPerfil(usuario_actual, datos)
+
+
+@UsuarioRouter.get(
+    "/listar",
+    response_model=list[dict],
+)
+def ListarUsuarios(
+    service: UsuarioService = Depends(get_usuario_service),
+    usuario_actual: dict = Depends(require_admin_db),
+):
+    """Lista todos los colaboradores registrados con su rol y sucursal asignada."""
+    return service.ListarUsuarios()
+
+
+@UsuarioRouter.put(
+    "/{id_usuario}/sucursal",
+    response_model=dict,
+)
+def ActualizarSucursal(
+    id_usuario: int,
+    id_sucursal: int | None = None,
+    service: UsuarioService = Depends(get_usuario_service),
+    usuario_actual: dict = Depends(require_admin_db),
+):
+    """Configura la sucursal de operación asignada a un colaborador (o null para multisede)."""
+    return service.ActualizarSucursalUsuario(id_usuario, id_sucursal)

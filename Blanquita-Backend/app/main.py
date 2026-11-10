@@ -107,7 +107,9 @@ def Servidor():
 
 #ROUTERS USUARIO
 app.include_router(UsuarioRouter)
+app.include_router(UsuarioRouter, prefix="/api")
 app.include_router(AuthRouter)
+app.include_router(AuthRouter, prefix="/api")
 
 
 

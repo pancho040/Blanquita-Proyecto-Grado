@@ -144,4 +144,22 @@ class UsuarioService:
                 detail="No se pudo registrar el usuario"
             )
 
+        # Asignar sucursal seleccionada si fue especificada
+        id_creado = usuario.get("IdUsuarioOut") or usuario.get("IdUsuario")
+        if id_creado and datos.IdSucursal is not None:
+            self.repository.ActualizarSucursalUsuario(id_creado, datos.IdSucursal)
+            usuario["IdSucursalOut"] = datos.IdSucursal
+
         return usuario
+
+    def ListarUsuarios(self) -> list[dict]:
+        return self.repository.ListarUsuarios()
+
+    def ActualizarSucursalUsuario(self, id_usuario: int, id_sucursal: int | None) -> dict:
+        res = self.repository.ActualizarSucursalUsuario(id_usuario, id_sucursal)
+        if not res:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado"
+            )
+        return res

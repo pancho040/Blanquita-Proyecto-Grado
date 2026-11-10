@@ -46,3 +46,37 @@ class UsuarioRepository:
             )
         '''
         return self.caller.LlamarUnRegistro(consulta, params)
+
+    def ListarUsuarios(self) -> list[dict]:
+        consulta = '''
+            SELECT 
+                u."IdUsuario",
+                u."Ci",
+                u."PrimerNombre",
+                u."SegundoNombre",
+                u."ApellidoPaterno",
+                u."ApellidoMaterno",
+                CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
+                u."Celular",
+                u."IdRol",
+                r."NombreRol",
+                u."IdEstadoUsuario",
+                CASE WHEN u."IdEstadoUsuario" = 1 THEN true ELSE false END as "Activo",
+                u."IsAdmin",
+                u."IdSucursal",
+                s."nombre" as "NombreSucursal"
+            FROM "Usuario" u
+            JOIN "Rol" r ON u."IdRol" = r."IdRol"
+            LEFT JOIN "sucursales" s ON u."IdSucursal" = s."id"
+            ORDER BY u."IdUsuario" ASC;
+        '''
+        return self.caller.LlamarFuncion(consulta, commit=False)
+
+    def ActualizarSucursalUsuario(self, id_usuario: int, id_sucursal: int | None) -> dict | None:
+        consulta = '''
+            UPDATE "Usuario"
+            SET "IdSucursal" = :id_sucursal
+            WHERE "IdUsuario" = :id_usuario
+            RETURNING "IdUsuario", "IdSucursal";
+        '''
+        return self.caller.LlamarUnRegistro(consulta, {"id_usuario": id_usuario, "id_sucursal": id_sucursal})
