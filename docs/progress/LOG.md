@@ -186,3 +186,25 @@
      - Guardia de zona protegida ejecutada con 0 violaciones detectadas.
      - Linter móvil `eslint src/` con 0 errores y 0 advertencias.
      - Suite backend de regresión ejecutada en su totalidad con pruebas aprobadas. | Archivos: `test_fase2_chofer_movil.py`, `DetalleParadaScreen.js`, `test_sync_subida_archivos.test.js`, `test_pantallas_react_test_renderer.test.js`, `run_all_mobile_tests.js`, `test_real_login_a3.py`, `verificar_limpieza_tablas_operativas.py`, `LOG.md`.
+
+
+- **2026-11-11 17:15** | **Agente Móvil & Backend** | **Fase 2.2 (Corrección de Defectos Detectados en Auditoría)** | Subsanación de 3 defectos reportados y validación integral:
+  1. Componente Modal Propio para No-Entrega en Android (`DetalleParadaScreen.js`):
+     - Se eliminó el llamado a `Alert.alert` con 5 botones (incompatible con el límite de 3 botones en Android nativo).
+     - Se integró componente `<Modal>` nativo con fondo atenuado (`rgba(15, 23, 42, 0.75)`), bordes rectos (`borderRadius: 4`), touch targets con altura mínima de 48px y texto en alto contraste acorde a `DESIGN.md`.
+     - Despliega el catálogo cerrado de motivos: `LOCAL_CERRADO`, `CLIENTE_AUSENTE`, `RECHAZO_PRECIO`, `SIN_FONDOS` y botón accesible de cancelación.
+  2. Subida Diferida de Comprobante en Cobro y Manejo Estricto de Errores (`syncService.js`):
+     - Para operaciones de tipo `COBRO` (simple y mixto con tramo QR o Transferencia), se asegura la subida previa del archivo local a `/chofer/subir-archivo` antes de despachar la transacción.
+     - Se inyecta `id_comprobante_archivo` y `url_comprobante` en el tramo bancario correspondiente.
+     - Se endureció la verificación de respuesta: si `!subida.success` (sea por error 4xx, 5xx, timeout o red), se interrumpe inmediatamente el flujo lanzando excepción con el código de estado correspondiente. La acción jamás se despacha sin comprobante.
+     - En `test_sync_subida_archivos.test.js` se incorporó el Test 4 validando la retención ante error 413 Payload Too Large y la inyección exitosa tras reintento.
+  3. Conexión de Cobro QR con Bandeja de Kevin y Retención de Deuda:
+     - En `/api/movil/v1/chofer/cobrar`, todo tramo QR/Transferencia asienta un registro en `AbonoCuentaCobrar` en estado `PENDIENTE_APROBACION` vinculado al `IdCuentaCobrar` de la sucursal del chofer.
+     - Se añadió el Test 11 en `test_fase2_chofer_movil.py` demostrando de extremo a extremo que:
+       (a) El abono QR figura en la bandeja de supervisión consultada mediante `CuentasCobrarService.ListarAbonosPendientes(sid)` y el endpoint HTTP `GET /contabilidad/cxc/abonos/pendientes`.
+       (b) El `SaldoPendiente` en `CuentaCobrar` no se descuenta mientras el abono permanezca en `PENDIENTE_APROBACION`.
+       (c) Al ejecutar `ResolverAbonoKevin` con aprobación, el saldo se descuenta inmediatamente a 0.00 y el abono pasa a `APROBADO`, desapareciendo de la lista de pendientes.
+  4. Suites de Verificación:
+     - Backend P2P: 11/11 pruebas aprobadas en `test_fase2_chofer_movil.py`.
+     - Mobile Unit/Integration: 9/9 suites aprobadas en `npm test` de `Blanquita-Mobile`.
+     - Linter: `npm run lint` finalizado con 0 errores y 0 advertencias. | Archivos: `DetalleParadaScreen.js`, `syncService.js`, `test_sync_subida_archivos.test.js`, `ChoferMovilRouter.py`, `test_fase2_chofer_movil.py`, `LOG.md`.

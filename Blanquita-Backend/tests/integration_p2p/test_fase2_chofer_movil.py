@@ -370,6 +370,18 @@ def test_cobro_mixto_qr_pendiente_aprobacion_exige_comprobante(db_session_rollba
     assert "exige obligatoriamente fotografía" in resp_fail.json().get("detail", "")
 
     # 2. Pago QR con comprobante es exitoso y queda PENDIENTE_APROBACION
+    comp_row = db.execute(text("""
+        INSERT INTO public."ComprobanteArchivo" (
+            "EntidadOrigen", "IdRegistroOrigen", "UrlArchivo", "NombreOriginal",
+            "Formato", "TamanoBytes", "Sha256", "ArchivoEliminado", "FechaSubida", "FechaExpiracion"
+        ) VALUES (
+            'PEDIDO', :id_ped, '/uploads/comprobantes/test_qr.jpg', 'test_qr.jpg',
+            'image/jpeg', 1024, 'sha256_mock_qr_cobro', false, NOW(), CURRENT_DATE + INTERVAL '60 days'
+        ) RETURNING "IdComprobante";
+    """), {"id_ped": id_ped}).fetchone()
+    id_comp_real = comp_row[0]
+    db.flush()
+
     headers["X-Idempotency-Key"] = clave_idemp
     payload_valido = {
         "id_pedido": id_ped,
@@ -382,7 +394,7 @@ def test_cobro_mixto_qr_pendiente_aprobacion_exige_comprobante(db_session_rollba
                 "metodo": "QR",
                 "monto": 100.0,
                 "numero_referencia": "BNB-QR-889922",
-                "id_comprobante_archivo": 9999,
+                "id_comprobante_archivo": id_comp_real,
                 "url_comprobante": "/uploads/comprobantes/test_qr.jpg"
             }
         ],
@@ -856,3 +868,180 @@ def test_seguridad_cruzada_chofer_ruta_ajena_y_sin_idempotencia(db_session_rollb
         }, headers=headers_key_invalida)
     assert resp_bad_uuid.status_code == 400
     assert "debe ser un UUID v4 válido" in resp_bad_uuid.json().get("detail", "")
+
+
+# ==============================================================================
+# TEST 11 (PUNTO 3): CONEXIÓN DE COBRO QR CON BANDEJA DE KEVIN Y RETENCIÓN DE SALDO
+# ==============================================================================
+def test_cobro_qr_movil_alimenta_bandeja_kevin_y_retiene_saldo_hasta_aprobacion(db_session_rollback, chofer_test):
+    """
+    Demuestra de extremo a extremo que:
+    1. Un cobro QR registrado por el chofer móvil crea un AbonoCuentaCobrar en estado PENDIENTE_APROBACION.
+    2. El abono aparece listado en la bandeja de verificación de Kevin (ListarAbonosPendientes / GET /contabilidad/cxc/abonos/pendientes).
+    3. El SaldoPendiente de la CuentaCobrar NO se descuenta mientras el abono está pendiente.
+    4. Kevin aprueba el abono y es en ese momento exacto cuando el SaldoPendiente se descuenta.
+    """
+    from app.Services.Contabilidad.CuentasCobrarService import CuentasCobrarService
+    from app.Constants.Roles import ROL_CONTADOR
+
+    db = db_session_rollback
+    uid_chofer = chofer_test["IdUsuario"]
+    sid = chofer_test["IdSucursal"]
+
+    # 1. Crear ruta, asignación y cliente en la sucursal del chofer
+    id_asig = _obtener_o_crear_asignacion(db, uid_chofer, sid)
+    id_cliente = _obtener_cliente_sucursal(db, sid)
+
+    monto_cobro = 350.00
+    nro_pedido = f"PED-KEVIN-{secrets.token_hex(3).upper()}"
+
+    ped_row = db.execute(text("""
+        INSERT INTO public."Pedido" (
+            "NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido",
+            "IdAsignacionRuta", "FechaPedido", "EsVentaDirecta", "MontoTotal"
+        ) VALUES (
+            :nro, :cli, :uid, 2, :asig, NOW(), false, :monto
+        ) RETURNING "IdPedido";
+    """), {
+        "nro": nro_pedido,
+        "cli": id_cliente,
+        "uid": uid_chofer,
+        "asig": id_asig,
+        "monto": monto_cobro
+    }).fetchone()
+    id_ped = ped_row[0]
+
+    # Insertar comprobante de archivo para el cobro QR
+    comp_row = db.execute(text("""
+        INSERT INTO public."ComprobanteArchivo" (
+            "EntidadOrigen", "IdRegistroOrigen", "UrlArchivo", "NombreOriginal",
+            "Formato", "TamanoBytes", "Sha256", "ArchivoEliminado", "FechaSubida", "FechaExpiracion"
+        ) VALUES (
+            'PEDIDO', :id_ped, '/uploads/comprobantes/test_kevin.jpg', 'comprobante_qr_kevin.jpg',
+            'image/jpeg', 20480, 'hash_test_qr_123', false, NOW(), CURRENT_DATE + INTERVAL '60 days'
+        ) RETURNING "IdComprobante";
+    """), {"id_ped": id_ped}).fetchone()
+    id_comprobante = comp_row[0]
+    db.flush()
+
+    # 2. El chofer ejecuta el cobro con método QR desde la app móvil
+    clave_idempotencia_qr = str(uuid.uuid4())
+    headers_chofer = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": clave_idempotencia_qr
+    }
+
+    payload_cobro = {
+        "id_pedido": id_ped,
+        "monto_total": monto_cobro,
+        "latitud": -19.0483,
+        "longitud": -65.2598,
+        "pagos": [
+            {
+                "metodo": "QR",
+                "monto": monto_cobro,
+                "numero_referencia": "TRANSF-BNB-998877",
+                "id_comprobante_archivo": id_comprobante,
+                "url_comprobante": "/uploads/comprobantes/test_kevin.jpg"
+            }
+        ],
+        "observacion": "Cobro total vía QR recibido en tienda"
+    }
+
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_cobro = client.post("/api/movil/v1/chofer/cobrar", json=payload_cobro, headers=headers_chofer)
+
+    assert resp_cobro.status_code == 200, f"Fallo al registrar cobro: {resp_cobro.text}"
+    data_cobro = resp_cobro.json()
+    assert data_cobro["codigo"] == "EXITO"
+
+    tramos = data_cobro["datos"]["tramos"]
+    assert len(tramos) == 1
+    tramo_qr = tramos[0]
+    assert tramo_qr["metodo"] == "QR"
+    assert tramo_qr["estado"] == "PENDIENTE_APROBACION"
+    id_abono = tramo_qr["id_abono_cuenta_cobrar"]
+    id_cxc = tramo_qr["id_cuenta_cobrar"]
+    assert id_abono is not None, "El cobro QR debe haber generado un AbonoCuentaCobrar"
+    assert id_cxc is not None, "El cobro QR debe estar vinculado a una CuentaCobrar"
+
+    # 3. Demostrar que el abono aparece en la bandeja de Kevin: CuentasCobrarService.ListarAbonosPendientes()
+    cxc_service = CuentasCobrarService(db)
+    abonos_pendientes = cxc_service.ListarAbonosPendientes(id_sucursal=sid)
+    abono_en_bandeja = next((a for a in abonos_pendientes if a["IdAbonoCuentaCobrar"] == id_abono), None)
+
+    assert abono_en_bandeja is not None, "El abono QR debe figurar en la bandeja de pendientes de Kevin"
+    assert abono_en_bandeja["EstadoAprobacion"] == "PENDIENTE_APROBACION"
+    assert float(abono_en_bandeja["MontoAbonado"]) == monto_cobro
+    assert abono_en_bandeja["IdComprobanteArchivo"] == id_comprobante
+
+    # Demostrar que la bandeja web GET /contabilidad/cxc/abonos/pendientes también lo retorna
+    from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
+
+    kevin_row = db.execute(text("""
+        SELECT "IdUsuario", "IdRol", "AuthUserId"
+        FROM public."Usuario"
+        WHERE "IdRol" IN (4, 1)
+        LIMIT 1;
+    """)).fetchone()
+    id_kevin_user = kevin_row[0] if kevin_row else 1
+    auth_kevin_uuid = str(kevin_row[2]) if kevin_row and kevin_row[2] else str(uuid.uuid4())
+
+    kevin_test_payload = {
+        "sub": auth_kevin_uuid,
+        "email": "kevin.test@blanquita.com",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "app_metadata": {"role_id": ROL_CONTADOR, "sucursal_id": sid, "IdUsuario": id_kevin_user, "IdRol": ROL_CONTADOR},
+        "user_metadata": {"IdUsuario": id_kevin_user, "IdRol": ROL_CONTADOR, "IdSucursal": sid}
+    }
+    headers_kevin = {"Authorization": "Bearer mock_jwt_kevin"}
+
+    alcance_kevin_override = AlcanceUsuario(
+        id_usuario=id_kevin_user,
+        puede_ver_todas=True,
+        sucursales_permitidas=[sid],
+        sucursal_efectiva=sid,
+        sucursal_asignada_defecto=sid
+    )
+    app.dependency_overrides[DependenciaAlcanceSucursal] = lambda: alcance_kevin_override
+    try:
+        with patch("app.Auth.Dependencies.verificar_token", return_value=kevin_test_payload):
+            resp_bandeja_http = client.get(f"/contabilidad/cxc/abonos/pendientes?id_sucursal={sid}", headers=headers_kevin)
+        assert resp_bandeja_http.status_code == 200
+        ids_en_bandeja_http = [a["IdAbonoCuentaCobrar"] for a in resp_bandeja_http.json()]
+        assert id_abono in ids_en_bandeja_http
+    finally:
+        app.dependency_overrides.pop(DependenciaAlcanceSucursal, None)
+
+    # 4. Demostrar que el SaldoPendiente de la CuentaCobrar NO se descuenta mientras está pendiente
+    cxc_row = db.execute(text("""
+        SELECT "SaldoPendiente", "MontoTotal"
+        FROM public."CuentaCobrar"
+        WHERE "IdCuentaCobrar" = :cxc_id;
+    """), {"cxc_id": id_cxc}).fetchone()
+    assert cxc_row is not None
+    assert float(cxc_row[0]) == monto_cobro, "El saldo deudor no debe descontarse antes de la aprobación"
+
+    # 5. Kevin aprueba el abono
+    resultado_aprobacion = cxc_service.ResolverAbonoKevin(
+        id_abono=id_abono,
+        aprobado=True,
+        id_kevin=id_kevin_user,
+        observacion="Comprobante QR verificado y validado en cuenta de banco"
+    )
+    assert resultado_aprobacion is not None
+
+    # 6. Demostrar que tras la aprobación el SaldoPendiente se descuenta a 0.00
+    cxc_post = db.execute(text("""
+        SELECT "SaldoPendiente", "IdEstadoCuentaCobrar"
+        FROM public."CuentaCobrar"
+        WHERE "IdCuentaCobrar" = :cxc_id;
+    """), {"cxc_id": id_cxc}).fetchone()
+    assert float(cxc_post[0]) == 0.00, "El saldo deudor debe ser 0.00 tras la aprobación de Kevin"
+
+    # 7. Demostrar que el abono ya NO figura en los pendientes
+    abonos_post = cxc_service.ListarAbonosPendientes(id_sucursal=sid)
+    abono_post = next((a for a in abonos_post if a["IdAbonoCuentaCobrar"] == id_abono), None)
+    assert abono_post is None, "El abono aprobado ya no debe aparecer en la bandeja de pendientes"
+

@@ -15,7 +15,7 @@ Rutas expuestas bajo /api/movil/v1/chofer/*:
 
 import os
 import uuid
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, Request, Header, HTTPException, status, UploadFile, File, Form
@@ -456,6 +456,65 @@ async def registrar_cobro_movil(
     ruta_service = RutaService(db)
     cxc_service = CuentasCobrarService(db)
 
+    # Obtener IdCliente e IdSucursal del pedido para vincular cuentas por cobrar
+    ped_info = db.execute(text("""
+        SELECT p."IdCliente", c."IdSucursal", p."MontoTotal", p."NumeroPedido"
+        FROM public."Pedido" p
+        JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        WHERE p."IdPedido" = :id_ped;
+    """), {"id_ped": dto.id_pedido}).fetchone()
+
+    id_cliente = ped_info[0] if ped_info else None
+    id_sucursal_ped = ped_info[1] if ped_info else (alcance.sucursal_efectiva or 1)
+
+    # Si hay tramos bancarios (QR/Transferencia), asegurar CuentaCobrar para conectar con la bandeja de Kevin
+    id_cxc = None
+    hay_tramo_bancario = any(p.metodo.upper() in ("QR", "TRANSFERENCIA") for p in dto.pagos)
+    if hay_tramo_bancario and id_cliente:
+        cxc_existente = db.execute(text("""
+            SELECT "IdCuentaCobrar"
+            FROM public."CuentaCobrar"
+            WHERE "IdPedido" = :id_ped
+            LIMIT 1;
+        """), {"id_ped": dto.id_pedido}).fetchone()
+
+        if cxc_existente:
+            id_cxc = cxc_existente[0]
+        else:
+            cxc_cliente = db.execute(text("""
+                SELECT "IdCuentaCobrar"
+                FROM public."CuentaCobrar"
+                WHERE "IdCliente" = :id_cli AND "IdEstadoCuentaCobrar" = 1 AND "SaldoPendiente" > 0
+                ORDER BY "IdCuentaCobrar" DESC
+                LIMIT 1;
+            """), {"id_cli": id_cliente}).fetchone()
+
+            if cxc_cliente:
+                id_cxc = cxc_cliente[0]
+            else:
+                nro_ped = ped_info[3] if ped_info and ped_info[3] else f"PED-{dto.id_pedido}"
+                nueva_cxc = cxc_service.repo.CrearCuentaCobrar({
+                    "IdCliente": id_cliente,
+                    "IdPedido": dto.id_pedido,
+                    "IdNotaVenta": None,
+                    "NumeroNotaVenta": str(nro_ped),
+                    "NumeroNotaEntrega": f"NE-{dto.id_pedido}",
+                    "FechaDespacho": date.today(),
+                    "DiasMora": 0,
+                    "IdEstadoCuentaCobrar": 1,
+                    "MontoTotal": dto.monto_total,
+                    "SaldoPendiente": dto.monto_total,
+                    "FechaEmision": date.today(),
+                    "FechaVencimiento": date.today() + timedelta(days=15),
+                    "IdUsuarioRegistro": uid,
+                    "Observacion": f"Cuenta generada por cobro móvil de pedido #{dto.id_pedido}"
+                })
+                id_cxc = nueva_cxc["IdCuentaCobrar"]
+                db.execute(text('UPDATE public."CuentaCobrar" SET "IdSucursal" = :sid WHERE "IdCuentaCobrar" = :id;'), {
+                    "sid": id_sucursal_ped,
+                    "id": id_cxc
+                })
+
     for p in dto.pagos:
         metodo = p.metodo.upper()
         if metodo in ("QR", "TRANSFERENCIA"):
@@ -484,8 +543,22 @@ async def registrar_cobro_movil(
             "Observacion": obs_pago
         })
 
-        # Si el método es QR o Transferencia, generar alerta y abono pendiente para Kevin
-        if metodo in ("QR", "TRANSFERENCIA"):
+        # Si el método es QR o Transferencia, asentar en AbonoCuentaCobrar en estado PENDIENTE_APROBACION para Kevin
+        id_abono_creado = None
+        if metodo in ("QR", "TRANSFERENCIA") and id_cxc:
+            dto_abono = AbonoCuentaCobrarCrear(
+                IdCuentaCobrar=id_cxc,
+                IdMetodoPago=2,
+                MetodoPago=metodo,
+                MontoAbonado=p.monto,
+                FechaAbono=date.today(),
+                NumeroReferencia=ref,
+                IdComprobanteArchivo=p.id_comprobante_archivo,
+                Observacion=f"Cobro móvil chofer #{uid} para Pedido #{dto.id_pedido}"
+            )
+            abono_db = cxc_service.RegistrarAbonoChofer(dto_abono, id_usuario=uid)
+            id_abono_creado = abono_db.get("IdAbonoCuentaCobrar")
+
             db.execute(text("""
                 INSERT INTO public."NotificacionInterna" (
                     "IdUsuarioDestinatario", "Tipo", "Titulo", "Mensaje",
@@ -504,7 +577,9 @@ async def registrar_cobro_movil(
             "monto": p.monto,
             "numero_referencia": ref,
             "estado": "PENDIENTE_APROBACION" if metodo in ("QR", "TRANSFERENCIA") else "CONFIRMADO",
-            "id_pago_pedido": pago_db.get("IdPagoPedido") if isinstance(pago_db, dict) else None
+            "id_pago_pedido": pago_db.get("IdPagoPedido") if isinstance(pago_db, dict) else None,
+            "id_abono_cuenta_cobrar": id_abono_creado,
+            "id_cuenta_cobrar": id_cxc if metodo in ("QR", "TRANSFERENCIA") else None
         })
 
     respuesta_datos = {
