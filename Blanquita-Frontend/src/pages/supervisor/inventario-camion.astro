@@ -1,0 +1,9 @@
+---
+import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
+import TablaAsignaciones from '@/components/Logistica/Asignaciones/TablaAsignaciones';
+---
+
+<Layout title="Inventario en Camión | Papelera Blanquita">
+  <TablaAsignaciones client:only="react" usuario={usuario} vistaInicial="inventario" />
+</Layout>

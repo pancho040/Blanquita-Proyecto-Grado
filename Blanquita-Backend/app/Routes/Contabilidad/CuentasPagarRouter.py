@@ -1,10 +1,11 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import date
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import get_current_user, require_role
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_CONTADOR, ROL_GERENTE_GENERAL
 from app.Services.Contabilidad.CuentasPagarService import CuentasPagarService
 from app.Models.Contabilidad.CuentasPagarModel import (
@@ -13,7 +14,23 @@ from app.Models.Contabilidad.CuentasPagarModel import (
     DevolucionProveedorCrear, DevolucionProveedorResponse
 )
 
-CuentasPagarRouter = APIRouter(prefix="/cxp", tags=["Contabilidad - Cuentas por Pagar a Proveedores"])
+def require_cxp_multisede(
+    usuario: dict = Depends(require_role([ROL_CONTADOR, ROL_GERENTE_GENERAL])),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+) -> tuple[dict, AlcanceUsuario]:
+    """Cuentas por Pagar es un módulo global corporativo restringido a roles multisede."""
+    if not alcance.puede_ver_todas:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Cuentas por Pagar es de alcance corporativo y requiere permisos multisede."
+        )
+    return usuario, alcance
+
+CuentasPagarRouter = APIRouter(
+    prefix="/cxp",
+    tags=["Contabilidad - Cuentas por Pagar a Proveedores"],
+    dependencies=[Depends(require_cxp_multisede)]
+)
 
 PERMISOS_CXP = [ROL_CONTADOR, ROL_GERENTE_GENERAL]
 

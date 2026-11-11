@@ -4,9 +4,9 @@ import SideBar from '@/components/layout/SideBar';
 ---
 
 <Layout>
-	<SideBar client:load idRol={1} />
+	<SideBar client:idle idRol={1} />
 	<div class="contenido-con-sidebar flex min-h-screen flex-col bg-slate-50 pt-20 font-sans text-slate-900 md:pt-0">
-		<header class="bg-gradient-to-r from-c3 to-c4 px-5 py-5 text-white sm:px-7">
+		<header class="bg-slate-900 px-5 py-5 text-white sm:px-7">
 			<div class="text-xl font-extrabold">Contenido de prueba</div>
 		</header>
 		<div class="p-6">Area de contenido — se reajusta al plegar el sidebar.</div>

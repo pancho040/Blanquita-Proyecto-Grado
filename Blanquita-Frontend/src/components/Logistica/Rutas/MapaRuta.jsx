@@ -4,7 +4,6 @@ import { getLeaflet } from "@/lib/leafletLoader";
 import { Navigation, Eye, EyeOff, Maximize2, Info, ChevronDown, ChevronUp } from "lucide-react";
 
 const SUCRE_CENTER = [-19.0435, -65.258];
-let cachedLeaflet = null;
 
 export default function MapaRuta({
   puntosRuta = [],
@@ -106,7 +105,7 @@ export default function MapaRuta({
       .map((p) => [Number(p.Latitud), Number(p.Longitud)]);
 
     if (puntosConCoords.length > 1) {
-      map.fitBounds(puntosConCoords, { padding: [60, 60], maxZoom: 16 });
+      map.fitBounds(puntosConCoords, { padding: [50, 50], maxZoom: 16 });
     } else if (puntosConCoords.length === 1) {
       map.setView(puntosConCoords[0], 16);
     } else {
@@ -144,43 +143,44 @@ export default function MapaRuta({
       const lng = Number(p.Longitud);
       coordsRuta.push([lat, lng]);
 
-      // Icono numerado llamativo
+      // Icono numerado industrial con fondo oscuro de alto contraste
       const customIcon = L.divIcon({
         className: "custom-stop-marker",
         html: `
           <div style="
-            background: linear-gradient(135deg, #20A7DB 0%, #0284c7 100%);
+            background: #0F172A;
             color: #ffffff;
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
-            font-size: 14px;
-            border: 3px solid #ffffff;
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.45);
+            font-weight: 700;
+            font-size: 13px;
+            font-family: monospace;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             transform: translate(-50%, -50%);
           ">
             ${p.OrdenVisita || "•"}
           </div>
         `,
-        iconSize: [34, 34],
+        iconSize: [30, 30],
         iconAnchor: [0, 0]
       });
 
       const marker = L.marker([lat, lng], { icon: customIcon });
 
       const popupContent = `
-        <div style="font-family: inherit; font-size: 13px; line-height: 1.4; min-width: 200px;">
-          <div style="display: inline-block; background: #e0f2fe; color: #0284c7; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px; margin-bottom: 5px;">
+        <div style="font-family: inherit; font-size: 13px; line-height: 1.4; min-width: 190px;">
+          <div style="display: inline-block; background: #e0f2fe; color: #0369a1; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 2px; margin-bottom: 4px;">
             PARADA #${p.OrdenVisita}
           </div>
-          <div style="font-weight: 800; color: #0f172a; font-size: 15px;">${p.NombreCliente || "Cliente"}</div>
+          <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${p.NombreCliente || "Cliente"}</div>
           <div style="color: #334155; font-size: 12px; font-weight: 600; margin-top: 2px;">${p.NombrePuntoVenta || ""}</div>
-          <div style="color: #64748b; font-size: 12px; margin-top: 4px;">Dirección: ${p.Direccion || "Sin dirección"}</div>
-          ${p.Referencia ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 3px; font-style: italic;">Ref: ${p.Referencia}</div>` : ""}
+          <div style="color: #475569; font-size: 12px; margin-top: 3px;">Dirección: ${p.Direccion || "Sin dirección"}</div>
+          ${p.Referencia ? `<div style="color: #64748b; font-size: 12px; margin-top: 2px; font-style: italic;">Ref: ${p.Referencia}</div>` : ""}
         </div>
       `;
 
@@ -188,7 +188,7 @@ export default function MapaRuta({
       marker.addTo(layerGroup);
     });
 
-    // 2. Trazado siguiendo calles reales con OSRM (Open Source Routing Machine)
+    // 2. Trazado siguiendo calles reales con OSRM
     if (coordsRuta.length > 1) {
       setCargandoRutaVial(true);
       abortController = new AbortController();
@@ -216,38 +216,36 @@ export default function MapaRuta({
               duracionMin: Math.max(1, Math.round(r.duration / 60))
             });
 
-            // Trazo vial que respeta calles
+            // Trazo vial con azul de contraste alto #0369A1
             polylineRef.current = L.polyline(routeGeom, {
-              color: "#0284c7",
-              weight: 5,
+              color: "#0369A1",
+              weight: 4,
               opacity: 0.9,
               lineCap: "round",
               lineJoin: "round"
             }).addTo(layerGroup);
           } else {
-            // Fallback a línea directa si OSRM no responde
             polylineRef.current = L.polyline(coordsRuta, {
-              color: "#20A7DB",
-              weight: 4,
-              dashArray: "6, 6"
+              color: "#0369A1",
+              weight: 3,
+              dashArray: "5, 5"
             }).addTo(layerGroup);
           }
         })
         .catch(() => {
           if (isCancelled) return;
           setCargandoRutaVial(false);
-          // Fallback a línea directa
           polylineRef.current = L.polyline(coordsRuta, {
-            color: "#20A7DB",
-            weight: 4,
-            dashArray: "6, 6"
+            color: "#0369A1",
+            weight: 3,
+            dashArray: "5, 5"
           }).addTo(layerGroup);
         });
     } else {
       setMetricasRuta(null);
     }
 
-    // 3. Puntos de venta adicionales (Opcionales, controlados por toggle para no tapar el mapa)
+    // 3. Puntos de venta adicionales (controlados por toggle)
     if (mostrarOtrosComercios) {
       todosPuntosVenta
         .filter((pv) => pv.Latitud && pv.Longitud && !idsEnRuta.has(pv.IdPuntoVenta))
@@ -259,24 +257,24 @@ export default function MapaRuta({
             className: "custom-available-marker",
             html: `
               <div style="
-                background: #94a3b8;
+                background: #475569;
                 color: #ffffff;
-                width: 22px;
-                height: 22px;
-                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                border-radius: 4px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 font-weight: 700;
-                font-size: 11px;
-                border: 2px solid #ffffff;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                font-size: 12px;
+                border: 1px solid #ffffff;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
                 transform: translate(-50%, -50%);
               ">
                 +
               </div>
             `,
-            iconSize: [22, 22],
+            iconSize: [20, 20],
             iconAnchor: [0, 0]
           });
 
@@ -284,13 +282,13 @@ export default function MapaRuta({
 
           const popupDiv = document.createElement("div");
           popupDiv.style.fontFamily = "inherit";
-          popupDiv.style.fontSize = "12px";
+          popupDiv.style.fontSize = "13px";
           popupDiv.style.minWidth = "180px";
           popupDiv.innerHTML = `
-            <div style="color: #64748b; font-size: 10px; font-weight: 700;">COMERCIO DISPONIBLE</div>
-            <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${pv.NombreCliente}</div>
-            <div style="color: #475569; font-size: 11px;">${pv.NombrePuntoVenta}</div>
-            <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">Dirección: ${pv.Direccion}</div>
+            <div style="color: #475569; font-size: 12px; font-weight: 700;">COMERCIO DISPONIBLE</div>
+            <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${pv.NombreCliente}</div>
+            <div style="color: #334155; font-size: 12px;">${pv.NombrePuntoVenta}</div>
+            <div style="color: #475569; font-size: 12px; margin-top: 2px;">Dirección: ${pv.Direccion}</div>
           `;
 
           if (onAgregarPunto) {
@@ -299,11 +297,11 @@ export default function MapaRuta({
             btn.style.marginTop = "8px";
             btn.style.width = "100%";
             btn.style.padding = "6px 8px";
-            btn.style.backgroundColor = "#20A7DB";
+            btn.style.backgroundColor = "#0F172A";
             btn.style.color = "#ffffff";
             btn.style.border = "none";
-            btn.style.borderRadius = "5px";
-            btn.style.fontSize = "11px";
+            btn.style.borderRadius = "2px";
+            btn.style.fontSize = "12px";
             btn.style.fontWeight = "bold";
             btn.style.cursor = "pointer";
             btn.onclick = () => {
@@ -318,11 +316,11 @@ export default function MapaRuta({
         });
     }
 
-    // 4. ZOOM EXCLUSIVO: Hacer zoom SOLO a las paradas de la ruta seleccionada de forma segura
+    // 4. Zoom seguro a las paradas
     if (map && map._container && map._mapPane) {
       try {
         if (coordsRuta.length > 1) {
-          map.fitBounds(coordsRuta, { padding: [60, 60], maxZoom: 16, animate: false });
+          map.fitBounds(coordsRuta, { padding: [50, 50], maxZoom: 16, animate: false });
         } else if (coordsRuta.length === 1) {
           map.setView(coordsRuta[0], 16, { animate: false });
         } else {
@@ -349,7 +347,7 @@ export default function MapaRuta({
   }, [puntosRuta, todosPuntosVenta, rutaSeleccionada, leafletLoaded, mostrarOtrosComercios]);
 
   return (
-    <div className={`relative w-full ${altura} rounded-xl overflow-hidden border border-slate-200 shadow-md bg-slate-100`}>
+    <div className={`relative w-full ${altura} rounded overflow-hidden border border-slate-300 bg-slate-100`}>
       {/* Contenedor del mapa Leaflet */}
       <div
         ref={mapContainerRef}
@@ -357,24 +355,24 @@ export default function MapaRuta({
         style={{ minHeight: "520px", height: "100%", width: "100%" }}
       />
 
-      {/* Barra flotante superior: Métricas del trayecto por calles y botones de control */}
-      <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 z-10 pointer-events-none">
+      {/* Barra flotante superior */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap items-center justify-between gap-2 z-10 pointer-events-none">
         {/* Métricas viales */}
-        <div className="flex items-center gap-2 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 pointer-events-auto text-xs">
-          <Navigation className="h-4 w-4 text-[#20A7DB] shrink-0" />
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-slate-300 pointer-events-auto text-xs">
+          <Navigation className="h-3.5 w-3.5 text-[#1C96C5] shrink-0" />
           {puntosRuta.length === 0 ? (
-            <span className="text-slate-500 font-medium">Sin paradas en la ruta</span>
+            <span className="text-slate-600 font-medium">Sin paradas en la ruta</span>
           ) : (
-            <div className="flex items-center gap-2 text-slate-800 font-semibold">
-              <span className="text-[#20A7DB] font-bold">{puntosRuta.length} paradas</span>
+            <div className="flex items-center gap-2 text-slate-900 font-semibold font-mono tabular-nums">
+              <span className="text-[#0369A1]">{puntosRuta.length} paradas</span>
               {cargandoRutaVial ? (
-                <span className="text-slate-400 font-normal">Calculando calles...</span>
+                <span className="text-slate-500 font-normal">Calculando...</span>
               ) : metricasRuta ? (
                 <>
                   <span className="text-slate-300">•</span>
                   <span>{metricasRuta.distanciaKm} km</span>
                   <span className="text-slate-300">•</span>
-                  <span>Aprox. {metricasRuta.duracionMin} min</span>
+                  <span>~{metricasRuta.duracionMin} min</span>
                 </>
               ) : null}
             </div>
@@ -383,14 +381,14 @@ export default function MapaRuta({
 
         {/* Botones de acción flotantes */}
         <div className="flex items-center gap-1.5 pointer-events-auto">
-          {/* Botón Re-centrar zoom en la ruta */}
+          {/* Botón Re-centrar zoom */}
           <button
             onClick={reCentrarRuta}
             type="button"
-            className="flex items-center gap-1 bg-white/95 backdrop-blur-md hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 rounded-lg shadow-sm border border-slate-200 text-xs font-semibold transition-all hover:border-[#20A7DB]"
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded border border-slate-300 text-xs font-semibold transition-colors hover:border-[#1C96C5]"
             title="Ajustar zoom a todas las paradas de la ruta"
           >
-            <Maximize2 className="h-3.5 w-3.5 text-[#20A7DB]" />
+            <Maximize2 className="h-3.5 w-3.5 text-[#1C96C5]" />
             <span className="hidden sm:inline">Enfocar Ruta</span>
           </button>
 
@@ -398,49 +396,49 @@ export default function MapaRuta({
           <button
             onClick={() => setMostrarOtrosComercios(!mostrarOtrosComercios)}
             type="button"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg shadow-sm border text-xs font-semibold transition-all backdrop-blur-md ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded border text-xs font-semibold transition-colors ${
               mostrarOtrosComercios
-                ? "bg-[#20A7DB] text-white border-[#20A7DB]"
-                : "bg-white/95 text-slate-700 border-slate-200 hover:border-slate-300"
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-800 border-slate-300 hover:border-slate-400"
             }`}
             title="Mostrar u ocultar los otros puntos de venta de la ciudad"
           >
-            {mostrarOtrosComercios ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-slate-500" />}
-            <span className="hidden sm:inline">{mostrarOtrosComercios ? "Ocultar otros comercios" : "Ver otros comercios"}</span>
+            {mostrarOtrosComercios ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-slate-600" />}
+            <span className="hidden sm:inline">{mostrarOtrosComercios ? "Ocultar otros" : "Ver otros comercios"}</span>
           </button>
 
           {/* Toggle de leyenda compacta */}
           <button
             onClick={() => setMostrarLeyenda(!mostrarLeyenda)}
             type="button"
-            className="flex items-center gap-1 bg-white/95 backdrop-blur-md hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 rounded-lg shadow-sm border border-slate-200 text-xs font-semibold transition-all"
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-800 px-2.5 py-1.5 rounded border border-slate-300 text-xs font-semibold transition-colors"
             title="Información de la leyenda"
           >
-            <Info className="h-3.5 w-3.5 text-[#20A7DB]" />
+            <Info className="h-3.5 w-3.5 text-[#1C96C5]" />
             <span className="hidden sm:inline">Leyenda</span>
             {mostrarLeyenda ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
         </div>
       </div>
 
-      {/* Leyenda flotante colapsable (no tapa el mapa a menos que se solicite) */}
+      {/* Leyenda flotante colapsable */}
       {mostrarLeyenda && (
-        <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-xl shadow-lg border border-slate-200 text-xs text-slate-700 z-10 space-y-1.5 max-w-xs transition-all pointer-events-auto">
-          <div className="font-bold text-slate-900 border-b border-slate-100 pb-1 flex items-center justify-between">
-            <span>Guía del Mapa GPS</span>
-            <button onClick={() => setMostrarLeyenda(false)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">X</button>
+        <div className="absolute bottom-2.5 right-2.5 bg-white px-3 py-2.5 rounded border border-slate-300 text-xs text-slate-800 z-10 space-y-1.5 max-w-xs pointer-events-auto">
+          <div className="font-bold text-slate-900 border-b border-slate-200 pb-1 flex items-center justify-between">
+            <span>Guía de Mapa GPS</span>
+            <button onClick={() => setMostrarLeyenda(false)} className="text-slate-500 hover:text-slate-800 text-xs font-bold">X</button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#0284c7] text-white flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+            <span className="w-4 h-4 rounded bg-[#0F172A] text-white flex items-center justify-center font-bold text-xs shrink-0 font-mono">1</span>
             <span>Paradas numeradas en secuencia de entrega</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-5 h-1 bg-[#0284c7] rounded-full shrink-0"></span>
+            <span className="w-4 h-1 bg-[#0369A1] rounded shrink-0"></span>
             <span>Ruta vehicular calculada por calles (OSRM)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded-full bg-slate-400 text-white flex items-center justify-center font-bold text-[9px] shrink-0">+</span>
-            <span>Otros puntos en Sucre (haz clic para agregar)</span>
+            <span className="w-4 h-4 rounded bg-slate-600 text-white flex items-center justify-center font-bold text-xs shrink-0">+</span>
+            <span>Otros puntos en Sucre (clic para agregar)</span>
           </div>
         </div>
       )}

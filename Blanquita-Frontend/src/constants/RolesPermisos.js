@@ -134,7 +134,7 @@ export const USUARIOS_INICIALES = [
     usuario: "admin",
     correo: "admin@blanquita.bo",
     idRol: 3,
-    idSucursal: null, // Multisede General (acceso a todas las sucursales)
+    idSucursal: 1, // Sede asignada por defecto (el alcance multisede se define en usuario_sucursal_permiso)
     activo: true,
     personalizado: false,
     permisosPersonalizados: null,

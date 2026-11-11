@@ -14,15 +14,15 @@ class RutaService:
         self.repo = RutaRepository(db)
 
     # ZONAS
-    def ListarZonas(self) -> list[dict]:
-        return self.repo.ListarZonas()
+    def ListarZonas(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarZonas(id_sucursal)
 
     def CrearZona(self, dto: ZonaCrear) -> dict:
         return self.repo.CrearZona(dto.model_dump())
 
     # RUTAS
-    def ListarRutas(self, id_zona: int | None = None) -> list[dict]:
-        return self.repo.ListarRutas(id_zona)
+    def ListarRutas(self, id_zona: int | None = None, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarRutas(id_zona, id_sucursal)
 
     def ObtenerRutaDetalle(self, id_ruta: int) -> dict:
         ruta = self.repo.ObtenerRutaPorId(id_ruta)
@@ -46,8 +46,8 @@ class RutaService:
         return self.ObtenerRutaDetalle(id_ruta)
 
     # ASIGNACIONES
-    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None) -> list[dict]:
-        return self.repo.ListarAsignaciones(fecha, id_repartidor)
+    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarAsignaciones(fecha, id_repartidor, id_sucursal)
 
     def CrearAsignacion(self, dto: AsignacionRutaCrear, id_usuario_asigna: int) -> dict:
         # Verificar duplicidad (uq_asignacion_ruta_fecha)
@@ -64,8 +64,8 @@ class RutaService:
     def ActualizarAsignacion(self, id_asignacion: int, dto: AsignacionRutaActualizar) -> dict:
         return self.repo.ActualizarAsignacion(id_asignacion, dto.model_dump(exclude_unset=True))
 
-    def ListarRepartidores(self) -> list[dict]:
-        return self.repo.ListarRepartidoresActivos()
+    def ListarRepartidores(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarRepartidoresActivos(id_sucursal)
 
     def CrearRepartidor(self, dto: RepartidorCrear) -> dict:
         existe = self.repo.caller.LlamarUnRegistro(
@@ -88,8 +88,8 @@ class RutaService:
     def RegistrarTelemetriaPing(self, dto: TelemetriaPing) -> dict:
         return self.repo.RegistrarTelemetriaPing(dto.model_dump())
 
-    def ObtenerChoferesEnVivo(self) -> list[dict]:
-        return self.repo.ObtenerChoferesEnVivo()
+    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None) -> list[dict]:
+        return self.repo.ObtenerChoferesEnVivo(sucursal_id)
 
     def ObtenerTrackingAsignacion(self, id_asignacion: int) -> dict:
         res = self.repo.ObtenerTrackingPorAsignacion(id_asignacion)

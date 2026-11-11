@@ -5,12 +5,11 @@ import {
   LogOut,
   User as UserIcon,
   ShieldCheck,
-  MapPin,
 } from "lucide-react";
 import { cerrarSesion } from "@/lib/logout-client";
 import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin } from "@/constants/NavBarRoutes";
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
-import { esUsuarioGeneral, obtenerSucursalActiva, cambiarSucursalActiva } from "@/lib/sucursalContext";
+import { useBranch } from "@/stores/branchStore";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import {
   Sheet,
@@ -111,40 +110,14 @@ export default function NavBar({
 }) {
   // Inicialización idéntica en SSR y en el cliente para prevenir Hydration Mismatch
   const [esAdmin, setEsAdmin] = useState(() => Boolean(esAdminProp));
-  const [sucursalActiva, setSucursalActiva] = useState("1");
-  const [sucursales, setSucursales] = useState([
-    { id: 1, nombre: "Sucursal Central Sucre" },
-    { id: 2, nombre: "Sucursal Potosí" }
-  ]);
 
-  const esGeneral = useMemo(() => esUsuarioGeneral(usuario), [usuario]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (!esGeneral && usuario?.IdSucursal) {
-        const sucursalFija = String(usuario.IdSucursal);
-        setSucursalActiva(sucursalFija);
-        localStorage.setItem("blanquita_sucursal_activa", sucursalFija);
-      } else {
-        const guardada = localStorage.getItem("blanquita_sucursal_activa") || "todas";
-        setSucursalActiva(guardada);
-      }
-
-      fetch("/api/sucursales?solo_activas=true")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (Array.isArray(data) && data.length > 0) {
-            setSucursales(data);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [usuario, esGeneral]);
-
-  const cambiarSucursal = (nuevaId) => {
-    setSucursalActiva(nuevaId);
-    cambiarSucursalActiva(nuevaId);
-  };
+  // Store único y centralizado de alcance de sucursales
+  const {
+    sucursalActiva,
+    sucursalesPermitidas,
+    puedeVerTodas,
+    cambiarSucursal
+  } = useBranch(usuario);
 
   useEffect(() => {
     if (esAdminProp !== undefined) {
@@ -381,33 +354,6 @@ export default function NavBar({
         {/* LADO DERECHO: Rol Badge + Modo Oscuro + Perfil Dropdown */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           
-          {/* Selector Global de Sucursal: Activo y conmutador para perfil General/Admin; Distintivo fijo para personal de sede */}
-          {esGeneral ? (
-            <div className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 border border-white/30 rounded-xl px-2.5 py-1 text-white shadow-2xs transition-colors">
-              <MapPin size={13} className="text-amber-300 shrink-0" />
-              <select
-                value={sucursalActiva}
-                onChange={(e) => cambiarSucursal(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer pr-1"
-                aria-label="Seleccionar Sucursal Activa"
-              >
-                <option value="todas" className="text-slate-800 bg-white">Todas las Sedes (Consolidado)</option>
-                {sucursales.map((s) => (
-                  <option key={s.id} value={String(s.id)} className="text-slate-800 bg-white">
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 bg-white/15 border border-white/25 rounded-xl px-2.5 py-1 text-white text-xs font-semibold shadow-2xs">
-              <MapPin size={13} className="text-amber-300" />
-              <span>
-                {sucursales.find((s) => String(s.id) === String(usuario?.IdSucursal || sucursalActiva))?.nombre || (Number(usuario?.IdSucursal) === 2 ? "Sucursal Potosí" : "Sucursal Central Sucre")}
-              </span>
-            </div>
-          )}
-
           {/* Badge de Rol Ejecutivo Unificado */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-white/30 bg-white/15 text-white shadow-2xs backdrop-blur-xs">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />

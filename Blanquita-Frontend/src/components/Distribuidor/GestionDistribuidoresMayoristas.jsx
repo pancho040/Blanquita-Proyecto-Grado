@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Factory, ShoppingCart, UploadCloud, CheckCircle2, Clock, MapPin, AlertCircle, FileText, Check } from "lucide-react";
+import { Factory, UploadCloud, MapPin, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import StatusBadge from "@/components/common/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  ObtenerCatalogoStock, ListarDistribuidores, ListarPedidos,
-  CrearPedidoDistribuidor, AjustarPedidoKevin, SubirBoletaPago, AprobarDespachoKevin
+  ObtenerCatalogoStock,
+  ListarDistribuidores,
+  ListarPedidos,
+  CrearPedidoDistribuidor,
+  AjustarPedidoKevin,
+  SubirBoletaPago,
+  AprobarDespachoKevin
 } from "@/services/Distribuidor/distribuidorService";
 import { SubirArchivoComprobante } from "@/services/Logistica/EnvioService";
 import { usePaginacion } from "@/hooks/usePaginacion";
@@ -110,7 +115,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
   const abrirModalAjuste = (pedido) => {
     setModalAjuste(pedido);
     const cantInit = {};
-    pedido.detalles.forEach(d => {
+    pedido.detalles.forEach((d) => {
       cantInit[d.id] = d.cantidad_aprobada ?? d.cantidad_solicitada;
     });
     setCantidadesAjustadas(cantInit);
@@ -167,99 +172,125 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <div className="bg-sky-600 text-white p-6 rounded-2xl shadow-sm flex justify-between items-center">
+    <div className="max-w-6xl mx-auto space-y-4">
+      {/* CABECERA INDUSTRIAL MODO OPERATE */}
+      <div className="bg-white border border-slate-200 rounded p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Factory className="w-6 h-6" /> Portal de Distribuidores Externos
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Factory className="w-5 h-5 text-slate-700" /> Portal de Distribuidores Externos
           </h1>
-          <p className="text-xs text-sky-100 mt-1">
+          <p className="text-xs text-slate-500 mt-0.5">
             Gestión mayorista para Oruro, Tarija, La Paz y Tupiza con validación estricta en planta
           </p>
         </div>
-        <div className="flex gap-2">
-          {["pedidos", "nuevo_pedido", "catalogo"].map((tab) => (
+        <div className="flex items-center gap-1.5 self-stretch sm:self-auto">
+          {[
+            { id: "pedidos", label: "Bandeja de Pedidos" },
+            { id: "nuevo_pedido", label: "+ Crear Pedido" },
+            { id: "catalogo", label: "Stock en Planta" }
+          ].map((tab) => (
             <button
-              key={tab}
-              onClick={() => setTabActiva(tab)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                tabActiva === tab ? "bg-white text-sky-700 shadow-sm" : "bg-white/20 text-white"
+              key={tab.id}
+              type="button"
+              onClick={() => setTabActiva(tab.id)}
+              className={`h-8 px-3 rounded text-xs font-medium transition-colors ${
+                tabActiva === tab.id
+                  ? "bg-slate-900 text-white"
+                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
               }`}
             >
-              {tab === "pedidos" ? "Bandeja de Pedidos" : tab === "nuevo_pedido" ? "+ Crear Pedido" : "Stock en Planta"}
+              {tab.label}
             </button>
           ))}
         </div>
       </div>
 
       {cargando ? (
-        <div className="p-8 text-center text-slate-500">Cargando datos mayoristas...</div>
+        <div className="bg-white border border-slate-200 rounded p-8 text-center text-xs text-slate-500">
+          Cargando datos mayoristas...
+        </div>
       ) : tabActiva === "pedidos" ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {pedidos.length === 0 ? (
-            <div className="bg-white p-10 rounded-2xl border text-center text-slate-500">
+            <div className="bg-white border border-slate-200 rounded p-8 text-center text-xs text-slate-500">
               No hay pedidos mayoristas registrados.
             </div>
           ) : (
             paginacionPedidos.itemsPaginados.map((ped, idx) => (
-              <div key={`ped-${ped.id || idx}`} className="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
-                <div className="flex justify-between items-start">
+              <div key={`ped-${ped.id || idx}`} className="bg-white border border-slate-200 rounded p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-800 text-base">{ped.codigo_pedido}</span>
-                      <Badge className={
-                        ped.estado === "APROBADO_DESPACHO" ? "bg-emerald-500" :
-                        ped.estado === "COMPROBANTE_SUBIDO" ? "bg-sky-600" :
-                        ped.estado === "PROFORMA_AJUSTADA" ? "bg-amber-500" : "bg-slate-500"
-                      }>
-                        {ped.estado}
-                      </Badge>
+                      <span className="font-semibold text-slate-900 text-sm font-mono">{ped.codigo_pedido}</span>
+                      <StatusBadge status={ped.estado} />
                     </div>
                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-sky-600" />
-                      {ped.nombre_distribuidor} ({ped.ciudad}) • {new Date(ped.fecha_pedido).toLocaleDateString()}
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{ped.nombre_distribuidor} ({ped.ciudad}) • {new Date(ped.fecha_pedido).toLocaleDateString()}</span>
                     </p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 font-medium">Monto Total</span>
-                    <p className="text-lg font-bold text-sky-700">Bs. {Number(ped.monto_total).toFixed(2)}</p>
+                  <div className="text-left sm:text-right">
+                    <span className="text-xs text-slate-500 block">Monto Total</span>
+                    <p className="text-base font-semibold font-mono tabular-nums text-slate-900">
+                      Bs. {Number(ped.monto_total).toFixed(2)}
+                    </p>
                   </div>
                 </div>
 
-                <div className="border rounded-xl p-3 bg-slate-50 divide-y text-xs">
-                  {ped.detalles.map(d => (
-                    <div key={d.id} className="py-2 flex justify-between items-center">
-                      <span className="font-medium text-slate-800">{d.nombre_producto || `Presentación #${d.presentacion_id}`}</span>
-                      <div className="flex gap-4 text-slate-600">
+                <div className="border border-slate-200 rounded p-2.5 bg-slate-50 divide-y divide-slate-200 text-xs">
+                  {ped.detalles.map((d) => (
+                    <div key={d.id} className="py-1.5 flex justify-between items-center">
+                      <span className="font-medium text-slate-800">
+                        {d.nombre_producto || `Presentación #${d.presentacion_id}`}
+                      </span>
+                      <div className="flex items-center gap-4 text-slate-600 font-mono tabular-nums">
                         <span>Sol: {d.cantidad_solicitada}</span>
                         {d.cantidad_aprobada !== null && (
-                          <span className="text-sky-700 font-semibold">Aprob: {d.cantidad_aprobada}</span>
+                          <span className="text-slate-900 font-medium">Aprob: {d.cantidad_aprobada}</span>
                         )}
-                        <span>Bs. {d.subtotal.toFixed(2)}</span>
+                        <span className="font-semibold">Bs. {d.subtotal.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t">
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   {esSupervisorOAdmin && ped.estado === "PENDIENTE_REVISION" && (
-                    <Button size="sm" onClick={() => abrirModalAjuste(ped)} className="text-xs bg-amber-600 hover:bg-amber-700">
+                    <Button
+                      size="sm"
+                      onClick={() => abrirModalAjuste(ped)}
+                      className="h-8 text-xs font-medium rounded bg-amber-600 hover:bg-amber-700 text-white"
+                    >
                       Revisar y Ajustar Cantidades
                     </Button>
                   )}
                   {ped.estado === "PROFORMA_AJUSTADA" && (
-                    <Button size="sm" variant="outline" onClick={() => setModalBoleta(ped)} className="text-xs gap-1">
-                      <UploadCloud className="w-4 h-4 text-sky-600" /> Adjuntar Boleta de Depósito
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setModalBoleta(ped)}
+                      className="h-8 text-xs font-medium rounded border-slate-200 text-slate-700 hover:bg-slate-50 gap-1"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5 text-slate-500" /> Adjuntar Boleta de Depósito
                     </Button>
                   )}
                   {ped.url_comprobante && (
-                    <a href={ped.url_comprobante} target="_blank" rel="noreferrer" className="text-xs text-sky-600 underline self-center px-2">
+                    <a
+                      href={ped.url_comprobante}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-[#0369A1] hover:underline font-medium self-center px-1"
+                    >
                       Ver Boleta
                     </a>
                   )}
                   {esSupervisorOAdmin && ped.estado === "COMPROBANTE_SUBIDO" && (
-                    <Button size="sm" onClick={() => handleAprobarDespacho(ped.id)} className="text-xs bg-emerald-600 hover:bg-emerald-700 gap-1">
-                      <Check className="w-4 h-4" /> Autorizar Despacho
+                    <Button
+                      size="sm"
+                      onClick={() => handleAprobarDespacho(ped.id)}
+                      className="h-8 text-xs font-medium rounded bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Autorizar Despacho
                     </Button>
                   )}
                 </div>
@@ -269,16 +300,18 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
           {pedidos.length > 0 && <PaginacionTabla {...paginacionPedidos} />}
         </div>
       ) : tabActiva === "nuevo_pedido" ? (
-        <form onSubmit={handleCrearPedido} className="bg-white p-6 rounded-2xl border shadow-sm space-y-6">
+        <form onSubmit={handleCrearPedido} className="bg-white border border-slate-200 rounded p-4 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-700 uppercase">Distribuidor Destino</label>
+            <label className="text-xs font-semibold text-slate-700 uppercase block mb-1">
+              Distribuidor Destino
+            </label>
             <select
               value={distribuidorId}
               onChange={(e) => setDistribuidorId(e.target.value)}
-              className="w-full mt-1.5 p-2.5 rounded-lg border text-sm bg-slate-50"
+              className="w-full h-8 px-2.5 rounded border border-slate-200 text-xs bg-white text-slate-800"
               required
             >
-              {distribuidores.map(d => (
+              {distribuidores.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.nombre_comercial} ({d.ciudad}) - Contacto: {d.contacto_nombre}
                 </option>
@@ -287,23 +320,23 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
           </div>
 
           <div>
-            <h2 className="text-xs font-semibold text-slate-700 uppercase mb-3">
+            <h2 className="text-xs font-semibold text-slate-700 uppercase mb-2">
               Catálogo Mayorista y Stock en Planta (Planta Sucre)
             </h2>
-            <div className="border rounded-xl overflow-hidden divide-y text-xs">
-              <div className="bg-slate-100 p-3 font-semibold grid grid-cols-12 text-slate-700">
+            <div className="border border-slate-200 rounded overflow-hidden divide-y divide-slate-100 text-xs">
+              <div className="bg-slate-50 p-2.5 font-medium grid grid-cols-12 text-slate-700 uppercase text-xs">
                 <span className="col-span-6">Producto</span>
-                <span className="col-span-3 text-center">Stock Disponible en Planta</span>
+                <span className="col-span-3 text-center">Stock Disponible</span>
                 <span className="col-span-3 text-center">Cantidad Solicitada</span>
               </div>
-              {catalogo.map(c => (
-                <div key={c.presentacion_id} className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
+              {catalogo.map((c) => (
+                <div key={c.presentacion_id} className="p-2.5 grid grid-cols-12 items-center hover:bg-slate-50">
                   <div className="col-span-6">
-                    <p className="font-semibold text-slate-800">{c.producto_nombre}</p>
-                    <p className="text-[11px] text-slate-400">{c.codigo_presentacion} • {c.tipo_contenedor}</p>
+                    <p className="font-medium text-slate-900">{c.producto_nombre}</p>
+                    <p className="text-xs text-slate-500">{c.codigo_presentacion} • {c.tipo_contenedor}</p>
                   </div>
-                  <span className="col-span-3 text-center font-bold text-sky-700">
-                    {c.stock_disponible} paquetes
+                  <span className="col-span-3 text-center font-mono tabular-nums font-semibold text-slate-800">
+                    {c.stock_disponible} paq.
                   </span>
                   <div className="col-span-3 flex justify-center">
                     <Input
@@ -313,7 +346,7 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
                       value={carrito[c.presentacion_id] || ""}
                       onChange={(e) => handleCantidadCarrito(c.presentacion_id, e.target.value)}
                       placeholder="0"
-                      className="w-24 text-center text-xs h-8"
+                      className="w-24 text-center text-xs h-7 rounded border-slate-200 font-mono tabular-nums"
                     />
                   </div>
                 </div>
@@ -321,19 +354,40 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
             </div>
           </div>
 
-          <Button type="submit" disabled={enviandoPedido} className="w-full bg-sky-600 hover:bg-sky-700 font-bold py-3 rounded-xl">
+          <div>
+            <label className="text-xs font-semibold text-slate-700 uppercase block mb-1">
+              Observaciones Adicionales
+            </label>
+            <Input
+              type="text"
+              placeholder="Notas opcionales de entrega o transporte..."
+              value={observacionDist}
+              onChange={(e) => setObservacionDist(e.target.value)}
+              className="text-xs h-8 rounded border-slate-200"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={enviandoPedido}
+            className="w-full bg-[#1C96C5] hover:bg-[#157A9E] text-white font-medium h-9 text-xs rounded"
+          >
             {enviandoPedido ? "Enviando Pedido..." : "Enviar Pedido a Revisión"}
           </Button>
         </form>
       ) : (
-        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
-          <h2 className="text-sm font-bold text-slate-800">Stock Físico de Planta Sucre (Solo Lectura)</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded p-4 space-y-3">
+          <h2 className="text-xs font-bold text-slate-900 uppercase">
+            Stock Físico de Planta Sucre (Solo Lectura)
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {paginacionCatalogo.itemsPaginados.map((c, idx) => (
-              <div key={`cat-${c.presentacion_id || idx}`} className="p-4 bg-slate-50 rounded-xl border">
-                <p className="font-semibold text-slate-800 text-sm">{c.producto_nombre}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{c.tipo_contenedor}</p>
-                <p className="text-xl font-bold text-sky-700 mt-2">{c.stock_disponible} paq.</p>
+              <div key={`cat-${c.presentacion_id || idx}`} className="p-3 bg-white border border-slate-200 rounded">
+                <p className="font-medium text-slate-900 text-xs">{c.producto_nombre}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{c.tipo_contenedor}</p>
+                <p className="text-base font-semibold font-mono tabular-nums text-slate-900 mt-2">
+                  {c.stock_disponible} paq.
+                </p>
               </div>
             ))}
           </div>
@@ -343,26 +397,28 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
 
       {/* Modal Ajuste Supervisión */}
       <Dialog open={!!modalAjuste} onOpenChange={() => setModalAjuste(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg rounded border border-slate-200">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold">Ajustar Proforma de Pedido</DialogTitle>
+            <DialogTitle className="text-sm font-bold text-slate-900">Ajustar Proforma de Pedido</DialogTitle>
           </DialogHeader>
           {modalAjuste && (
-            <div className="space-y-4 pt-2 text-xs">
-              <div className="divide-y border rounded-xl p-3 bg-slate-50">
-                {modalAjuste.detalles.map(d => (
+            <div className="space-y-3 pt-2 text-xs">
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded p-2.5 bg-slate-50">
+                {modalAjuste.detalles.map((d) => (
                   <div key={d.id} className="py-2 flex justify-between items-center">
                     <span className="font-medium text-slate-800">{d.nombre_producto}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">Sol: {d.cantidad_solicitada}</span>
+                    <div className="flex items-center gap-2 font-mono tabular-nums">
+                      <span className="text-slate-500 text-xs">Sol: {d.cantidad_solicitada}</span>
                       <Input
                         type="number"
                         value={cantidadesAjustadas[d.id] ?? d.cantidad_solicitada}
-                        onChange={(e) => setCantidadesAjustadas({
-                          ...cantidadesAjustadas,
-                          [d.id]: e.target.value
-                        })}
-                        className="w-20 text-center text-xs h-7"
+                        onChange={(e) =>
+                          setCantidadesAjustadas({
+                            ...cantidadesAjustadas,
+                            [d.id]: e.target.value
+                          })
+                        }
+                        className="w-20 text-center text-xs h-7 rounded border-slate-200 font-mono tabular-nums"
                       />
                     </div>
                   </div>
@@ -372,9 +428,13 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
                 placeholder="Observación de ajuste para el distribuidor"
                 value={obsSupervision}
                 onChange={(e) => setObsSupervision(e.target.value)}
-                className="text-xs"
+                className="text-xs h-8 rounded border-slate-200"
               />
-              <Button onClick={handleGuardarAjuste} disabled={guardandoAjuste} className="w-full bg-sky-600 hover:bg-sky-700 text-xs">
+              <Button
+                onClick={handleGuardarAjuste}
+                disabled={guardandoAjuste}
+                className="w-full bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded"
+              >
                 {guardandoAjuste ? "Guardando..." : "Confirmar Ajuste de Proforma"}
               </Button>
             </div>
@@ -384,16 +444,21 @@ export default function GestionDistribuidoresMayoristas({ usuario }) {
 
       {/* Modal Subir Boleta */}
       <Dialog open={!!modalBoleta} onOpenChange={() => setModalBoleta(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded border border-slate-200">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold">Adjuntar Boleta de Depósito Bancario</DialogTitle>
+            <DialogTitle className="text-sm font-bold text-slate-900">Adjuntar Boleta de Depósito Bancario</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2 text-xs">
-            <p className="text-slate-500">
+          <div className="space-y-3 pt-2 text-xs">
+            <p className="text-slate-600">
               Adjunte la fotografía o comprobante de transferencia a Banco Unión por el pedido {modalBoleta?.codigo_pedido}:
             </p>
-            <input type="file" accept="image/*,application/pdf" onChange={handleSubirBoleta} className="text-xs" />
-            {subiendoBoleta && <p className="text-sky-600 animate-pulse font-medium">Subiendo archivo a storage...</p>}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleSubirBoleta}
+              className="text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+            />
+            {subiendoBoleta && <p className="text-slate-700 font-medium">Subiendo archivo a storage...</p>}
           </div>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import "leaflet/dist/leaflet.css";
 import { getLeaflet } from "@/lib/leafletLoader";
 import { toast } from "sonner";
@@ -8,32 +11,30 @@ import {
 } from "@/services/Logistica/RutaService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import StatusBadge from "@/components/common/StatusBadge";
 import ModalLiquidacionRuta from "./ModalLiquidacionRuta";
 import ModalDetalleParadasGPS from "./ModalDetalleParadasGPS";
 import ModalSimuladorGPS from "./ModalSimuladorGPS";
 import {
-  Truck,
-  MapPin,
-  RefreshCw,
   Search,
+  RefreshCw,
   BatteryCharging,
   Gauge,
   Clock,
   Radio,
   FileCheck,
-  CheckCircle2,
   Navigation,
-  Phone,
-  Maximize2,
-  Layers,
-  Sliders,
-  DollarSign
+  Maximize2
 } from "lucide-react";
 
 const SUCRE_CENTER = [-19.0435, -65.258];
-let cachedLeaflet = null;
 
-export default function RastreoChoferesGPS() {
+export default function RastreoChoferesGPS({ usuario = null }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: true,
+  });
+
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
@@ -46,7 +47,7 @@ export default function RastreoChoferesGPS() {
   const [busqueda, setBusqueda] = useState("");
   const [choferSeleccionado, setChoferSeleccionado] = useState(null);
   const [detalleAsignacion, setDetalleAsignacion] = useState(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
@@ -128,10 +129,11 @@ export default function RastreoChoferesGPS() {
   }, []);
 
   // 2. Cargar choferes en vivo
-  const cargarTelemetria = async (silencioso = false) => {
+  const cargarTelemetria = useCallback(async (silencioso = false) => {
     try {
       if (!silencioso) setCargando(true);
-      const data = await ObtenerChoferesEnVivo();
+      const sid = sucursal === "todas" ? null : sucursal;
+      const data = await ObtenerChoferesEnVivo(sid);
       setChoferes(data || []);
       setUltimaActualizacion(new Date());
     } catch (err) {
@@ -139,20 +141,22 @@ export default function RastreoChoferesGPS() {
     } finally {
       if (!silencioso) setCargando(false);
     }
-  };
+  }, [sucursal]);
 
   useEffect(() => {
-    cargarTelemetria();
-  }, []);
+    if (!cargandoAlcance) {
+      cargarTelemetria();
+    }
+  }, [sucursal, cargandoAlcance, cargarTelemetria]);
 
   // Intervalo de polling en vivo (cada 8 segundos)
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || cargandoAlcance) return;
     const interval = setInterval(() => {
       cargarTelemetria(true);
     }, 8000);
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, cargandoAlcance, cargarTelemetria]);
 
   // 3. Cargar detalle de la ruta si se selecciona un chofer
   useEffect(() => {
@@ -178,7 +182,6 @@ export default function RastreoChoferesGPS() {
     const layer = markersLayerRef.current;
     layer.clearLayers();
 
-    // Asegurar tamaño del viewport de Leaflet
     mapInstanceRef.current.invalidateSize();
 
     if (routePolylineRef.current) {
@@ -194,26 +197,25 @@ export default function RastreoChoferesGPS() {
 
       const esSeleccionado = choferSeleccionado?.IdUsuarioRepartidor === ch.IdUsuarioRepartidor;
 
-      // Icono HTML moderno para el camión
+      // Icono sobrio industrial para el camión
       const truckIcon = L.divIcon({
         className: "bg-transparent border-0",
         html: `
           <div style="
             position: relative;
-            background: ${esSeleccionado ? "#1e293b" : "#20A7DB"};
+            background: ${esSeleccionado ? "#0F172A" : "#0369A1"};
             color: white;
-            border-radius: 9999px;
-            width: 38px;
-            height: 38px;
+            border-radius: 4px;
+            width: 34px;
+            height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            border: 2px solid white;
-            transition: transform 0.2s;
-            transform: ${esSeleccionado ? "scale(1.2)" : "scale(1)"};
+            border: 1px solid rgba(255,255,255,0.9);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+            transform: ${esSeleccionado ? "scale(1.15)" : "scale(1)"};
           ">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
               <path d="M15 18H9"/>
               <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
@@ -224,31 +226,30 @@ export default function RastreoChoferesGPS() {
               position: absolute;
               bottom: -2px;
               right: -2px;
-              width: 12px;
-              height: 12px;
-              border-radius: 9999px;
-              background: ${ch.EstadoMovimiento === "En Ruta" ? "#22c55e" : "#eab308"};
-              border: 2px solid white;
+              width: 10px;
+              height: 10px;
+              border-radius: 2px;
+              background: ${ch.EstadoMovimiento === "En Ruta" ? "#15803d" : "#ca8a04"};
+              border: 1px solid white;
             "></div>
           </div>
         `,
-        iconSize: [38, 38],
-        iconAnchor: [19, 19],
-        popupAnchor: [0, -20]
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -18]
       });
 
       const marker = L.marker([lat, lng], { icon: truckIcon }).addTo(layer);
 
-      // Popup informativo
       const popupHtml = `
         <div style="font-family: inherit; font-size: 12px; min-width: 220px; padding: 2px;">
           <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 2px;">
             ${ch.NombreRepartidor}
           </div>
-          <div style="color: #64748b; font-size: 11px; margin-bottom: 8px;">
+          <div style="color: #64748b; font-size: 12px; margin-bottom: 8px;">
             Ruta: <b>${ch.NombreRuta || "Sin Asignar"}</b> (${ch.NombreZona || "Sucre"})
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-bottom: 8px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; margin-bottom: 8px;">
             <div>Velocidad: <b>${ch.Velocidad || 0} km/h</b></div>
             <div>Batería: <b>${ch.Bateria || 100}%</b></div>
             <div>Paradas: <b>${ch.ParadasCompletadas || 0} / ${ch.TotalParadas || 0}</b></div>
@@ -256,7 +257,7 @@ export default function RastreoChoferesGPS() {
           </div>
           ${
             ch.Celular
-              ? `<a href="https://wa.me/591${ch.Celular}" target="_blank" style="display: block; text-align: center; background: #22c55e; color: white; padding: 4px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 11px;">Contactar WhatsApp</a>`
+              ? `<a href="https://wa.me/591${ch.Celular}" target="_blank" style="display: block; text-align: center; background: #15803d; color: white; padding: 5px; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 12px;">Contactar WhatsApp</a>`
               : ""
           }
         </div>
@@ -272,7 +273,6 @@ export default function RastreoChoferesGPS() {
     if (detalleAsignacion?.Paradas?.length > 0) {
       const puntosCoords = [];
 
-      // Incluir posición del camión
       if (choferSeleccionado?.Latitud && choferSeleccionado?.Longitud) {
         puntosCoords.push([
           parseFloat(choferSeleccionado.Latitud),
@@ -293,30 +293,30 @@ export default function RastreoChoferesGPS() {
           className: "bg-transparent border-0",
           html: `
             <div style="
-              background: ${esEntregado ? "#16a34a" : "#64748b"};
+              background: ${esEntregado ? "#15803d" : "#475569"};
               color: white;
-              border-radius: 9999px;
-              width: 24px;
-              height: 24px;
+              border-radius: 4px;
+              width: 22px;
+              height: 22px;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-weight: 800;
-              font-size: 11px;
-              border: 2px solid white;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+              font-weight: 700;
+              font-size: 12px;
+              border: 1px solid white;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.25);
             ">
               ${p.OrdenVisita || idx + 1}
             </div>
           `,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
-          popupAnchor: [0, -14]
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+          popupAnchor: [0, -12]
         });
 
         const stopMarker = L.marker([pLat, pLng], { icon: stopIcon }).addTo(layer);
         stopMarker.bindPopup(`
-          <div style="font-size: 11px; min-width: 180px;">
+          <div style="font-size: 12px; min-width: 180px;">
             <b>Parada ${p.OrdenVisita || idx + 1}: ${p.NombrePuntoVenta}</b><br/>
             <span>Cliente: ${p.NombreCliente}</span><br/>
             <span>Estado: <b>${p.EstadoEntrega}</b></span>
@@ -328,15 +328,15 @@ export default function RastreoChoferesGPS() {
       // Trazar línea de ruta
       if (puntosCoords.length > 1) {
         routePolylineRef.current = L.polyline(puntosCoords, {
-          color: detalleAsignacion.ColorHex || "#20A7DB",
-          weight: 4,
-          opacity: 0.75,
+          color: detalleAsignacion.ColorHex || "#0369A1",
+          weight: 3,
+          opacity: 0.85,
           dashArray: "6, 8"
         }).addTo(mapInstanceRef.current);
       }
     }
 
-    // Si hay choferes pero ninguno seleccionado, ajustar límites del mapa para mostrarlos a todos
+    // Ajustar límites del mapa
     if (choferes.length > 0 && !choferSeleccionado) {
       const markersCoords = choferes
         .map((ch) => [parseFloat(ch.Latitud), parseFloat(ch.Longitud)])
@@ -377,66 +377,70 @@ export default function RastreoChoferesGPS() {
   return (
     <div className="space-y-4">
       {/* BARRA SUPERIOR */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            Rastreo
-          </h2>
-        </div>
+      <PageHeader
+        title="Rastreo Satelital en Vivo"
+        subtitle="Monitoreo en tiempo real de unidades de reparto, velocidad y avance de paradas"
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => cargarTelemetria()}
+          disabled={cargando}
+          className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
+          <span>Actualizar</span>
+        </Button>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => cargarTelemetria()}
-            disabled={cargando}
-            className="text-xs font-semibold text-slate-700 h-9"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#20A7DB]" : ""}`} />
-            <span>Actualizar</span>
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setModalSimuladorAbierto(true)}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white text-xs font-semibold h-9 gap-1.5 shadow-2xs"
-          >
-            <Radio className="h-3.5 w-3.5" />
-            <span>Ubicación GPS</span>
-          </Button>
-        </div>
-      </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setModalSimuladorAbierto(true)}
+          className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded gap-1.5 shadow-none"
+        >
+          <Radio className="h-3.5 w-3.5" />
+          <span>Simulador GPS</span>
+        </Button>
+      </PageHeader>
 
       {/* CONTENIDO PRINCIPAL: MAPA Y PANEL LATERAL */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* PANEL LATERAL: LISTA DE CHOFERES */}
         <div className="lg:col-span-4 space-y-3">
-          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-3">
+          <div className="bg-white border border-slate-200 rounded p-3 space-y-2.5">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <Input
                 type="text"
                 placeholder="Buscar chofer o ruta..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-9 h-9 text-xs"
+                className="pl-8 h-8 text-xs rounded border-slate-200"
               />
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium px-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-0.5">
               <span>{choferesFiltrados.length} repartidores activos</span>
-              <span>
-                Última sincronización: {ultimaActualizacion.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              <span className="font-mono tabular-nums">
+                {ultimaActualizacion.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </span>
             </div>
           </div>
 
           {/* LISTADO DE TARJETAS DE CHOFERES */}
-          <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
             {choferesFiltrados.length === 0 ? (
-              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs">
+              <div className="bg-white border border-slate-200 rounded p-8 text-center text-slate-400 text-xs">
                 No hay repartidores disponibles.
               </div>
             ) : (
@@ -448,40 +452,32 @@ export default function RastreoChoferesGPS() {
                   <div
                     key={ch.IdUsuarioRepartidor}
                     onClick={() => centrarEnChofer(ch)}
-                    className={`p-3.5 bg-white border rounded-xl shadow-2xs cursor-pointer transition-all ${
+                    className={`p-3 bg-white border rounded cursor-pointer transition-all ${
                       esSeleccionado
-                        ? "border-[#20A7DB] ring-2 ring-[#20A7DB]/20 bg-sky-50/20"
+                        ? "border-[#1C96C5] ring-1 ring-[#1C96C5] bg-sky-50/20"
                         : "border-slate-200 hover:border-slate-300"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-bold text-slate-900 text-xs block">
+                        <span className="font-semibold text-slate-900 text-xs block">
                           {ch.NombreRepartidor}
                         </span>
-                        <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                        <span className="text-xs text-slate-500 font-medium block mt-0.5">
                           {ch.NombreRuta || "Sin Ruta Asignada"} • {ch.NombreZona || "Sucre"}
                         </span>
                       </div>
 
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          ch.EstadoMovimiento === "En Ruta"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {ch.EstadoMovimiento || "Activo"}
-                      </span>
+                      <StatusBadge status={ch.EstadoMovimiento || "Activo"} />
                     </div>
 
                     {/* SENSORES Y TELEMETRÍA */}
-                    <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2 border-t border-slate-100 text-[10px] text-slate-600">
-                      <div className="flex items-center gap-1 ">
+                    <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-100 text-xs text-slate-600 font-mono tabular-nums">
+                      <div className="flex items-center gap-1">
                         <Gauge className="h-3 w-3 text-slate-400" />
                         <span>{ch.Velocidad || 0} km/h</span>
                       </div>
-                      <div className="flex items-center gap-1 ">
+                      <div className="flex items-center gap-1">
                         <BatteryCharging className="h-3 w-3 text-emerald-600" />
                         <span>{ch.Bateria || 100}%</span>
                       </div>
@@ -493,25 +489,25 @@ export default function RastreoChoferesGPS() {
 
                     {/* PROGRESO DE PARADAS */}
                     <div className="mt-2.5">
-                      <div className="flex justify-between text-[10px] font-medium text-slate-600 mb-1">
+                      <div className="flex justify-between text-xs font-medium text-slate-600 mb-1">
                         <span>Paradas atendidas</span>
-                        <span className="font-bold">
+                        <span className="font-semibold font-mono tabular-nums">
                           {ch.ParadasCompletadas || 0} / {ch.TotalParadas || 0} ({porcentaje}%)
                         </span>
                       </div>
-                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-slate-100 rounded-xs h-1.5 overflow-hidden">
                         <div
-                          className="bg-[#20A7DB] h-1.5 rounded-full transition-all duration-500"
+                          className="bg-[#1C96C5] h-1.5 rounded-xs transition-all duration-300"
                           style={{ width: `${porcentaje}%` }}
                         ></div>
                       </div>
                     </div>
 
                     {/* RECAUDACIÓN Y BOTONES DE ACCIÓN */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                       <div>
-                        <span className="text-[10px] text-slate-500 block">Cobrado en Ruta:</span>
-                        <span className="text-xs font-bold text-emerald-700">
+                        <span className="text-xs text-slate-500 block">Cobrado en Ruta:</span>
+                        <span className="text-xs font-semibold font-mono tabular-nums text-emerald-700">
                           {formatearMonto(ch.MontoCobradoTotal)}
                         </span>
                       </div>
@@ -528,7 +524,7 @@ export default function RastreoChoferesGPS() {
                                 setIdAsignacionParaModal(ch.IdAsignacionRuta);
                                 setModalParadasAbierto(true);
                               }}
-                              className="h-7 text-[11px] font-semibold px-2 text-slate-700 hover:text-[#20A7DB]"
+                              className="h-7 text-xs font-medium px-2 rounded border-slate-200 text-slate-700 hover:text-[#1C96C5]"
                               title="Ver paradas de la ruta"
                             >
                               <Navigation className="h-3 w-3 mr-1" />
@@ -544,7 +540,7 @@ export default function RastreoChoferesGPS() {
                                 setIdAsignacionParaModal(ch.IdAsignacionRuta);
                                 setModalLiquidacionAbierto(true);
                               }}
-                              className="h-7 text-[11px] font-semibold px-2 text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+                              className="h-7 text-xs font-medium px-2 rounded text-emerald-700 hover:bg-emerald-50 border-emerald-200"
                               title="Liquidar ruta para caja"
                             >
                               <FileCheck className="h-3 w-3 mr-1" />
@@ -562,11 +558,11 @@ export default function RastreoChoferesGPS() {
         </div>
 
         {/* CONTENEDOR DEL MAPA LEAFLET */}
-        <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs relative h-[690px]">
+        <div className="lg:col-span-8 bg-white border border-slate-200 rounded overflow-hidden relative h-[660px]">
           <div
             ref={mapContainerRef}
             className="w-full h-full z-0"
-            style={{ minHeight: "690px" }}
+            style={{ minHeight: "660px" }}
           ></div>
 
           {/* CONTROLES FLOTANTES EN LA ESQUINA SUPERIOR IZQUIERDA */}
@@ -582,28 +578,28 @@ export default function RastreoChoferesGPS() {
                 }
               }}
               type="button"
-              className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 text-xs font-semibold text-slate-700 hover:text-[#20A7DB] hover:border-[#20A7DB] transition-all"
+              className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded border border-slate-200 text-xs font-medium text-slate-700 hover:text-[#1C96C5] hover:border-[#1C96C5] transition-colors"
             >
-              <Maximize2 className="h-3.5 w-3.5 text-[#20A7DB]" />
+              <Maximize2 className="h-3.5 w-3.5 text-[#1C96C5]" />
               <span>Centrar Sucre</span>
             </button>
           </div>
 
           {/* LEYENDA FLOTANTE SOBRE EL MAPA */}
-          <div className="absolute top-3 right-3 z-[400] bg-white/95 backdrop-blur-xs p-3 rounded-xl border border-slate-200 shadow-md text-xs space-y-2 pointer-events-auto">
-            <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
-              Referencia de Ruta
+          <div className="absolute top-3 right-3 z-[400] bg-white p-2.5 rounded border border-slate-200 text-xs space-y-1.5 pointer-events-auto">
+            <span className="font-semibold text-slate-800 block text-xs uppercase tracking-wider">
+              Referencia
             </span>
-            <div className="flex items-center gap-2 text-[11px] text-slate-600">
-              <span className="h-3 w-3 rounded-full bg-[#20A7DB]"></span>
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="h-2.5 w-2.5 rounded-xs bg-[#0369A1]"></span>
               <span>Camión de Reparto</span>
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-slate-600">
-              <span className="h-3 w-3 rounded-full bg-emerald-600"></span>
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="h-2.5 w-2.5 rounded-xs bg-emerald-700"></span>
               <span>Parada Entregada</span>
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-slate-600">
-              <span className="h-3 w-3 rounded-full bg-slate-500"></span>
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="h-2.5 w-2.5 rounded-xs bg-slate-500"></span>
               <span>Parada Pendiente</span>
             </div>
           </div>

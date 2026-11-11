@@ -38,13 +38,13 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
       <DialogContent className="w-full sm:max-w-4xl max-h-[95vh] overflow-y-auto p-6 sm:p-8">
         <DialogHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
           <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#20A7DB]" />
+            <FileText className="h-5 w-5 text-[#1C96C5]" />
             <span>Hoja de Ruta</span>
           </DialogTitle>
           <Button
             type="button"
             onClick={handleImprimir}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 h-8 text-xs font-semibold px-3.5 shadow-2xs"
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-8 text-xs font-semibold px-3.5 shadow-2xs"
           >
             <Printer className="h-4 w-4" />
             <span>Imprimir</span>
@@ -53,12 +53,12 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
 
         {loading ? (
           <div className="py-20 flex flex-col justify-center items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1C96C5]" />
             <p className="text-xs text-slate-500 font-medium">Cargando hoja de ruta...</p>
           </div>
         ) : (
           /* DOCUMENTO FORMAL IMPRIMIBLE */
-          <div className="p-6 bg-white border border-slate-200 rounded-xl space-y-6 text-slate-900 print:border-none print:p-0">
+          <div className="p-6 bg-white border border-slate-200 rounded space-y-6 text-slate-900 print:border-none print:p-0">
             {/* MEMBRETE CORPORATIVO */}
             <div className="border-b-2 border-slate-800 pb-4 flex justify-between items-start">
               <div>
@@ -77,7 +77,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
                   HOJA DE RUTA N°
                 </span>
-                <span className="text-lg font-black text-[#20A7DB]">
+                <span className="text-lg font-black text-[#1C96C5]">
                   HR-{asignacion?.IdAsignacionRuta?.toString().padStart(5, "0")}
                 </span>
                 <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
@@ -87,7 +87,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
             </div>
 
             {/* METADATOS DEL DESPACHO */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 rounded bg-slate-50 border border-slate-200 text-xs">
               <div>
                 <span className="text-slate-500 block uppercase text-[10px] font-bold">Conductor / Chofer</span>
                 <strong className="text-slate-900 font-semibold">{asignacion?.NombreRepartidor}</strong>
@@ -121,7 +121,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
                 Itinerario de Entrega & Firma de Conformidad ({puntos.length} clientes):
               </h3>
 
-              <div className="overflow-x-auto border border-slate-300 rounded-lg">
+              <div className="overflow-x-auto border border-slate-300 rounded">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead className="bg-slate-100 uppercase text-[11px] font-bold text-slate-700 border-b border-slate-300">
                     <tr>
@@ -194,7 +194,7 @@ export default function HojaDeRutaModal({ asignacion, abierto, onCerrar }) {
           <Button
             type="button"
             onClick={handleImprimir}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white font-semibold"
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold"
           >
             Imprimir Planilla
           </Button>

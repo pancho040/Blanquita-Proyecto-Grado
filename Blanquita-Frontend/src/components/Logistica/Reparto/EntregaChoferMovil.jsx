@@ -1,21 +1,18 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Truck, 
   CheckCircle2, 
   QrCode, 
-  Banknote, 
-  ShieldAlert, 
-  FileText, 
   UserCheck, 
-  PackagePlus, 
+  Plus, 
   X,
   CreditCard,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import FirmaDigital from "@/components/common/FirmaDigital";
 import { CrearNotaVenta, ObtenerClientesCxC } from "@/services/Contabilidad/cuentasCobrarService";
@@ -39,7 +36,7 @@ export default function EntregaChoferMovil({
   const [cargando, setCargando] = useState(true);
   const [cargandoStock, setCargandoStock] = useState(false);
 
-  // Chofer seleccionado (si es supervisor/admin puede elegir)
+  // Chofer seleccionado
   const esChofer = Number(usuario?.IdRol) === 6;
   const [choferId, setChoferId] = useState(() => {
     if (choferPreseleccionado) return Number(choferPreseleccionado);
@@ -88,7 +85,6 @@ export default function EntregaChoferMovil({
       setRepartidores(reps || []);
       setPreciosCatalogo(pre || []);
 
-      // Determinar ID del chofer activo
       let idInicial = choferPreseleccionado ? Number(choferPreseleccionado) : null;
       if (!idInicial && esChofer && usuario?.IdUsuario) {
         idInicial = Number(usuario.IdUsuario);
@@ -97,11 +93,10 @@ export default function EntregaChoferMovil({
         idInicial = Number(reps[0].IdUsuario);
       }
       if (!idInicial) {
-        idInicial = 9; // Fallback a chofer existente de prueba
+        idInicial = 9;
       }
       setChoferId(idInicial);
 
-      // Cargar inventario del chofer determinado
       if (idInicial) {
         await cargarInventarioChofer(idInicial, pre || []);
       }
@@ -118,10 +113,8 @@ export default function EntregaChoferMovil({
       const stk = await ListarInventarioChofer(cid).catch(() => []);
       setStockChofer(stk || []);
 
-      // Si las líneas actuales están vacías o no configuradas, preseleccionar la primera
       setLineas((prevLineas) => {
         if (prevLineas.length === 1 && (!prevLineas[0].presentacion_id || prevLineas[0].presentacion_id === "")) {
-          // Prioridad: primer producto con stock en camión
           if (stk && stk.length > 0) {
             return [{
               presentacion_id: String(stk[0].presentacion_id),
@@ -129,7 +122,6 @@ export default function EntregaChoferMovil({
               precio_unitario: Number(stk[0].precio_vigente_carga || 20)
             }];
           }
-          // Fallback: primer producto del catálogo
           if (catalogoPrecios && catalogoPrecios.length > 0) {
             return [{
               presentacion_id: String(catalogoPrecios[0].IdPresentacion),
@@ -147,18 +139,15 @@ export default function EntregaChoferMovil({
     }
   };
 
-  // Reaccionar al cambio de chofer
   const handleCambioChofer = async (nuevoId) => {
     const numId = Number(nuevoId);
     setChoferId(numId);
     await cargarInventarioChofer(numId);
   };
 
-  // Catálogo unificado de productos (Garantiza que NUNCA aparezca vacío)
   const productosDisponibles = useMemo(() => {
     const mapa = new Map();
 
-    // 1. Incorporar todo el catálogo comercial oficial de presentaciones
     preciosCatalogo.forEach((p) => {
       const presId = Number(p.IdPresentacion);
       mapa.set(presId, {
@@ -169,7 +158,6 @@ export default function EntregaChoferMovil({
       });
     });
 
-    // 2. Sobreponer existencias en camión del chofer actual
     stockChofer.forEach((s) => {
       const presId = Number(s.presentacion_id);
       const remanente = Number(s.cantidad_remanente) || 0;
@@ -192,7 +180,6 @@ export default function EntregaChoferMovil({
     return Array.from(mapa.values());
   }, [preciosCatalogo, stockChofer]);
 
-  // Si cambia el catálogo y la primera línea no tiene ID, asignar el primero disponible
   useEffect(() => {
     if (productosDisponibles.length > 0 && (!lineas[0]?.presentacion_id || lineas[0]?.presentacion_id === "")) {
       const primero = productosDisponibles[0];
@@ -220,7 +207,6 @@ export default function EntregaChoferMovil({
     const copia = [...lineas];
     copia[idx][campo] = valor;
 
-    // Si cambió la presentación, actualizar automáticamente su precio sugerido
     if (campo === "presentacion_id") {
       const prod = productosDisponibles.find((p) => String(p.presentacion_id) === String(valor));
       if (prod && prod.precio) {
@@ -314,7 +300,6 @@ export default function EntregaChoferMovil({
       await CrearNotaVenta(payload);
       toast.success(`Nota de Venta ${numeroNota} emitida con éxito`);
 
-      // Limpiar formulario para la siguiente entrega
       setFirmaBase64(null);
       setNombreReceptor("");
       setCiReceptor("");
@@ -322,7 +307,6 @@ export default function EntregaChoferMovil({
       setArchivoQR(null);
       setClienteSeleccionado("");
 
-      // Recargar stock remanente del camión
       if (choferId) {
         await cargarInventarioChofer(choferId);
       }
@@ -339,60 +323,68 @@ export default function EntregaChoferMovil({
 
   if (cargando) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-sky-600" />
+      <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-2">
+        <Loader2 className="w-6 h-6 animate-spin text-[#1C96C5]" />
         <p className="text-xs font-medium">Cargando catálogos y datos de entrega...</p>
       </div>
     );
   }
 
+  const itemsEnCamion = stockChofer.filter((s) => Number(s.cantidad_remanente) > 0).length;
+
   return (
-    <div className={`mx-auto space-y-5 ${enModal ? "max-w-full p-1" : "max-w-2xl p-4"}`}>
-      {/* Cabecera Informativa */}
-      <div className="bg-gradient-to-r from-sky-700 to-sky-900 text-white p-5 rounded-2xl shadow-sm flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold flex items-center gap-2">
-            <Truck className="w-5 h-5 text-sky-300" /> Registro de Entrega y Nota de Venta
-          </h1>
-          <p className="text-xs text-sky-200 mt-0.5">
-            Emisión de comprobante en ruta con firma digital y descargo de inventario
-          </p>
+    <div className={`space-y-4 ${enModal ? "p-1" : "w-full max-w-4xl mx-auto"}`}>
+      {/* Cabecera Sólida Industrial */}
+      <div className="bg-white border border-slate-200 rounded p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 bg-[#F0F9FF] border border-[#BAE6FD] rounded flex items-center justify-center text-[#1C96C5] shrink-0 mt-0.5">
+            <Truck className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">
+                Registro de Entrega & Nota de Venta
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border bg-slate-50 border-slate-200 text-slate-700">
+                {esChofer ? "Móvil Chofer" : "Panel Supervisor"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Emisión de comprobante en ruta con descargo de existencias del furgón y firma digital.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge className="bg-white/20 text-white border-0 text-xs font-normal">
-            {esChofer ? "Móvil Chofer" : "Panel Supervisor"}
-          </Badge>
-          {onCerrar && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onCerrar}
-              className="text-white hover:bg-white/20 h-7 w-7 p-0 rounded-full"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
+
+        {onCerrar && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCerrar}
+            className="h-8 px-2.5 text-xs rounded border-slate-200 text-slate-600 hover:text-slate-900"
+          >
+            <X className="w-3.5 h-3.5 mr-1" /> Cerrar
+          </Button>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-5">
-        {/* Selección de Repartidor y Camión (si es supervisor/admin o para confirmación) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 p-3.5 rounded-xl border border-slate-100">
+      <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded p-4 space-y-4">
+        {/* Sección 1: Repartidor y Camión */}
+        <div className="bg-slate-50 border border-slate-200 rounded p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
+            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
               Chofer Repartidor
             </label>
             {esChofer ? (
-              <div className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-sky-600" />
+              <div className="h-8 text-xs font-medium text-slate-800 bg-white border border-slate-300 px-2.5 rounded flex items-center gap-2">
+                <UserCheck className="w-3.5 h-3.5 text-[#1C96C5]" />
                 <span>{usuario?.NombreCompleto || "Chofer"}</span>
               </div>
             ) : (
               <select
                 value={choferId || ""}
                 onChange={(e) => handleCambioChofer(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                className="w-full h-8 text-xs rounded border border-slate-300 bg-white px-2 text-slate-800 focus:border-slate-900 focus:outline-none"
                 required
               >
                 {repartidores.map((r) => (
@@ -405,32 +397,43 @@ export default function EntregaChoferMovil({
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
-              Placa del Vehículo
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                Placa del Vehículo
+              </label>
+              <span className="text-[11px] text-slate-500">
+                {cargandoStock ? (
+                  <span className="text-[#1C96C5] flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Verificando camión...
+                  </span>
+                ) : (
+                  <span>{itemsEnCamion} presentaciones a bordo</span>
+                )}
+              </span>
+            </div>
             <Input
               type="text"
               value={placaCamion}
               onChange={(e) => setPlacaCamion(e.target.value.toUpperCase())}
               placeholder="Ej. 5738UPK"
-              className="text-xs h-9 bg-white"
+              className="h-8 text-xs rounded border-slate-300 font-mono uppercase bg-white"
               required
             />
           </div>
         </div>
 
-        {/* Cliente Receptor */}
+        {/* Sección 2: Cliente Receptor */}
         <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
-            Cliente Receptor
+          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+            Cliente Receptor / Punto de Venta *
           </label>
           <select
             value={clienteSeleccionado}
             onChange={(e) => setClienteSeleccionado(e.target.value)}
-            className="w-full p-2.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:border-sky-500"
+            className="w-full h-8 text-xs rounded border border-slate-300 bg-white px-2 text-slate-900 focus:border-slate-900 focus:outline-none"
             required
           >
-            <option value="">-- Seleccione un cliente o punto de venta --</option>
+            <option value="">-- Seleccionar cliente o punto de venta --</option>
             {clientes.map((c) => (
               <option key={c.IdCliente} value={c.IdCliente}>
                 {c.RazonSocial || c.NombreCompleto} {c.Ciudad ? `• ${c.Ciudad}` : ""} {c.NitCi ? `(NIT/CI: ${c.NitCi})` : ""}
@@ -439,233 +442,254 @@ export default function EntregaChoferMovil({
           </select>
         </div>
 
-        {/* Productos Entregados */}
+        {/* Sección 3: Tabla Industrial de Productos Entregados */}
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                Productos Entregados
-              </label>
-              {cargandoStock && (
-                <span className="text-xs text-sky-600 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Actualizando camión...
-                </span>
-              )}
-            </div>
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              Detalle de Productos Entregados
+            </span>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={agregarLinea}
-              className="h-7 text-xs gap-1 text-sky-600 border-sky-200 hover:bg-sky-50"
+              className="h-7 text-xs px-2.5 rounded border-slate-300 text-slate-700 hover:bg-slate-50 gap-1"
             >
-              <PackagePlus className="w-3.5 h-3.5" /> Agregar Ítem
+              <Plus className="w-3.5 h-3.5 text-[#1C96C5]" /> Agregar Ítem
             </Button>
           </div>
 
           {productosDisponibles.length === 0 ? (
-            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+            <div className="p-3 bg-amber-50 rounded border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>No se encontraron presentaciones activas en el catálogo ni en el camión.</span>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              {lineas.map((linea, idx) => {
-                const prodSel = productosDisponibles.find((p) => String(p.presentacion_id) === String(linea.presentacion_id));
-                const stockDisponible = prodSel ? prodSel.stockCamion : 0;
+            <div className="border border-slate-200 rounded overflow-hidden">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="px-3 py-2">Presentación / Producto a Bordo</th>
+                    <th className="px-3 py-2 text-center w-24">Cantidad</th>
+                    <th className="px-3 py-2 text-right w-28">P. Unit (Bs.)</th>
+                    <th className="px-3 py-2 text-right w-28">Subtotal (Bs.)</th>
+                    <th className="px-2 py-2 text-center w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {lineas.map((linea, idx) => {
+                    const subtotal = Number(linea.cantidad || 0) * Number(linea.precio_unitario || 0);
 
-                return (
-                  <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                    <div className="flex-1 w-full sm:w-auto">
-                      <select
-                        value={linea.presentacion_id}
-                        onChange={(e) => actualizarLinea(idx, "presentacion_id", e.target.value)}
-                        className="w-full p-2 rounded-lg border border-slate-200 text-xs bg-white focus:border-sky-500 font-medium"
-                        required
-                      >
-                        {productosDisponibles.map((prod) => (
-                          <option key={prod.presentacion_id} value={prod.presentacion_id}>
-                            {prod.stockCamion > 0
-                              ? `[Camión: ${prod.stockCamion} disp.] ${prod.nombre} - Bs. ${prod.precio}`
-                              : `[Sin stock camión] ${prod.nombre} - Bs. ${prod.precio}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-3 py-1.5">
+                          <select
+                            value={linea.presentacion_id}
+                            onChange={(e) => actualizarLinea(idx, "presentacion_id", e.target.value)}
+                            className="w-full h-8 text-xs px-2 rounded border border-slate-300 bg-white focus:border-slate-900 focus:outline-none"
+                            required
+                          >
+                            {productosDisponibles.map((prod) => (
+                              <option key={prod.presentacion_id} value={prod.presentacion_id}>
+                                {prod.stockCamion > 0
+                                  ? `[En Camión: ${prod.stockCamion} u.] ${prod.nombre}`
+                                  : `[Sin stock camión] ${prod.nombre}`}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <div className="w-24">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={linea.cantidad}
-                          onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)}
-                          className="text-xs text-center h-8"
-                          placeholder="Cant."
-                          required
-                        />
-                      </div>
+                        <td className="px-3 py-1.5 text-center">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={linea.cantidad}
+                            onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)}
+                            className="h-8 text-xs text-center font-mono tabular-nums rounded border-slate-300"
+                            required
+                          />
+                        </td>
 
-                      <div className="w-24">
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          value={linea.precio_unitario}
-                          onChange={(e) => actualizarLinea(idx, "precio_unitario", e.target.value)}
-                          className="text-xs text-center h-8"
-                          placeholder="Bs./u"
-                          required
-                        />
-                      </div>
+                        <td className="px-3 py-1.5 text-right">
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={linea.precio_unitario}
+                            onChange={(e) => actualizarLinea(idx, "precio_unitario", e.target.value)}
+                            className="h-8 text-xs text-right font-mono tabular-nums rounded border-slate-300"
+                            required
+                          />
+                        </td>
 
-                      <div className="text-xs font-bold text-slate-700 w-24 text-right pr-1">
-                        Bs. {(Number(linea.cantidad) * Number(linea.precio_unitario) || 0).toFixed(2)}
-                      </div>
+                        <td className="px-3 py-1.5 text-right font-mono tabular-nums font-semibold text-slate-900">
+                          {subtotal.toFixed(2)}
+                        </td>
 
-                      {lineas.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => eliminarLinea(idx)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
-                          title="Quitar ítem"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                        <td className="px-2 py-1.5 text-center">
+                          {lineas.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => eliminarLinea(idx)}
+                              className="text-slate-400 hover:text-red-700 p-1 rounded transition-colors inline-flex items-center justify-center"
+                              title="Eliminar ítem"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <div className="bg-slate-50 px-3 py-2 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <span className="text-[11px] text-slate-500">
+                  Descuento automático de inventario aplicado a la carga del chofer.
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-600 font-medium">Total a Cobrar:</span>
+                  <span className="text-sm font-bold font-mono tabular-nums text-slate-900">
+                    Bs. {totalBruto.toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
-
-          {/* Resumen Total y Bonificación */}
-          <div className="mt-3 p-3 bg-sky-50 rounded-xl flex flex-col sm:flex-row justify-between items-center border border-sky-100 gap-2">
-            <span className="text-xs text-sky-800 font-medium">
-              Bonificación automática por volumen y bandeo activa en sucursal
-            </span>
-            <span className="text-base font-bold text-sky-700">
-              Total a Cobrar: Bs. {totalBruto.toFixed(2)}
-            </span>
-          </div>
         </div>
 
-        {/* Modalidad de Pago */}
-        <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1.5">
+        {/* Sección 4: Modalidad de Pago */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
             Modalidad de Pago
           </label>
-          <div className="grid grid-cols-4 gap-2">
-            {["Efectivo", "QR", "Credito", "Mixto"].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMetodoPago(m)}
-                className={`py-2 text-xs rounded-xl border font-medium transition-all ${
-                  metodoPago === m
-                    ? "bg-sky-600 text-white border-sky-600 shadow-xs"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { id: "Efectivo", label: "Efectivo" },
+              { id: "QR", label: "QR Bancario" },
+              { id: "Credito", label: "Crédito CxC" },
+              { id: "Mixto", label: "Mixto" }
+            ].map((m) => {
+              const activo = metodoPago === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMetodoPago(m.id)}
+                  className={`h-8 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
+                    activo
+                      ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {m.id === "QR" && <QrCode className="w-3.5 h-3.5" />}
+                  {m.id === "Credito" && <CreditCard className="w-3.5 h-3.5" />}
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {(metodoPago === "QR" || metodoPago === "Mixto") && (
-            <div className="mt-3 p-3.5 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
-              <span className="text-xs font-semibold text-amber-900 flex items-center gap-1.5">
-                <QrCode className="w-4 h-4 text-amber-700" /> Comprobante QR Obligatorio
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
+              <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                <QrCode className="w-3.5 h-3.5 text-[#1C96C5]" /> Comprobante QR Requerido
               </span>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleSubirQR}
-                className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:bg-amber-200 file:text-amber-900 hover:file:bg-amber-300"
+                className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border file:border-slate-300 file:text-xs file:bg-white file:text-slate-700 hover:file:bg-slate-50"
               />
-              {subiendoQR && <p className="text-xs text-amber-700 animate-pulse">Subiendo imagen de comprobante...</p>}
-              {archivoQR && <p className="text-xs text-emerald-700 font-medium">Comprobante vinculado: {archivoQR}</p>}
+              {subiendoQR && <p className="text-xs text-[#1C96C5] animate-pulse">Subiendo comprobante QR...</p>}
+              {archivoQR && (
+                <p className="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Archivo adjunto: {archivoQR}
+                </p>
+              )}
             </div>
           )}
 
           {metodoPago === "Mixto" && (
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 bg-slate-50 border border-slate-200 rounded">
               <div>
-                <label className="text-xs text-slate-500 mb-0.5 block">Bs. Efectivo</label>
+                <label className="text-[11px] text-slate-600 mb-0.5 block">Bs. Efectivo</label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={montoEfectivo}
                   onChange={(e) => setMontoEfectivo(e.target.value)}
-                  className="text-xs h-8"
+                  className="text-xs h-8 text-right font-mono tabular-nums rounded border-slate-300 bg-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500 mb-0.5 block">Bs. QR</label>
+                <label className="text-[11px] text-slate-600 mb-0.5 block">Bs. QR</label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={montoQR}
                   onChange={(e) => setMontoQR(e.target.value)}
-                  className="text-xs h-8"
+                  className="text-xs h-8 text-right font-mono tabular-nums rounded border-slate-300 bg-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500 mb-0.5 block">Bs. Crédito</label>
+                <label className="text-[11px] text-slate-600 mb-0.5 block">Bs. Crédito</label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={montoCredito}
                   onChange={(e) => setMontoCredito(e.target.value)}
-                  className="text-xs h-8"
+                  className="text-xs h-8 text-right font-mono tabular-nums rounded border-slate-300 bg-white"
                 />
               </div>
             </div>
           )}
         </div>
 
-        {/* Firma Digital Táctil del Receptor */}
-        <div className="space-y-3 pt-2">
-          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4 text-sky-600" /> Firma Digital del Receptor en Punto de Venta
+        {/* Sección 5: Firma Digital Táctil del Receptor */}
+        <div className="space-y-2 pt-1 border-t border-slate-100">
+          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-[#1C96C5]" />
+            Firma Digital del Receptor en Punto de Venta *
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Input
               placeholder="Nombre completo del receptor"
               value={nombreReceptor}
               onChange={(e) => setNombreReceptor(e.target.value)}
-              className="text-xs h-9"
+              className="text-xs h-8 rounded border-slate-300 bg-white"
               required
             />
             <Input
               placeholder="C.I. del receptor"
               value={ciReceptor}
               onChange={(e) => setCiReceptor(e.target.value)}
-              className="text-xs h-9"
+              className="text-xs h-8 rounded border-slate-300 bg-white"
               required
             />
           </div>
 
-          <FirmaDigital
-            onFirmaGuardada={(data) => setFirmaBase64(data.firmaBase64)}
-            nombreFirmante={nombreReceptor || "Cliente Receptor"}
-            cargoFirmante="Receptor en Tienda / Punto de Venta"
-          />
+          <div className="border border-slate-200 rounded p-2.5 bg-slate-50">
+            <FirmaDigital
+              onFirmaGuardada={(data) => setFirmaBase64(data.firmaBase64)}
+              nombreFirmante={nombreReceptor || "Cliente Receptor"}
+              cargoFirmante="Receptor en Tienda / Punto de Venta"
+            />
+          </div>
         </div>
 
-        {/* Botón de Emisión */}
+        {/* Botón Principal de Emisión */}
         <Button
           type="submit"
           disabled={procesando || !firmaBase64 || lineas.length === 0}
-          className="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-xl shadow-sm gap-2"
+          className="w-full bg-[#1C96C5] hover:bg-[#157A9E] text-white font-medium h-9 text-xs rounded shadow-xs flex items-center justify-center gap-2 transition-colors"
         >
           {procesando ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Emitiendo Nota de Venta...</span>
+              <span>Emitiendo Nota de Venta & Descargando Camión...</span>
             </>
           ) : (
             <>

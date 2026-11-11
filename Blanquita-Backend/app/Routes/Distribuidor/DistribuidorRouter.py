@@ -1,9 +1,10 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import get_current_user, require_role
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal, resolver_alcance_usuario
 from app.Constants.Roles import ROL_CONTADOR, ROL_GERENTE_GENERAL, ROL_SUPERVISOR, ROL_DISTRIBUIDOR
 from app.Services.Distribuidor.DistribuidorService import DistribuidorService
 from app.Models.Distribuidor.DistribuidorModel import (
@@ -28,8 +29,14 @@ def consultar_catalogo_stock_disponible(
 def listar_distribuidores(
     activo: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_INTERNOS))
+    usuario: dict = Depends(require_role(PERMISOS_INTERNOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    if not alcance.puede_ver_todas:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: El catálogo de distribuidores mayoristas es de alcance corporativo y requiere permisos multisede."
+        )
     return DistribuidorService(db).ListarDistribuidores(activo)
 
 @DistribuidorRouter.get("/pedidos")
@@ -39,11 +46,20 @@ def listar_pedidos_distribuidores(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_PORTAL))
 ):
-    # Si el usuario es un distribuidor externo, solo ve sus propios pedidos
+    # Aislamiento estricto: Si el usuario es un distribuidor externo, solo ve sus propios pedidos
     if usuario.get("IdRol") == ROL_DISTRIBUIDOR:
         dist = DistribuidorService(db).repo.ObtenerDistribuidorPorUsuarioId(usuario["IdUsuario"])
-        if dist:
-            distribuidor_id = dist["id"]
+        if not dist:
+            return [] # Fallo cerrado: distribuidor sin ficha vinculada no ve pedidos de nadie
+        distribuidor_id = dist["id"]
+    else:
+        # Usuario interno (Gerente, Contador, etc.): debe ser multisede corporativo
+        alcance = resolver_alcance_usuario(id_usuario=usuario["IdUsuario"], db=db)
+        if not alcance.puede_ver_todas:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso restringido: La gestión de pedidos de distribuidores mayoristas es de alcance corporativo y requiere permisos multisede."
+            )
 
     return DistribuidorService(db).ListarPedidos(distribuidor_id, estado)
 
@@ -53,7 +69,22 @@ def obtener_pedido_detalle(
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_PORTAL))
 ):
-    return DistribuidorService(db).ObtenerPedidoDetalle(pedido_id)
+    if usuario.get("IdRol") == ROL_DISTRIBUIDOR:
+        dist = DistribuidorService(db).repo.ObtenerDistribuidorPorUsuarioId(usuario["IdUsuario"])
+        if not dist:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+        p = DistribuidorService(db).ObtenerPedidoDetalle(pedido_id)
+        if not p or p.get("distribuidor_id") != dist["id"]:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+        return p
+    else:
+        alcance = resolver_alcance_usuario(id_usuario=usuario["IdUsuario"], db=db)
+        if not alcance.puede_ver_todas:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso restringido: La gestión de pedidos de distribuidores mayoristas es de alcance corporativo y requiere permisos multisede."
+            )
+        return DistribuidorService(db).ObtenerPedidoDetalle(pedido_id)
 
 @DistribuidorRouter.post("/pedidos")
 def crear_pedido_distribuidor(

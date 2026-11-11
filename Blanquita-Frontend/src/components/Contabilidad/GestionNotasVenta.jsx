@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import {
   Truck,
   PlusCircle,
@@ -16,6 +19,7 @@ import {
   ChevronRight,
   Printer,
   FileText,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,12 +40,19 @@ import {
   ObtenerClientesCxC,
 } from "@/services/Contabilidad/cuentasCobrarService";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { SkeletonRow } from "@/components/common/LoadingStates";
 import ModalImportarExcel from "./ModalImportarExcel";
+import StatusBadge from "@/components/common/StatusBadge";
 import { ImportarNotasVenta } from "@/services/Contabilidad/importacionService";
 import { FileSpreadsheet } from "lucide-react";
 import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionNotasVenta({ usuario }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: true,
+  });
+
   const [notas, setNotas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -93,34 +104,25 @@ export default function GestionNotasVenta({ usuario }) {
   });
   const [guardandoNota, setGuardandoNota] = useState(false);
 
-  useEffect(() => {
-    cargarDatos();
-  }, [pagina, filtroEstadoPago]);
-
-  // Debounce búsqueda
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      cargarDatos();
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [busqueda]);
-
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
+      const sid = sucursal === "todas" ? null : sucursal;
+      const cacheKeyClientes = `contabilidad:clientesCxC:${sid || "todas"}`;
 
-      let clientesData = cache.get("contabilidad:clientesCxC");
+      let clientesData = cache.get(cacheKeyClientes);
       const peticiones = [
         ObtenerNotasVenta({
           page: pagina,
           limit: limite,
           estadoPago: filtroEstadoPago !== "TODOS" ? filtroEstadoPago : null,
           busqueda: busqueda.trim(),
+          idSucursal: sid,
         }),
       ];
 
       if (!clientesData) {
-        peticiones.push(ObtenerClientesCxC().catch(() => []));
+        peticiones.push(ObtenerClientesCxC(sid).catch(() => []));
       }
 
       const resultados = await Promise.all(peticiones);
@@ -129,13 +131,14 @@ export default function GestionNotasVenta({ usuario }) {
       if (!clientesData) {
         const cRes = resultados[1];
         clientesData = Array.isArray(cRes) ? cRes : cRes?.items || [];
-        cache.set("contabilidad:clientesCxC", clientesData, 300);
+        cache.set(cacheKeyClientes, clientesData, 300);
       }
 
       const items = Array.isArray(notasRes) ? notasRes : (notasRes?.items || []);
       setNotas(items);
-      setTotalRegistros(notasRes?.total != null ? notasRes.total : items.length);
-      setTotalPaginas(notasRes?.total_paginas || 1);
+      const total = notasRes?.total != null ? notasRes.total : items.length;
+      setTotalRegistros(total);
+      setTotalPaginas(notasRes?.total_paginas || Math.max(1, Math.ceil(total / limite)));
 
       setClientes(clientesData);
     } catch (err) {
@@ -143,7 +146,16 @@ export default function GestionNotasVenta({ usuario }) {
     } finally {
       setCargando(false);
     }
-  };
+  }, [pagina, limite, filtroEstadoPago, busqueda, sucursal]);
+
+  // Sincronización eficiente con debounce de 250 ms para búsqueda
+  useEffect(() => {
+    if (cargandoAlcance) return;
+    const timer = setTimeout(() => {
+      cargarDatos();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [cargarDatos, cargandoAlcance]);
 
   const verDetalle = async (nota) => {
     setNotaSeleccionada(nota);
@@ -201,10 +213,16 @@ export default function GestionNotasVenta({ usuario }) {
     if (formNota.observaciones.trim()) obsArray.push(formNota.observaciones.trim());
     const obsCompleta = obsArray.join(" | ");
 
+    if (sucursal === "todas") {
+      toast.error("Seleccione una sucursal específica para emitir notas de venta");
+      return;
+    }
+
     try {
       setGuardandoNota(true);
       await CrearNotaVenta({
         id_cliente: idCli,
+        id_sucursal: Number(sucursal),
         numero_nota: formNota.numero_nota.trim(),
         numero_camion: formNota.numero_camion.trim() || null,
         chofer: formNota.chofer.trim() || null,
@@ -258,72 +276,100 @@ export default function GestionNotasVenta({ usuario }) {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
-            <Truck className="h-7 w-7 text-[#20A7DB]" />
-            Notas de Venta
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Control de despachos, notas de venta y entregas.
-          </p>
-        </div>
+  const esModoTodas = sucursal === "todas";
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setModalImportarOpen(true)}
-            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
-            title="Importar control de notas de venta y despachos en camión desde Excel"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            <span>Importar Excel</span>
-          </Button>
-          <Button
-            onClick={() => setModalNuevaOpen(true)}
-            className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Nueva Nota
-          </Button>
+  return (
+    <div className="space-y-4">
+      {/* Encabezado Operativo */}
+      <PageHeader
+        title="Notas de Venta y Despachos"
+        subtitle="Control de despachos en camión, fletes de chofer, notas de venta y entregas comerciales."
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      >
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setModalImportarOpen(true)}
+          className="h-8 rounded border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 text-xs font-medium"
+          title="Importar control de notas de venta y despachos en camión desde Excel"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5 text-[#15803D]" />
+          <span>Importar Excel</span>
+        </Button>
+        <Button
+          disabled={esModoTodas}
+          onClick={() => {
+            if (esModoTodas) {
+              toast.info("Seleccione una sucursal para emitir notas de venta");
+              return;
+            }
+            setModalNuevaOpen(true);
+          }}
+          className={`h-8 rounded flex items-center gap-1.5 text-xs font-medium shadow-none transition-colors ${
+            esModoTodas
+              ? "bg-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-200"
+              : "bg-[#1C96C5] hover:bg-[#157A9E] text-white"
+          }`}
+          title={esModoTodas ? "Seleccione una sucursal para emitir notas de venta" : "Registrar nueva nota de venta"}
+        >
+          <PlusCircle className="h-3.5 w-3.5" />
+          <span>Nueva Nota</span>
+        </Button>
+      </PageHeader>
+
+      {/* Alerta preventiva en modo Todas */}
+      {esModoTodas && (
+        <div className="bg-sky-50 border border-sky-200 text-sky-800 text-xs px-3.5 py-2.5 rounded flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-sky-600 shrink-0" />
+          <span>
+            Visualizando notas de venta consolidadas de todas las sedes. Para emitir una nueva nota, seleccione previamente una sede específica (Sucre o Potosí).
+          </span>
         </div>
-      </div>
+      )}
 
       {/* Tarjetas Resumen */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 uppercase">Total Despachos</span>
-          <div className="text-2xl font-bold text-slate-800 mt-1">{totalRegistros}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Total Despachos</span>
+          <div className="text-xl font-bold font-mono tabular-nums text-slate-900 mt-2">{totalRegistros}</div>
+          <span className="text-[11px] text-slate-500 mt-0.5 block">Registros consolidados</span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 uppercase">Ventas al Contado</span>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">
+        <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Ventas al Contado</span>
+          <div className="text-xl font-bold font-mono tabular-nums text-[#15803D] mt-2">
             {notas.filter((n) => n.CondicionVenta === "Contado").length}
           </div>
+          <span className="text-[11px] text-[#15803D] font-medium mt-0.5 block">Cobro inmediato</span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 uppercase">Ventas a Crédito</span>
-          <div className="text-2xl font-bold text-blue-600 mt-1">
+        <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Ventas a Crédito</span>
+          <div className="text-xl font-bold font-mono tabular-nums text-[#0369A1] mt-2">
             {notas.filter((n) => n.CondicionVenta === "Crédito").length}
           </div>
+          <span className="text-[11px] text-[#0369A1] font-medium mt-0.5 block">Plazo de 15 días</span>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-slate-400 uppercase">Pendientes de Cobro</span>
-          <div className="text-2xl font-bold text-amber-600 mt-1">
+        <div className="bg-[#FFFBEB] p-3.5 rounded border border-[#FDE68A] flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-[#B45309] uppercase tracking-wider">Pendientes de Cobro</span>
+          <div className="text-xl font-bold font-mono tabular-nums text-[#B45309] mt-2">
             {notas.filter((n) => n.EstadoPago === "Pendiente" || n.EstadoPago === "Parcial").length}
           </div>
+          <span className="text-[11px] text-[#B45309] font-medium mt-0.5 block">En seguimiento CxC</span>
         </div>
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative flex-1 sm:w-80">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+      <div className="bg-white rounded border border-slate-200 overflow-hidden">
+        <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative flex-1 sm:w-80 w-full">
+            <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Buscar por N° nota, cliente, chofer o placa..."
               value={busqueda}
@@ -331,11 +377,11 @@ export default function GestionNotasVenta({ usuario }) {
                 setBusqueda(e.target.value);
                 setPagina(1);
               }}
-              className="pl-9 h-9 bg-white text-sm"
+              className="pl-8 h-8 rounded border-slate-300 bg-white text-xs w-full"
             />
           </div>
 
-          <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-medium text-slate-600">
+          <div className="flex rounded border border-slate-200 bg-white p-0.5 text-xs font-medium text-slate-600">
             {["TODOS", "Pagado", "Parcial", "Pendiente"].map((est) => (
               <button
                 key={est}
@@ -343,8 +389,8 @@ export default function GestionNotasVenta({ usuario }) {
                   setFiltroEstadoPago(est);
                   setPagina(1);
                 }}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
-                  filtroEstadoPago === est ? "bg-[#20A7DB] text-white" : "hover:text-slate-900"
+                className={`h-7 px-2.5 rounded text-xs transition-colors ${
+                  filtroEstadoPago === est ? "bg-[#1C96C5] text-white font-medium" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
                 {est}
@@ -354,27 +400,25 @@ export default function GestionNotasVenta({ usuario }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase font-semibold text-slate-600 border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">N° Nota</th>
-                <th className="py-3 px-4">Fecha</th>
-                <th className="py-3 px-4">Cliente / Destino</th>
-                <th className="py-3 px-4">Camión / Chofer</th>
-                <th className="py-3 px-4 text-center">Condición</th>
-                <th className="py-3 px-4 text-right">Flete Chofer</th>
-                <th className="py-3 px-4 text-right">Total Neto</th>
-                <th className="py-3 px-4 text-center">Estado Pago</th>
-                <th className="py-3 px-4 text-center">Acciones</th>
+                <th className="py-2.5 px-3">N° Nota</th>
+                <th className="py-2.5 px-3">Fecha</th>
+                <th className="py-2.5 px-3">Cliente / Destino</th>
+                <th className="py-2.5 px-3">Camión / Chofer</th>
+                <th className="py-2.5 px-3 text-center">Condición</th>
+                <th className="py-2.5 px-3 text-right">Flete Chofer</th>
+                <th className="py-2.5 px-3 text-right">Total Neto</th>
+                <th className="py-2.5 px-3 text-center">Estado Pago</th>
+                <th className="py-2.5 px-3 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {cargando ? (
-                <tr>
-                  <td colSpan="9" className="py-8 text-center text-slate-400">
-                    Cargando notas de venta y despachos...
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, idx) => (
+                  <SkeletonRow key={idx} cols={9} rowIdx={idx} />
+                ))
               ) : notas.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="py-8 text-center text-slate-400">
@@ -383,24 +427,24 @@ export default function GestionNotasVenta({ usuario }) {
                 </tr>
               ) : (
                 notas.map((n) => (
-                  <tr key={n.IdNotaVenta} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-bold text-xs text-[#20A7DB]">
+                  <tr key={n.IdNotaVenta} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-2 px-3 font-mono font-medium text-[#1C96C5]">
                       {n.NumeroNota}
                     </td>
-                    <td className="py-3 px-4 text-xs text-slate-500">
+                    <td className="py-2 px-3 font-mono text-slate-500">
                       {n.FechaEmision ? new Date(n.FechaEmision).toLocaleDateString("es-BO") : "-"}
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-800 text-xs">
+                    <td className="py-2 px-3">
+                      <div className="font-semibold text-slate-900 text-xs">
                         {n.RazonSocial || n.NombreComercial}
                       </div>
                       <div className="text-[11px] text-slate-400">{n.Ciudad || "Sucre"}</div>
                     </td>
-                    <td className="py-3 px-4 text-xs">
+                    <td className="py-2 px-3 text-xs">
                       {n.Chofer ? (
                         <>
-                          <div className="font-medium text-slate-700">{n.Chofer}</div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="font-medium text-slate-800">{n.Chofer}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">
                             Camión #{n.NumeroCamion || "1"} {n.Placa ? `(${n.Placa})` : ""}
                           </div>
                         </>
@@ -408,42 +452,41 @@ export default function GestionNotasVenta({ usuario }) {
                         <span className="text-slate-400">Entrega Local</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge
-                        className={
+                    <td className="py-2 px-3 text-center">
+                      <span
+                        className={`inline-flex px-1.5 py-0.5 rounded border text-[11px] font-medium ${
                           n.CondicionVenta === "Contado"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200"
-                        }
+                            ? "border-[#86EFAC] bg-[#F0FDF4] text-[#15803D]"
+                            : "border-[#BAE6FD] bg-[#F0F9FF] text-[#0369A1]"
+                        }`}
                       >
                         {n.CondicionVenta}
-                      </Badge>
+                      </span>
                     </td>
-                    <td className="py-3 px-4 text-right text-xs font-medium text-slate-600">
-                      {Number(n.FleteChofer || 0) > 0 ? `Bs. ${Number(n.FleteChofer).toFixed(2)}` : "-"}
+                    <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-700">
+                      {Number(n.FleteChofer || 0) > 0 ? `Bs. ${Number(n.FleteChofer).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold text-slate-800 whitespace-nowrap">
-                      Bs. {Number(n.TotalNeto || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+                    <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-slate-900 whitespace-nowrap">
+                      Bs. {Number(n.TotalNeto || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge
-                        className={
+                    <td className="py-2 px-3 text-center">
+                      <StatusBadge
+                        status={
                           n.EstadoPago === "Pagado"
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            ? "aprobado"
                             : n.EstadoPago === "Parcial"
-                            ? "bg-blue-100 text-blue-800 border-blue-300"
-                            : "bg-amber-100 text-amber-800 border-amber-300"
+                            ? "info"
+                            : "pendiente"
                         }
-                      >
-                        {n.EstadoPago}
-                      </Badge>
+                        label={n.EstadoPago}
+                      />
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-2 px-3 text-center">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => verDetalle(n)}
-                        className="h-7 w-7 p-0 text-slate-500 hover:text-slate-800"
+                        className="h-7 w-7 p-0 rounded text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                         title="Ver detalle del despacho"
                       >
                         <Eye className="h-3.5 w-3.5" />
@@ -478,18 +521,18 @@ export default function GestionNotasVenta({ usuario }) {
       {/* MODAL REGISTRAR NOTA */}
       {modalNuevaOpen && (
       <Dialog open={modalNuevaOpen} onOpenChange={setModalNuevaOpen}>
-        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <Truck className="h-5 w-5 text-[#20A7DB]" />
-              Registrar Nota de Venta
+        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 rounded border border-slate-300 bg-white">
+          <DialogHeader className="border-b border-slate-200 pb-3">
+            <DialogTitle className="flex items-center gap-2 text-slate-900 text-base font-semibold">
+              <Truck className="h-4 w-4 text-[#1C96C5]" />
+              Registrar Nota de Venta y Despacho
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleCrearNota} className="space-y-4">
+          <form onSubmit={handleCrearNota} className="space-y-3.5 pt-1">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   N° Nota de Venta *
                 </label>
                 <Input
@@ -497,24 +540,24 @@ export default function GestionNotasVenta({ usuario }) {
                   value={formNota.numero_nota}
                   onChange={(e) => setFormNota({ ...formNota, numero_nota: e.target.value })}
                   placeholder="Ej: NV-501"
-                  className="text-sm"
+                  className="text-xs h-8 rounded border-slate-300 font-mono"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   N° Nota de Entrega
                 </label>
                 <Input
                   value={formNota.numero_entrega}
                   onChange={(e) => setFormNota({ ...formNota, numero_entrega: e.target.value })}
                   placeholder="Ej: NE-308"
-                  className="text-sm"
+                  className="text-xs h-8 rounded border-slate-300 font-mono"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Cliente *
                 </label>
                 <select
@@ -529,7 +572,7 @@ export default function GestionNotasVenta({ usuario }) {
                       destino: cli?.Ciudad || formNota.destino,
                     });
                   }}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                 >
                   <option value="">Seleccione Cliente...</option>
                   {clientes.map((c) => (
@@ -541,13 +584,13 @@ export default function GestionNotasVenta({ usuario }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Destino / Ciudad
                 </label>
                 <select
                   value={formNota.destino}
                   onChange={(e) => setFormNota({ ...formNota, destino: e.target.value })}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                 >
                   <option value="Sucre">Sucre</option>
                   <option value="Cochabamba">Cochabamba</option>
@@ -563,82 +606,82 @@ export default function GestionNotasVenta({ usuario }) {
             </div>
 
             {/* Datos del Camión y Transporte */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded space-y-2.5">
+              <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block">
                 Transporte y Despacho
               </span>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-500 block">N° Camión</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">N° Camión</label>
                   <Input
                     value={formNota.numero_camion}
                     onChange={(e) => setFormNota({ ...formNota, numero_camion: e.target.value })}
                     placeholder="Camión 1"
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Chofer</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Chofer</label>
                   <Input
                     value={formNota.chofer}
                     onChange={(e) => setFormNota({ ...formNota, chofer: e.target.value })}
                     placeholder="Ej: Roberto Flores"
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Placa</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Placa</label>
                   <Input
                     value={formNota.placa}
                     onChange={(e) => setFormNota({ ...formNota, placa: e.target.value })}
                     placeholder="Ej: 3021-XRT"
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3 pt-1">
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Flete Chofer (Bs.)</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Flete Chofer (Bs.)</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formNota.flete_chofer}
                     onChange={(e) => setFormNota({ ...formNota, flete_chofer: e.target.value })}
                     placeholder="0.00"
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Condición de Venta</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Condición de Venta</label>
                   <select
                     value={formNota.condicion_venta}
                     onChange={(e) => setFormNota({ ...formNota, condicion_venta: e.target.value })}
-                    className="w-full text-xs h-8 rounded-md border border-slate-300 bg-white px-2 font-medium"
+                    className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                   >
                     <option value="Crédito">Crédito</option>
                     <option value="Contado">Contado</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block">Días de Crédito</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Días de Crédito</label>
                   <Input
                     type="number"
                     value={formNota.dias_credito}
                     onChange={(e) => setFormNota({ ...formNota, dias_credito: e.target.value })}
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right"
                   />
                 </div>
               </div>
             </div>
 
             {/* Desglose de Paquetes según Excel 5_CONTROL NOTAS DE VENTA */}
-            <div className="border border-slate-200 rounded-xl p-3.5 space-y-3">
-              <span className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider block">
+            <div className="border border-slate-200 rounded p-3 space-y-2.5">
+              <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block">
                 Paquetes Despachados
               </span>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
                   <label className="text-xs font-medium text-slate-600 block">MEGA 12R</label>
                   <Input
@@ -646,7 +689,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_mega_12r}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_mega_12r: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -656,7 +699,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_economico}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_economico: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -666,7 +709,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_mega_30m}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_mega_30m: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -676,7 +719,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_lux_6r}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_lux_6r: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -686,7 +729,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_lux_12r}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_lux_12r: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -696,7 +739,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_lux_24r}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_lux_24r: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -706,7 +749,7 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.paquetes_serv_500x6}
                     onChange={(e) => setFormNota({ ...formNota, paquetes_serv_500x6: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
                 <div>
@@ -716,14 +759,14 @@ export default function GestionNotasVenta({ usuario }) {
                     value={formNota.bonificacion_paquetes}
                     onChange={(e) => setFormNota({ ...formNota, bonificacion_paquetes: e.target.value })}
                     placeholder="0"
-                    className="text-xs h-8 mt-1"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right mt-1"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
+              <label className="text-xs font-medium text-slate-700 block mb-1">
                 Observaciones del Despacho
               </label>
               <Textarea
@@ -731,15 +774,15 @@ export default function GestionNotasVenta({ usuario }) {
                 value={formNota.observaciones}
                 onChange={(e) => setFormNota({ ...formNota, observaciones: e.target.value })}
                 placeholder="Ruta Sucre-Santa Cruz, entrega directa en almacén..."
-                className="text-xs"
+                className="text-xs rounded border-slate-300"
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalNuevaOpen(false)}>
+            <DialogFooter className="gap-2 pt-2 border-t border-slate-200">
+              <Button type="button" variant="outline" onClick={() => setModalNuevaOpen(false)} className="h-8 rounded text-xs border-slate-300">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={guardandoNota} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+              <Button type="submit" disabled={guardandoNota} className="h-8 rounded bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium">
                 {guardandoNota ? "Guardando..." : "Confirmar Despacho"}
               </Button>
             </DialogFooter>
@@ -764,105 +807,105 @@ export default function GestionNotasVenta({ usuario }) {
       {/* MODAL DETALLE DE LA NOTA */}
       {modalDetalleOpen && (
       <Dialog open={modalDetalleOpen} onOpenChange={setModalDetalleOpen}>
-        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-          <DialogHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-slate-900 text-lg font-bold">
-              <FileText className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 rounded border border-slate-300 bg-white">
+          <DialogHeader className="border-b border-slate-200 pb-3 flex flex-row items-center justify-between print:hidden">
+            <DialogTitle className="flex items-center gap-2 text-slate-900 text-base font-semibold">
+              <FileText className="h-4 w-4 text-[#1C96C5]" />
               <span>Nota Oficial de Venta & Despacho: {detalleNota?.NumeroNota || notaSeleccionada?.NumeroNota}</span>
             </DialogTitle>
             <Button
               type="button"
               onClick={() => window.print()}
-              className="bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 h-8 text-xs font-semibold px-3 shadow-2xs"
+              className="bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-8 text-xs font-medium px-3 rounded"
             >
-              <Printer className="h-4 w-4" />
+              <Printer className="h-3.5 w-3.5" />
               <span>Imprimir Nota / Recibo</span>
             </Button>
           </DialogHeader>
 
           {detalleNota && (
-            <div className="space-y-5 print:p-0">
+            <div className="space-y-4 print:p-0 pt-1">
               {/* MEMBRETE CORPORATIVO FORMAL */}
-              <div className="border-b-2 border-slate-800 pb-3 flex justify-between items-start">
+              <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-start">
                 <div>
-                  <h1 className="text-xl font-black uppercase tracking-wider text-slate-900">
+                  <h1 className="text-base font-bold uppercase tracking-wider text-slate-900">
                     Empresa de Papel Blanquita (Shema Asociados S.R.L.)
                   </h1>
-                  <p className="text-xs font-semibold text-slate-600 uppercase">
+                  <p className="text-[11px] font-medium text-slate-600 uppercase">
                     División Comercial, Despacho y Facturación • Sucre, Bolivia
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[10px] text-slate-500 mt-0.5">
                     Calle Regimiento Charcas N° 37 • Tel: (4) 64-51234 • NIT: 1024589028
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
                     NOTA DE VENTA N°
                   </span>
-                  <span className="text-lg font-black text-[#20A7DB]">
+                  <span className="text-base font-mono font-bold text-[#1C96C5]">
                     {detalleNota.NumeroNota || "NV-000"}
                   </span>
-                  <span className="text-xs font-semibold text-slate-700 block mt-0.5">
+                  <span className="text-xs font-mono text-slate-700 block mt-0.5">
                     Fecha: {detalleNota.FechaVenta ? new Date(detalleNota.FechaVenta).toLocaleDateString("es-BO") : new Date().toLocaleDateString("es-BO")}
                   </span>
                 </div>
               </div>
 
               {/* DATOS DE LA OPERACIÓN Y CLIENTE */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                 <div>
-                  <strong className="text-slate-500 block font-medium">Cliente / Razón Social:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.RazonSocial}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Cliente / Razón Social:</strong>
+                  <span className="font-semibold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.RazonSocial}</span>
                 </div>
                 <div>
-                  <strong className="text-slate-500 block font-medium">Destino / Ciudad:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.Ciudad || "Sucre"}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Destino / Ciudad:</strong>
+                  <span className="font-semibold text-slate-900 mt-0.5 block">{detalleNota.Cliente?.Ciudad || "Sucre"}</span>
                 </div>
                 <div>
-                  <strong className="text-slate-500 block font-medium">Transportista / Chofer:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Chofer || "No asignado"}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Transportista / Chofer:</strong>
+                  <span className="font-semibold text-slate-900 mt-0.5 block">{detalleNota.Chofer || "No asignado"}</span>
                 </div>
                 <div>
-                  <strong className="text-slate-500 block font-medium">Placa Camión:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.Placa || "-"}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Placa Camión:</strong>
+                  <span className="font-mono text-slate-900 mt-0.5 block">{detalleNota.Placa || "-"}</span>
                 </div>
                 <div>
-                  <strong className="text-slate-500 block font-medium">Condición de Venta:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">{detalleNota.CondicionVenta}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Condición de Venta:</strong>
+                  <span className="font-semibold text-slate-900 mt-0.5 block">{detalleNota.CondicionVenta}</span>
                 </div>
                 <div>
-                  <strong className="text-slate-500 block font-medium">Flete de Chofer:</strong>
-                  <span className="font-bold text-slate-900 mt-0.5 block">Bs. {Number(detalleNota.FleteChofer || 0).toFixed(2)}</span>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Flete de Chofer:</strong>
+                  <span className="font-mono tabular-nums text-slate-900 mt-0.5 block">Bs. {Number(detalleNota.FleteChofer || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="sm:col-span-2">
-                  <strong className="text-slate-500 block font-medium">Observaciones:</strong>
+                  <strong className="text-slate-500 block font-medium uppercase text-[10px]">Observaciones:</strong>
                   <span className="text-slate-700 mt-0.5 block">{detalleNota.Observacion || "Despacho regular conforme a pedido."}</span>
                 </div>
               </div>
 
               {/* TABLA DE ÍTEMS */}
               <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 mb-2">
+                <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-700 mb-2">
                   Ítems y Productos Despachados
                 </h4>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="border border-slate-200 rounded overflow-hidden">
                   <table className="w-full text-left text-xs text-slate-700">
                     <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-600 border-b border-slate-200">
                       <tr>
-                        <th className="py-2.5 px-3">Presentación / Producto</th>
-                        <th className="py-2.5 px-3 text-center">Cantidad Paquetes</th>
-                        <th className="py-2.5 px-3 text-right">Precio Unitario</th>
-                        <th className="py-2.5 px-3 text-right">Subtotal</th>
+                        <th className="py-2 px-3">Presentación / Producto</th>
+                        <th className="py-2 px-3 text-center">Cantidad Paquetes</th>
+                        <th className="py-2 px-3 text-right">Precio Unitario</th>
+                        <th className="py-2 px-3 text-right">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {detalleNota.Detalles?.map((d) => (
-                        <tr key={d.IdDetalleNota} className="hover:bg-slate-50/50">
-                          <td className="py-2.5 px-3 font-semibold text-slate-900">{d.Presentacion}</td>
-                          <td className="py-2.5 px-3 text-center font-bold">{d.PaquetesEntregados}</td>
-                          <td className="py-2.5 px-3 text-right ">Bs. {Number(d.PrecioUnitario || 0).toFixed(2)}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                            Bs. {Number(d.Subtotal || 0).toFixed(2)}
+                        <tr key={d.IdDetalleNota} className="hover:bg-slate-50">
+                          <td className="py-2 px-3 font-semibold text-slate-900">{d.Presentacion}</td>
+                          <td className="py-2 px-3 text-center font-mono tabular-nums font-bold">{d.PaquetesEntregados}</td>
+                          <td className="py-2 px-3 text-right font-mono tabular-nums">Bs. {Number(d.PrecioUnitario || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
+                            Bs. {Number(d.Subtotal || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       ))}
@@ -872,29 +915,29 @@ export default function GestionNotasVenta({ usuario }) {
               </div>
 
               {/* TOTALES */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm gap-3">
-                <span className="font-bold text-slate-700">Total Importe Neto de la Operación:</span>
-                <span className="font-black text-lg text-[#20A7DB]">
-                  Bs. {Number(detalleNota.TotalNeto || 0).toFixed(2)}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-slate-50 rounded border border-slate-200 text-xs gap-2">
+                <span className="font-semibold text-slate-700">Total Importe Neto de la Operación:</span>
+                <span className="font-mono tabular-nums font-bold text-base text-[#1C96C5]">
+                  Bs. {Number(detalleNota.TotalNeto || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
               {/* SECCIÓN FORMAL DE FIRMAS IMPRIMIBLE */}
-              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs text-slate-600">
-                <div className="border-t border-slate-400 pt-2">
-                  <p className="font-bold text-slate-800">Entregado Conforme</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Firma Transportista / Despacho</p>
+              <div className="pt-6 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs text-slate-600">
+                <div className="border-t border-slate-400 pt-1.5">
+                  <p className="font-semibold text-slate-800">Entregado Conforme</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Firma Transportista / Despacho</p>
                 </div>
-                <div className="border-t border-slate-400 pt-2">
-                  <p className="font-bold text-slate-800">Recibido Conforme</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Firma y Sello del Cliente</p>
+                <div className="border-t border-slate-400 pt-1.5">
+                  <p className="font-semibold text-slate-800">Recibido Conforme</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Firma y Sello del Cliente</p>
                 </div>
               </div>
             </div>
           )}
 
-          <DialogFooter className="border-t border-slate-100 pt-3">
-            <Button variant="outline" onClick={() => setModalDetalleOpen(false)}>
+          <DialogFooter className="border-t border-slate-200 pt-3 print:hidden">
+            <Button variant="outline" onClick={() => setModalDetalleOpen(false)} className="h-8 rounded text-xs border-slate-300">
               Cerrar
             </Button>
           </DialogFooter>

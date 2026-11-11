@@ -80,8 +80,8 @@ class RRHHService:
     def ListarEmpleados(self, busqueda: str = "", area: str = "", activo: bool | None = None, es_asegurado: bool | None = None, id_sucursal: int | None = None) -> list[dict]:
         return self.repository.ListarEmpleados(busqueda, area, activo, es_asegurado, id_sucursal)
 
-    def ListarEmpleadosSimple(self, area: str = "") -> list[dict]:
-        return self.repository.ListarEmpleadosSimple(area)
+    def ListarEmpleadosSimple(self, area: str = "", id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarEmpleadosSimple(area, id_sucursal)
 
     def ObtenerEmpleado(self, id_usuario: int) -> dict:
         emp = self.repository.ObtenerEmpleadoPorId(id_usuario)
@@ -138,8 +138,8 @@ class RRHHService:
     # =========================================================================
     # 3. CRONOGRAMA DE TURNOS SEMANAL
     # =========================================================================
-    def ObtenerCronograma(self, fecha_inicio: date, fecha_fin: date, area: str = "") -> list[dict]:
-        return self.repository.ListarCronograma(fecha_inicio, fecha_fin, area)
+    def ObtenerCronograma(self, fecha_inicio: date, fecha_fin: date, area: str = "", id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarCronograma(fecha_inicio, fecha_fin, area, id_sucursal)
 
     def AsignarTurno(self, id_usuario: int, id_turno: int, fecha: date, area: str = "", observacion: str = "") -> dict:
         return self.repository.AsignarTurno(id_usuario, id_turno, fecha, area, observacion)
@@ -163,8 +163,9 @@ class RRHHService:
     # =========================================================================
     # 4. ASISTENCIA & BIOMÉTRICO (NG-ECO / ZKTECO)
     # =========================================================================
-    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None, id_usuario: int | None = None, area: str = "") -> list[dict]:
-        return self.repository.ListarAsistencias(fecha_inicio, fecha_fin, id_usuario, area)
+    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None,
+                          id_usuario: int | None = None, area: str = "", id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarAsistencias(fecha_inicio, fecha_fin, id_usuario, area, id_sucursal)
 
     def ActualizarAsistencia(self, id_asistencia: int, datos: dict) -> dict:
         asist = self.repository.ObtenerAsistenciaPorId(id_asistencia)
@@ -360,7 +361,8 @@ class RRHHService:
         # 2. Limpiar detalles previos para recalcular
         self.repository.EliminarDetallesPlanilla(id_planilla)
 
-        # 3. Filtrar empleados según el tipo de planilla
+        # 3. Filtrar empleados según el tipo de planilla y pre-cargar datos en batch
+        detalles_a_crear = []
         if tipo == "OFICIAL":
             # Planilla Oficial para Ministerio de Trabajo y Gestora: solo personal Asegurado
             empleados = self.repository.ListarEmpleados(activo=True, es_asegurado=True, id_sucursal=id_sucursal)
@@ -373,7 +375,7 @@ class RRHHService:
                 liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 valor_hora = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
-                self.repository.CrearDetallePlanilla({
+                detalles_a_crear.append({
                     "IdPlanilla": id_planilla,
                     "IdUsuario": id_u,
                     "SueldoBasico": sueldo_basico,
@@ -392,14 +394,36 @@ class RRHHService:
                     "LiquidoPagable": liquido_pagable,
                     "Observacion": "Planilla Oficial Ministerial Gestora 12.71%"
                 })
+            self.repository.CrearDetallesPlanillaBatch(detalles_a_crear)
         else:
             # Planilla Interna de Planta: computable completo (sueldo + extras - faltas - permisos - No Venta - anticipos)
             empleados = self.repository.ListarEmpleados(activo=True, id_sucursal=id_sucursal)
+            
+            # Pre-carga en batch antes del bucle de empleados para eliminar N+1
+            asistencias_todas = self.repository.ListarAsistencias(f_ini, f_fin)
+            asistencias_por_usuario = {}
+            for a in asistencias_todas:
+                uid = a.get("IdUsuario")
+                if uid:
+                    asistencias_por_usuario.setdefault(uid, []).append(a)
+
+            cuotas_todas = self.repository.ObtenerTodasCuotasNoVentaPendientes()
+            cuotas_por_usuario = {}
+            for c in cuotas_todas:
+                uid = c.get("id_usuario")
+                if uid:
+                    cuotas_por_usuario.setdefault(uid, []).append(c)
+
+            cobros_por_repartidor = self.repository.ObtenerTotalCobrosRepartidoresPeriodoBatch(f_ini, f_fin)
+            anticipos_todos = self.repository.ObtenerTotalAnticiposPeriodoBatch(f_ini, f_fin)
+
+            cuotas_aplicadas_ids = []
+
             for emp in empleados:
                 id_u = emp["IdUsuario"]
                 sueldo_basico = Decimal(str(emp.get("SueldoBasico", 2500.00)))
 
-                asistencias_emp = self.repository.ListarAsistencias(f_ini, f_fin, id_u)
+                asistencias_emp = asistencias_por_usuario.get(id_u, [])
                 total_hrs_extra = sum([Decimal(str(a.get("HorasExtraTrabajadas") or 0)) for a in asistencias_emp])
                 total_min_atraso = sum([int(a.get("MinutosAtraso") or 0) for a in asistencias_emp])
                 dias_falta = sum([1 for a in asistencias_emp if a.get("EsFalta") and not a.get("FaltaJustificada")])
@@ -416,10 +440,10 @@ class RRHHService:
                 descuento_faltas = (Decimal(str(dias_falta)) * valor_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
                 # Deducciones pendientes de No Venta imputadas
-                cuotas_no_venta = self.repository.ObtenerCuotasNoVentaPendientes(id_u)
+                cuotas_no_venta = cuotas_por_usuario.get(id_u, [])
                 descuento_no_venta = sum([Decimal(str(c["cuota_descuento"])) for c in cuotas_no_venta]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 if cuotas_no_venta:
-                    self.repository.MarcarCuotasNoVentaAplicadas([c["id"] for c in cuotas_no_venta], id_planilla)
+                    cuotas_aplicadas_ids.extend([c["id"] for c in cuotas_no_venta])
 
                 # Comisiones de ventas / reparto
                 pct_comision = Decimal(str(emp.get("PorcentajeComisionDefault") or 0.0))
@@ -428,12 +452,19 @@ class RRHHService:
 
                 monto_comisiones = Decimal("0.00")
                 if pct_comision > Decimal("0.0"):
-                    total_cobrado_ruta = self.repository.ObtenerTotalCobrosRepartidorPeriodo(id_u, f_ini, f_fin)
+                    total_cobrado_ruta = cobros_por_repartidor.get(id_u, Decimal("0.00"))
                     monto_comisiones = (total_cobrado_ruta * (pct_comision / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
                 total_bonos = Decimal("0.00")
-                nom_emp = f"{emp.get('PrimerNombre', '')} {emp.get('ApellidoPaterno', '')}".strip()
-                total_anticipos = self.repository.ObtenerTotalAnticiposEmpleadoPeriodo(id_u, nom_emp, f_ini, f_fin)
+                nom_emp = f"{emp.get('PrimerNombre', '')} {emp.get('ApellidoPaterno', '')}".strip().lower()
+                total_anticipos = Decimal("0.00")
+                for ant in anticipos_todos:
+                    ant_uid = ant.get("IdUsuario")
+                    solicitante = (ant.get("Solicitante") or "").lower()
+                    desc = (ant.get("Descripcion") or "").lower()
+                    if ant_uid == id_u or (nom_emp and (nom_emp in solicitante or nom_emp in desc)):
+                        total_anticipos += Decimal(str(ant.get("Monto") or 0))
+
                 otras_deducciones = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
                 total_ganado = (sueldo_basico + monto_horas_extra + monto_comisiones + total_bonos).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -441,7 +472,7 @@ class RRHHService:
                 total_descuento = (descuento_atrasos + descuento_faltas + aporte_afp + otras_deducciones + descuento_no_venta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-                self.repository.CrearDetallePlanilla({
+                detalles_a_crear.append({
                     "IdPlanilla": id_planilla,
                     "IdUsuario": id_u,
                     "SueldoBasico": sueldo_basico,
@@ -460,6 +491,10 @@ class RRHHService:
                     "LiquidoPagable": liquido_pagable,
                     "Observacion": f"{total_hrs_extra}h extras, {total_min_atraso}m atraso, {dias_falta} faltas, NoVenta Bs. {descuento_no_venta}"
                 })
+
+            if cuotas_aplicadas_ids:
+                self.repository.MarcarCuotasNoVentaAplicadas(cuotas_aplicadas_ids, id_planilla)
+            self.repository.CrearDetallesPlanillaBatch(detalles_a_crear)
 
         # 4. Recalcular totales de cabecera
         self.repository.RecalcularTotalesPlanilla(id_planilla)
@@ -577,8 +612,8 @@ class RRHHService:
     # =========================================================================
     # 7. RESUMEN / KPIS
     # =========================================================================
-    def ObtenerResumenKPIs(self) -> dict:
-        return self.repository.ObtenerKPIsResumenRRHH()
+    def ObtenerResumenKPIs(self, id_sucursal: int | None = None) -> dict:
+        return self.repository.ObtenerKPIsResumenRRHH(id_sucursal)
 
     # =========================================================================
     # 8. FINIQUITOS LABORALES (MINISTERIO DE TRABAJO)
@@ -703,8 +738,8 @@ class RRHHService:
         self.repository.ActualizarEmpleado(dto.IdUsuario, {}, {"FechaRetiro": f_retiro, "Activo": False})
         return creado
 
-    def ListarFiniquitos(self, id_usuario: int | None = None) -> list[dict]:
-        return self.repository.ListarFiniquitos(id_usuario)
+    def ListarFiniquitos(self, id_usuario: int | None = None, id_sucursal: int | None = None) -> list[dict]:
+        return self.repository.ListarFiniquitos(id_usuario, id_sucursal)
 
     def ObtenerFiniquito(self, id_finiquito: int) -> dict:
         fin = self.repository.ObtenerFiniquitoPorId(id_finiquito)

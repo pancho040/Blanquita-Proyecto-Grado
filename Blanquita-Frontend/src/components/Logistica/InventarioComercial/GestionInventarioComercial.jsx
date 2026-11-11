@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import {
   Boxes,
   Truck,
@@ -16,13 +19,10 @@ import {
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 
-export default function GestionInventarioComercial() {
-  const [sucursalId, setSucursalId] = useState(() => {
-    if (typeof window !== "undefined") {
-      const g = localStorage.getItem("blanquita_sucursal_activa");
-      return g && g !== "todas" ? Number(g) : 1;
-    }
-    return 1;
+export default function GestionInventarioComercial({ usuario = null }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: false,
   });
 
   const [pestaña, setPestaña] = useState("inventario"); // 'inventario' | 'reporte'
@@ -41,8 +41,8 @@ export default function GestionInventarioComercial() {
   });
   const [guardandoCarga, setGuardandoCarga] = useState(false);
 
-  const cargarDatos = async (sid = sucursalId) => {
-    const sidNum = sid && sid !== "todas" ? Number(sid) : 1;
+  const cargarDatos = useCallback(async () => {
+    const sidNum = Number(sucursal) || 1;
     setCargando(true);
     try {
       if (pestaña === "inventario") {
@@ -57,20 +57,13 @@ export default function GestionInventarioComercial() {
     } finally {
       setCargando(false);
     }
-  };
+  }, [sucursal, pestaña, fechaCorte]);
 
   useEffect(() => {
-    cargarDatos(sucursalId);
-
-    const handler = (e) => {
-      const sid = e.detail?.sucursalId || "1";
-      const numSid = sid !== "todas" ? Number(sid) : 1;
-      setSucursalId(numSid);
-      cargarDatos(numSid);
-    };
-    window.addEventListener("sucursal_cambiada", handler);
-    return () => window.removeEventListener("sucursal_cambiada", handler);
-  }, [pestaña, fechaCorte]);
+    if (!cargandoAlcance) {
+      cargarDatos();
+    }
+  }, [sucursal, pestaña, fechaCorte, cargandoAlcance, cargarDatos]);
 
   const handleCargarChofer = async (e) => {
     e.preventDefault();
@@ -88,13 +81,13 @@ export default function GestionInventarioComercial() {
     try {
       await CargarChofer({
         chofer_id: Number(formCarga.chofer_id),
-        sucursal_id: sucursalId,
+        sucursal_id: Number(sucursal),
         items: [{ presentacion_id: Number(formCarga.presentacion_id), cantidad: cantNum }]
       });
       toast.success("Mercadería cargada exitosamente al camión del chofer.");
       setModalCargaAbierto(false);
       setFormCarga({ chofer_id: "", presentacion_id: "", cantidad: "" });
-      cargarDatos(sucursalId);
+      cargarDatos();
     } catch (err) {
       toast.error(err.message || "Error al cargar mercadería al chofer.");
     } finally {
@@ -113,38 +106,34 @@ export default function GestionInventarioComercial() {
   return (
     <div className="space-y-4">
       {/* Cabecera Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-slate-100 text-[#1C96C5] rounded border border-slate-200">
-              <Boxes size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Inventario Comercial de Sucursal</h1>
-              <p className="text-xs text-slate-600">
-                Gestión de stock físico, traslados a camiones y valoración formal (Sede: {sucursalId === 1 ? "Sucre" : sucursalId === 2 ? "Potosí" : `#${sucursalId}`})
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setModalCargaAbierto(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-semibold rounded cursor-pointer"
-          >
-            <Truck size={15} />
-            Cargar Camión a Chofer
-          </button>
-          <button
-            onClick={() => cargarDatos(sucursalId)}
-            className="p-2 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200 cursor-pointer"
-            title="Refrescar datos"
-          >
-            <RefreshCw size={15} className={cargando ? "animate-spin" : ""} />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Inventario Comercial de Sucursal"
+        subtitle="Gestión de stock físico, traslados a camiones y valoración formal por almacén."
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={false}
+          />
+        }
+      >
+        <button
+          onClick={() => setModalCargaAbierto(true)}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-semibold rounded cursor-pointer shadow-none"
+        >
+          <Truck size={15} />
+          Cargar Camión a Chofer
+        </button>
+        <button
+          onClick={() => cargarDatos()}
+          className="p-1.5 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200 cursor-pointer"
+          title="Refrescar datos"
+        >
+          <RefreshCw size={15} className={cargando ? "animate-spin" : ""} />
+        </button>
+      </PageHeader>
 
       {/* Tabs de Navegación */}
       <div className="flex border-b border-slate-200 gap-1">

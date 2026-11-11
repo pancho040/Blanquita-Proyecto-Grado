@@ -46,14 +46,73 @@ class EnvioRepository:
             ORDER BY e.created_at DESC;
         """
         params = {"estado": estado} if estado else {}
-        envios = self.caller.LlamarFuncion(sql, params)
+        envios = self.caller.LlamarFuncion(sql, params, commit=False)
+
+        if not envios:
+            return []
+
+        envio_ids = [envio["id"] for envio in envios]
+        detalles_map = self.listar_detalles_envios_batch(envio_ids)
+        mermas_map = self.listar_mermas_envios_batch(envio_ids)
 
         for envio in envios:
             envio_id = envio["id"]
-            envio["detalles"] = self.listar_detalles_envio(envio_id)
-            envio["mermas"] = self.listar_mermas_envio(envio_id)
+            envio["detalles"] = detalles_map.get(envio_id, [])
+            envio["mermas"] = mermas_map.get(envio_id, [])
         
         return envios
+
+    def listar_detalles_envios_batch(self, envio_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+        if not envio_ids:
+            return {}
+        sql = """
+            SELECT 
+                d.id,
+                d.envio_id,
+                d.presentacion_id,
+                p."CodigoPresentacion" as codigo_presentacion,
+                prod."NombreProducto" as nombre_producto,
+                p."TipoContenedor" as tipo_contenedor,
+                d.cantidad_enviada,
+                d.cantidad_recibida
+            FROM public.detalles_envio_inventario d
+            JOIN public."PresentacionProducto" p ON d.presentacion_id = p."IdPresentacion"
+            JOIN public."Producto" prod ON p."IdProducto" = prod."IdProducto"
+            WHERE d.envio_id = ANY(:envio_ids)
+            ORDER BY d.id ASC;
+        """
+        filas = self.caller.LlamarFuncion(sql, {"envio_ids": envio_ids}, commit=False)
+        resultado: Dict[int, List[Dict[str, Any]]] = {eid: [] for eid in envio_ids}
+        for f in filas:
+            eid = f["envio_id"]
+            if eid in resultado:
+                resultado[eid].append(f)
+        return resultado
+
+    def listar_mermas_envios_batch(self, envio_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+        if not envio_ids:
+            return {}
+        sql = """
+            SELECT 
+                m.id,
+                m.envio_id,
+                m.presentacion_id,
+                p."CodigoPresentacion" as codigo_presentacion,
+                m.cantidad_merma,
+                m.motivo,
+                m.fecha_registro
+            FROM public.mermas_envio m
+            JOIN public."PresentacionProducto" p ON m.presentacion_id = p."IdPresentacion"
+            WHERE m.envio_id = ANY(:envio_ids)
+            ORDER BY m.id ASC;
+        """
+        filas = self.caller.LlamarFuncion(sql, {"envio_ids": envio_ids}, commit=False)
+        resultado: Dict[int, List[Dict[str, Any]]] = {eid: [] for eid in envio_ids}
+        for f in filas:
+            eid = f["envio_id"]
+            if eid in resultado:
+                resultado[eid].append(f)
+        return resultado
 
     def obtener_envio(self, envio_id: int) -> Optional[Dict[str, Any]]:
         sql = """

@@ -31,9 +31,9 @@ import { obtenerPerfil, editarPerfil } from "../../services/Usuario/Perfil";
 import { dateFormatter } from "@/utils/dates";
 
 const ESTADO_ESTILO = {
-  1: "border-emerald-300 bg-emerald-50 text-emerald-700",
-  2: "border-slate-300 bg-slate-100 text-slate-600",
-  3: "border-red-300 bg-red-50 text-red-600",
+  1: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  2: "border-slate-300 bg-slate-100 text-slate-700",
+  3: "border-red-300 bg-red-50 text-red-800",
 };
 
 const MAX_NOMBRE = 15;
@@ -111,26 +111,26 @@ async function copiar(texto, etiqueta) {
 
 function Campo({ icono: Icono, etiqueta, valor, copiable = false }) {
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div className="flex items-start gap-3 py-2.5">
       {Icono && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-c4/10 text-c3">
-          <Icono size={17} strokeWidth={2.25} />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700">
+          <Icono size={15} strokeWidth={2} />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           {etiqueta}
         </div>
-        <div className="flex items-center gap-2 break-words text-[15px] font-semibold text-slate-800">
-          {valor}
+        <div className="flex items-center gap-2 break-words text-xs font-medium text-slate-900 mt-0.5">
+          <span>{valor || "—"}</span>
           {copiable && valor && (
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-xs"
               onClick={() => copiar(valor, etiqueta)}
-              className="h-6 w-6 shrink-0 text-slate-400 hover:text-c3"
+              className="h-5 w-5 shrink-0 text-slate-400 hover:text-slate-900 cursor-pointer rounded"
             >
-              <Copy size={13} strokeWidth={2.5} />
+              <Copy size={12} strokeWidth={2} />
             </Button>
           )}
         </div>
@@ -141,30 +141,30 @@ function Campo({ icono: Icono, etiqueta, valor, copiable = false }) {
 
 function TarjetaPerfil({ titulo, icono: Icono, children }) {
   return (
-    <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5 text-sm font-extrabold text-slate-700">
+    <section className="overflow-hidden rounded border border-slate-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-700">
         {Icono && (
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-c4/10 text-c3">
-            <Icono size={16} strokeWidth={2.25} />
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-700">
+            <Icono size={14} strokeWidth={2} />
           </div>
         )}
-        {titulo}
+        <span>{titulo}</span>
       </div>
-      <div className="px-5 py-1">{children}</div>
+      <div className="px-4 py-1 divide-y divide-slate-100">{children}</div>
     </section>
   );
 }
 
 function PerfilSkeleton() {
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-        <div className="flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-center">
-          <Skeleton className="h-20 w-20 rounded-full" />
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded border border-slate-200 bg-white">
+        <div className="flex flex-col items-center gap-4 p-5 sm:flex-row sm:items-center">
+          <Skeleton className="h-16 w-16 rounded" />
           <div className="w-full space-y-2">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-5 w-24 rounded-full" />
+            <Skeleton className="h-5 w-48 rounded" />
+            <Skeleton className="h-4 w-32 rounded" />
+            <Skeleton className="h-4 w-24 rounded" />
           </div>
         </div>
       </section>
@@ -172,14 +172,14 @@ function PerfilSkeleton() {
       {[0, 1].map((i) => (
         <section
           key={i}
-          className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200"
+          className="overflow-hidden rounded border border-slate-200 bg-white"
         >
-          <div className="border-b border-slate-100 px-5 py-3.5">
-            <Skeleton className="h-4 w-28" />
+          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
+            <Skeleton className="h-4 w-28 rounded" />
           </div>
-          <div className="space-y-4 p-5">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-8 w-full rounded" />
+            <Skeleton className="h-8 w-full rounded" />
           </div>
         </section>
       ))}
@@ -234,15 +234,16 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Editar perfil</DialogTitle>
+      <DialogContent className="sm:max-w-xl rounded border border-slate-200 p-5">
+        <DialogHeader className="border-b border-slate-100 pb-3">
+          <DialogTitle className="text-base font-bold text-slate-900">Editar Perfil de Colaborador</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex flex-col gap-3 py-2">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <InputForModal
               className="flex-1"
+              classNameInput="h-9 text-xs rounded"
               id="PrimerNombre"
               etiqueta="Primer nombre"
               valor={form.PrimerNombre}
@@ -253,6 +254,7 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
             />
             <InputForModal
               className="flex-1"
+              classNameInput="h-9 text-xs rounded"
               id="SegundoNombre"
               etiqueta="Segundo nombre"
               opcional
@@ -264,9 +266,10 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
             />
           </div>
 
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <InputForModal
               className="flex-1"
+              classNameInput="h-9 text-xs rounded"
               id="ApellidoPaterno"
               etiqueta="Apellido paterno"
               valor={form.ApellidoPaterno}
@@ -277,6 +280,7 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
             />
             <InputForModal
               className="flex-1"
+              classNameInput="h-9 text-xs rounded"
               id="ApellidoMaterno"
               etiqueta="Apellido materno"
               opcional
@@ -289,6 +293,7 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
 
           <InputForModal
             id="Celular"
+            classNameInput="h-9 text-xs rounded font-mono"
             etiqueta="Celular"
             opcional
             valor={form.Celular}
@@ -300,25 +305,26 @@ function DialogEditarPerfil({ abierto, onOpenChange, perfil, onGuardado }) {
           />
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-slate-100 pt-3 gap-2">
           <DialogClose
-            render={<Button variant="outline" disabled={guardando} />}
+            render={<Button variant="outline" size="sm" disabled={guardando} className="h-8 text-xs rounded" />}
           >
             Cancelar
           </DialogClose>
           <Button
             onClick={guardar}
+            size="sm"
             disabled={guardando || !cambios}
-            className="gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium"
+            className="h-8 gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded cursor-pointer"
           >
             {guardando ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={14} className="animate-spin" />
                 Guardando...
               </>
             ) : (
               <>
-                <Check size={16} strokeWidth={2.75} />
+                <Check size={14} strokeWidth={2.5} />
                 Guardar cambios
               </>
             )}
@@ -355,64 +361,62 @@ export default function Perfil() {
   }, []);
 
   return (
-    <div className="contenido-con-sidebar mt-20 md:mt-0 flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6 pb-28 sm:px-6 lg:max-w-5xl">
+    <div className="contenido-con-sidebar mt-20 md:mt-0 flex min-h-screen flex-col bg-[#F8FAFC] font-sans text-slate-900">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-28 sm:px-6 lg:max-w-5xl">
         {cargando && <PerfilSkeleton />}
 
         {!cargando && error && (
-          <div className="rounded-xl bg-red-50 p-5 text-center text-sm font-semibold text-red-600">
+          <div className="rounded border border-red-200 bg-red-50 p-4 text-center text-xs font-semibold text-red-700">
             {error}
           </div>
         )}
 
         {!cargando && !error && perfil && (
-          <div className="space-y-6 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:space-y-0">
-            <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="relative flex h-full flex-col items-center gap-4 bg-slate-900 p-6 text-white sm:flex-row sm:text-left">
+          <div className="space-y-5 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-5 lg:space-y-0">
+            <section className="overflow-hidden rounded border border-slate-200 bg-white">
+              <div className="relative flex h-full flex-col items-center gap-4 bg-slate-900 p-5 text-white sm:flex-row sm:text-left">
                 <Button
                   onClick={() => setEditando(true)}
-                  className="absolute right-4 top-4 h-9 gap-1.5 bg-white/15 font-bold text-white hover:bg-white/25"
+                  variant="outline"
+                  size="sm"
+                  className="absolute right-3.5 top-3.5 h-8 gap-1.5 border-white/20 bg-white/10 text-white hover:bg-white/20 text-xs font-semibold rounded cursor-pointer"
                 >
-                  <Pencil size={14} strokeWidth={2.5} />
+                  <Pencil size={13} strokeWidth={2} />
                   Editar
                 </Button>
 
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/15 text-2xl font-extrabold">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-white/20 bg-white/10 text-xl font-bold font-mono tracking-wider">
                   {iniciales(perfil.PrimerNombre, perfil.ApellidoPaterno)}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xl font-extrabold leading-tight break-words">
+                  <div className="text-lg font-bold leading-tight break-words tracking-tight">
                     {perfil.NombreCompleto}
                   </div>
-                  <div className="mt-1 flex items-center justify-center gap-2 text-sm text-white/85 sm:justify-start">
-                    <IdCard size={15} strokeWidth={2.25} />
-                    CI {perfil.Ci}
+                  <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-300 font-mono tabular-nums sm:justify-start">
+                    <IdCard size={14} strokeWidth={2} className="text-slate-400" />
+                    <span>CI {perfil.Ci}</span>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon-xs"
                       onClick={() => copiar(perfil.Ci, "CI")}
-                      className="h-6 w-6 text-white/80 hover:bg-white/15 hover:text-white"
+                      className="h-5 w-5 text-white/70 hover:bg-white/10 hover:text-white rounded cursor-pointer"
                     >
-                      <Copy size={13} strokeWidth={2.5} />
+                      <Copy size={11} strokeWidth={2} />
                     </Button>
                   </div>
-                  <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
-                    <Badge
-                      variant="outline"
-                      className="border-white/40 bg-white/10 font-bold text-white"
-                    >
+                  <div className="mt-2.5 flex flex-wrap justify-center gap-1.5 sm:justify-start">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border border-white/20 bg-white/10 text-white">
                       {perfil.NombreRol}
-                    </Badge>
-                    <Badge
-                      variant="outline"
+                    </span>
+                    <span
                       className={cn(
-                        "font-bold",
+                        "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border",
                         ESTADO_ESTILO[perfil.IdEstadoUsuario] ??
-                          "border-white/40 bg-white/10 text-white",
+                          "border-white/20 bg-white/10 text-white",
                       )}
                     >
                       {perfil.NombreEstadoUsuario}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -421,38 +425,30 @@ export default function Perfil() {
             <TarjetaPerfil titulo="Datos personales" icono={UserRound}>
               <Campo etiqueta="Primer nombre" valor={perfil.PrimerNombre} />
               {perfil.SegundoNombre && (
-                <>
-                  <Separator />
-                  <Campo
-                    etiqueta="Segundo nombre"
-                    valor={perfil.SegundoNombre}
-                  />
-                </>
+                <Campo
+                  etiqueta="Segundo nombre"
+                  valor={perfil.SegundoNombre}
+                />
               )}
-              <Separator />
               <Campo
                 etiqueta="Apellido paterno"
                 valor={perfil.ApellidoPaterno}
               />
               {perfil.ApellidoMaterno && (
-                <>
-                  <Separator />
-                  <Campo
-                    etiqueta="Apellido materno"
-                    valor={perfil.ApellidoMaterno}
-                  />
-                </>
+                <Campo
+                  etiqueta="Apellido materno"
+                  valor={perfil.ApellidoMaterno}
+                />
               )}
             </TarjetaPerfil>
 
-            <TarjetaPerfil titulo="Contacto">
+            <TarjetaPerfil titulo="Contacto" icono={Phone}>
               <Campo
                 icono={Phone}
                 etiqueta="Celular"
                 valor={formatearCelular(perfil.Celular)}
                 copiable={Boolean(perfil.Celular)}
               />
-              <Separator />
               <Campo
                 icono={Mail}
                 etiqueta="Correo"
@@ -461,15 +457,13 @@ export default function Perfil() {
               />
             </TarjetaPerfil>
 
-            <TarjetaPerfil titulo="Cuenta">
+            <TarjetaPerfil titulo="Cuenta" icono={UserRoundKey}>
               <Campo icono={UserRoundKey} etiqueta="Rol" valor={perfil.NombreRol} />
-              <Separator />
               <Campo
                 icono={ShieldCheck}
                 etiqueta="Estado"
                 valor={perfil.NombreEstadoUsuario}
               />
-              <Separator />
               <Campo
                 icono={CalendarClock}
                 etiqueta="Registrado el"

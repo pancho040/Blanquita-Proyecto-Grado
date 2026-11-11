@@ -8,10 +8,8 @@ from app.Config.supabase import SessionLocal
 from app.Services.Gerencia.GerenciaService import GerenciaService
 
 @pytest.fixture
-def db_session():
-    session = SessionLocal()
-    yield session
-    session.close()
+def db_session(db_session_rollback):
+    return db_session_rollback
 from app.Models.Gerencia.GerenciaModel import (
     RegistrarFirmaSelloRequest,
     ConciliarBancoRequest

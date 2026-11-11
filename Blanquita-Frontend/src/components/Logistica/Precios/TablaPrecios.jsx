@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import { ObtenerPrecios, GuardarPrecio, ObtenerHistorialPrecios } from "@/services/Logistica/PrecioService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,25 +13,17 @@ import { Tag, Edit2, Loader2, Package, CheckCircle2, History, Clock, Search, Spa
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
-import { esUsuarioGeneral } from "@/lib/sucursalContext";
 
-export default function TablaPrecios({ usuario }) {
-  const esGeneral = esUsuarioGeneral(usuario);
-  const sucursalFija = (!esGeneral && usuario?.IdSucursal) ? Number(usuario.IdSucursal) : null;
+export default function TablaPrecios({ usuario = null }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: false,
+  });
 
   const [precios, setPrecios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("TODOS"); // "TODOS" | "RECIENTES" | "SIN_PRECIO"
-
-  const [sucursalId, setSucursalId] = useState(() => {
-    if (sucursalFija) return sucursalFija;
-    if (typeof window !== "undefined") {
-      const g = localStorage.getItem("blanquita_sucursal_activa");
-      return (g && g !== "todas") ? Number(g) : 1;
-    }
-    return 1;
-  });
 
   // Modal edición precio
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -47,8 +42,8 @@ export default function TablaPrecios({ usuario }) {
   const [historialItems, setHistorialItems] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
-  const cargarPrecios = async (sid = sucursalId, forzar = false) => {
-    const sActual = (sid && sid !== "todas") ? Number(sid) : 1;
+  const cargarPrecios = useCallback(async (forzar = false) => {
+    const sActual = Number(sucursal) || 1;
     const cacheKey = `logistica:precios:sucursal:${sActual}`;
     try {
       if (!forzar) {
@@ -69,22 +64,14 @@ export default function TablaPrecios({ usuario }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sucursal]);
 
   useEffect(() => {
-    const sEfectiva = sucursalFija || sucursalId;
-    cargarPrecios(sEfectiva);
-
-    const handler = (e) => {
-      if (sucursalFija) return; // Usuario de sede fija no cambia de sede
-      const sid = e.detail?.sucursalId || "1";
-      const numSid = sid !== "todas" ? Number(sid) : 1;
-      setSucursalId(numSid);
-      cargarPrecios(numSid, true);
-    };
-    window.addEventListener("sucursal_cambiada", handler);
-    return () => window.removeEventListener("sucursal_cambiada", handler);
-  }, [sucursalFija]);
+    if (!cargandoAlcance) {
+      setPrecios([]);
+      cargarPrecios();
+    }
+  }, [sucursal, cargandoAlcance, cargarPrecios]);
 
   // Identificar fecha de cambio más reciente en el catálogo
   const fechaUltimoCambioGlobal = useMemo(() => {
@@ -140,7 +127,7 @@ export default function TablaPrecios({ usuario }) {
     setModalHistorialAbierto(true);
     setCargandoHistorial(true);
     try {
-      const res = await ObtenerHistorialPrecios(item.IdPresentacion, sucursalId);
+      const res = await ObtenerHistorialPrecios(item.IdPresentacion, Number(sucursal));
       setHistorialItems(res || []);
     } catch (err) {
       toast.error("Error al obtener historial de precios: " + err.message);
@@ -156,20 +143,21 @@ export default function TablaPrecios({ usuario }) {
       toast.error("El precio unitario debe ser mayor a 0");
       return;
     }
+    const sidNum = Number(sucursal);
     try {
       setGuardando(true);
       await GuardarPrecio({
         IdPresentacion: itemEditar.IdPresentacion,
-        IdSucursal: sucursalId,
+        IdSucursal: sidNum,
         PrecioUnitario: Number(formPrecio.PrecioUnitario),
         PrecioMayorista: formPrecio.PrecioMayorista ? Number(formPrecio.PrecioMayorista) : null,
         CantidadMinimaMayorista: Number(formPrecio.CantidadMinimaMayorista) || 10,
         VigenteDesde: formPrecio.VigenteDesde
       });
-      cache.invalidate(`logistica:precios:sucursal:${sucursalId}`);
+      cache.invalidate(`logistica:precios:sucursal:${sidNum}`);
       toast.success("Precio actualizado exitosamente con auditoría y revalorización.");
       setModalAbierto(false);
-      cargarPrecios(sucursalId, true);
+      cargarPrecios(true);
     } catch (err) {
       toast.error(err.message || "Error al guardar precio");
     } finally {
@@ -182,53 +170,14 @@ export default function TablaPrecios({ usuario }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Catálogo de Precios Oficiales</h2>
-          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            Gestión de tarifas unitarias, mayoristas y control cronológico de vigencias por sucursal.
-          </p>
-        </div>
-
-        {/* Conmutador o distintivo de sucursal */}
-        {esGeneral ? (
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded border border-slate-200">
-            <button
-              type="button"
-              onClick={() => {
-                setSucursalId(1);
-                cargarPrecios(1, true);
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
-                sucursalId === 1
-                  ? "bg-white text-slate-900 border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Sucursal Sucre
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSucursalId(2);
-                cargarPrecios(2, true);
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
-                sucursalId === 2
-                  ? "bg-white text-slate-900 border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Sucursal Potosí
-            </button>
-          </div>
-        ) : (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-sky-200 bg-sky-50 text-sky-900 text-xs font-semibold">
-            <Building className="h-3.5 w-3.5 text-[#1C96C5]" />
-            <span>Sede de Operación: {sucursalId === 2 ? "Sucursal Potosí" : "Sucursal Sucre (Central)"}</span>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        titulo="Catálogo de Precios Oficiales"
+        subtitulo="Gestión de tarifas unitarias, mayoristas y control cronológico de vigencias por sucursal."
+        icono={Tag}
+        permiteTodas={false}
+        sucursal={sucursal}
+        setSucursal={setSucursal}
+      />
 
       {/* Tarjetas de Resumen Rápido */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -370,7 +319,7 @@ export default function TablaPrecios({ usuario }) {
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono tabular-nums font-bold text-slate-900">
                           {tienePrecio ? `Bs. ${Number(p.PrecioUnitario).toFixed(2)}` : (
-                            <span className="text-xs text-amber-700 font-normal italic">Sin precio</span>
+                            <span className="text-xs text-amber-700 font-normal italic">Sin tarifa</span>
                           )}
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono tabular-nums text-emerald-700 font-semibold">

@@ -61,6 +61,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect(RUTA_POR_ROL[sesion.IdRol] || "/");
   }
 
+  // Regla de Seguridad Territorial y RBAC:
+  // La administración de roles y permisos territoriales (/admin/roles) es EXCLUSIVA para el Gerente General (IdRol = 3).
+  // Ningún usuario con IsAdmin = true de otro rol (ej. Líder de Inventario) puede acceder a esta pantalla.
+  if (pathname.startsWith("/admin/roles") && sesion.IdRol !== 3) {
+    return context.redirect(RUTA_POR_ROL[sesion.IdRol] || "/");
+  }
+
   const omitePrefijoRol = RUTAS_SIN_PREFIJO_ROL.some((prefijo) =>
     pathname.startsWith(prefijo)
   );

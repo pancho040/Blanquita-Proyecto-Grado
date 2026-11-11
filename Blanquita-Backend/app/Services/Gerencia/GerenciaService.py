@@ -31,7 +31,7 @@ class GerenciaService:
     # =========================================================================
     # 1. BUSCADOR GLOBAL POR CÓDIGO NUMÉRICO O PREFIJO
     # =========================================================================
-    def BuscarReporteOGlobal(self, codigo: str) -> BuscadorGlobalResponse:
+    def BuscarReporteOGlobal(self, codigo: str, id_sucursal: int | None = None) -> BuscadorGlobalResponse:
         if not codigo or not codigo.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -39,7 +39,7 @@ class GerenciaService:
             )
 
         codigo_limpio = codigo.strip()
-        documentos_raw = self.repo.BuscarDocumentosGlobal(codigo_limpio)
+        documentos_raw = self.repo.BuscarDocumentosGlobal(codigo_limpio, id_sucursal)
         
         # Verificar coincidencia exacta
         coincidencia_exacta = any(
@@ -61,8 +61,8 @@ class GerenciaService:
     # =========================================================================
     # 2. KPIS EJECUTIVOS GLOBALES (DON OSVALDO)
     # =========================================================================
-    def ObtenerKPIsEjecutivos(self) -> KPIsEjecutivosResponse:
-        data = self.repo.ObtenerKPIsEjecutivos()
+    def ObtenerKPIsEjecutivos(self, id_sucursal: int | None = None) -> KPIsEjecutivosResponse:
+        data = self.repo.ObtenerKPIsEjecutivos(id_sucursal)
         bancos_model = [SaldoBancoItem(**b) for b in data["bancos"]]
         alertas_model = [AlertaGerencialItem(**a) for a in data["alertas"]]
 

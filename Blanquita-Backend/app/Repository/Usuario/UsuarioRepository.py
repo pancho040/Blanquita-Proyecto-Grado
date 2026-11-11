@@ -47,8 +47,14 @@ class UsuarioRepository:
         '''
         return self.caller.LlamarUnRegistro(consulta, params)
 
-    def ListarUsuarios(self) -> list[dict]:
-        consulta = '''
+    def ListarUsuarios(self, sucursal_id: int | None = None) -> list[dict]:
+        filtro = ""
+        params = {}
+        if sucursal_id is not None:
+            filtro = 'WHERE u."IdSucursal" = :sucursal_id'
+            params["sucursal_id"] = sucursal_id
+
+        consulta = f'''
             SELECT 
                 u."IdUsuario",
                 u."Ci",
@@ -68,9 +74,10 @@ class UsuarioRepository:
             FROM "Usuario" u
             JOIN "Rol" r ON u."IdRol" = r."IdRol"
             LEFT JOIN "sucursales" s ON u."IdSucursal" = s."id"
+            {filtro}
             ORDER BY u."IdUsuario" ASC;
         '''
-        return self.caller.LlamarFuncion(consulta, commit=False)
+        return self.caller.LlamarFuncion(consulta, params, commit=False)
 
     def ActualizarSucursalUsuario(self, id_usuario: int, id_sucursal: int | None) -> dict | None:
         consulta = '''

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import StatusBadge from "@/components/common/StatusBadge";
 import { toast } from "sonner";
 import {
   ObtenerTrackingAsignacion,
@@ -13,13 +14,9 @@ import {
   MapPin,
   Loader2,
   CheckCircle2,
-  Clock,
   Phone,
   DollarSign,
   Navigation,
-  AlertCircle,
-  Truck,
-  ExternalLink,
   ShieldCheck
 } from "lucide-react";
 
@@ -65,7 +62,6 @@ export default function ModalDetalleParadasGPS({
     }
     try {
       setProcesandoAccion(true);
-      // Usar coordenadas del cliente o del chofer actual
       const lat = parseFloat(parada.Latitud) || data.LatitudChofer || -19.0435;
       const lng = parseFloat(parada.Longitud) || data.LongitudChofer || -65.258;
 
@@ -123,36 +119,36 @@ export default function ModalDetalleParadasGPS({
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-        <DialogHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
-          <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Navigation className="h-5 w-5 text-[#20A7DB]" />
-            <span>Paradas y Entregas</span>
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
+        <DialogHeader className="border-b border-slate-200 pb-2.5 flex flex-row items-center justify-between">
+          <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Navigation className="h-4 w-4 text-[#1C96C5]" />
+            <span>Paradas y Entregas de la Asignación</span>
           </DialogTitle>
         </DialogHeader>
 
         {cargando ? (
           <div className="py-20 flex flex-col justify-center items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
-            <p className="text-xs text-slate-500 font-medium">Cargando paradas...</p>
+            <Loader2 className="h-7 w-7 animate-spin text-[#1C96C5]" />
+            <p className="text-xs text-slate-600 font-medium">Cargando paradas...</p>
           </div>
         ) : !data ? (
-          <div className="py-12 text-center text-slate-500 text-sm">
+          <div className="py-12 text-center text-slate-600 text-xs">
             No se encontró información de la asignación.
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* ENCABEZADO DE TELEMETRÍA */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="bg-slate-50 border border-slate-200 rounded p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <span className="text-slate-500 block font-medium">Repartidor a Cargo:</span>
+                <span className="text-slate-600 block font-medium">Repartidor:</span>
                 <span className="font-bold text-slate-900 mt-0.5 block truncate">
                   {data.NombreRepartidor}
                 </span>
                 {data.CelularRepartidor && (
                   <a
                     href={`tel:${data.CelularRepartidor}`}
-                    className="text-[11px] text-[#20A7DB] hover:underline flex items-center gap-1 mt-0.5"
+                    className="text-[11px] text-[#1C96C5] hover:underline flex items-center gap-1 mt-0.5"
                   >
                     <Phone className="h-3 w-3" />
                     {data.CelularRepartidor}
@@ -161,42 +157,42 @@ export default function ModalDetalleParadasGPS({
               </div>
 
               <div>
-                <span className="text-slate-500 block font-medium">Ruta y Zona:</span>
+                <span className="text-slate-600 block font-medium">Ruta y Zona:</span>
                 <span className="font-bold text-slate-900 mt-0.5 block truncate">
                   {data.NombreRuta} ({data.NombreZona})
                 </span>
               </div>
 
               <div>
-                <span className="text-slate-500 block font-medium">Progreso de Paradas:</span>
-                <span className="font-bold text-slate-900 mt-0.5 block">
-                  {data.ParadasEntregadas || 0} de {data.TotalParadas || 0} completadas
+                <span className="text-slate-600 block font-medium">Progreso de Paradas:</span>
+                <span className="font-bold font-mono tabular-nums text-slate-900 mt-0.5 block">
+                  {data.ParadasEntregadas || 0} / {data.TotalParadas || 0} completadas
                 </span>
               </div>
 
               <div>
-                <span className="text-slate-500 block font-medium">Recaudación en Ruta:</span>
-                <span className="font-bold text-emerald-700 text-sm mt-0.5 block">
+                <span className="text-slate-600 block font-medium">Recaudación en Ruta:</span>
+                <span className="font-bold font-mono tabular-nums text-emerald-700 text-sm mt-0.5 block">
                   {formatearMonto(data.TotalRecaudado)}
                 </span>
               </div>
             </div>
 
-            {/* FORMULARIO RÁPIDO DE COBRO (SI ESTÁ SELECCIONADA UNA PARADA) */}
+            {/* FORMULARIO RÁPIDO DE COBRO */}
             {paradaParaCobro && (
               <form
                 onSubmit={handleRegistrarCobro}
-                className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-3"
+                className="bg-sky-50 border border-sky-200 rounded p-3.5 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-blue-600" />
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4 text-[#1C96C5]" />
                     <span>Registrar Cobro para: {paradaParaCobro.NombrePuntoVenta}</span>
                   </h4>
                   <button
                     type="button"
                     onClick={() => setParadaParaCobro(null)}
-                    className="text-xs text-blue-700 hover:text-blue-900 underline font-medium"
+                    className="text-xs text-sky-800 hover:text-sky-950 underline font-medium"
                   >
                     Cancelar
                   </button>
@@ -204,7 +200,7 @@ export default function ModalDetalleParadasGPS({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <Label className="text-xs font-medium text-slate-700">Monto a Cobrar (Bs.)</Label>
+                    <Label className="text-xs font-medium text-slate-800">Monto a Cobrar (Bs.)</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -213,16 +209,16 @@ export default function ModalDetalleParadasGPS({
                       onChange={(e) => setMontoCobro(e.target.value)}
                       placeholder="Ej. 150.00"
                       required
-                      className="mt-1 font-bold"
+                      className="mt-1 h-8 text-xs font-mono font-bold rounded"
                     />
                   </div>
 
                   <div>
-                    <Label className="text-xs font-medium text-slate-700">Método de Pago</Label>
+                    <Label className="text-xs font-medium text-slate-800">Método de Pago</Label>
                     <select
                       value={metodoCobro}
                       onChange={(e) => setMetodoCobro(e.target.value)}
-                      className="mt-1 w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-800 shadow-xs focus:border-[#20A7DB] focus:outline-none"
+                      className="mt-1 w-full h-8 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-[#1C96C5] focus:outline-none"
                     >
                       <option value="1">Efectivo Contado</option>
                       <option value="2">Transferencia Bancaria</option>
@@ -235,12 +231,12 @@ export default function ModalDetalleParadasGPS({
                     <Button
                       type="submit"
                       disabled={procesandoAccion}
-                      className="w-full bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 h-9 text-xs font-semibold"
+                      className="w-full bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-8 text-xs font-semibold rounded"
                     >
                       {procesandoAccion ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <CheckCircle2 className="h-4 w-4" />
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                       )}
                       <span>Confirmar Cobro con GPS</span>
                     </Button>
@@ -250,17 +246,17 @@ export default function ModalDetalleParadasGPS({
             )}
 
             {/* LISTA SECUENCIAL DE PARADAS */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                 Itinerario Secuencial de Visita y Estado GPS
               </h4>
 
               {data.Paradas?.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                <div className="py-8 text-center text-slate-500 text-xs border border-dashed border-slate-300 rounded bg-slate-50">
                   No hay puntos de venta configurados para esta ruta.
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {data.Paradas?.map((p, idx) => {
                     const esEntregado = p.EstadoEntrega === "Entregado";
                     const tieneGPS = p.Latitud && p.Longitud;
@@ -269,20 +265,20 @@ export default function ModalDetalleParadasGPS({
                     return (
                       <div
                         key={idx}
-                        className={`p-3.5 rounded-xl border transition-all ${
+                        className={`p-3 rounded border transition-colors ${
                           esEntregado
-                            ? "bg-emerald-50/30 border-emerald-200"
+                            ? "bg-emerald-50/20 border-emerald-200"
                             : "bg-white border-slate-200 hover:border-slate-300"
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           {/* INFORMACIÓN DEL CLIENTE Y PARADA */}
-                          <div className="flex items-start gap-3">
+                          <div className="flex items-start gap-2.5">
                             <span
-                              className={`flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold shrink-0 ${
+                              className={`flex items-center justify-center h-6 w-6 rounded text-xs font-mono font-bold shrink-0 ${
                                 esEntregado
                                   ? "bg-emerald-600 text-white"
-                                  : "bg-slate-200 text-slate-700"
+                                  : "bg-slate-200 text-slate-800"
                               }`}
                             >
                               {p.OrdenVisita || idx + 1}
@@ -294,44 +290,44 @@ export default function ModalDetalleParadasGPS({
                                   {p.NombrePuntoVenta}
                                 </span>
                                 <span className="text-slate-400">•</span>
-                                <span className="text-xs text-slate-600 font-medium">
+                                <span className="text-xs text-slate-700 font-medium">
                                   {p.NombreCliente}
                                 </span>
                               </div>
 
-                              <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                              <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
+                                <MapPin className="h-3 w-3 text-slate-500 shrink-0" />
                                 <span>{p.Direccion || "Sin dirección específica"}</span>
                                 {p.Referencia && (
-                                  <span className="text-slate-400">({p.Referencia})</span>
+                                  <span className="text-slate-500">({p.Referencia})</span>
                                 )}
                               </p>
 
                               {/* AUDITORÍA GPS */}
-                              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[10px]">
+                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
                                 {tieneGPS && (
-                                  <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  <span className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-mono">
                                     GPS Cliente: {parseFloat(p.Latitud).toFixed(4)},{" "}
                                     {parseFloat(p.Longitud).toFixed(4)}
                                   </span>
                                 )}
 
                                 {p.LatitudEntrega && (
-                                  <span className="text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                    <ShieldCheck className="h-3 w-3" />
+                                  <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1 font-mono">
+                                    <ShieldCheck className="h-3 w-3 text-emerald-600" />
                                     GPS Entrega: {parseFloat(p.LatitudEntrega).toFixed(4)},{" "}
                                     {parseFloat(p.LongitudEntrega).toFixed(4)}
                                   </span>
                                 )}
 
                                 {p.MontoPedido && (
-                                  <span className="font-semibold text-slate-700">
+                                  <span className="font-semibold text-slate-800 font-mono tabular-nums">
                                     Pedido: {formatearMonto(p.MontoPedido)}
                                   </span>
                                 )}
 
                                 {tieneCobro && (
-                                  <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <span className="font-bold font-mono tabular-nums text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                     Cobrado: {formatearMonto(p.MontoCobrado)}
                                   </span>
                                 )}
@@ -341,15 +337,9 @@ export default function ModalDetalleParadasGPS({
 
                           {/* ACCIONES Y ESTADO */}
                           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                                esEntregado
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {p.EstadoEntrega || "Pendiente"}
-                            </span>
+                            <StatusBadge
+                              estado={esEntregado ? "ENTREGADO" : "PENDIENTE"}
+                            />
 
                             {!esEntregado && p.IdPedido && (
                               <Button
@@ -358,10 +348,10 @@ export default function ModalDetalleParadasGPS({
                                 variant="outline"
                                 disabled={procesandoAccion}
                                 onClick={() => handleEntregarParada(p)}
-                                className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium"
+                                className="h-7 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-medium rounded"
                               >
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                Marcar Entrega
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Entrega
                               </Button>
                             )}
 
@@ -378,10 +368,10 @@ export default function ModalDetalleParadasGPS({
                                   );
                                   setMontoCobro(resto > 0 ? resto.toFixed(2) : "0.00");
                                 }}
-                                className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50 font-medium"
+                                className="h-7 text-xs border-sky-300 text-[#1C96C5] hover:bg-sky-50 font-medium rounded"
                               >
-                                <DollarSign className="h-3.5 w-3.5 mr-1" />
-                                Registrar Cobro
+                                <DollarSign className="h-3 w-3 mr-1" />
+                                Cobrar
                               </Button>
                             )}
                           </div>
@@ -393,8 +383,8 @@ export default function ModalDetalleParadasGPS({
               )}
             </div>
 
-            <DialogFooter className="border-t border-slate-100 pt-3">
-              <Button type="button" variant="outline" onClick={onCerrar}>
+            <DialogFooter className="border-t border-slate-200 pt-2.5">
+              <Button type="button" variant="outline" size="sm" onClick={onCerrar} className="rounded h-8 text-xs">
                 Cerrar Detalle
               </Button>
             </DialogFooter>

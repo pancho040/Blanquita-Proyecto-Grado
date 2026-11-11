@@ -69,8 +69,9 @@ export async function ObtenerCajas(limit = 20, offset = 0) {
   return await res.json();
 }
 
-export async function ObtenerCajaActual() {
-  const res = await fetchConCache("/api/tesoreria/cajas/actual", {}, 15000);
+export async function ObtenerCajaActual(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/tesoreria/cajas/actual${query}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -122,6 +123,7 @@ export async function ObtenerMovimientosCaja({
   limit = 25,
   offset = 0,
   page = 1,
+  idSucursal = null,
 } = {}) {
   const params = new URLSearchParams();
   if (idAperturaCierre) params.append("id_apertura_cierre", idAperturaCierre);
@@ -131,6 +133,7 @@ export async function ObtenerMovimientosCaja({
   if (fechaDesde) params.append("fecha_desde", fechaDesde);
   if (fechaHasta) params.append("fecha_hasta", fechaHasta);
   if (busqueda) params.append("busqueda", busqueda);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
   params.append("limit", limit);
   params.append("offset", offset);
   if (page) params.append("page", page);
@@ -169,6 +172,7 @@ export async function ObtenerSolicitudesCajaChica({
   limit = 25,
   offset = 0,
   page = 1,
+  idSucursal = null,
 } = {}) {
   const params = new URLSearchParams();
   if (estado && estado !== "TODOS") params.append("estado", estado);
@@ -176,6 +180,7 @@ export async function ObtenerSolicitudesCajaChica({
   if (busqueda) params.append("busqueda", busqueda);
   if (fechaDesde) params.append("fecha_desde", fechaDesde);
   if (fechaHasta) params.append("fecha_hasta", fechaHasta);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
   params.append("limit", limit);
   params.append("offset", offset);
   if (page) params.append("page", page);
@@ -232,8 +237,9 @@ export async function DescargarSolicitudCajaChica(idSolicitud, datos) {
 // ==========================================
 // KPIS Y DASHBOARD
 // ==========================================
-export async function ObtenerDashboardKPIs() {
-  const res = await fetchConCache("/api/tesoreria/dashboard-kpis", {}, 20000);
+export async function ObtenerDashboardKPIs(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/tesoreria/dashboard-kpis${query}`, {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
@@ -281,8 +287,9 @@ export async function ImprimirValeCajaChica(idSolicitud) {
   return await res.json();
 }
 
-export async function ListarPendientesGerencia() {
-  const res = await fetchConCache("/api/tesoreria/caja-chica/pendientes-gerencia", {}, 10000);
+export async function ListarPendientesGerencia(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/tesoreria/caja-chica/pendientes-gerencia${query}`, {}, 10000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }

@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import require_admin_db
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Services.RRHH.RRHHService import RRHHService
 from app.Models.RRHH.RRHHModel import (
     EmpleadoActualizar,
@@ -34,9 +35,12 @@ RRHHRouter = APIRouter(
 # DASHBOARD RESUMEN
 # =============================================================================
 @RRHHRouter.get("/resumen")
-def ObtenerResumen(db: Session = Depends(get_db)):
+def ObtenerResumen(
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
-    return service.ObtenerResumenKPIs()
+    return service.ObtenerResumenKPIs(alcance.sucursal_efectiva)
 
 # =============================================================================
 # EMPLEADOS & DATOS LABORALES
@@ -47,25 +51,44 @@ def ListarEmpleados(
     area: str = "",
     activo: Optional[bool] = None,
     es_asegurado: Optional[bool] = None,
-    id_sucursal: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
-    return service.ListarEmpleados(busqueda, area, activo, es_asegurado, id_sucursal)
+    return service.ListarEmpleados(busqueda, area, activo, es_asegurado, alcance.sucursal_efectiva)
 
 @RRHHRouter.get("/empleados/simple")
-def ListarEmpleadosSimple(area: str = "", db: Session = Depends(get_db)):
+def ListarEmpleadosSimple(
+    area: str = "",
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
-    return service.ListarEmpleadosSimple(area)
+    return service.ListarEmpleadosSimple(area, alcance.sucursal_efectiva)
 
 @RRHHRouter.get("/empleados/{id_usuario}")
-def ObtenerEmpleado(id_usuario: int, db: Session = Depends(get_db)):
+def ObtenerEmpleado(
+    id_usuario: int,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
-    return service.ObtenerEmpleado(id_usuario)
+    emp = service.ObtenerEmpleado(id_usuario)
+    alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
+    return emp
 
 @RRHHRouter.put("/empleados/{id_usuario}")
-def ActualizarEmpleado(id_usuario: int, datos: EmpleadoActualizar, db: Session = Depends(get_db)):
+def ActualizarEmpleado(
+    id_usuario: int,
+    datos: EmpleadoActualizar,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
+    emp = service.ObtenerEmpleado(id_usuario)
+    alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
+    if datos.IdSucursal is not None:
+        alcance.validar_escritura(datos.IdSucursal, nombre_recurso="sucursal_empleado")
     return service.ActualizarEmpleado(id_usuario, datos.dict(exclude_unset=True))
 
 # =============================================================================
@@ -100,14 +123,21 @@ def ObtenerCronograma(
     fecha_inicio: date,
     fecha_fin: date,
     area: str = "",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
-    return service.ObtenerCronograma(fecha_inicio, fecha_fin, area)
+    return service.ObtenerCronograma(fecha_inicio, fecha_fin, area, alcance.sucursal_efectiva)
 
 @RRHHRouter.post("/cronograma/asignar")
-def AsignarTurno(datos: AsignacionTurnoCrear, db: Session = Depends(get_db)):
+def AsignarTurno(
+    datos: AsignacionTurnoCrear,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
+    emp = service.ObtenerEmpleado(datos.IdUsuario)
+    alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
     return service.AsignarTurno(
         id_usuario=datos.IdUsuario,
         id_turno=datos.IdTurno,
@@ -117,13 +147,27 @@ def AsignarTurno(datos: AsignacionTurnoCrear, db: Session = Depends(get_db)):
     )
 
 @RRHHRouter.post("/cronograma/asignar-batch")
-def AsignarTurnosBatch(datos: AsignacionTurnoBatch, db: Session = Depends(get_db)):
+def AsignarTurnosBatch(
+    datos: AsignacionTurnoBatch,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
+    for item in datos.Asignaciones:
+        emp = service.ObtenerEmpleado(item.IdUsuario)
+        alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
     return service.AsignarTurnosBatch([item.dict() for item in datos.Asignaciones])
 
 @RRHHRouter.delete("/cronograma/desasignar")
-def DesasignarTurno(id_usuario: int, fecha: date, db: Session = Depends(get_db)):
+def DesasignarTurno(
+    id_usuario: int,
+    fecha: date,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
+    emp = service.ObtenerEmpleado(id_usuario)
+    alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
     service.DesasignarTurno(id_usuario, fecha)
     return {"mensaje": "Turno desasignado correctamente"}
 
@@ -136,10 +180,11 @@ def ListarAsistencias(
     fecha_fin: Optional[date] = None,
     id_usuario: Optional[int] = None,
     area: str = "",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
-    return service.ListarAsistencias(fecha_inicio, fecha_fin, id_usuario, area)
+    return service.ListarAsistencias(fecha_inicio, fecha_fin, id_usuario, area, alcance.sucursal_efectiva)
 
 @RRHHRouter.put("/asistencia/{id_asistencia}")
 def ActualizarAsistencia(
@@ -211,10 +256,12 @@ def ObtenerPlanilla(
     id_periodo: int,
     tipo_planilla: Optional[str] = None,
     id_sucursal: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    id_suc = alcance.validar_recurso(id_sucursal) if id_sucursal else alcance.sucursal_efectiva
     service = RRHHService(db)
-    pl = service.ObtenerPlanillaPeriodo(id_periodo, tipo_planilla, id_sucursal)
+    pl = service.ObtenerPlanillaPeriodo(id_periodo, tipo_planilla, id_suc)
     if not pl:
         return {"mensaje": "No se ha generado planilla para este periodo aún", "generada": False}
     return pl
@@ -223,8 +270,10 @@ def ObtenerPlanilla(
 def GenerarPlanilla(
     datos: PlanillaGenerarRequest,
     usuario_actual: dict = Depends(require_admin_db),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    datos.IdSucursal = alcance.validar_escritura(datos.IdSucursal, nombre_recurso="sucursal_planilla")
     service = RRHHService(db)
     return service.GenerarPlanilla(
         datos.IdPeriodoNomina,
@@ -253,14 +302,30 @@ def AprobarPlanilla(
     return service.AprobarPlanilla(id_planilla, usuario_actual["IdUsuario"], datos.Observacion or "")
 
 @RRHHRouter.get("/planillas/boleta/{id_detalle}")
-def ObtenerBoletaPago(id_detalle: int, db: Session = Depends(get_db)):
+def ObtenerBoletaPago(
+    id_detalle: int,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
-    return service.GenerarBoletaPago(id_detalle)
+    boleta = service.GenerarBoletaPago(id_detalle)
+    if boleta and "IdUsuario" in boleta:
+        emp = service.repository.ObtenerEmpleadoPorId(boleta["IdUsuario"])
+        alcance.validar_recurso(emp.get("IdSucursal") if emp else None, nombre_recurso="boleta_pago", responder_404=True)
+    return boleta
 
 @RRHHRouter.get("/planillas/boleta/{id_detalle}/doble")
-def ObtenerBoletaPagoDoble(id_detalle: int, db: Session = Depends(get_db)):
+def ObtenerBoletaPagoDoble(
+    id_detalle: int,
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
     service = RRHHService(db)
-    return service.GenerarPapeletaPagoDoble(id_detalle)
+    boleta = service.GenerarPapeletaPagoDoble(id_detalle)
+    if boleta and "IdUsuario" in boleta:
+        emp = service.repository.ObtenerEmpleadoPorId(boleta["IdUsuario"])
+        alcance.validar_recurso(emp.get("IdSucursal") if emp else None, nombre_recurso="boleta_pago", responder_404=True)
+    return boleta
 
 
 # =============================================================================
@@ -269,26 +334,36 @@ def ObtenerBoletaPagoDoble(id_detalle: int, db: Session = Depends(get_db)):
 @RRHHRouter.post("/finiquitos/calcular")
 def CalcularFiniquito(
     datos: FiniquitoCalcularRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
+    emp = service.ObtenerEmpleado(datos.IdUsuario)
+    alcance.validar_recurso(emp.get("IdSucursal"), nombre_recurso="empleado", responder_404=True)
     return service.CalcularYRegistrarFiniquito(datos)
 
 @RRHHRouter.get("/finiquitos")
 def ListarFiniquitos(
     id_usuario: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
-    return service.ListarFiniquitos(id_usuario)
+    return service.ListarFiniquitos(id_usuario, alcance.sucursal_efectiva)
 
 @RRHHRouter.get("/finiquitos/{id_finiquito}")
 def ObtenerFiniquito(
     id_finiquito: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     service = RRHHService(db)
-    return service.ObtenerFiniquito(id_finiquito)
+    fin = service.ObtenerFiniquito(id_finiquito)
+    if not fin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finiquito no encontrado")
+    emp = service.repository.ObtenerEmpleadoPorId(fin.get("IdUsuario"))
+    alcance.validar_recurso(emp.get("IdSucursal") if emp else None, nombre_recurso="finiquito", responder_404=True)
+    return fin
 
 
 # =============================================================================
@@ -297,18 +372,31 @@ def ObtenerFiniquito(
 @RRHHRouter.post("/no-venta")
 def RegistrarNoVenta(
     datos: RegistrarNoVentaRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    datos.IdSucursal = alcance.validar_escritura(datos.IdSucursal, nombre_recurso="sucursal_no_venta")
     service = RRHHService(db)
     return service.RegistrarNoVenta(datos)
 
 @RRHHRouter.get("/no-venta")
 def ListarNoVenta(
-    id_sucursal: Optional[int] = None,
-    db: Session = Depends(get_db)
+    id_sucursal: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    sid = None
+    if id_sucursal is not None and str(id_sucursal).strip().lower() not in ("todas", "all", "null", ""):
+        try:
+            sid = int(id_sucursal)
+            alcance.validar_recurso(sid, nombre_recurso="sucursal_no_venta")
+        except ValueError:
+            sid = alcance.sucursal_efectiva
+    else:
+        sid = alcance.sucursal_efectiva
+
     service = RRHHService(db)
-    return service.ListarDeudasNoVenta(id_sucursal)
+    return service.ListarDeudasNoVenta(sid)
 
 
 # =============================================================================
@@ -321,8 +409,11 @@ async def ImportarExcelOsvaldo(
     mes: int = Query(..., ge=1, le=12),
     anio: int = Query(..., ge=2020, le=2100),
     id_sucursal: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    id_suc = alcance.validar_escritura(id_sucursal, nombre_recurso="importar_asistencia")
     service = RRHHService(db)
     contenido = await file.read()
+    return service.ImportarAsistenciaExcelOsvaldo(contenido, mes, anio, id_suc)
     return service.ImportarAsistenciaExcelOsvaldo(contenido, mes, anio, id_sucursal)

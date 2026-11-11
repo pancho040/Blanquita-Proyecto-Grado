@@ -152,8 +152,8 @@ class UsuarioService:
 
         return usuario
 
-    def ListarUsuarios(self) -> list[dict]:
-        return self.repository.ListarUsuarios()
+    def ListarUsuarios(self, sucursal_id: int | None = None) -> list[dict]:
+        return self.repository.ListarUsuarios(sucursal_id)
 
     def ActualizarSucursalUsuario(self, id_usuario: int, id_sucursal: int | None) -> dict:
         res = self.repository.ActualizarSucursalUsuario(id_usuario, id_sucursal)

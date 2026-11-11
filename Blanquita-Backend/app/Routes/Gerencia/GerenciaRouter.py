@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.Config.supabase import get_db
+from app.Auth.Dependencies import require_role
+from app.Constants.Roles import ROL_GERENTE_GENERAL, ROL_CONTADOR
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Services.Gerencia.GerenciaService import GerenciaService
 from app.Models.Gerencia.GerenciaModel import (
     BuscadorGlobalResponse,
@@ -16,32 +19,38 @@ from app.Models.Gerencia.GerenciaModel import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/gerencia", tags=["Gerencia General"])
+router = APIRouter(
+    prefix="/gerencia",
+    tags=["Gerencia General"],
+    dependencies=[Depends(require_role([ROL_GERENTE_GENERAL, ROL_CONTADOR]))]
+)
 
 
 @router.get("/buscar-reporte", response_model=BuscadorGlobalResponse)
 def buscar_reporte_global(
     codigo: str = Query(..., description="Código numérico o identificador de documento"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Buscador Global Rápido por Código.
     Localiza al instante el documento exacto (nota de venta, vale de caja chica, abono de cliente o pedido mayorista).
     """
     service = GerenciaService(db)
-    return service.BuscarReporteOGlobal(codigo)
+    return service.BuscarReporteOGlobal(codigo, alcance.sucursal_efectiva)
 
 
 @router.get("/kpis-ejecutivos", response_model=KPIsEjecutivosResponse)
 def obtener_kpis_ejecutivos(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Panel de Control Ejecutivo de Gerencia.
     Consolida en tiempo real ventas del día, mora de clientes, vales de caja chica por autorizar y saldos bancarios.
     """
     service = GerenciaService(db)
-    return service.ObtenerKPIsEjecutivos()
+    return service.ObtenerKPIsEjecutivos(alcance.sucursal_efectiva)
 
 
 @router.post("/firmar-documento", response_model=FirmaSelloResponse)

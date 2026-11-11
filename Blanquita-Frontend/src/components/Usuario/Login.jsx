@@ -76,44 +76,37 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-sky-50/60 via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-100 font-sans selection:bg-[#20A7DB]/20 selection:text-[#188cba] relative overflow-hidden">
-      {/* Halos decorativos de fondo con el celeste corporativo de Blanquita */}
-      <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#20A7DB]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#20A7DB]/10 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-[#F8FAFC] text-slate-900 font-sans selection:bg-[#1C96C5]/20 selection:text-[#157A9E] relative">
       {/* Contenedor Central */}
-      <div className="w-full max-w-[390px] flex flex-col gap-6 animate-in fade-in duration-300 relative z-10">
+      <div className="w-full max-w-[380px] flex flex-col gap-5 relative z-10">
         
         {/* Identidad de Marca y Logo Oficial */}
         <div className="flex flex-col items-center text-center">
-          <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-sky-100 dark:border-slate-800 shadow-sm shadow-[#20A7DB]/10 mb-4 transition-transform hover:scale-105 duration-200">
+          <div className="p-2.5 bg-white rounded border border-slate-200 mb-3">
             <img 
               src="/LogoBlanquita.webp" 
               alt="Papel Blanquita" 
-              className="h-14 w-auto object-contain"
+              className="h-12 w-auto object-contain"
               loading="eager"
             />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">
             Papelera Blanquita
           </h1>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Sistema Integral de Gestión y Control
+          <p className="text-xs font-medium text-slate-500 mt-0.5">
+            Sistema Integral de Gestión y Control ERP
           </p>
         </div>
 
         {/* Tarjeta de Inicio de Sesión */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-lg shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
-          {/* Línea superior con gradiente corporativo */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#20A7DB] via-[#52c2ed] to-[#20A7DB]" />
-
+        <div className="bg-white rounded border border-slate-200 p-6 shadow-xs relative">
           <form onSubmit={handleIngresar} className="flex flex-col gap-4">
             
             {/* Campo CI */}
             <div className="space-y-1.5">
               <Label 
                 htmlFor="ci" 
-                className="text-[11px] font-semibold tracking-wider uppercase text-slate-600 dark:text-slate-400"
+                className="text-xs font-semibold tracking-wider uppercase text-slate-600"
               >
                 Carnet de Identidad (CI)
               </Label>
@@ -127,7 +120,7 @@ export default function Login() {
                 autoComplete="username"
                 placeholder="Ej. 10000001"
                 disabled={cargando}
-                className="h-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-2 focus-visible:ring-[#20A7DB] focus-visible:border-[#20A7DB] transition-all"
+                className="h-9 text-xs font-medium rounded border-slate-300 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-900"
               />
             </div>
 
@@ -136,7 +129,7 @@ export default function Login() {
               <div className="flex items-center justify-between">
                 <Label 
                   htmlFor="clave" 
-                  className="text-[11px] font-semibold tracking-wider uppercase text-slate-600 dark:text-slate-400"
+                  className="text-xs font-semibold tracking-wider uppercase text-slate-600"
                 >
                   Contraseña
                 </Label>
@@ -152,13 +145,13 @@ export default function Login() {
                   autoComplete="current-password"
                   disabled={cargando}
                   placeholder="••••••••••••"
-                  className="h-10 pr-10 text-sm font-medium rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-2 focus-visible:ring-[#20A7DB] focus-visible:border-[#20A7DB] transition-all"
+                  className="h-9 pr-9 text-xs font-medium rounded border-slate-300 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-900"
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setMostrarClave(!mostrarClave)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#20A7DB] dark:hover:text-[#20A7DB] transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 >
                   {mostrarClave ? (
                     <EyeOff className="h-4 w-4" />
@@ -171,16 +164,16 @@ export default function Login() {
 
             {/* Alerta de Error Minimalista */}
             {error && (
-              <div className="p-3 text-xs font-medium text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 rounded-lg border border-rose-200/70 dark:border-rose-900/50 text-center animate-in fade-in duration-200">
+              <div className="p-2.5 text-xs font-medium text-red-700 bg-red-50 rounded border border-red-200 text-center">
                 {error}
               </div>
             )}
 
-            {/* Botón de Ingreso con el Celeste de la Interfaz (#20A7DB) */}
+            {/* Botón de Ingreso con el Azul Corporativo Oficial (#1C96C5) */}
             <Button
               type="submit"
               disabled={cargando}
-              className="h-10 mt-2 bg-[#20A7DB] hover:bg-[#188cba] active:bg-[#1579a1] text-white text-xs font-bold rounded-lg shadow-sm hover:shadow-md hover:shadow-[#20A7DB]/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="h-9 mt-1 bg-[#1C96C5] hover:bg-[#157A9E] active:bg-[#126b8b] text-white text-xs font-semibold rounded transition-colors flex items-center justify-center gap-2 cursor-pointer border border-transparent shadow-none"
             >
               {cargando ? (
                 <>
@@ -198,12 +191,12 @@ export default function Login() {
         </div>
 
         {/* Footer Corporativo Sobrio */}
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
-            <ShieldCheck className="h-3.5 w-3.5 text-[#20A7DB]" />
+        <div className="flex flex-col items-center gap-1 text-center">
+          <div className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            <ShieldCheck className="h-3.5 w-3.5 text-[#1C96C5]" />
             <span>Shema Asociados S.R.L. · Acceso Restringido</span>
           </div>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[11px] text-slate-400 font-mono">
             Versión 2.0 Enterprise
           </span>
         </div>

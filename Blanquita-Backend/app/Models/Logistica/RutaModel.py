@@ -7,9 +7,10 @@ class ZonaBase(BaseModel):
     Ciudad: str = "Sucre"
     Descripcion: Optional[str] = None
     Activa: bool = True
+    IdSucursal: Optional[int] = 1
 
 class ZonaCrear(ZonaBase):
-    pass
+    IdSucursal: Optional[int] = None
 
 class ZonaResponse(ZonaBase):
     IdZonaDistribucion: int
@@ -24,6 +25,7 @@ class RutaBase(BaseModel):
     DiaSemana: Optional[int] = None # 1=Lunes, 7=Domingo
     Descripcion: Optional[str] = None
     Activa: bool = True
+    IdSucursal: Optional[int] = 1
 
 class RutaCrear(RutaBase):
     pass
@@ -34,6 +36,7 @@ class RutaActualizar(BaseModel):
     DiaSemana: Optional[int] = None
     Descripcion: Optional[str] = None
     Activa: Optional[bool] = None
+    IdSucursal: Optional[int] = None
 
 class PuntoVentaRutaItem(BaseModel):
     IdPuntoVenta: int

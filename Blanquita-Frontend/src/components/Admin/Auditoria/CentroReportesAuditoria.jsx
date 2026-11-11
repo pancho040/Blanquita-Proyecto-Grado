@@ -26,8 +26,22 @@ import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
 import { getReporteAuditoriaSeguridad } from "@/services/Reportes/reportesService";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/stores/branchStore";
 
-export default function CentroReportesAuditoria() {
+export default function CentroReportesAuditoria({ usuario = null }) {
+  const {
+    sucursal,
+    setSucursal,
+    esMultisede,
+    listoParaConsultar,
+    sucursalesPermitidas
+  } = usePaginaSucursal({
+    permiteTodas: true,
+    usuario
+  });
+
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
   const paginacion = usePaginacion(reporteData.data || [], 15);
@@ -40,6 +54,7 @@ export default function CentroReportesAuditoria() {
   const [busqueda, setBusqueda] = useState("");
 
   const cargarReporte = useCallback(async () => {
+    if (!listoParaConsultar) return;
     setLoading(true);
     try {
       const res = await getReporteAuditoriaSeguridad({
@@ -48,6 +63,7 @@ export default function CentroReportesAuditoria() {
         tabla: filtroTabla || undefined,
         accion: filtroAccion !== "TODAS" ? filtroAccion : undefined,
         busqueda: busqueda || undefined,
+        id_sucursal: sucursal === "todas" ? undefined : Number(sucursal),
       });
       setReporteData(res);
     } catch (err) {
@@ -56,7 +72,7 @@ export default function CentroReportesAuditoria() {
     } finally {
       setLoading(false);
     }
-  }, [fechaInicio, fechaFin, filtroTabla, filtroAccion, busqueda]);
+  }, [fechaInicio, fechaFin, filtroTabla, filtroAccion, busqueda, sucursal, listoParaConsultar]);
 
   useEffect(() => {
     cargarReporte();
@@ -114,49 +130,49 @@ export default function CentroReportesAuditoria() {
         }
       />
 
-      {/* Header en pantalla / Acciones */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-              <ShieldCheck className="w-7 h-7 text-sky-600" />
-              Centro de Reportes de Auditoría y Seguridad
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Trazabilidad integral de eventos del sistema, modificaciones de datos contables, nóminas y despachos.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cargarReporte}
-              disabled={loading}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <RotateCw className={`w-4 h-4 ${loading ? "animate-spin text-sky-600" : ""}`} />
-              Actualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <Printer className="w-4 h-4 text-slate-600" />
-              Imprimir
-            </Button>
-            <Button
-              size="sm"
-              onClick={exportarCSV}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              Exportar CSV
-            </Button>
-          </div>
-        </div>
+      {/* Header en pantalla / Acciones con PageHeader y BranchFilter */}
+      <div className="no-print">
+        <PageHeader
+          title="Centro de Reportes de Auditoría y Seguridad"
+          subtitle="Trazabilidad integral de eventos del sistema, modificaciones de datos contables, nóminas y despachos."
+          branchFilter={
+            <BranchFilter
+              sucursal={sucursal}
+              onChange={setSucursal}
+              sucursales={sucursalesPermitidas}
+              esMultisede={esMultisede}
+              permiteTodas={true}
+            />
+          }
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cargarReporte}
+            disabled={loading}
+            className="gap-1.5 h-8 text-xs font-semibold rounded text-slate-700 hover:bg-slate-50 border-slate-300"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
+            <span>Actualizar</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            className="gap-1.5 h-8 text-xs font-semibold rounded text-slate-700 hover:bg-slate-50 border-slate-300"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-600" />
+            <span>Imprimir</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={exportarCSV}
+            className="gap-1.5 h-8 text-xs font-semibold rounded bg-[#1C96C5] hover:bg-[#157A9E] text-white border-transparent cursor-pointer shadow-none"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar CSV</span>
+          </Button>
+        </PageHeader>
       </div>
 
       {/* KPIs superiores */}
@@ -198,45 +214,45 @@ export default function CentroReportesAuditoria() {
       />
 
       {/* Barra de Filtros */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex items-center gap-2 mb-3 text-slate-700 font-semibold text-sm">
-          <Filter className="w-4 h-4 text-sky-600" />
-          Filtros de Búsqueda y Parámetros
+      <div className="no-print bg-white rounded border border-slate-200 p-3 space-y-2.5">
+        <div className="flex items-center gap-1.5 text-slate-800 font-bold text-xs uppercase tracking-wider">
+          <Filter className="w-3.5 h-3.5 text-[#1C96C5]" />
+          <span>Filtros de Búsqueda y Parámetros</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">Desde Fecha</Label>
+            <Label className="text-[11px] text-slate-600 font-semibold mb-1 block uppercase">Desde Fecha</Label>
             <Input
               type="date"
               value={fechaInicio}
               onChange={(e) => setFechaInicio(e.target.value)}
-              className="text-sm h-9"
+              className="text-xs h-8 rounded border-slate-300 font-mono"
             />
           </div>
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">Hasta Fecha</Label>
+            <Label className="text-[11px] text-slate-600 font-semibold mb-1 block uppercase">Hasta Fecha</Label>
             <Input
               type="date"
               value={fechaFin}
               onChange={(e) => setFechaFin(e.target.value)}
-              className="text-sm h-9"
+              className="text-xs h-8 rounded border-slate-300 font-mono"
             />
           </div>
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">Tabla / Entidad</Label>
+            <Label className="text-[11px] text-slate-600 font-semibold mb-1 block uppercase">Tabla / Entidad</Label>
             <Input
               placeholder="Ej. MovimientoCaja, Pedido..."
               value={filtroTabla}
               onChange={(e) => setFiltroTabla(e.target.value)}
-              className="text-sm h-9"
+              className="text-xs h-8 rounded border-slate-300"
             />
           </div>
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">Tipo de Acción</Label>
+            <Label className="text-[11px] text-slate-600 font-semibold mb-1 block uppercase">Tipo de Acción</Label>
             <select
               value={filtroAccion}
               onChange={(e) => setFiltroAccion(e.target.value)}
-              className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
             >
               <option value="TODAS">Todas las Acciones</option>
               <option value="CREACION">Creación</option>
@@ -247,25 +263,25 @@ export default function CentroReportesAuditoria() {
             </select>
           </div>
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">Búsqueda rápida</Label>
+            <Label className="text-[11px] text-slate-600 font-semibold mb-1 block uppercase">Búsqueda rápida</Label>
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
               <Input
                 placeholder="Usuario, módulo o detalle..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-8 text-sm h-9"
+                className="pl-8 text-xs h-8 rounded border-slate-300"
               />
             </div>
           </div>
         </div>
 
-        <div className="mt-3 flex justify-end">
+        <div className="pt-1 flex justify-end">
           <Button
             variant="ghost"
             size="sm"
             onClick={limpiarFiltros}
-            className="text-xs text-slate-500 hover:text-slate-800"
+            className="text-xs h-7 text-slate-500 hover:text-slate-900 rounded"
           >
             Limpiar filtros
           </Button>
@@ -273,70 +289,69 @@ export default function CentroReportesAuditoria() {
       </div>
 
       {/* Tabla de Registros */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden">
         {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
-            <RotateCw className="w-8 h-8 animate-spin text-sky-600" />
-            <p className="text-sm font-medium">Cargando registros de auditoría y seguridad...</p>
+          <div className="py-16 flex flex-col items-center justify-center gap-2.5 text-slate-500">
+            <RotateCw className="w-6 h-6 animate-spin text-[#1C96C5]" />
+            <p className="text-xs font-medium">Cargando registros de auditoría y seguridad...</p>
           </div>
         ) : reporteData.data && reporteData.data.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center text-slate-400 gap-2">
-            <ShieldCheck className="w-10 h-10 stroke-[1.5]" />
-            <p className="text-base font-semibold text-slate-600">No se encontraron eventos</p>
-            <p className="text-sm text-slate-400">Intente modificando el rango de fechas o los filtros seleccionados.</p>
+          <div className="py-14 flex flex-col items-center justify-center text-slate-400 gap-2">
+            <ShieldCheck className="w-8 h-8 stroke-[1.5] text-slate-400" />
+            <p className="text-sm font-semibold text-slate-700">No se encontraron eventos</p>
+            <p className="text-xs text-slate-400">Intente modificando el rango de fechas o los filtros seleccionados.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold tracking-wider">
-                  <th className="py-3 px-3">Fecha y Hora</th>
-                  <th className="py-3 px-3">Usuario Responsable</th>
-                  <th className="py-3 px-3">Rol</th>
-                  <th className="py-3 px-3">Módulo / Tabla</th>
-                  <th className="py-3 px-3">Acción</th>
-                  <th className="py-3 px-3">ID Registro</th>
-                  <th className="py-3 px-3">Detalle de Operación</th>
-
+                <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold uppercase tracking-wider text-[11px] sticky top-0">
+                  <th className="py-2.5 px-3">Fecha y Hora</th>
+                  <th className="py-2.5 px-3">Usuario Responsable</th>
+                  <th className="py-2.5 px-3">Rol</th>
+                  <th className="py-2.5 px-3">Módulo / Tabla</th>
+                  <th className="py-2.5 px-3">Acción</th>
+                  <th className="py-2.5 px-3">ID Registro</th>
+                  <th className="py-2.5 px-3">Detalle de Operación</th>
                 </tr>
               </thead>
               {/* Cuerpo pantalla con paginación */}
               <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                 {paginacion.itemsPaginados.map((item, idx) => (
-                  <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-3 whitespace-nowrap">
+                  <tr key={item.id || idx} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-2 px-3 whitespace-nowrap font-mono tabular-nums text-[11px]">
                       <div className="font-medium text-slate-800">
-                        {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "-"}
+                        {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") : "—"}
                       </div>
                       <div className="text-[10px] text-slate-400">
                         {item.fecha_hora ? new Date(item.fecha_hora).toLocaleTimeString("es-BO") : ""}
                       </div>
                     </td>
-                    <td className="py-3 px-3 font-semibold text-slate-900">{item.usuario_nombre}</td>
-                    <td className="py-3 px-3">
-                      <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                    <td className="py-2 px-3 font-semibold text-slate-900">{item.usuario_nombre}</td>
+                    <td className="py-2 px-3">
+                      <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                         {item.rol}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-medium text-slate-800">{item.modulo_tabla}</td>
-                    <td className="py-3 px-3 font-semibold text-sky-700">
+                    <td className="py-2 px-3 font-medium text-slate-800">{item.modulo_tabla}</td>
+                    <td className="py-2 px-3">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
                           item.accion === "CREACION"
-                            ? "bg-emerald-100 text-emerald-800"
+                            ? "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
                             : item.accion === "MODIFICACION"
-                            ? "bg-blue-100 text-blue-800"
+                            ? "bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]"
                             : item.accion === "ELIMINACION"
-                            ? "bg-rose-100 text-rose-800"
-                            : "bg-amber-100 text-amber-800"
+                            ? "bg-[#FEF2F2] text-[#B91C1C] border-[#FCA5A5]"
+                            : "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]"
                         }`}
                       >
                         {item.accion}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-600 text-[11px]">{item.id_registro}</td>
-                    <td className="py-3 px-3 text-slate-700 max-w-sm truncate" title={item.detalle}>
-                      {item.detalle}
+                    <td className="py-2 px-3 text-slate-700 font-mono tabular-nums text-[11px]">{item.id_registro || "—"}</td>
+                    <td className="py-2 px-3 text-slate-700 max-w-sm truncate" title={item.detalle}>
+                      {item.detalle || "—"}
                     </td>
                   </tr>
                 ))}
@@ -345,24 +360,24 @@ export default function CentroReportesAuditoria() {
               <tbody className="hidden print:table-row-group text-black">
                 {(reporteData.data || []).map((item, idx) => (
                   <tr key={`print-${item.id || idx}`}>
-                    <td className="whitespace-nowrap">
+                    <td className="whitespace-nowrap font-mono">
                       {item.fecha_hora ? new Date(item.fecha_hora).toLocaleDateString("es-BO") + " " + new Date(item.fecha_hora).toLocaleTimeString("es-BO") : "-"}
                     </td>
                     <td className="font-semibold">{item.usuario_nombre}</td>
                     <td>{item.rol}</td>
                     <td className="font-medium">{item.modulo_tabla}</td>
                     <td className="font-bold">{item.accion}</td>
-                    <td>{item.id_registro}</td>
+                    <td className="font-mono">{item.id_registro}</td>
                     <td>{item.detalle}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={5} className="py-3 px-3 text-right">
+                <tr className="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                  <td colSpan={5} className="py-2.5 px-3 text-right text-xs">
                     Total Eventos Auditados en el Período:
                   </td>
-                  <td colSpan={2} className="py-3 px-3 font-bold text-slate-900">
+                  <td colSpan={2} className="py-2.5 px-3 font-bold text-slate-900 font-mono tabular-nums text-xs">
                     {formatNumber(reporteData.metricas?.total_eventos_auditados || 0)} eventos
                   </td>
                 </tr>

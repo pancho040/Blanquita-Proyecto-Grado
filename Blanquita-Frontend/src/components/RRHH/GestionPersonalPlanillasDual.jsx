@@ -39,8 +39,22 @@ import {
 } from "@/services/RRHH/RRHHService";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/stores/branchStore";
 
-export default function GestionPersonalPlanillasDual() {
+export default function GestionPersonalPlanillasDual({ usuario = null }) {
+  const {
+    sucursal,
+    setSucursal,
+    esMultisede,
+    listoParaConsultar,
+    sucursalesPermitidas
+  } = usePaginaSucursal({
+    permiteTodas: true,
+    usuario
+  });
+
   const [pestañaActiva, setPestañaActiva] = useState("personal"); // personal | planillas | excel | finiquitos | noventa
   
   // ==========================================
@@ -50,7 +64,6 @@ export default function GestionPersonalPlanillasDual() {
   const [empleados, setEmpleados] = useState([]);
   const [cargandoPersonal, setCargandoPersonal] = useState(false);
   const [busquedaPersonal, setBusquedaPersonal] = useState("");
-  const [filtroSucursal, setFiltroSucursal] = useState("");
 
   // ==========================================
   // ESTADOS - PLANILLAS DUALES
@@ -115,23 +128,29 @@ export default function GestionPersonalPlanillasDual() {
 
   // Cargar datos iniciales
   useEffect(() => {
-    cargarPersonal();
-    cargarPeriodos();
-    cargarFiniquitos();
-    cargarNoVenta();
-  }, []);
+    if (listoParaConsultar) {
+      cargarPersonal();
+      cargarPeriodos();
+      cargarFiniquitos();
+      cargarNoVenta();
+    }
+  }, [listoParaConsultar]);
 
   useEffect(() => {
-    cargarPersonal();
-  }, [subPestañaPersonal, filtroSucursal]);
+    if (listoParaConsultar) {
+      cargarPersonal();
+    }
+  }, [subPestañaPersonal, sucursal, listoParaConsultar]);
 
   const cargarPersonal = async () => {
+    if (!listoParaConsultar) return;
     try {
       setCargandoPersonal(true);
       const asegurado = subPestañaPersonal === "asegurados";
+      const sid = sucursal === "todas" ? null : Number(sucursal);
       const data = await ListarEmpleadosDual({
         asegurado: asegurado,
-        idSucursal: filtroSucursal || null,
+        idSucursal: sid,
         busqueda: busquedaPersonal
       });
       setEmpleados(Array.isArray(data) ? data : (data.items || []));
@@ -178,6 +197,10 @@ export default function GestionPersonalPlanillasDual() {
   };
 
   const handleGenerarPlanilla = async () => {
+    if (sucursal === "todas") {
+      toast.error("Seleccione Sucre o Potosí para generar la nómina. No es posible generar nóminas consolidadas para ambas sedes.");
+      return;
+    }
     if (!periodoSeleccionado) {
       toast.error("Seleccione un periodo de nómina");
       return;
@@ -187,7 +210,7 @@ export default function GestionPersonalPlanillasDual() {
       await GenerarPlanillaDual({
         idPeriodo: periodoSeleccionado,
         tipoPlanilla: tipoPlanilla,
-        idSucursal: filtroSucursal || null
+        idSucursal: Number(sucursal)
       });
       toast.success(`¡Planilla ${tipoPlanilla} generada exitosamente!`);
       await cargarPlanilla(periodoSeleccionado, tipoPlanilla);
@@ -330,77 +353,73 @@ export default function GestionPersonalPlanillasDual() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Encabezado Industrial */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded border border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-slate-100 text-slate-700 rounded border border-slate-200">
-              <Users className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                Gestión de Personal y Planillas
-              </h1>
-              <p className="text-xs text-slate-600">
-                Planilla Oficial vs Interna, Control de Asistencia, Deducción No Venta y Finiquitos
-              </p>
-            </div>
-          </div>
-        </div>
+      {/* Encabezado con PageHeader y BranchFilter Unificado */}
+      <PageHeader
+        title="Gestión de Personal y Planillas"
+        subtitle="Planilla Oficial vs Interna, Control de Asistencia, Deducción No Venta y Finiquitos"
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      />
 
-        {/* Pestañas Principales */}
-        <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded border border-slate-200 text-xs font-medium">
-          <button
-            onClick={() => setPestañaActiva("personal")}
-            className={`px-3 py-1.5 rounded transition-colors ${
-              pestañaActiva === "personal"
-                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            1. Nómina de Personal
-          </button>
-          <button
-            onClick={() => setPestañaActiva("planillas")}
-            className={`px-3 py-1.5 rounded transition-colors ${
-              pestañaActiva === "planillas"
-                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            2. Planillas de Sueldos
-          </button>
-          <button
-            onClick={() => setPestañaActiva("excel")}
-            className={`px-3 py-1.5 rounded transition-colors ${
-              pestañaActiva === "excel"
-                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            3. Importar Asistencia
-          </button>
-          <button
-            onClick={() => setPestañaActiva("finiquitos")}
-            className={`px-3 py-1.5 rounded transition-colors ${
-              pestañaActiva === "finiquitos"
-                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            4. Finiquitos (LGT)
-          </button>
-          <button
-            onClick={() => setPestañaActiva("noventa")}
-            className={`px-3 py-1.5 rounded transition-colors ${
-              pestañaActiva === "noventa"
-                ? "bg-white text-slate-900 border border-slate-200 font-semibold"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            5. No Venta Prorrateada
-          </button>
-        </div>
+      {/* Pestañas Principales Compartidas */}
+      <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded border border-slate-200 text-xs font-medium">
+        <button
+          onClick={() => setPestañaActiva("personal")}
+          className={`px-3 py-1.5 rounded transition-colors ${
+            pestañaActiva === "personal"
+              ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          1. Nómina de Personal
+        </button>
+        <button
+          onClick={() => setPestañaActiva("planillas")}
+          className={`px-3 py-1.5 rounded transition-colors ${
+            pestañaActiva === "planillas"
+              ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          2. Planillas de Sueldos
+        </button>
+        <button
+          onClick={() => setPestañaActiva("excel")}
+          className={`px-3 py-1.5 rounded transition-colors ${
+            pestañaActiva === "excel"
+              ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          3. Importar Asistencia
+        </button>
+        <button
+          onClick={() => setPestañaActiva("finiquitos")}
+          className={`px-3 py-1.5 rounded transition-colors ${
+            pestañaActiva === "finiquitos"
+              ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          4. Finiquitos (LGT)
+        </button>
+        <button
+          onClick={() => setPestañaActiva("noventa")}
+          className={`px-3 py-1.5 rounded transition-colors ${
+            pestañaActiva === "noventa"
+              ? "bg-white text-slate-900 border border-slate-200 font-semibold"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          5. No Venta Prorrateada
+        </button>
       </div>
 
       {/* ========================================================================= */}
@@ -435,18 +454,8 @@ export default function GestionPersonalPlanillasDual() {
               </Button>
             </div>
 
-            {/* Filtros de Sucursal y Búsqueda */}
+            {/* Búsqueda de Personal */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={filtroSucursal}
-                onChange={(e) => setFiltroSucursal(e.target.value)}
-                className="text-xs px-2.5 h-8 rounded border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
-              >
-                <option value="">Todas las Sucursales</option>
-                <option value="1">Sucursal Sucre</option>
-                <option value="2">Sucursal Potosí</option>
-              </select>
-
               <div className="relative flex-1 sm:w-64">
                 <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-slate-400" />
                 <Input
@@ -594,13 +603,21 @@ export default function GestionPersonalPlanillasDual() {
 
             <Button
               onClick={handleGenerarPlanilla}
-              disabled={generandoPlanilla || !periodoSeleccionado}
-              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3 h-8 gap-1.5 rounded"
+              disabled={generandoPlanilla || !periodoSeleccionado || sucursal === "todas"}
+              className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-medium px-3 h-8 gap-1.5 rounded cursor-pointer"
             >
               <Calculator className="h-3.5 w-3.5" />
               {generandoPlanilla ? "Calculando..." : `Generar Planilla ${tipoPlanilla}`}
             </Button>
           </div>
+
+          {/* Aviso preventivo cuando el filtro está en 'Todas' */}
+          {sucursal === "todas" && (
+            <div className="flex items-center gap-2.5 p-3 rounded bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Seleccione Sucre o Potosí para generar la nómina. No es posible generar nóminas consolidadas para ambas sedes simultáneamente.</span>
+            </div>
+          )}
 
           {/* Tabla de la Planilla */}
           <div className="bg-white rounded border border-slate-200 overflow-hidden">

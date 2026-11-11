@@ -9,44 +9,60 @@ class RutaRepository:
     # -------------------------------------------------------------
     # ZONAS
     # -------------------------------------------------------------
-    def ListarZonas(self) -> list[dict]:
-        sql = """
+    def ListarZonas(self, id_sucursal: int | None = None) -> list[dict]:
+        where = ""
+        params = {}
+        if id_sucursal is not None:
+            where = 'WHERE z."IdSucursal" = :id_sucursal'
+            params["id_sucursal"] = id_sucursal
+
+        sql = f"""
             SELECT 
                 z."IdZonaDistribucion",
                 z."NombreZona",
                 z."Ciudad",
                 z."Descripcion",
                 z."Activa",
+                z."IdSucursal",
                 COUNT(r."IdRutaDistribucion") as "TotalRutas"
             FROM "ZonaDistribucion" z
             LEFT JOIN "RutaDistribucion" r ON z."IdZonaDistribucion" = r."IdZonaDistribucion" AND r."Activa" = TRUE
+            {where}
             GROUP BY z."IdZonaDistribucion"
             ORDER BY z."NombreZona" ASC;
         """
-        return self.caller.LlamarFuncion(sql, {})
+        return self.caller.LlamarFuncion(sql, params)
 
     def CrearZona(self, datos: dict) -> dict:
         sql = """
-            INSERT INTO "ZonaDistribucion" ("NombreZona", "Ciudad", "Descripcion", "Activa")
-            VALUES (:NombreZona, :Ciudad, :Descripcion, :Activa)
+            INSERT INTO "ZonaDistribucion" ("NombreZona", "Ciudad", "Descripcion", "Activa", "IdSucursal")
+            VALUES (:NombreZona, :Ciudad, :Descripcion, :Activa, :IdSucursal)
             RETURNING "IdZonaDistribucion";
         """
-        return self.caller.LlamarUnRegistro(sql, datos)
+        payload = dict(datos)
+        payload.setdefault("IdSucursal", 1)
+        return self.caller.LlamarUnRegistro(sql, payload)
 
     # -------------------------------------------------------------
     # RUTAS
     # -------------------------------------------------------------
-    def ListarRutas(self, id_zona: int | None = None) -> list[dict]:
+    def ListarRutas(self, id_zona: int | None = None, id_sucursal: int | None = None) -> list[dict]:
         params = {}
-        where_sql = ""
+        condiciones = []
         if id_zona is not None:
-            where_sql = 'WHERE r."IdZonaDistribucion" = :id_zona'
+            condiciones.append('r."IdZonaDistribucion" = :id_zona')
             params["id_zona"] = id_zona
+        if id_sucursal is not None:
+            condiciones.append('r."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
+
+        where_sql = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
 
         sql = f"""
             SELECT 
                 r."IdRutaDistribucion",
                 r."IdZonaDistribucion",
+                r."IdSucursal",
                 z."NombreZona",
                 r."NombreRuta",
                 r."DiaSemana",
@@ -84,6 +100,7 @@ class RutaRepository:
             SELECT 
                 r."IdRutaDistribucion",
                 r."IdZonaDistribucion",
+                r."IdSucursal",
                 z."NombreZona",
                 r."NombreRuta",
                 r."DiaSemana",
@@ -98,9 +115,9 @@ class RutaRepository:
     def CrearRuta(self, datos: dict) -> dict:
         sql = """
             INSERT INTO "RutaDistribucion" (
-                "IdZonaDistribucion", "NombreRuta", "DiaSemana", "Descripcion", "Activa"
+                "IdZonaDistribucion", "NombreRuta", "DiaSemana", "Descripcion", "Activa", "IdSucursal"
             ) VALUES (
-                :IdZonaDistribucion, :NombreRuta, :DiaSemana, :Descripcion, :Activa
+                :IdZonaDistribucion, :NombreRuta, :DiaSemana, :Descripcion, :Activa, :IdSucursal
             ) RETURNING "IdRutaDistribucion";
         """
         return self.caller.LlamarUnRegistro(sql, datos)
@@ -168,7 +185,7 @@ class RutaRepository:
     # -------------------------------------------------------------
     # ASIGNACIONES DIARIAS A REPARTIDORES
     # -------------------------------------------------------------
-    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None) -> list[dict]:
+    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None, id_sucursal: int | None = None) -> list[dict]:
         params = {}
         where_clauses = []
         if fecha:
@@ -177,6 +194,9 @@ class RutaRepository:
         if id_repartidor:
             where_clauses.append('ar."IdUsuarioRepartidor" = :id_repartidor')
             params["id_repartidor"] = id_repartidor
+        if id_sucursal:
+            where_clauses.append('r."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -244,8 +264,10 @@ class RutaRepository:
         """
         return self.caller.LlamarUnRegistro(sql, params)
 
-    def ListarRepartidoresActivos(self) -> list[dict]:
-        sql = """
+    def ListarRepartidoresActivos(self, id_sucursal: int | None = None) -> list[dict]:
+        where_suc = 'AND u."IdSucursal" = :id_s' if id_sucursal is not None else ""
+        params = {"id_s": id_sucursal} if id_sucursal is not None else {}
+        sql = f"""
             SELECT 
                 u."IdUsuario",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
@@ -256,13 +278,15 @@ class RutaRepository:
                 u."Celular",
                 u."Ci",
                 u."IdEstadoUsuario",
+                u."IdSucursal",
                 CASE WHEN u."IdEstadoUsuario" = 1 THEN 'Activo' ELSE 'Inactivo' END as "Estado",
                 (SELECT COUNT(*) FROM "AsignacionRuta" ar WHERE ar."IdUsuarioRepartidor" = u."IdUsuario") as "TotalAsignaciones"
             FROM "Usuario" u
             WHERE u."IdRol" = 6
+              {where_suc}
             ORDER BY u."IdEstadoUsuario" ASC, u."PrimerNombre" ASC;
         """
-        return self.caller.LlamarFuncion(sql, {})
+        return self.caller.LlamarFuncion(sql, params)
 
     def CrearRepartidor(self, datos: dict, clave_hash: str) -> dict:
         sql = """
@@ -365,8 +389,14 @@ class RutaRepository:
         }
         return self.caller.LlamarUnRegistro(sql, params)
 
-    def ObtenerChoferesEnVivo(self) -> list[dict]:
-        sql = """
+    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None) -> list[dict]:
+        filtro_sucursal = ""
+        params = {}
+        if sucursal_id is not None:
+            filtro_sucursal = 'AND u."IdSucursal" = :sucursal_id'
+            params["sucursal_id"] = sucursal_id
+
+        sql = f"""
             SELECT 
                 COALESCE(t."IdTracking", 0) as "IdTracking",
                 u."IdUsuario" as "IdUsuarioRepartidor",
@@ -396,10 +426,10 @@ class RutaRepository:
             LEFT JOIN "AsignacionRuta" ar ON (ar."IdUsuarioRepartidor" = u."IdUsuario" AND ar."FechaAsignacion" = CURRENT_DATE)
             LEFT JOIN "RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
             LEFT JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
-            WHERE u."IdRol" = 6 AND u."IdEstadoUsuario" = 1
+            WHERE u."IdRol" = 6 AND u."IdEstadoUsuario" = 1 {filtro_sucursal}
             ORDER BY t."UltimaActualizacion" DESC NULLS LAST, u."PrimerNombre" ASC;
         """
-        return self.caller.LlamarFuncion(sql, {})
+        return self.caller.LlamarFuncion(sql, params)
 
     def ObtenerTrackingPorAsignacion(self, id_asignacion: int) -> dict:
         sql_asig = """

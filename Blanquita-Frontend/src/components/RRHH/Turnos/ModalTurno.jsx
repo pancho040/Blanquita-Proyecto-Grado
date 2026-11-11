@@ -8,7 +8,7 @@ import { CrearTurno, ActualizarTurno } from "@/services/RRHH/RRHHService";
 import { Clock, Loader2, Palette } from "lucide-react";
 
 const COLORES_TURNO = [
-  "#20A7DB", // Azul Blanquita
+  "#1C96C5", // Azul Blanquita Oficial
   "#0284c7", // Sky
   "#059669", // Esmeralda
   "#d97706", // Ámbar
@@ -27,7 +27,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
     HoraInicio: "06:00:00",
     HoraFin: "15:00:00",
     Area: "General",
-    Color: "#20A7DB",
+    Color: "#1C96C5",
     DescripcionTurno: ""
   });
 
@@ -38,7 +38,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
         HoraInicio: turno.HoraInicio || "06:00:00",
         HoraFin: turno.HoraFin || "15:00:00",
         Area: turno.Area || "General",
-        Color: turno.Color || "#20A7DB",
+        Color: turno.Color || "#1C96C5",
         DescripcionTurno: turno.DescripcionTurno || ""
       });
     } else {
@@ -47,7 +47,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
         HoraInicio: "06:00:00",
         HoraFin: "15:00:00",
         Area: "General",
-        Color: "#20A7DB",
+        Color: "#1C96C5",
         DescripcionTurno: ""
       });
     }
@@ -82,8 +82,8 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
     <Dialog open={abierto} onOpenChange={onCerrar}>
       <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
         <DialogHeader className="border-b border-slate-100 pb-3">
-          <DialogTitle className="text-lg font-bold text-[#20A7DB] flex items-center gap-2">
-            <Clock className="h-5 w-5 text-[#20A7DB]" />
+          <DialogTitle className="text-lg font-bold text-[#1C96C5] flex items-center gap-2">
+            <Clock className="h-5 w-5 text-[#1C96C5]" />
             <span>{turno ? "Editar Horario de Turno" : "Configurar Nuevo Turno"}</span>
           </DialogTitle>
         </DialogHeader>
@@ -96,7 +96,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
               onChange={(e) => setFormData({ ...formData, NombreTurno: e.target.value })}
               placeholder="Ej. Rebobinado Mañana (06:00 - 15:00)"
               required
-              className="mt-1 bg-white border-slate-300 text-sm"
+              className="mt-1 bg-white border-slate-300 text-xs h-8 rounded"
             />
           </div>
 
@@ -109,7 +109,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
                 value={formData.HoraInicio}
                 onChange={(e) => setFormData({ ...formData, HoraInicio: e.target.value })}
                 required
-                className="mt-1 bg-white border-slate-300 text-sm "
+                className="mt-1 bg-white border-slate-300 text-xs h-8 rounded "
               />
             </div>
 
@@ -121,7 +121,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
                 value={formData.HoraFin}
                 onChange={(e) => setFormData({ ...formData, HoraFin: e.target.value })}
                 required
-                className="mt-1 bg-white border-slate-300 text-sm "
+                className="mt-1 bg-white border-slate-300 text-xs h-8 rounded "
               />
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
               <select
                 value={formData.Area}
                 onChange={(e) => setFormData({ ...formData, Area: e.target.value })}
-                className="mt-1 w-full text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                className="mt-1 w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 text-slate-800"
               >
                 {AREAS_TURNO.map((a) => (
                   <option key={a} value={a}>{a}</option>
@@ -149,7 +149,7 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
                     type="button"
                     onClick={() => setFormData({ ...formData, Color: c })}
                     style={{ backgroundColor: c }}
-                    className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                    className={`w-6 h-6 rounded border-2 transition-transform ${
                       formData.Color === c ? "scale-125 border-slate-900" : "border-white hover:scale-110"
                     }`}
                   />
@@ -164,13 +164,13 @@ export default function ModalTurno({ turno, abierto, onCerrar, onGuardado }) {
               value={formData.DescripcionTurno}
               onChange={(e) => setFormData({ ...formData, DescripcionTurno: e.target.value })}
               placeholder="Ej. Jornada completa de 8 horas con refrigerio"
-              className="mt-1 bg-white border-slate-300 text-sm"
+              className="mt-1 bg-white border-slate-300 text-xs h-8 rounded"
             />
           </div>
 
-          <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
+          <DialogFooter className="gap-2 pt-3 border-t border-slate-200">
             <Button type="button" variant="outline" onClick={onCerrar}>Cancelar</Button>
-            <Button type="submit" disabled={loading} className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold">
+            <Button type="submit" disabled={loading} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-8 text-xs font-medium rounded">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Guardar Turno
             </Button>

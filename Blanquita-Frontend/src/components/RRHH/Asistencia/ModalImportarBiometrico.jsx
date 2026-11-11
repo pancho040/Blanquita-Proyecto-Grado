@@ -170,10 +170,10 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
         <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 rounded-lg text-blue-600 dark:text-blue-400">
+            <div className="p-2 bg-slate-100 rounded border border-slate-200 text-slate-700">
               <Fingerprint className="h-6 w-6" />
             </div>
             <div>
@@ -186,7 +186,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
 
         <div className="space-y-4 py-2">
           {/* Instrucciones rápidas */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex items-center gap-2.5">
+          <div className="p-3 bg-slate-50 rounded border border-slate-200 text-xs text-slate-700 flex items-center gap-2">
             <Info className="h-4 w-4 text-blue-500 shrink-0" />
             <span>Formatos admitidos: <strong>.DAT, .TXT, .CSV, .LOG</strong>. El sistema procesa marcas y horarios automáticamente.</span>
           </div>
@@ -201,7 +201,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
                 value={dispositivo}
                 onChange={(e) => setDispositivo(e.target.value)}
                 placeholder="Ej. NGTeco MB20 Planta El Alto"
-                className="mt-1 h-9 text-xs"
+                className="mt-1 h-8 text-xs rounded border-slate-300"
               />
             </div>
             <div>
@@ -214,7 +214,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
                   setTipoDefecto(e.target.value);
                   parsearTextoMarcas(textoCrudo);
                 }}
-                className="mt-1 w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full h-8 px-2.5 rounded border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
               >
                 <option value="AUTO">Detección Automática (Entrada / Salida por horario)</option>
                 <option value="ENTRADA">Forzar todo como Entrada</option>
@@ -224,7 +224,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
           </div>
 
           {/* Dropzone o Selector de archivo */}
-          <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+          <div className="border-2 border-dashed border-slate-300 rounded p-4 text-center hover:bg-slate-50 transition">
             <input
               type="file"
               id="fileBiometrico"
@@ -279,13 +279,13 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
               value={textoCrudo}
               onChange={handleTextoChange}
               placeholder="Pega aquí el contenido del archivo si no deseas subirlo..."
-              className="w-full p-2.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full p-2.5 text-xs font-mono rounded border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
           </div>
 
           {/* Previsualización de marcas parseadas */}
           {registrosParseados.length > 0 && (
-            <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded overflow-hidden">
               <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -330,7 +330,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
 
           {/* Resultado de la última importación */}
           {resumen && (
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs space-y-1">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
               <p className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 ¡Importación completada con éxito!
@@ -357,7 +357,7 @@ export default function ModalImportarBiometrico({ abierto, onCerrar, onImportado
             type="button"
             onClick={handleImportar}
             disabled={loading || registrosParseados.length === 0}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 flex items-center gap-2"
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-4 h-8 rounded flex items-center gap-1.5"
           >
             {loading ? (
               <>

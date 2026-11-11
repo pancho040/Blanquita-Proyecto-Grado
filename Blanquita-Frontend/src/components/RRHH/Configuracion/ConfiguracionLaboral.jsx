@@ -106,10 +106,10 @@ export default function ConfiguracionLaboral() {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Cabecera */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+      <div className="bg-white p-4 sm:p-5 rounded border border-slate-200 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg">
+            <span className="p-2 bg-slate-100 text-slate-700 rounded border border-slate-200">
               <Settings2 className="h-5 w-5" />
             </span>
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
@@ -124,7 +124,7 @@ export default function ConfiguracionLaboral() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Parámetros de Biométrico y Turnos */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-5 rounded border border-slate-200 space-y-3">
           <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <Clock className="h-4 w-4 text-blue-500" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
@@ -143,7 +143,7 @@ export default function ConfiguracionLaboral() {
                 name="ToleranciaAtrasoMinutos"
                 value={formData.ToleranciaAtrasoMinutos}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
               <span className="text-[11px] text-slate-400">
                 Marcaciones dentro de este margen no computan como atraso.
@@ -160,7 +160,7 @@ export default function ConfiguracionLaboral() {
                 name="HorasMesLaboral"
                 value={formData.HorasMesLaboral}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
               <span className="text-[11px] text-slate-400">
                 Estándar legal boliviano: 240 horas mensuales (8 hrs/día).
@@ -170,7 +170,7 @@ export default function ConfiguracionLaboral() {
         </div>
 
         {/* Parámetros de Ley y Nómina */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-5 rounded border border-slate-200 space-y-3">
           <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <Scale className="h-4 w-4 text-emerald-500" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
@@ -190,7 +190,7 @@ export default function ConfiguracionLaboral() {
                 name="FactorRecargoHorasExtras"
                 value={formData.FactorRecargoHorasExtras}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
               <span className="text-[11px] text-slate-400">
                 2.0 equivale al 100% de recargo según la LGT.
@@ -208,7 +208,7 @@ export default function ConfiguracionLaboral() {
                 name="PorcentajeGestoraAFP"
                 value={formData.PorcentajeGestoraAFP}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
               <span className="text-[11px] text-slate-400">
                 Porcentaje obligatorio de ley (12.71%).
@@ -226,7 +226,7 @@ export default function ConfiguracionLaboral() {
                 name="SueldoMinimoNacional"
                 value={formData.SueldoMinimoNacional}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
               <span className="text-[11px] text-slate-400">
                 Base de cálculo para bonos de antigüedad.
@@ -236,7 +236,7 @@ export default function ConfiguracionLaboral() {
         </div>
 
         {/* Membrete Oficial para Boletas de Pago */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-5 rounded border border-slate-200 space-y-3">
           <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <Building2 className="h-4 w-4 text-slate-500" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
@@ -253,7 +253,7 @@ export default function ConfiguracionLaboral() {
                 name="NombreEmpresa"
                 value={formData.NombreEmpresa}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs"
+                className="mt-1 h-8 text-xs rounded border-slate-300"
               />
             </div>
 
@@ -265,7 +265,7 @@ export default function ConfiguracionLaboral() {
                 name="NIT"
                 value={formData.NIT}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs "
+                className="mt-1 h-8 text-xs rounded border-slate-300 font-mono tabular-nums text-right"
               />
             </div>
 
@@ -277,7 +277,7 @@ export default function ConfiguracionLaboral() {
                 name="DireccionPlanta"
                 value={formData.DireccionPlanta}
                 onChange={handleChange}
-                className="mt-1 h-9 text-xs"
+                className="mt-1 h-8 text-xs rounded border-slate-300"
               />
             </div>
           </div>
@@ -287,7 +287,7 @@ export default function ConfiguracionLaboral() {
           <Button
             type="submit"
             disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-6 flex items-center gap-2 shadow-xs"
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-4 h-8 rounded flex items-center gap-1.5"
           >
             {guardando ? (
               <>

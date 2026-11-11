@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import require_role
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_CONTADOR, ROL_GERENTE_GENERAL, ROL_SUPERVISOR
 
 ReportesRouter = APIRouter(prefix="/reportes", tags=["Módulo Central de Reportes y Análisis"])
@@ -27,10 +28,15 @@ def reporte_flujo_caja(
     metodo_pago: Optional[str] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1", 'COALESCE(mc."Anulado", false) = false']
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('mc."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if fecha_inicio:
         where.append('mc."FechaMovimiento"::date >= :f_ini')
@@ -69,6 +75,8 @@ def reporte_flujo_caja(
             COALESCE(mc."MetodoPago", 'Efectivo') as "metodo_pago",
             b."NombreBanco" as "banco"
         FROM "MovimientoCaja" mc
+        LEFT JOIN "AperturaCierreCaja" acc ON mc."IdAperturaCierreCaja" = acc."IdAperturaCierreCaja"
+        LEFT JOIN "Caja" c_caja ON acc."IdCaja" = c_caja."IdCaja"
         LEFT JOIN "CategoriaMovimientoCaja" cat ON mc."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
         LEFT JOIN "CuentaBancariaEmpresa" b ON mc."IdCuentaBancaria" = b."IdCuentaBancaria"
         WHERE {where_sql}
@@ -100,10 +108,15 @@ def reporte_cuentas_cobrar(
     ciudad: Optional[str] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('cxc."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if id_cliente:
         where.append('cxc."IdCliente" = :id_cli')
@@ -203,8 +216,14 @@ def reporte_cuentas_pagar(
     fecha_fin: Optional[date] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    if not alcance.puede_ver_todas:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: El reporte de Cuentas por Pagar es de alcance corporativo y requiere permisos multisede."
+        )
     where = ["1=1"]
     params = {}
 
@@ -295,10 +314,15 @@ def reporte_notas_venta(
     fecha_fin: Optional[date] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('nv."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if id_cliente:
         where.append('nv."IdCliente" = :id_cli')
@@ -386,10 +410,15 @@ def reporte_desempeno_rutas(
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('r."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if id_repartidor:
         where.append('ar."IdUsuarioRepartidor" = :id_rep')
@@ -471,10 +500,15 @@ def reporte_cobertura_clientes(
     con_gps: Optional[bool] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('c."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if ciudad and ciudad != "TODAS":
         where.append('c."CiudadDestino" ILIKE :ciu')
@@ -540,10 +574,15 @@ def reporte_asistencia_puntualidad(
     solo_faltas: bool = False,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if fecha_inicio:
         where.append('a."Fecha" >= :f_ini')
@@ -591,6 +630,7 @@ def reporte_asistencia_puntualidad(
             COALESCE(a."Observacion", '-') as "observacion"
         FROM "AsistenciaDiaria" a
         JOIN "Usuario" u ON a."IdUsuario" = u."IdUsuario"
+        LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
         LEFT JOIN "Turno" t ON a."IdTurno" = t."IdTurno"
         LEFT JOIN "Rol" r ON u."IdRol" = r."IdRol"
         WHERE {where_sql}
@@ -624,10 +664,15 @@ def reporte_nomina_historica(
     id_usuario: Optional[int] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(ROLES_PERMITIDOS))
+    usuario: dict = Depends(require_role(ROLES_PERMITIDOS)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('pl."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if id_periodo:
         where.append('pl."IdPeriodoNomina" = :id_per')
@@ -712,10 +757,15 @@ def reporte_auditoria_seguridad(
     fecha_fin: Optional[date] = None,
     busqueda: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL, ROL_CONTADOR]))
+    usuario: dict = Depends(require_role([ROL_GERENTE_GENERAL, ROL_CONTADOR])),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ["1=1"]
     params = {}
+
+    if alcance.sucursal_efectiva:
+        where.append('u."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if id_usuario:
         where.append('a."IdUsuario" = :id_u')

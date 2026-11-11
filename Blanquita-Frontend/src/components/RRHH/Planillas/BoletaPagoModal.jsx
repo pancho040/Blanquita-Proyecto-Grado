@@ -50,10 +50,10 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
         <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-3 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-50 dark:bg-blue-950/50 rounded-lg text-blue-600 dark:text-blue-400">
+            <div className="p-2 bg-slate-100 rounded border border-slate-200 text-slate-700">
               <FileText className="h-5 w-5" />
             </div>
             <div>
@@ -67,7 +67,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
             type="button"
             onClick={handleImprimir}
             disabled={cargando || !boleta}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 h-8 flex items-center gap-1.5"
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3 h-8 rounded flex items-center gap-1.5"
           >
             <Printer className="h-3.5 w-3.5" />
             Imprimir Boleta
@@ -86,7 +86,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
         ) : (
           <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1" ref={boletaRef}>
             {/* Boleta física lista para impresión con membrete formal */}
-            <div className="p-6 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg shadow-xs text-slate-800 dark:text-slate-200 text-xs print:m-0 print:p-4 print:border-black">
+            <div className="p-6 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded text-slate-900 text-xs print:m-0 print:p-4 print:border-black">
               {/* Membrete Empresa de Papel Blanquita */}
               <div className="border-b-2 border-slate-800 dark:border-slate-300 pb-3 mb-4 flex justify-between items-start">
                 <div>
@@ -161,13 +161,13 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Haber Básico</td>
-                        <td className="py-1.5 px-3 text-right font-medium">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium">
                           {Number(boleta.Ingresos?.HaberBasico || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Bono de Antigüedad</td>
-                        <td className="py-1.5 px-3 text-right font-medium">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium">
                           {Number(boleta.Ingresos?.BonoAntiguedad || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -175,13 +175,13 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Horas Extras ({boleta.Ingresos?.HorasExtrasCantidad || 0} hrs)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-medium">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium">
                           {Number(boleta.Ingresos?.HorasExtrasMonto || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Otros Bonos y Recargos</td>
-                        <td className="py-1.5 px-3 text-right font-medium">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium">
                           {Number(boleta.Ingresos?.OtrosBonos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -189,7 +189,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tfoot>
                       <tr className="bg-slate-100 dark:bg-slate-850 font-bold border-t border-slate-200 dark:border-slate-700">
                         <td className="py-2 px-3 text-slate-800 dark:text-slate-100">TOTAL GANADO</td>
-                        <td className="py-2 px-3 text-right text-emerald-600 dark:text-emerald-400">
+                        <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
                           {Number(boleta.Ingresos?.TotalGanado || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -206,7 +206,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Aporte Gestora / AFP (12.71%)</td>
-                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.GestoraAFP || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -214,7 +214,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Descuento Atrasos ({boleta.Descuentos?.MinutosAtraso || 0} min)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.AtrasosMonto || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -222,19 +222,19 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">
                           Descuento Faltas ({boleta.Descuentos?.FaltasCantidad || 0} días)
                         </td>
-                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.FaltasMonto || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Anticipos de Sueldo / Préstamos</td>
-                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.Anticipos || 0).toFixed(2)}
                         </td>
                       </tr>
                       <tr>
                         <td className="py-1.5 px-3 text-slate-600 dark:text-slate-300">Otros Descuentos</td>
-                        <td className="py-1.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">
+                        <td className="py-1.5 px-3 text-right font-mono tabular-nums font-medium text-rose-600 dark:text-rose-400">
                           {Number(boleta.Descuentos?.OtrosDescuentos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -242,7 +242,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                     <tfoot>
                       <tr className="bg-slate-100 dark:bg-slate-850 font-bold border-t border-slate-200 dark:border-slate-700">
                         <td className="py-2 px-3 text-slate-800 dark:text-slate-100">TOTAL DESCUENTOS</td>
-                        <td className="py-2 px-3 text-right text-rose-600 dark:text-rose-400">
+                        <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
                           {Number(boleta.Descuentos?.TotalDescuentos || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -252,7 +252,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
               </div>
 
               {/* Líquido Pagable Resaltado y Literal en Palabras */}
-              <div className="bg-slate-100 dark:bg-slate-850 p-4 rounded-lg border border-slate-300 dark:border-slate-700 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div className="bg-slate-50 p-3.5 rounded border border-slate-300 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                 <div>
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                     Líquido Pagable Neto:
@@ -262,7 +262,7 @@ export default function BoletaPagoModal({ idDetallePlanilla, abierto, onCerrar }
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400 ">
+                  <span className="text-xl font-bold font-mono tabular-nums text-slate-900 ">
                     Bs. {Number(boleta.LiquidoPagable || 0).toFixed(2)}
                   </span>
                 </div>

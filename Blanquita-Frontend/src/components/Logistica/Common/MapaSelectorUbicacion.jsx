@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useId } from "react";
 import "leaflet/dist/leaflet.css";
 import { getLeaflet } from "@/lib/leafletLoader";
-import { MapPin, Navigation, Crosshair, Sparkles } from "lucide-react";
+import { MapPin, Crosshair } from "lucide-react";
 
 const SUCRE_DEFAULT = { lat: -19.0435, lng: -65.258 };
 
@@ -16,14 +16,13 @@ const PRESETS_SUCRE = [
 
 /**
  * Selector de ubicación interactivo en mapa Leaflet con arrastre de pin y presets de Sucre.
+ * Cumple con modo Operate / Industrial Minimalist de Papelera Blanquita.
  * @param {number} lat
  * @param {number} lng
- * @param {Function} onChange ({ lat, lng })
+ * @param {Function} onChange ({ lat, lng, referencia })
  * @param {string} altura
  * @param {string} label
  */
-let cachedLeaflet = null;
-
 export default function MapaSelectorUbicacion({
   lat = SUCRE_DEFAULT.lat,
   lng = SUCRE_DEFAULT.lng,
@@ -99,7 +98,7 @@ export default function MapaSelectorUbicacion({
         className: "custom-pin",
         html: `
           <div style="position:relative; width:36px; height:36px; display:flex; align-items:center; justify-content:center;">
-            <div style="background-color:#EF4444; width:32px; height:32px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.3); border:2px solid white;">
+            <div style="background-color:#EF4444; width:32px; height:32px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.25); border:2px solid white;">
               <div style="background-color:white; width:10px; height:10px; border-radius:50%; transform:rotate(45deg);"></div>
             </div>
           </div>
@@ -179,14 +178,14 @@ export default function MapaSelectorUbicacion({
     <div className="space-y-2">
       {/* Cabecera del selector */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5 text-[#20A7DB]" />
+        <label className="text-xs font-semibold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 text-[#1C96C5]" />
           <span>{label}</span>
         </label>
         <button
           type="button"
           onClick={centrarEnPin}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#20A7DB] hover:underline"
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1C96C5] hover:underline"
         >
           <Crosshair className="h-3 w-3" />
           <span>Centrar en el pin</span>
@@ -200,16 +199,16 @@ export default function MapaSelectorUbicacion({
             key={idx}
             type="button"
             onClick={() => aplicarPreset(p)}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200 hover:border-sky-300 transition-colors font-medium"
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-slate-50 hover:bg-sky-50 text-slate-700 border border-slate-200 hover:border-sky-300 transition-colors font-medium"
           >
-            <MapPin className="h-3 w-3 text-[#20A7DB]" />
+            <MapPin className="h-3 w-3 text-[#1C96C5]" />
             <span>{p.nombre}</span>
           </button>
         ))}
       </div>
 
       {/* Contenedor del Mapa Leaflet */}
-      <div className={`relative w-full ${altura} rounded-xl border border-slate-300 overflow-hidden shadow-2xs z-0`}>
+      <div className={`relative w-full ${altura} rounded border border-slate-300 overflow-hidden z-0`}>
         <div
           ref={mapContainerRef}
           className="w-full h-full"
@@ -218,8 +217,8 @@ export default function MapaSelectorUbicacion({
         />
         
         {/* Badge flotante con coordenadas en tiempo real */}
-        <div className="absolute bottom-2 left-2 z-[400] bg-white px-2.5 py-1 rounded-lg border border-slate-300 text-[11px] font-semibold text-slate-800 shadow-sm flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+        <div className="absolute bottom-2 left-2 z-[400] bg-white px-2.5 py-1 rounded border border-slate-300 text-[11px] font-semibold text-slate-800 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500"></span>
           <span>Lat: {coords.lat}</span>
           <span>•</span>
           <span>Lng: {coords.lng}</span>
