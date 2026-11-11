@@ -371,11 +371,13 @@ class CuentasCobrarService:
         # Notificar al chofer que subió el cobro
         if abono.get("IdUsuario"):
             estado_txt = "Aprobado" if aprobado else "Rechazado"
+            motivo_extra = f" Motivo: {observacion}." if (not aprobado and observacion) else ""
             self.notif_service.CrearNotificacion(
                 id_usuario_destino=abono["IdUsuario"],
                 titulo=f"Cobro {estado_txt}",
-                mensaje=f"Tu registro de cobro por Bs. {float(abono['MontoAbonado']):.2f} fue {estado_txt.lower()} por Kevin.",
-                tipo="INFO" if aprobado else "ERROR"
+                mensaje=f"Tu registro de cobro por Bs. {float(abono['MontoAbonado']):.2f} fue {estado_txt.lower()} por Kevin.{motivo_extra}",
+                tipo="INFO" if aprobado else "ERROR",
+                codigo_referencia=id_abono
             )
 
         self.db.commit()

@@ -164,6 +164,30 @@ class PushNotificationService:
         return [r[0] for r in rows if r[0]]
 
     @classmethod
+    def notificar_usuario(
+        cls,
+        session: Session,
+        usuario_id: int,
+        titulo: str,
+        mensaje: str,
+        datos_extra: Optional[Dict[str, Any]] = None,
+        background_tasks=None
+    ) -> Dict[str, Any]:
+        """
+        Obtiene los tokens activos del usuario y envía la notificación push sanitizada
+        (cero montos en Bs. y cero nombres de clientes en pantalla de bloqueo).
+        """
+        titulo_seguro, mensaje_seguro = cls.sanitizar_mensaje_pantalla_bloqueo(titulo, mensaje)
+        tokens = cls.obtener_tokens_activos_usuario(session, usuario_id)
+        if not tokens:
+            return {"enviados": 0, "modo": "sin_dispositivos"}
+        if background_tasks:
+            cls.enviar_asincrono_background(background_tasks, tokens, titulo_seguro, mensaje_seguro, datos_extra)
+            return {"enviados": len(tokens), "modo": "background"}
+        else:
+            return cls.enviar_notificacion(tokens, titulo_seguro, mensaje_seguro, datos_extra)
+
+    @classmethod
     def enviar_notificacion(
         cls,
         tokens: List[str],

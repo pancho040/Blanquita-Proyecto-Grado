@@ -72,7 +72,24 @@ class NotificationService:
             "codigo_ref": codigo_referencia
         }).fetchone()
         
-        return row[0]
+        id_notif = row[0]
+
+        # Invocar PushNotificationService si hay destinatario específico
+        if id_usuario_destinatario:
+            try:
+                from app.Services.Movil.PushNotificationService import PushNotificationService
+                tit_seg, msj_seg = PushNotificationService.sanitizar_mensaje_pantalla_bloqueo(titulo, mensaje)
+                PushNotificationService.notificar_usuario(
+                    session=session,
+                    usuario_id=id_usuario_destinatario,
+                    titulo=tit_seg,
+                    mensaje=msj_seg,
+                    datos_extra={"tipo": tipo, "codigo_referencia": codigo_referencia}
+                )
+            except Exception as e:
+                logger.warning(f"[PushNotification] No se pudo enviar push a usuario {id_usuario_destinatario}: {e}")
+
+        return id_notif
 
     @staticmethod
     def listar_notificaciones(
