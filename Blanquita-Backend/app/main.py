@@ -49,6 +49,7 @@ from app.Routes.Usuario.AuditRouter import AuditRouter
 from app.Routes.Reportes.ReportesRouter import ReportesRouter
 from app.Routes.Gerencia.GerenciaRouter import router as GerenciaRouter
 from app.Routes.Movil.MovilRouter import MovilRouter
+from app.Routes.Movil.ChoferMovilRouter import ChoferMovilRouter
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -134,6 +135,7 @@ def health_check():
 
 # ROUTER MOVIL V1
 app.include_router(MovilRouter)
+app.include_router(ChoferMovilRouter, prefix="/api/movil/v1")
 
 
 #ROUTERS USUARIO
