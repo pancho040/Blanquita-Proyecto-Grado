@@ -20,9 +20,11 @@ export const linkingConfig = {
       Login: 'login',
       MainTabs: {
         screens: {
-          RutaTab: 'ruta',
-          CierreTab: 'cierre',
-          SyncTab: 'sync',
+          HojaRutaTab: 'ruta',
+          AvisosTab: 'avisos',
+          NuevoClienteTab: 'nuevo-cliente',
+          CierreRutaTab: 'cierre',
+          SincronizacionTab: 'sync',
         },
       },
       DetalleParada: 'parada/:id',
