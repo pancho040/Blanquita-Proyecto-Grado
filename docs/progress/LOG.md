@@ -233,3 +233,13 @@
      - Limpieza de base de datos: 0 registros residuales tras pruebas mediante rollback transaccional.
      - Móvil: 10/10 suites aprobadas en `npm test`, linter `eslint src/` con 0 errores y 0 advertencias, script de contraste con código 0 y empaquetado Expo `npx expo export -p android --no-bytecode` con 0 secretos en `dist/`.
      - Guardia de seguridad: 0 infracciones a tablas y esquemas de planta. | Archivos: `ChoferMovilModel.py`, `ChoferMovilRouter.py`, `PushNotificationService.py`, `NotificationService.py`, `CuentasCobrarService.py`, `NuevoClienteScreen.js`, `BandejaAvisosScreen.js`, `SincronizacionScreen.js`, `logisticaApi.js`, `syncService.js`, `RutaContext.js`, `run_all_mobile_tests.js`, `test_fase3_chofer_movil.py`, `test_fase3_pantallas_y_cliente.test.js`, `LOG.md`.
+
+
+- **2026-11-11 18:50** | **Agente Móvil & Backend** | **Cierre e Integración en Rama Principal (`feat/repartidores`)** | Unificación de la aplicación móvil y servicios de backend con la rama principal:
+  1. Conexión de Navegación:
+     - Sincronización de `linkingConfig` en `AppNavigator.js` con las 5 pestañas de `TabNavigator.js` (`HojaRutaTab`, `AvisosTab`, `NuevoClienteTab`, `CierreRutaTab`, `SincronizacionTab`).
+  2. Aislamiento y Limpieza SQL:
+     - Verificación directa sobre `Cliente`, `PuntoVenta`, `RutaPuntoVenta` y `NotificacionInterna` confirmando 0 registros de prueba persistidos.
+  3. Integración en `feat/repartidores`:
+     - Fusión limpia sin conflictos de `feat/movil` sobre la rama principal `feat/repartidores`.
+     - Confirmación de una única cabeza lineal de migraciones en Alembic.
