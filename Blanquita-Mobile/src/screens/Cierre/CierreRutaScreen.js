@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
   QrCode,
   CheckCircle2,
   Gauge,
-  Wallet,
 } from 'lucide-react-native';
 
 export const CierreRutaScreen = ({ navigation }) => {

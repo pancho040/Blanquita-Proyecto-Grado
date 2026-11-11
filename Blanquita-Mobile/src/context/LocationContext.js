@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import * as Location from "expo-location";
 import { Alert } from "react-native";
 import { CONFIG } from "../constants/Config";
@@ -115,7 +115,7 @@ export function LocationProvider({ children }) {
         LogisticaApi.enviarTelemetriaPing(payload).catch(() => {
           SyncQueue.encolarOperacion("PING_GPS", payload, gps).catch(() => {});
         });
-      } catch (e) {
+      } catch (_e) {
         // Ignorar fallos de telemetría silenciosos en background
       }
     }, CONFIG.GPS.INTERVALO_PING_SEGUNDOS * 1000);

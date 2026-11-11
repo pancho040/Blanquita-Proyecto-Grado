@@ -2,14 +2,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CONFIG } from "../constants/Config";
 
 /**
- * Cola de Sincronización Asíncrona (Outbox Pattern)
+ * Cola de Sincronización Asíncrona (Outbox Pattern con Idempotencia)
  * Implementa HU-27 (Modo Offline) y HU-28 (Sincronización Automática Cifrada)
- * Almacena operaciones en local y las transmite secuencialmente al volver la red
+ * Almacena operaciones en local con claves UUID v4 y las transmite secuencialmente al volver la red.
  */
 export const SyncQueue = {
-  // Generar ID único para cada transacción
-  generarIdUnico() {
-    return `trx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  // Generar clave UUID v4 estándar RFC 4122 para Idempotencia Transaccional
+  generarUuidV4() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
   },
 
   // Obtener todas las operaciones encoladas pendientes
@@ -37,7 +41,74 @@ export const SyncQueue = {
   // Obtener la cantidad de operaciones pendientes
   async contarPendientes() {
     const cola = await this.obtenerCola();
-    return cola.length;
+    return cola.filter((item) => item.estado === "pendiente de sincronizar").length;
+  },
+
+  // Obtener operaciones pendientes que involucran dinero (cobros, entregas con pago)
+  async obtenerPendientesConDinero() {
+    const cola = await this.obtenerCola();
+    return cola.filter((item) =>
+      item.estado === "pendiente de sincronizar" &&
+      (item.tipo === "COBRO" || (item.payload && (item.payload.monto || item.payload.montoCobrado || item.payload.monto_efectivo || item.payload.monto_qr)))
+    );
+  },
+
+  /**
+   * Resumen detallado de dinero en cola para cierre de sesión (Punto 6).
+   * Desglosa operaciones reintentables vs errores 4xx no reintentables.
+   */
+  async obtenerResumenDineroPendiente() {
+    const cola = await this.obtenerCola();
+    const operacionesDinero = cola.filter((item) =>
+      item.tipo === "COBRO" ||
+      (item.payload && (
+        item.payload.monto ||
+        item.payload.montoCobrado ||
+        item.payload.monto_efectivo ||
+        item.payload.monto_qr
+      ))
+    );
+
+    let totalBs = 0;
+    const reintentables = [];
+    const noReintentables4xx = [];
+
+    for (const op of operacionesDinero) {
+      const monto = Number(
+        op.payload?.monto ||
+        op.payload?.montoCobrado ||
+        op.payload?.monto_efectivo ||
+        op.payload?.monto_qr ||
+        0
+      );
+
+      const itemResumen = {
+        id: op.id,
+        tipo: op.tipo,
+        monto: isNaN(monto) ? 0 : monto,
+        cliente: op.payload?.cliente || op.payload?.nombreCliente || `Operación #${(op.id || "").slice(0, 8)}`,
+        esErrorPermanente: Boolean(op.esErrorPermanente),
+        ultimoError: op.ultimoError || null,
+      };
+
+      if (op.esErrorPermanente) {
+        noReintentables4xx.push(itemResumen);
+      } else {
+        reintentables.push(itemResumen);
+        totalBs += itemResumen.monto;
+      }
+    }
+
+    return {
+      totalOperaciones: operacionesDinero.length,
+      cantidadReintentables: reintentables.length,
+      cantidadNoReintentables4xx: noReintentables4xx.length,
+      totalDineroBs: totalBs,
+      reintentables,
+      noReintentables4xx,
+      // Solo bloquea si hay dinero en operaciones reintentables; los 4xx no impiden logout
+      bloqueoRequerido: reintentables.length > 0,
+    };
   },
 
   /**
@@ -49,10 +120,13 @@ export const SyncQueue = {
   async encolarOperacion(tipo, payload, gps = null) {
     try {
       const cola = await this.obtenerCola();
+      const idempotencyKey = this.generarUuidV4();
       const nuevaOperacion = {
-        id: this.generarIdUnico(),
+        id: idempotencyKey,
+        idempotencyKey,
         tipo,
         payload,
+        estado: "pendiente de sincronizar", // Siempre se muestra pendiente hasta confirmación del servidor
         gps: gps || {
           latitud: 0,
           longitud: 0,
@@ -62,6 +136,7 @@ export const SyncQueue = {
         fechaCreacion: new Date().toISOString(),
         intentos: 0,
         ultimoError: null,
+        esErrorPermanente: false,
       };
 
       cola.push(nuevaOperacion);
@@ -86,17 +161,24 @@ export const SyncQueue = {
     }
   },
 
-  // Incrementar intento y guardar error si falló el envío
-  async registrarFalloOperacion(idOperacion, errorMensaje) {
+  // Registrar fallo distinguiendo 4xx (no reintentable) de 5xx/red (reintentable)
+  async registrarFalloOperacion(idOperacion, error) {
     try {
       const cola = await this.obtenerCola();
+      const status = error?.response?.status || error?.status;
+      const esError4xx = typeof status === "number" && status >= 400 && status < 500;
+      const mensaje = error?.friendlyMessage || error?.message || String(error);
+
       const actualizada = cola.map((item) => {
         if (item.id === idOperacion) {
           return {
             ...item,
             intentos: (item.intentos || 0) + 1,
-            ultimoError: String(errorMensaje),
+            ultimoError: mensaje,
             ultimoIntento: new Date().toISOString(),
+            // Si es 4xx (reglas de negocio, conflicto o datos inválidos), no se sigue reintentando en loop
+            esErrorPermanente: esError4xx,
+            estado: esError4xx ? "error_validacion" : "pendiente de sincronizar",
           };
         }
         return item;
@@ -107,7 +189,7 @@ export const SyncQueue = {
     }
   },
 
-  // Limpiar toda la cola (en caso de reseteo manual de emergencia)
+  // Limpiar toda la cola
   async limpiarCola() {
     try {
       await AsyncStorage.removeItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);

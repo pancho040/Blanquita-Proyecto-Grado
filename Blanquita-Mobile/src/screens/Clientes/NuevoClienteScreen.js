@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,7 @@ import {
   Store,
   MapPin,
   Phone,
-  FileText,
   RotateCw,
-  CheckCircle2,
   Navigation,
 } from 'lucide-react-native';
 

@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Colors } from "../../constants/Colors";
 
@@ -15,6 +15,7 @@ export const Input = ({
   icon: IconComponent = null,
   multiline = false,
   numberOfLines = 1,
+  isNumeric = false,
   style = {},
   inputStyle = {},
 }) => {
@@ -47,6 +48,7 @@ export const Input = ({
           style={[
             styles.input,
             multiline && { minHeight: numberOfLines * 24, textAlignVertical: "top" },
+            isNumeric && styles.numericText,
             inputStyle,
           ]}
         />
@@ -70,30 +72,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1, // DESIGN.md: 1px sólido
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 4, // DESIGN.md: Máximo 4px
     paddingHorizontal: 12,
+    minHeight: 48, // DESIGN.md: Target táctil >= 48px
   },
   disabledWrapper: {
-    backgroundColor: "#1E293B",
-    opacity: 0.6,
+    backgroundColor: Colors.backgroundDark,
+    opacity: 0.7,
   },
   errorWrapper: {
     borderColor: Colors.danger,
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    backgroundColor: Colors.dangerLight,
   },
   iconContainer: {
     marginRight: 8,
   },
   input: {
     flex: 1,
-    height: 46,
+    height: 48,
     color: Colors.text,
     fontSize: 15,
   },
+  numericText: {
+    fontVariant: ["tabular-nums"], // DESIGN.md: Números tabulares alineados
+  },
   errorText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.danger,
     fontWeight: "600",
     marginTop: 4,

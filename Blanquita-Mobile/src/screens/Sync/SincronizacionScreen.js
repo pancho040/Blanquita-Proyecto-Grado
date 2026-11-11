@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  FlatList,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
@@ -23,21 +21,18 @@ import {
   WifiOff,
   RotateCw,
   Database,
-  CloudCheck,
-  CloudAlert,
   Server,
   FileText,
   CheckCircle2,
-  Trash2,
 } from 'lucide-react-native';
 
 export const SincronizacionScreen = () => {
   const { isOnline, connectionType, forzarSincronizacion, syncInProgress } = useNetwork();
-  const { syncPendientes, cargarRutaDelDia } = useRuta();
+  const { syncPendientes, _cargarRutaDelDia } = useRuta();
   const { token } = useAuth();
 
   const [itemsCola, setItemsCola] = useState([]);
-  const [loadingItems, setLoadingItems] = useState(false);
+  const [__loadingItems, setLoadingItems] = useState(false);
 
   const cargarCola = async () => {
     setLoadingItems(true);

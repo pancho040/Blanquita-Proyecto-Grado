@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useRuta } from '../../context/RutaContext';
 import { Header } from '../../components/common/Header';
-import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import {
   MapPin,

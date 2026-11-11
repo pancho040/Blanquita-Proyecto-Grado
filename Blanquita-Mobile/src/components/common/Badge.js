@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "../../constants/Colors";
 
@@ -8,6 +8,7 @@ export const Badge = ({
   variant = "neutral",
   variante,
   icon: IconComponent = null,
+  isNumeric = false,
   style = {},
   textStyle = {},
 }) => {
@@ -21,38 +22,38 @@ export const Badge = ({
       case "PAGADO":
       case "ONLINE":
         return {
-          bg: "rgba(16, 185, 129, 0.15)",
+          bg: Colors.successLight,
           text: Colors.success,
-          border: "rgba(16, 185, 129, 0.3)",
+          border: Colors.successBorder,
         };
       case "danger":
       case "NO_ENTREGADO":
       case "CANCELADO":
       case "OFFLINE":
         return {
-          bg: "rgba(239, 68, 68, 0.15)",
+          bg: Colors.dangerLight,
           text: Colors.danger,
-          border: "rgba(239, 68, 68, 0.3)",
+          border: Colors.dangerBorder,
         };
       case "warning":
       case "PENDIENTE":
       case "CREDITO":
         return {
-          bg: "rgba(245, 158, 11, 0.15)",
-          text: Colors.accent,
-          border: "rgba(245, 158, 11, 0.3)",
+          bg: Colors.warningLight,
+          text: Colors.warning,
+          border: Colors.warningBorder,
         };
       case "primary":
       case "EN_CAMINO":
       case "EN_CURSO":
         return {
-          bg: Colors.primaryMuted,
-          text: Colors.primary,
-          border: Colors.primary,
+          bg: Colors.primaryLight,
+          text: Colors.primaryDark,
+          border: Colors.borderStrong,
         };
       default:
         return {
-          bg: "rgba(148, 163, 184, 0.15)",
+          bg: Colors.backgroundDark,
           text: Colors.textSecondary,
           border: Colors.border,
         };
@@ -72,7 +73,14 @@ export const Badge = ({
       {IconComponent && (
         <IconComponent size={12} color={c.text} style={styles.icon} />
       )}
-      <Text style={[styles.text, { color: c.text }, textStyle]}>
+      <Text
+        style={[
+          styles.text,
+          { color: c.text },
+          isNumeric && styles.tabularText,
+          textStyle,
+        ]}
+      >
         {label}
       </Text>
     </View>
@@ -85,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 4, // DESIGN.md: Máximo 4px
     borderWidth: 1,
     alignSelf: "flex-start",
   },
@@ -95,6 +103,10 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 11,
     fontWeight: "700",
+    letterSpacing: 0.1,
+  },
+  tabularText: {
+    fontVariant: ["tabular-nums"], // DESIGN.md: Cifras numéricas tabulares
   },
 });
 

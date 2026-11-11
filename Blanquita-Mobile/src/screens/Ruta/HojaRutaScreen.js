@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useRuta } from '../../context/RutaContext';
 import { useAuth } from '../../context/AuthContext';
 import { Header } from '../../components/common/Header';
 import { OfflineBanner } from '../../components/common/OfflineBanner';
+import { FrescuraIndicador } from '../../components/common/FrescuraIndicador';
 import { ParadaCard } from '../../components/ruta/ParadaCard';
 import { MapaRutaSvg } from '../../components/ruta/MapaRutaSvg';
 import { Button } from '../../components/common/Button';
@@ -27,7 +28,7 @@ import {
 
 export const HojaRutaScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const { hojaRuta, metricas, cargarRutaDelDia } = useRuta();
+  const { hojaRuta, metricas, cargarRutaDelDia, ultimaSincronizacion } = useRuta();
 
   const [vista, setVista] = useState('mapa'); // 'mapa' | 'lista'
   const [refreshing, setRefreshing] = useState(false);
@@ -72,6 +73,11 @@ export const HojaRutaScreen = ({ navigation }) => {
         showSyncButton
       />
       <OfflineBanner />
+      <FrescuraIndicador
+        ultimaSincronizacion={ultimaSincronizacion}
+        onActualizar={onRefresh}
+        cargando={refreshing}
+      />
 
       {/* Barra de Progreso y Selector de Vista (Limpio y Minimalista) */}
       <View style={styles.topControlPanel}>
@@ -137,7 +143,7 @@ export const HojaRutaScreen = ({ navigation }) => {
         <View style={styles.mapContainer}>
           <MapaRutaSvg
             paradas={paradasList}
-            onSeleccionarParada={(p) => {}}
+            onSeleccionarParada={() => {}}
             onIrADetalle={irADetalle}
           />
         </View>

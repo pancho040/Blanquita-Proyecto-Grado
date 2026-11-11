@@ -20,7 +20,6 @@ import Svg, {
   LinearGradient,
   Stop,
 } from 'react-native-svg';
-import { Colors } from '../../constants/Colors';
 import {
   Navigation,
   ChevronRight,

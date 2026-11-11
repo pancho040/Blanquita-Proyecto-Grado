@@ -6,7 +6,9 @@ import { NetworkProvider } from './src/context/NetworkContext';
 import { LocationProvider } from './src/context/LocationContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { RutaProvider } from './src/context/RutaContext';
+import { NotificacionesProvider } from './src/context/NotificacionesContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { ActualizacionRequeridaModal } from './src/components/common/ActualizacionRequeridaModal';
 import { Colors } from './src/constants/Colors';
 
 export default function App() {
@@ -21,9 +23,12 @@ export default function App() {
         <NetworkProvider>
           <LocationProvider>
             <AuthProvider>
-              <RutaProvider>
-                <AppNavigator />
-              </RutaProvider>
+              <NotificacionesProvider>
+                <RutaProvider>
+                  <AppNavigator />
+                  <ActualizacionRequeridaModal />
+                </RutaProvider>
+              </NotificacionesProvider>
             </AuthProvider>
           </LocationProvider>
         </NetworkProvider>

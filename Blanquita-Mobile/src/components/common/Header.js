@@ -1,7 +1,7 @@
-import React from "react";
+// import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Wifi, WifiOff, RefreshCw, User, ChevronLeft } from "lucide-react-native";
-import { Colors, COLORS } from "../../constants/Colors";
+import { Colors } from "../../constants/Colors";
 import { useNetwork } from "../../context/NetworkContext";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
@@ -19,7 +19,7 @@ export const Header = ({
 }) => {
   const navigation = useNavigation();
   const { isOnline, syncInProgress, forzarSincronizacion } = useNetwork();
-  const { user, token } = useAuth();
+  const { token } = useAuth();
 
   const textoTitulo = title || titulo || "Blanquita";
   const textoSubtitulo = subtitle || subtitulo;

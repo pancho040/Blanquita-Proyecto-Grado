@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { AuthApi } from "../api/authApi";
-import { supabase } from "../api/supabaseClient";
+import { SecureStorage } from "../services/secureStorage";
 import { LocalDB } from "../database/localDb";
+import { SyncQueue } from "../database/syncQueue";
 import { useNetwork } from "./NetworkContext";
 
 const AuthContext = createContext(null);
@@ -18,9 +19,15 @@ export function AuthProvider({ children }) {
     async function restaurarSesion() {
       try {
         const sesionGuardada = await LocalDB.obtenerSesion();
+        const tokenSeguro = await SecureStorage.obtenerToken();
+        const refreshSeguro = await SecureStorage.obtenerRefreshToken();
+
         if (sesionGuardada && sesionGuardada.usuario) {
           setUsuario(sesionGuardada.usuario);
-          setTokens(sesionGuardada.tokens);
+          setTokens({
+            AccessToken: tokenSeguro || sesionGuardada.tokens?.AccessToken,
+            RefreshToken: refreshSeguro || sesionGuardada.tokens?.RefreshToken,
+          });
         }
       } catch (e) {
         console.error("[AuthContext] Error restaurando sesión:", e);
@@ -33,7 +40,7 @@ export function AuthProvider({ children }) {
 
   /**
    * Iniciar Sesión para Chofer (HU-27, HU-35)
-   * Si hay red: valida contra FastAPI backend.
+   * Si hay red: valida contra FastAPI /api/movil/v1/auth/login.
    * Si está offline: valida credenciales contra la última sesión local guardada.
    */
   const iniciarSesion = async (ci, clave) => {
@@ -42,45 +49,37 @@ export function AuthProvider({ children }) {
 
     try {
       if (isOnline) {
-        let authData = null;
-
-        // 1. Intentar Login con el Backend FastAPI
-        try {
-          authData = await AuthApi.login(ci, clave);
-        } catch (backendErr) {
-          console.log("[AuthContext] Backend local no respondió, intentando acceso directo Supabase Auth...", backendErr.message);
-          // 2. Fallback directo a Supabase Auth en la nube
-          const emailSintetico = `${ci.trim()}@papelblanquita.invalid`;
-          const { data: supaData, error: supaErr } = await supabase.auth.signInWithPassword({
-            email: emailSintetico,
-            password: clave,
-          });
-
-          if (supaErr || !supaData?.session) {
-            throw new Error(supaErr?.message || "Credenciales incorrectas (CI o contraseña inválida).");
-          }
-
-          authData = {
-            AccessToken: supaData.session.access_token,
-            RefreshToken: supaData.session.refresh_token,
-          };
-        }
-
-        const usuarioPerfil = {
-          IdUsuario: ci === "7891002" ? 10 : 9,
-          NombreCompleto: ci === "7891002" ? "Alejandro Vargas" : "Marcos Antonio Condori",
-          nombre: ci === "7891002" ? "Alejandro" : "Marcos",
-          apellido: ci === "7891002" ? "Vargas" : "Condori",
-          Ci: ci.trim(),
-          IdRol: 6,
-          RolNombre: "Agente de Reparto",
+        // 1. Login centralizado con FastAPI
+        const respLogin = await AuthApi.login(ci, clave);
+        // respLogin: { access_token, refresh_token, token_type, expires_in, usuario }
+        const tokenPayload = {
+          AccessToken: respLogin.access_token,
+          RefreshToken: respLogin.refresh_token,
         };
 
-        setUsuario(usuarioPerfil);
-        setTokens(authData);
+        const usuarioPerfil = {
+          IdUsuario: respLogin.usuario.id_usuario,
+          NombreCompleto: `${respLogin.usuario.nombre} ${respLogin.usuario.apellido}`.trim(),
+          nombre: respLogin.usuario.nombre,
+          apellido: respLogin.usuario.apellido,
+          Ci: respLogin.usuario.ci,
+          IdRol: respLogin.usuario.id_rol,
+          RolNombre: respLogin.usuario.nombre_rol,
+          SucursalesPermitidas: respLogin.usuario.sucursales_permitidas,
+          PuedeVerTodas: respLogin.usuario.puede_ver_todas,
+          SucursalDefecto: respLogin.usuario.sucursal_defecto,
+        };
+
+        // Guardar tokens de forma segura y encriptada
+        await SecureStorage.guardarToken(respLogin.access_token);
+        await SecureStorage.guardarRefreshToken(respLogin.refresh_token);
 
         // Guardar sesión en local para acceso offline (HU-27)
-        await LocalDB.guardarSesion(usuarioPerfil, authData);
+        await LocalDB.guardarSesion(usuarioPerfil, tokenPayload);
+
+        setUsuario(usuarioPerfil);
+        setTokens(tokenPayload);
+
         return { exito: true, usuario: usuarioPerfil };
       } else {
         // 2. Login Offline (HU-27: CA-27.1 y CA-27.2)
@@ -104,14 +103,41 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Cerrar Sesión
-  const cerrarSesion = async () => {
+  // Cerrar Sesión Seguro (Punto 6 - Protección de Dinero con Desglose y Excepción de 4xx)
+  const cerrarSesion = async (forzar = false) => {
     try {
+      const resumen = await SyncQueue.obtenerResumenDineroPendiente();
+
+      // Si hay cobros/dinero reintentables pendientes y no se ha confirmado forzar:
+      if (resumen.bloqueoRequerido && !forzar) {
+        return {
+          bloqueado: true,
+          requiereConfirmacion: true,
+          cantidad: resumen.cantidadReintentables,
+          montoTotal: resumen.totalDineroBs,
+          desgloseReintentables: resumen.reintentables,
+          desgloseNoReintentables: resumen.noReintentables4xx,
+          mensaje: `Tienes ${resumen.cantidadReintentables} cobro(s) con dinero por un total de Bs. ${resumen.totalDineroBs.toFixed(2)} sin sincronizar. Si cierras sesión ahora, podrían perderse. Por favor sincroniza primero o confirma explícitamente el cierre forzado.`,
+        };
+      }
+
+      // Los errores 4xx no reintentables NO bloquean el logout
+      await AuthApi.logout().catch(() => {});
+      await SecureStorage.limpiarTokens();
       await LocalDB.eliminarSesion();
+      await LocalDB.limpiarTodo();
+      await SyncQueue.limpiarCola();
       setUsuario(null);
       setTokens(null);
+      return {
+        exito: true,
+        advertencia4xx: resumen.cantidadNoReintentables4xx > 0
+          ? `Se descartaron ${resumen.cantidadNoReintentables4xx} operaciones con error de validación 4xx.`
+          : null,
+      };
     } catch (e) {
       console.error("[AuthContext] Error al cerrar sesión:", e);
+      return { exito: false, error: e.message };
     }
   };
 

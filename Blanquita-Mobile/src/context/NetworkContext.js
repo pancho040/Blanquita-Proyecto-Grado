@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import NetInfo from "@react-native-community/netinfo";
 import { syncService } from "../services/syncService";
 import { SyncQueue } from "../database/syncQueue";

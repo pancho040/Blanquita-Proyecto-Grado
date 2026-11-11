@@ -1,15 +1,15 @@
 // Configuración del entorno de la aplicación móvil Blanquita Choferes
-// Alineado con el Backend FastAPI y Supabase del Sistema Central
+// Conexión exclusiva al Backend FastAPI del Sistema Central ERP (Sin claves directas a BD)
 
 export const CONFIG = {
-  // URLs del Servidor Backend FastAPI
-  // IP local de la computadora para que el celular físico se conecte por Wi-Fi
-  API_BASE_URL: "https://blanquita-proyecto-grado-9f7j.onrender.com",
-  API_TIMEOUT_MS: 15000,
+  // Versión del cliente móvil para verificación de compatibilidad
+  CLIENT_VERSION: "1.0.0",
 
-  // Credenciales de Supabase para acceso directo / autenticación / realtime
-  SUPABASE_URL: "https://pyvimfqomqjdvopzsmts.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_u2CkFOXO1fxZi8np6TECYw_ZEGkMENZ",
+  // URL del Servidor Backend FastAPI (Render o Red Local)
+  API_BASE_URL: "https://blanquita-proyecto-grado-9f7j.onrender.com",
+  // 65 segundos en primera llamada para tolerar arranque en frío del plan gratis en Render (~54s)
+  API_TIMEOUT_MS: 65000,
+  API_MAX_RETRIES: 2,
 
   // Parámetros de Telemetría GPS en Vivo (HU-30, HU-33)
   GPS: {

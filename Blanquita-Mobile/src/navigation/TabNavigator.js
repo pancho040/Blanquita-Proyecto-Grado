@@ -1,17 +1,20 @@
-import React from 'react';
+// import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Colors } from '../constants/Colors';
 import { useRuta } from '../context/RutaContext';
+import { useNotificaciones } from '../context/NotificacionesContext';
 import { HojaRutaScreen } from '../screens/Ruta/HojaRutaScreen';
 import { NuevoClienteScreen } from '../screens/Clientes/NuevoClienteScreen';
 import { CierreRutaScreen } from '../screens/Cierre/CierreRutaScreen';
 import { SincronizacionScreen } from '../screens/Sync/SincronizacionScreen';
-import { Truck, UserPlus, DollarSign, Database } from 'lucide-react-native';
+import { BandejaAvisosScreen } from '../screens/Avisos/BandejaAvisosScreen';
+import { Truck, UserPlus, DollarSign, Database, Bell } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 
 export const TabNavigator = () => {
   const { syncPendientes } = useRuta();
+  const { conteoNoLeidas } = useNotificaciones();
 
   return (
     <Tab.Navigator
@@ -39,6 +42,20 @@ export const TabNavigator = () => {
         options={{
           tabBarLabel: 'Ruta',
           tabBarIcon: ({ color, size }) => <Truck size={size} color={color} />,
+        }}
+      />
+      <Tab.Screen
+        name="AvisosTab"
+        component={BandejaAvisosScreen}
+        options={{
+          tabBarLabel: 'Avisos',
+          tabBarBadge: conteoNoLeidas > 0 ? conteoNoLeidas : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: Colors.accent,
+            fontSize: 10,
+            fontWeight: '800',
+          },
+          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
         }}
       />
       <Tab.Screen

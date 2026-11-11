@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -15,14 +15,11 @@ import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
 import { ComprobanteModal } from '../../components/ruta/ComprobanteModal';
 import {
   PackageCheck,
   UserCheck,
   MapPin,
-  FileText,
-  AlertTriangle,
   RotateCw,
   Plus,
   Minus,
@@ -31,7 +28,7 @@ import {
 export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const { parada, pedido } = route.params;
   const { registrarEntrega, comprobanteActual, cerrarComprobante } = useRuta();
-  const { location, gpsStatus, getCurrentCoords } = useLocation();
+  const { location, _gpsStatus, getCurrentCoords } = useLocation();
 
   // Cantidades de los ítems
   const [items, setItems] = useState(

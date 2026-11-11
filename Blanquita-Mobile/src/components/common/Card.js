@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Colors } from "../../constants/Colors";
 
@@ -44,15 +44,12 @@ export const Card = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 14,
+    borderRadius: 4, // DESIGN.md: Máximo 4px de radio
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0, // DESIGN.md: Cero sombras difusas
+    elevation: 0,
     marginBottom: 12,
   },
   header: {
@@ -68,9 +65,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
     color: Colors.text,
-    letterSpacing: 0.3,
+    letterSpacing: -0.1,
   },
 });
 

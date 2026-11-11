@@ -1,6 +1,6 @@
-import React from "react";
+// import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Truck, CheckCircle2, DollarSign, Wallet } from "lucide-react-native";
+import { DollarSign, Wallet } from "lucide-react-native";
 import { Colors } from "../../constants/Colors";
 import { Card } from "../common/Card";
 

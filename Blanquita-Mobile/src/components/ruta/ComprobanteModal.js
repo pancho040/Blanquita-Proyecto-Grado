@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import {
   Modal,
   View,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Share,
 } from "react-native";
-import { CheckCircle2, Share2, X, MapPin, Calendar, Clock, Hash } from "lucide-react-native";
+import { CheckCircle2, Share2, X, MapPin } from "lucide-react-native";
 import { COLORS } from "../../constants/Colors";
 import Button from "../common/Button";
 

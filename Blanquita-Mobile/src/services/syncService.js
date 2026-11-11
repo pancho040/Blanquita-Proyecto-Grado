@@ -1,7 +1,6 @@
 import { SyncQueue } from "../database/syncQueue";
 import { LogisticaApi } from "../api/logisticaApi";
 import { ClientesApi } from "../api/clientesApi";
-import { LocalDB } from "../database/localDb";
 
 /**
  * Motor de Sincronización Asíncrona Automática
@@ -36,7 +35,7 @@ class SyncService {
    * Ejecuta el procesamiento de todas las operaciones pendientes
    * @param {boolean} forzar - Si es forzado por el usuario o automático
    */
-  async procesarCola(forzar = false) {
+  async procesarCola(_forzar = false) {
     if (this.sincronizando) {
       console.log("[SyncService] Ya hay una sincronización en curso.");
       return { exito: false, mensaje: "Sincronización ya en curso." };

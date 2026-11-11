@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { LogisticaApi } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
@@ -18,6 +18,7 @@ export function RutaProvider({ children }) {
   const [cargandoRuta, setCargandoRuta] = useState(false);
   const [errorRuta, setErrorRuta] = useState(null);
   const [comprobanteActual, setComprobanteActual] = useState(null);
+  const [ultimaSincronizacion, setUltimaSincronizacion] = useState(new Date());
 
   const cerrarComprobante = () => setComprobanteActual(null);
 
@@ -68,7 +69,7 @@ export function RutaProvider({ children }) {
       if (rutaInicial && usuario) {
         iniciarTelemetria(usuario.IdUsuario, rutaInicial.IdAsignacion);
       }
-    } catch (e) {
+    } catch (_e) {
       const defaultRuta = generarRutaPorDefecto();
       setAsignacionActiva(defaultRuta);
       recalcularRecaudacion(defaultRuta);
@@ -84,6 +85,7 @@ export function RutaProvider({ children }) {
           setAsignacionActiva(rutaChofer);
           await LocalDB.guardarRutaActiva(rutaChofer);
           recalcularRecaudacion(rutaChofer);
+          setUltimaSincronizacion(new Date());
         } else {
           // Fallback a asignaciones estándar
           const hoyStr = new Date().toISOString().split("T")[0];
@@ -96,6 +98,7 @@ export function RutaProvider({ children }) {
               setAsignacionActiva(dataRuta);
               await LocalDB.guardarRutaActiva(dataRuta);
               recalcularRecaudacion(dataRuta);
+              setUltimaSincronizacion(new Date());
             }
           }
         }
@@ -136,7 +139,7 @@ export function RutaProvider({ children }) {
     let gps = null;
     try {
       gps = await obtenerUbicacionActual();
-    } catch (e) {
+    } catch (_e) {
       gps = { latitud: -19.0435, longitud: -65.2580, precision: 10 };
     }
 
@@ -341,7 +344,7 @@ export function RutaProvider({ children }) {
       return nuevaRuta;
     });
 
-    // 3. Encolar para sincronizar con Supabase central (HU-28, HU-29)
+    // 3. Encolar para sincronizar con servidor central FastAPI (HU-28, HU-29)
     await SyncQueue.encolarOperacion("NUEVO_CLIENTE", nuevoCliente, gps);
     await refrescarPendientes();
 
@@ -583,6 +586,7 @@ export function RutaProvider({ children }) {
         cerrarRutaDiaria,
         cerrarRuta: cerrarRutaDiaria,
         syncPendientes: paradasList.length > 0 ? 0 : 0,
+        ultimaSincronizacion,
       }}
     >
       {children}

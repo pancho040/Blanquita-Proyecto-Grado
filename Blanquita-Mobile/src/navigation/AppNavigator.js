@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Colors } from '../constants/Colors';
@@ -11,6 +11,27 @@ import { RegistrarCobroScreen } from '../screens/Ruta/RegistrarCobroScreen';
 import { NuevoClienteScreen } from '../screens/Clientes/NuevoClienteScreen';
 
 const Stack = createNativeStackNavigator();
+
+// Configuración de Deep Links blanquita:// (Fase 1.1 - Punto C1)
+export const linkingConfig = {
+  prefixes: ['blanquita://', 'https://app.blanquita.com'],
+  config: {
+    screens: {
+      Login: 'login',
+      MainTabs: {
+        screens: {
+          RutaTab: 'ruta',
+          CierreTab: 'cierre',
+          SyncTab: 'sync',
+        },
+      },
+      DetalleParada: 'parada/:id',
+      RegistrarEntrega: 'entrega/:id',
+      RegistrarCobro: 'cobro/:id',
+      NuevoCliente: 'cliente/nuevo',
+    },
+  },
+};
 
 export const AppNavigator = () => {
   const { isAuthenticated, loading } = useAuth();

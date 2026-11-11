@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import {
   TouchableOpacity,
   Text,
@@ -12,7 +12,7 @@ export const Button = ({
   title,
   onPress,
   variant = "primary", // "primary" | "secondary" | "success" | "danger" | "outline"
-  size = "md",          // "sm" | "md" | "lg" | "small" | "large"
+  size = "md",          // "sm" | "md" | "lg"
   loading = false,
   disabled = false,
   icon: IconComponent = null,
@@ -20,12 +20,12 @@ export const Button = ({
   textStyle = {},
 }) => {
   const getBackgroundColor = () => {
-    if (disabled) return "#475569";
+    if (disabled) return "#94A3B8";
     switch (variant) {
       case "primary":
         return Colors.primary;
       case "secondary":
-        return Colors.secondary;
+        return Colors.surface;
       case "success":
         return Colors.success;
       case "danger":
@@ -38,8 +38,9 @@ export const Button = ({
   };
 
   const getTextColor = () => {
-    if (disabled) return "#94A3B8";
+    if (disabled) return "#FFFFFF";
     if (variant === "outline") return Colors.primary;
+    if (variant === "secondary") return Colors.text;
     return "#FFFFFF";
   };
 
@@ -47,12 +48,12 @@ export const Button = ({
     switch (size) {
       case "sm":
       case "small":
-        return { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 };
+        return { paddingVertical: 8, paddingHorizontal: 12, minHeight: 40 };
       case "lg":
       case "large":
-        return { paddingVertical: 15, paddingHorizontal: 20, borderRadius: 14 };
+        return { paddingVertical: 14, paddingHorizontal: 20, minHeight: 52 };
       default:
-        return { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12 };
+        return { paddingVertical: 12, paddingHorizontal: 16, minHeight: 48 }; // Target táctil >= 48px
     }
   };
 
@@ -65,9 +66,9 @@ export const Button = ({
         styles.base,
         getPadding(),
         { backgroundColor: getBackgroundColor() },
-        variant === "outline" && {
-          borderWidth: 1.5,
-          borderColor: disabled ? "#475569" : Colors.primary,
+        (variant === "outline" || variant === "secondary") && {
+          borderWidth: 1,
+          borderColor: disabled ? "#94A3B8" : (variant === "secondary" ? Colors.border : Colors.primary),
         },
         style,
       ]}
@@ -93,7 +94,7 @@ export const Button = ({
                   size === "sm" || size === "small"
                     ? 13
                     : size === "lg" || size === "large"
-                    ? 16
+                    ? 15
                     : 14,
               },
               textStyle,
@@ -109,13 +110,11 @@ export const Button = ({
 
 const styles = StyleSheet.create({
   base: {
+    borderRadius: 4, // DESIGN.md: Máximo 4px de radio
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+    elevation: 0, // Sin sombras AI-slop
+    shadowOpacity: 0,
   },
   contentRow: {
     flexDirection: "row",
@@ -127,7 +126,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: "700",
-    textAlign: "center",
+    letterSpacing: 0.2,
   },
 });
 

@@ -1,26 +1,22 @@
-import React from "react";
+// import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from "react-native";
 import {
   MapPin,
   Phone,
-  Package,
   DollarSign,
-  CheckCircle,
-  XCircle,
-  Clock,
   ChevronRight,
 } from "lucide-react-native";
 import { Colors } from "../../constants/Colors";
 import { Card } from "../common/Card";
 import { Badge } from "../common/Badge";
 
-export const ParadaCard = ({ parada, onPress, onDetalle, onEntregar, onCobrar }) => {
+export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar }) => {
   const handlePress = onPress || onDetalle;
 
   const estado = (parada.Estado || parada.estado || "PENDIENTE").toUpperCase();
   const esEntregado = estado === "ENTREGADO";
   const esNoEntregado = estado === "NO_ENTREGADO";
-  const esPendiente = !esEntregado && !esNoEntregado;
+  const _esPendiente = !esEntregado && !esNoEntregado;
 
   const orden = parada.OrdenVisita || parada.secuencia || parada.orden || "1";
   const nombrePunto =

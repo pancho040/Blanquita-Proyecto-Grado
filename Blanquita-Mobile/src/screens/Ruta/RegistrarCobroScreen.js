@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,6 @@ import {
   Receipt,
   MapPin,
   CheckCircle2,
-  AlertCircle,
 } from 'lucide-react-native';
 
 export const RegistrarCobroScreen = ({ route, navigation }) => {
