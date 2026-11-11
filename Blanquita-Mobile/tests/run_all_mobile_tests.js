@@ -16,6 +16,7 @@ const testFiles = [
   "test_fase2_flujos_chofer.test.js",
   "test_sync_subida_archivos.test.js",
   "test_pantallas_react_test_renderer.test.js",
+  "test_fase3_pantallas_y_cliente.test.js",
 ];
 
 console.log("==================================================================");

@@ -1,6 +1,5 @@
 import { SyncQueue } from "../database/syncQueue";
 import { LogisticaApi } from "../api/logisticaApi";
-import { ClientesApi } from "../api/clientesApi";
 
 /**
  * Motor de Sincronización Asíncrona Automática (Fase 2)
@@ -180,13 +179,28 @@ class SyncService {
               break;
             }
 
+            case "ALTA_CLIENTE":
             case "NUEVO_CLIENTE": {
               const payloadCliente = {
-                ...item.payload,
-                Latitud: item.gps?.latitud || item.payload?.Latitud,
-                Longitud: item.gps?.longitud || item.payload?.Longitud,
+                razon_social: item.payload?.razon_social || item.payload?.NombreCliente || item.payload?.razonSocial || "Cliente Ruta",
+                nombre_comercial: item.payload?.nombre_comercial || item.payload?.NombrePuntoVenta || item.payload?.nombreComercial || null,
+                nit_ci: item.payload?.nit_ci || item.payload?.NitCi || item.payload?.nitCi || null,
+                telefono: item.payload?.telefono || item.payload?.Telefono || null,
+                direccion: item.payload?.direccion || item.payload?.Direccion || "Sin direccion",
+                zona: item.payload?.zona || item.payload?.Zona || null,
+                tipo_negocio: item.payload?.tipo_negocio || item.payload?.tipoNegocio || null,
+                observaciones: item.payload?.observaciones || item.payload?.Observaciones || null,
+                latitud: item.gps?.latitud || item.payload?.latitud || item.payload?.Latitud || -19.0431,
+                longitud: item.gps?.longitud || item.payload?.longitud || item.payload?.Longitud || -65.2592,
+                id_ruta_distribucion: item.payload?.id_ruta_distribucion || item.payload?.IdRutaDistribucion || null,
               };
-              await ClientesApi.crearCliente(payloadCliente);
+
+              const resCliente = await LogisticaApi.registrarNuevoCliente(payloadCliente, idempotencyKey);
+              if (!resCliente.success) {
+                const err = new Error(resCliente.error);
+                err.status = resCliente.status;
+                throw err;
+              }
               break;
             }
 

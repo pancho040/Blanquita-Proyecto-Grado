@@ -208,3 +208,28 @@
      - Backend P2P: 11/11 pruebas aprobadas en `test_fase2_chofer_movil.py`.
      - Mobile Unit/Integration: 9/9 suites aprobadas en `npm test` de `Blanquita-Mobile`.
      - Linter: `npm run lint` finalizado con 0 errores y 0 advertencias. | Archivos: `DetalleParadaScreen.js`, `syncService.js`, `test_sync_subida_archivos.test.js`, `ChoferMovilRouter.py`, `test_fase2_chofer_movil.py`, `LOG.md`.
+
+
+- **2026-11-11 18:40** | **Agente Móvil & Backend** | **Fase 3 (Alta de Clientes, Bandeja de Avisos y Cierre de Módulo)** | Implementación de las 4 restricciones técnicas y suite de verificación integral:
+  1. Deuda Técnica Fase 2 y Mapeo Dinámico de Catálogo:
+     - En `ChoferMovilRouter.py`, resolución dinámica de `IdMetodoPago` consultando el catálogo `MetodoPago` (`3` para QR y `2` para Transferencia Bancaria).
+     - En `/chofer/sincronizar-batch`, procesamiento unificado de operaciones de tipo `COBRO` (simple y mixto) asentando en `AbonoCuentaCobrar` en estado `PENDIENTE_APROBACION` con vinculación a `ComprobanteArchivo` y notificación a supervisión de Kevin.
+  2. Módulo A — Alta de Cliente en Ruta (`NuevoClienteScreen.js` + `POST /api/movil/v1/chofer/clientes`):
+     - Creación de `Cliente` y `PuntoVenta` asignados forzosamente a la sucursal del chofer (`alcance.sucursal_efectiva`) y vinculados a su ruta mediante `RutaPuntoVenta`.
+     - Exigencia de `X-Idempotency-Key` (UUID v4) con respuesta cacheada en caso de reintentos concurrentes sin duplicar registros en base de datos.
+     - En interfaz móvil, captura satelital con temporizador y botón de contingencia "Continuar sin señal GPS precisa" para ambientes cerrados o sótanos.
+     - Soporte encolado offline de `ALTA_CLIENTE` en `syncService.js` y `RutaContext.js`.
+  3. Módulo B — Bandeja de Avisos y Supervisión de Kevin (`BandejaAvisosScreen.js`):
+     - Conexión con `/api/movil/v1/notificaciones` y marcado con `PATCH /api/movil/v1/notificaciones/{id}/leida`.
+     - Visualización diferenciada con tarjetas e insignias de estado para eventos: aprobación/rechazo de abonos QR con motivo explícito, ajustes de notas de venta y avisos de revalorización de inventario.
+     - Indicador `tabBarBadge` conectado al conteo de no leídas en el Tab Avisos.
+     - En `PushNotificationService.py`, sanitización estricta de mensajes en pantalla de bloqueo (cero montos en Bs. y cero nombres de clientes).
+  4. Módulo C y D — Monitor de Transmisiones y Diseño Industrial (`SincronizacionScreen.js`):
+     - Monitor con desglose de ítems en cola (`ENTREGA`, `COBRO`, `ALTA_CLIENTE`, `NO_ENTREGA`, `CIERRE_RUTA`, `PING_GPS`).
+     - Tratamiento y visualización accesible de observaciones 4xx ("Requiere Revisión") distinguiéndolas de fallos de red 5xx reintentables.
+     - Cumplimiento de `DESIGN.md`: radios de borde de 4px, touch targets mayores o iguales a 48px, tipografía numérica tabular y ratios de contraste WCAG AA/AAA.
+  5. Verificaciones y Calidad:
+     - Backend P2P: 4/4 pruebas aprobadas en `test_fase3_chofer_movil.py` y 210/210 pruebas de la suite completa aprobadas.
+     - Limpieza de base de datos: 0 registros residuales tras pruebas mediante rollback transaccional.
+     - Móvil: 10/10 suites aprobadas en `npm test`, linter `eslint src/` con 0 errores y 0 advertencias, script de contraste con código 0 y empaquetado Expo `npx expo export -p android --no-bytecode` con 0 secretos en `dist/`.
+     - Guardia de seguridad: 0 infracciones a tablas y esquemas de planta. | Archivos: `ChoferMovilModel.py`, `ChoferMovilRouter.py`, `PushNotificationService.py`, `NotificationService.py`, `CuentasCobrarService.py`, `NuevoClienteScreen.js`, `BandejaAvisosScreen.js`, `SincronizacionScreen.js`, `logisticaApi.js`, `syncService.js`, `RutaContext.js`, `run_all_mobile_tests.js`, `test_fase3_chofer_movil.py`, `test_fase3_pantallas_y_cliente.test.js`, `LOG.md`.

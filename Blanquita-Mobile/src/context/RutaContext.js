@@ -309,19 +309,47 @@ export function RutaProvider({ children }) {
   };
 
   /**
-   * HU-29: Registrar Nuevos Clientes en Campo
+   * HU-29: Registrar Nuevos Clientes en Campo (Fase 3)
    */
   const registrarNuevoClienteCampo = async (clienteForm) => {
-    // 1. GPS obligatorio en el punto de registro
-    const gps = await obtenerUbicacionActual();
+    // 1. Obtener ubicación con fallback si no viene provista
+    const lat = clienteForm.latitud || clienteForm.Latitud;
+    const lng = clienteForm.longitud || clienteForm.Longitud;
+    const gps = (lat && lng) ? { latitud: Number(lat), longitud: Number(lng) } : await obtenerUbicacionActual();
 
-    const nuevoCliente = {
+    const razonSocial = clienteForm.razon_social || clienteForm.nombreCliente || clienteForm.razonSocial || "Nuevo Cliente";
+    const nombreComercial = clienteForm.nombre_comercial || clienteForm.nombreNegocio || clienteForm.nombreComercial || razonSocial;
+    const direccion = clienteForm.direccion || clienteForm.Direccion || "Sin dirección";
+    const telefono = clienteForm.telefono || clienteForm.Telefono || null;
+    const nitCi = clienteForm.nit_ci || clienteForm.nitCi || null;
+    const zona = clienteForm.zona || clienteForm.Zona || null;
+    const tipoNegocio = clienteForm.tipo_negocio || clienteForm.tipoNegocio || null;
+    const observaciones = clienteForm.observaciones || clienteForm.referencia || clienteForm.Referencia || null;
+
+    const idRuta = asignacionActiva?.IdRutaDistribucion || asignacionActiva?.IdRuta || null;
+    const idempotencyKey = clienteForm.idempotencyKey || `cli-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const payloadApi = {
+      razon_social: razonSocial,
+      nombre_comercial: nombreComercial,
+      nit_ci: nitCi,
+      telefono: telefono,
+      direccion: direccion,
+      zona: zona,
+      tipo_negocio: tipoNegocio,
+      observaciones: observaciones,
+      latitud: gps.latitud,
+      longitud: gps.longitud,
+      id_ruta_distribucion: idRuta,
+    };
+
+    const nuevoClienteLocal = {
       IdPuntoVenta: `temp_${Date.now()}`,
-      NombreCliente: clienteForm.nombreCliente,
-      NombrePuntoVenta: clienteForm.nombreNegocio,
-      Telefono: clienteForm.telefono,
-      Direccion: clienteForm.direccion,
-      Referencia: clienteForm.referencia,
+      NombreCliente: razonSocial,
+      NombrePuntoVenta: nombreComercial,
+      Telefono: telefono,
+      Direccion: direccion,
+      Referencia: observaciones,
       Latitud: gps.latitud,
       Longitud: gps.longitud,
       IdZona: asignacionActiva?.IdZona || 1,
@@ -334,25 +362,37 @@ export function RutaProvider({ children }) {
     };
 
     // 2. Guardar en clientes locales y agregar a la ruta del día
-    await LocalDB.agregarClienteLocal(nuevoCliente);
+    await LocalDB.agregarClienteLocal(nuevoClienteLocal);
 
     setAsignacionActiva((prev) => {
       if (!prev) return prev;
-      const paradas = [...(prev.paradas || []), nuevoCliente];
+      const paradas = [...(prev.paradas || []), nuevoClienteLocal];
       const nuevaRuta = { ...prev, paradas };
       LocalDB.guardarRutaActiva(nuevaRuta);
       return nuevaRuta;
     });
 
-    // 3. Encolar para sincronizar con servidor central FastAPI (HU-28, HU-29)
-    await SyncQueue.encolarOperacion("NUEVO_CLIENTE", nuevoCliente, gps);
-    await refrescarPendientes();
-
+    // 3. Si hay red, enviar directamente al backend; si falla o está offline, encolar en SyncQueue
     if (isOnline) {
-      LogisticaApi.crearCliente ? null : null; // o vía ClientesApi
+      try {
+        const res = await LogisticaApi.registrarNuevoCliente(payloadApi, idempotencyKey);
+        if (res.success) {
+          return { success: true, exito: true, datos: res.data, nuevoCliente: nuevoClienteLocal };
+        }
+      } catch (_e) {
+        // Fallback a encolar offline
+      }
     }
 
-    return { exito: true, nuevoCliente };
+    await SyncQueue.encolarOperacion("ALTA_CLIENTE", payloadApi, gps, idempotencyKey);
+    await refrescarPendientes();
+
+    return {
+      success: true,
+      exito: true,
+      mensajeOffline: "Cliente registrado en modo offline y programado para sincronización.",
+      nuevoCliente: nuevoClienteLocal,
+    };
   };
 
   /**

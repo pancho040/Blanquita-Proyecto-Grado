@@ -112,3 +112,18 @@ class ResumenInventarioChoferDTO(BaseModel):
     total_saldo_camion: float
     valor_total_camion_bs: float
     items: List[ItemInventarioCamionDTO]
+
+
+class ClienteMovilRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    razon_social: str = Field(..., min_length=2, validation_alias=AliasChoices("razon_social", "RazonSocial"))
+    nombre_comercial: Optional[str] = Field(None, validation_alias=AliasChoices("nombre_comercial", "NombreComercial"))
+    nit_ci: Optional[str] = Field(None, validation_alias=AliasChoices("nit_ci", "NitCi", "nit"))
+    telefono: Optional[str] = Field(None, validation_alias=AliasChoices("telefono", "Telefono"))
+    direccion: str = Field(..., min_length=3, validation_alias=AliasChoices("direccion", "Direccion"))
+    zona: Optional[str] = None
+    tipo_negocio: Optional[str] = "TIENDA_BARRIO"
+    observaciones: Optional[str] = None
+    latitud: float = Field(..., validation_alias=AliasChoices("latitud", "Latitud"))
+    longitud: float = Field(..., validation_alias=AliasChoices("longitud", "Longitud"))
+

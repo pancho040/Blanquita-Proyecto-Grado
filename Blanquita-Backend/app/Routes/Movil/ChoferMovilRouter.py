@@ -39,6 +39,7 @@ from app.Models.Movil.ChoferMovilModel import (
     CobroMovilRequest,
     NoEntregaMovilRequest,
     CierreTurnoMovilRequest,
+    ClienteMovilRequest,
     ResumenInventarioChoferDTO,
     ItemInventarioCamionDTO
 )
@@ -82,6 +83,216 @@ def _verificar_idempotencia_escritura(
         endpoint=endpoint
     )
     return hash_cuerpo, respuesta_cacheada
+
+
+def _resolver_id_metodo_pago(db: Session, nombre_metodo: str) -> int:
+    """Resuelve dinámicamente el IdMetodoPago desde el catálogo MetodoPago."""
+    metodo_norm = (nombre_metodo or "EFECTIVO").strip().upper()
+    row = db.execute(text("""
+        SELECT "IdMetodoPago"
+        FROM public."MetodoPago"
+        WHERE UPPER("NombreMetodoPago") = :nombre
+        LIMIT 1;
+    """), {"nombre": metodo_norm}).fetchone()
+    if row:
+        return int(row[0])
+    if "TRANSF" in metodo_norm:
+        return 2
+    if "QR" in metodo_norm:
+        return 3
+    if "CRED" in metodo_norm:
+        return 4
+    return 1
+
+
+def _asegurar_cxc_y_abono_bancario_chofer(
+    db: Session,
+    uid: int,
+    id_pedido: int,
+    metodo: str,
+    monto: float,
+    numero_referencia: str,
+    id_comprobante_archivo: Optional[int],
+    url_comprobante: Optional[str],
+    alcance: AlcanceUsuario,
+    observacion: Optional[str] = None
+) -> tuple[Optional[int], Optional[int]]:
+    """Localiza o crea la CuentaCobrar y asienta el AbonoCuentaCobrar en PENDIENTE_APROBACION para Kevin."""
+    cxc_service = CuentasCobrarService(db)
+
+    ped_info = db.execute(text("""
+        SELECT p."IdCliente", c."IdSucursal", p."MontoTotal", p."NumeroPedido"
+        FROM public."Pedido" p
+        JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        WHERE p."IdPedido" = :id_ped;
+    """), {"id_ped": id_pedido}).fetchone()
+
+    id_cliente = ped_info[0] if ped_info else None
+    id_sucursal_ped = ped_info[1] if ped_info else (alcance.sucursal_efectiva or 1)
+
+    id_cxc = None
+    if id_cliente:
+        cxc_existente = db.execute(text("""
+            SELECT "IdCuentaCobrar"
+            FROM public."CuentaCobrar"
+            WHERE "IdPedido" = :id_ped
+            LIMIT 1;
+        """), {"id_ped": id_pedido}).fetchone()
+
+        if cxc_existente:
+            id_cxc = cxc_existente[0]
+        else:
+            cxc_cliente = db.execute(text("""
+                SELECT "IdCuentaCobrar"
+                FROM public."CuentaCobrar"
+                WHERE "IdCliente" = :id_cli AND "IdEstadoCuentaCobrar" = 1 AND "SaldoPendiente" > 0
+                ORDER BY "IdCuentaCobrar" DESC
+                LIMIT 1;
+            """), {"id_cli": id_cliente}).fetchone()
+
+            if cxc_cliente:
+                id_cxc = cxc_cliente[0]
+            else:
+                nro_ped = ped_info[3] if ped_info and ped_info[3] else f"PED-{id_pedido}"
+                nueva_cxc = cxc_service.repo.CrearCuentaCobrar({
+                    "IdCliente": id_cliente,
+                    "IdPedido": id_pedido,
+                    "IdNotaVenta": None,
+                    "NumeroNotaVenta": str(nro_ped),
+                    "NumeroNotaEntrega": f"NE-{id_pedido}",
+                    "FechaDespacho": date.today(),
+                    "DiasMora": 0,
+                    "IdEstadoCuentaCobrar": 1,
+                    "MontoTotal": monto,
+                    "SaldoPendiente": monto,
+                    "FechaEmision": date.today(),
+                    "FechaVencimiento": date.today() + timedelta(days=15),
+                    "IdUsuarioRegistro": uid,
+                    "Observacion": f"Cuenta generada por cobro móvil de pedido #{id_pedido}"
+                })
+                id_cxc = nueva_cxc["IdCuentaCobrar"]
+                db.execute(text('UPDATE public."CuentaCobrar" SET "IdSucursal" = :sid WHERE "IdCuentaCobrar" = :id;'), {
+                    "sid": id_sucursal_ped,
+                    "id": id_cxc
+                })
+
+    id_abono_creado = None
+    id_metodo_pago = _resolver_id_metodo_pago(db, metodo)
+    if id_cxc:
+        dto_abono = AbonoCuentaCobrarCrear(
+            IdCuentaCobrar=id_cxc,
+            IdMetodoPago=id_metodo_pago,
+            MetodoPago=metodo.upper(),
+            MontoAbonado=monto,
+            FechaAbono=date.today(),
+            NumeroReferencia=numero_referencia,
+            IdComprobanteArchivo=id_comprobante_archivo,
+            Observacion=f"Cobro móvil chofer #{uid} para Pedido #{id_pedido} - {observacion or ''}".strip()
+        )
+        abono_db = cxc_service.RegistrarAbonoChofer(dto_abono, id_usuario=uid)
+        id_abono_creado = abono_db.get("IdAbonoCuentaCobrar")
+
+        db.execute(text("""
+            INSERT INTO public."NotificacionInterna" (
+                "IdUsuarioDestinatario", "Tipo", "Titulo", "Mensaje",
+                "CodigoReferencia", "Leido", "FechaCreacion"
+            ) VALUES (
+                1, 'ALERTA', 'Cobro QR/Transferencia Móvil Pendiente',
+                :msj, :id_ped, false, NOW()
+            );
+        """), {
+            "msj": f"El chofer #{uid} registró un cobro de Bs. {monto:.2f} vía {metodo.upper()} para Pedido #{id_pedido}. Requiere validación de Kevin.",
+            "id_ped": id_pedido
+        })
+
+    return id_cxc, id_abono_creado
+
+
+def _crear_cliente_y_punto_venta_en_ruta(
+    db: Session,
+    uid: int,
+    payload: dict,
+    lat: float,
+    lng: float,
+    alcance: AlcanceUsuario
+) -> dict:
+    """Crea Cliente y PuntoVenta forzosamente en la sucursal del chofer y lo vincula a su ruta."""
+    sid = alcance.sucursal_efectiva or 1
+    razon = (payload.get("razon_social") or "").strip()
+    if not razon:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La razón social es obligatoria."
+        )
+    nombre_com = (payload.get("nombre_comercial") or razon).strip()
+    nit = payload.get("nit_ci") or None
+    tel = payload.get("telefono") or None
+    dir_txt = (payload.get("direccion") or "Sin dirección especificada").strip()
+    obs = payload.get("observaciones") or payload.get("tipo_negocio")
+
+    # 1. Insertar Cliente asignado forzosamente a la sucursal del chofer
+    cli_row = db.execute(text("""
+        INSERT INTO public."Cliente" (
+            "IdEstadoCliente", "RazonSocial", "NombreComercial", "NitCi",
+            "Telefono", "Direccion", "Latitud", "Longitud",
+            "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion", "IdSucursal"
+        ) VALUES (
+            1, :razon, :nom_com, :nit,
+            :tel, :dir, :lat, :lng,
+            0, 0, :uid, :obs, :sid
+        ) RETURNING "IdCliente";
+    """), {
+        "razon": razon, "nom_com": nombre_com, "nit": nit, "tel": tel,
+        "dir": dir_txt, "lat": lat, "lng": lng, "uid": uid, "obs": obs, "sid": sid
+    }).fetchone()
+    id_cliente = cli_row[0]
+
+    # 2. Insertar PuntoVenta
+    pv_row = db.execute(text("""
+        INSERT INTO public."PuntoVenta" (
+            "IdCliente", "NombrePuntoVenta", "Direccion",
+            "Latitud", "Longitud", "Referencia", "Activo"
+        ) VALUES (
+            :cli, :nom_com, :dir,
+            :lat, :lng, :ref, true
+        ) RETURNING "IdPuntoVenta";
+    """), {
+        "cli": id_cliente, "nom_com": nombre_com, "dir": dir_txt,
+        "lat": lat, "lng": lng, "ref": obs
+    }).fetchone()
+    id_pv = pv_row[0]
+
+    # 3. Vincular a la ruta activa del chofer si existe
+    asig = db.execute(text("""
+        SELECT ar."IdRutaDistribucion"
+        FROM public."AsignacionRuta" ar
+        WHERE ar."IdUsuarioRepartidor" = :uid AND ar."FechaAsignacion" = CURRENT_DATE
+        ORDER BY ar."IdAsignacionRuta" DESC
+        LIMIT 1;
+    """), {"uid": uid}).fetchone()
+    if asig:
+        id_ruta = asig[0]
+        max_orden = db.execute(text("""
+            SELECT COALESCE(MAX("OrdenVisita"), 0) + 1
+            FROM public."RutaPuntoVenta"
+            WHERE "IdRutaDistribucion" = :rid;
+        """), {"rid": id_ruta}).scalar()
+
+        db.execute(text("""
+            INSERT INTO public."RutaPuntoVenta" ("IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita")
+            VALUES (:rid, :pvid, :orden)
+            ON CONFLICT ("IdRutaDistribucion", "IdPuntoVenta") DO NOTHING;
+        """), {"rid": id_ruta, "pvid": id_pv, "orden": max_orden})
+
+    return {
+        "id_cliente": id_cliente,
+        "id_punto_venta": id_pv,
+        "razon_social": razon,
+        "nombre_comercial": nombre_com,
+        "sucursal_id": sid,
+        "latitud": lat,
+        "longitud": lng
+    }
 
 
 # ==============================================================================
@@ -454,66 +665,6 @@ async def registrar_cobro_movil(
     # 3. Procesar cada tramo de pago
     tramos_procesados = []
     ruta_service = RutaService(db)
-    cxc_service = CuentasCobrarService(db)
-
-    # Obtener IdCliente e IdSucursal del pedido para vincular cuentas por cobrar
-    ped_info = db.execute(text("""
-        SELECT p."IdCliente", c."IdSucursal", p."MontoTotal", p."NumeroPedido"
-        FROM public."Pedido" p
-        JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
-        WHERE p."IdPedido" = :id_ped;
-    """), {"id_ped": dto.id_pedido}).fetchone()
-
-    id_cliente = ped_info[0] if ped_info else None
-    id_sucursal_ped = ped_info[1] if ped_info else (alcance.sucursal_efectiva or 1)
-
-    # Si hay tramos bancarios (QR/Transferencia), asegurar CuentaCobrar para conectar con la bandeja de Kevin
-    id_cxc = None
-    hay_tramo_bancario = any(p.metodo.upper() in ("QR", "TRANSFERENCIA") for p in dto.pagos)
-    if hay_tramo_bancario and id_cliente:
-        cxc_existente = db.execute(text("""
-            SELECT "IdCuentaCobrar"
-            FROM public."CuentaCobrar"
-            WHERE "IdPedido" = :id_ped
-            LIMIT 1;
-        """), {"id_ped": dto.id_pedido}).fetchone()
-
-        if cxc_existente:
-            id_cxc = cxc_existente[0]
-        else:
-            cxc_cliente = db.execute(text("""
-                SELECT "IdCuentaCobrar"
-                FROM public."CuentaCobrar"
-                WHERE "IdCliente" = :id_cli AND "IdEstadoCuentaCobrar" = 1 AND "SaldoPendiente" > 0
-                ORDER BY "IdCuentaCobrar" DESC
-                LIMIT 1;
-            """), {"id_cli": id_cliente}).fetchone()
-
-            if cxc_cliente:
-                id_cxc = cxc_cliente[0]
-            else:
-                nro_ped = ped_info[3] if ped_info and ped_info[3] else f"PED-{dto.id_pedido}"
-                nueva_cxc = cxc_service.repo.CrearCuentaCobrar({
-                    "IdCliente": id_cliente,
-                    "IdPedido": dto.id_pedido,
-                    "IdNotaVenta": None,
-                    "NumeroNotaVenta": str(nro_ped),
-                    "NumeroNotaEntrega": f"NE-{dto.id_pedido}",
-                    "FechaDespacho": date.today(),
-                    "DiasMora": 0,
-                    "IdEstadoCuentaCobrar": 1,
-                    "MontoTotal": dto.monto_total,
-                    "SaldoPendiente": dto.monto_total,
-                    "FechaEmision": date.today(),
-                    "FechaVencimiento": date.today() + timedelta(days=15),
-                    "IdUsuarioRegistro": uid,
-                    "Observacion": f"Cuenta generada por cobro móvil de pedido #{dto.id_pedido}"
-                })
-                id_cxc = nueva_cxc["IdCuentaCobrar"]
-                db.execute(text('UPDATE public."CuentaCobrar" SET "IdSucursal" = :sid WHERE "IdCuentaCobrar" = :id;'), {
-                    "sid": id_sucursal_ped,
-                    "id": id_cxc
-                })
 
     for p in dto.pagos:
         metodo = p.metodo.upper()
@@ -527,8 +678,8 @@ async def registrar_cobro_movil(
 
         ref = p.numero_referencia or f"MOVIL-{int(datetime.now().timestamp())}-{uuid.uuid4().hex[:4].upper()}"
 
-        # Registrar en PagoPedido
-        id_metodo_pago = 1 if metodo == "EFECTIVO" else (2 if metodo in ("QR", "TRANSFERENCIA") else 3)
+        # Resolver dinámicamente IdMetodoPago desde el catálogo MetodoPago
+        id_metodo_pago = _resolver_id_metodo_pago(db, metodo)
         obs_pago = f"[{metodo}] {dto.observacion or ''}".strip()
         if metodo in ("QR", "TRANSFERENCIA"):
             obs_pago += f" [PENDIENTE_APROBACION - Comprobante: {p.id_comprobante_archivo or p.url_comprobante}]"
@@ -545,32 +696,20 @@ async def registrar_cobro_movil(
 
         # Si el método es QR o Transferencia, asentar en AbonoCuentaCobrar en estado PENDIENTE_APROBACION para Kevin
         id_abono_creado = None
-        if metodo in ("QR", "TRANSFERENCIA") and id_cxc:
-            dto_abono = AbonoCuentaCobrarCrear(
-                IdCuentaCobrar=id_cxc,
-                IdMetodoPago=2,
-                MetodoPago=metodo,
-                MontoAbonado=p.monto,
-                FechaAbono=date.today(),
-                NumeroReferencia=ref,
-                IdComprobanteArchivo=p.id_comprobante_archivo,
-                Observacion=f"Cobro móvil chofer #{uid} para Pedido #{dto.id_pedido}"
+        id_cxc = None
+        if metodo in ("QR", "TRANSFERENCIA"):
+            id_cxc, id_abono_creado = _asegurar_cxc_y_abono_bancario_chofer(
+                db=db,
+                uid=uid,
+                id_pedido=dto.id_pedido,
+                metodo=metodo,
+                monto=p.monto,
+                numero_referencia=ref,
+                id_comprobante_archivo=p.id_comprobante_archivo,
+                url_comprobante=p.url_comprobante,
+                alcance=alcance,
+                observacion=dto.observacion
             )
-            abono_db = cxc_service.RegistrarAbonoChofer(dto_abono, id_usuario=uid)
-            id_abono_creado = abono_db.get("IdAbonoCuentaCobrar")
-
-            db.execute(text("""
-                INSERT INTO public."NotificacionInterna" (
-                    "IdUsuarioDestinatario", "Tipo", "Titulo", "Mensaje",
-                    "CodigoReferencia", "Leido", "FechaCreacion"
-                ) VALUES (
-                    1, 'ALERTA', 'Cobro QR/Transferencia Móvil Pendiente',
-                    :msj, :id_ped, false, NOW()
-                );
-            """), {
-                "msj": f"El chofer #{uid} registró un cobro de Bs. {p.monto:.2f} vía {metodo} para Pedido #{dto.id_pedido}. Requiere validación de Kevin.",
-                "id_ped": dto.id_pedido
-            })
 
         tramos_procesados.append({
             "metodo": metodo,
@@ -579,7 +718,7 @@ async def registrar_cobro_movil(
             "estado": "PENDIENTE_APROBACION" if metodo in ("QR", "TRANSFERENCIA") else "CONFIRMADO",
             "id_pago_pedido": pago_db.get("IdPagoPedido") if isinstance(pago_db, dict) else None,
             "id_abono_cuenta_cobrar": id_abono_creado,
-            "id_cuenta_cobrar": id_cxc if metodo in ("QR", "TRANSFERENCIA") else None
+            "id_cuenta_cobrar": id_cxc
         })
 
     respuesta_datos = {
@@ -827,9 +966,9 @@ async def sincronizar_batch_movil(
     errores = []
 
     for op in operaciones:
-        op_id = op.get("id")
+        op_id = op.get("id") or op.get("idempotency_key") or op.get("id_operacion")
         tipo = op.get("tipo")
-        payload = op.get("payload", {})
+        payload = op.get("payload") or op.get("datos") or {}
         gps = op.get("gps", {})
         lat = gps.get("latitud") or payload.get("latitud") or -19.0483
         lng = gps.get("longitud") or payload.get("longitud") or -65.2598
@@ -851,20 +990,92 @@ async def sincronizar_batch_movil(
             elif tipo == "COBRO":
                 id_pedido = payload.get("id_pedido") or payload.get("IdPedido")
                 _validar_pertenencia_pedido_chofer(db, int(id_pedido), usuario, alcance)
-                monto = float(payload.get("monto") or payload.get("monto_total") or 0.0)
-                metodo = payload.get("metodo") or "EFECTIVO"
-                id_metodo = 1 if metodo == "EFECTIVO" else 2
+                monto_total = float(payload.get("monto_total") or payload.get("monto") or payload.get("Monto") or 0.0)
+                pagos = payload.get("pagos")
 
                 ruta_service = RutaService(db)
-                ruta_service.RegistrarCobroParada({
-                    "IdPedido": int(id_pedido),
-                    "IdMetodoPago": id_metodo,
-                    "Monto": monto,
-                    "NumeroReferencia": payload.get("numero_referencia") or f"OFFLINE-{uuid.uuid4().hex[:6].upper()}",
-                    "LatitudCobro": lat,
-                    "LongitudCobro": lng,
-                    "Observacion": payload.get("observacion") or "Cobro sincronizado desde cola offline"
-                })
+
+                if isinstance(pagos, list) and len(pagos) > 0:
+                    for p in pagos:
+                        met = (p.get("metodo") or "EFECTIVO").upper()
+                        m_tramo = float(p.get("monto") or 0.0)
+                        id_comp = p.get("id_comprobante_archivo")
+                        url_comp = p.get("url_comprobante")
+                        ref = p.get("numero_referencia") or f"BATCH-{uuid.uuid4().hex[:6].upper()}"
+                        id_met = _resolver_id_metodo_pago(db, met)
+
+                        obs_pago = f"[{met}] {payload.get('observacion') or 'Cobro sincronizado en lote'}".strip()
+                        if met in ("QR", "TRANSFERENCIA"):
+                            obs_pago += f" [PENDIENTE_APROBACION - Comprobante: {id_comp or url_comp}]"
+
+                        ruta_service.RegistrarCobroParada({
+                            "IdPedido": int(id_pedido),
+                            "IdMetodoPago": id_met,
+                            "Monto": m_tramo,
+                            "NumeroReferencia": ref,
+                            "LatitudCobro": lat,
+                            "LongitudCobro": lng,
+                            "Observacion": obs_pago
+                        })
+
+                        if met in ("QR", "TRANSFERENCIA"):
+                            _asegurar_cxc_y_abono_bancario_chofer(
+                                db=db,
+                                uid=uid,
+                                id_pedido=int(id_pedido),
+                                metodo=met,
+                                monto=m_tramo,
+                                numero_referencia=ref,
+                                id_comprobante_archivo=id_comp,
+                                url_comprobante=url_comp,
+                                alcance=alcance,
+                                observacion="Sincronización batch offline"
+                            )
+                else:
+                    met = (payload.get("metodo") or "EFECTIVO").upper()
+                    id_comp = payload.get("id_comprobante_archivo")
+                    url_comp = payload.get("url_comprobante")
+                    ref = payload.get("numero_referencia") or f"BATCH-{uuid.uuid4().hex[:6].upper()}"
+                    id_met = _resolver_id_metodo_pago(db, met)
+
+                    obs_pago = f"[{met}] {payload.get('observacion') or 'Cobro sincronizado en lote'}".strip()
+                    if met in ("QR", "TRANSFERENCIA"):
+                        obs_pago += f" [PENDIENTE_APROBACION - Comprobante: {id_comp or url_comp}]"
+
+                    ruta_service.RegistrarCobroParada({
+                        "IdPedido": int(id_pedido),
+                        "IdMetodoPago": id_met,
+                        "Monto": monto_total,
+                        "NumeroReferencia": ref,
+                        "LatitudCobro": lat,
+                        "LongitudCobro": lng,
+                        "Observacion": obs_pago
+                    })
+
+                    if met in ("QR", "TRANSFERENCIA"):
+                        _asegurar_cxc_y_abono_bancario_chofer(
+                            db=db,
+                            uid=uid,
+                            id_pedido=int(id_pedido),
+                            metodo=met,
+                            monto=monto_total,
+                            numero_referencia=ref,
+                            id_comprobante_archivo=id_comp,
+                            url_comprobante=url_comp,
+                            alcance=alcance,
+                            observacion="Sincronización batch offline"
+                        )
+                sincronizados.append(op_id)
+
+            elif tipo == "ALTA_CLIENTE":
+                _crear_cliente_y_punto_venta_en_ruta(
+                    db=db,
+                    uid=uid,
+                    payload=payload,
+                    lat=lat,
+                    lng=lng,
+                    alcance=alcance
+                )
                 sincronizados.append(op_id)
 
             elif tipo == "NO_ENTREGA":
@@ -950,3 +1161,60 @@ def subir_comprobante_archivo_movil(
         request_id=req_id,
         datos=resultado
     )
+
+
+# ==============================================================================
+# 9. ALTA DE NUEVO CLIENTE Y PUNTO DE VENTA EN RUTA
+# ==============================================================================
+@ChoferMovilRouter.post("/clientes", response_model=MovilResponse[Dict[str, Any]])
+async def registrar_nuevo_cliente_movil(
+    request: Request,
+    dto: ClienteMovilRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
+    x_idempotency_key: Optional[str] = Header(None, alias="X-Idempotency-Key")
+):
+    """
+    Registra un nuevo cliente y su punto de venta asignado forzosamente a la sucursal del chofer.
+    Exige X-Idempotency-Key (UUID v4).
+    """
+    req_id = _obtener_request_id(request)
+    uid = usuario["IdUsuario"]
+    cuerpo_bytes = await request.body()
+
+    hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
+        db, uid, request.url.path, x_idempotency_key, cuerpo_bytes
+    )
+    if respuesta_cacheada:
+        return respuesta_cacheada
+
+    datos_cliente = _crear_cliente_y_punto_venta_en_ruta(
+        db=db,
+        uid=uid,
+        payload=dto.model_dump(),
+        lat=dto.latitud,
+        lng=dto.longitud,
+        alcance=alcance
+    )
+
+    respuesta_datos = {
+        "codigo": "EXITO",
+        "mensaje": "Nuevo cliente y punto de venta registrados exitosamente",
+        "request_id": req_id,
+        "datos": datos_cliente
+    }
+
+    IdempotenciaService.registrar_respuesta(
+        session=db,
+        usuario_id=uid,
+        clave=x_idempotency_key,
+        endpoint=request.url.path,
+        hash_cuerpo=hash_cuerpo,
+        codigo_estado=200,
+        cuerpo_respuesta=respuesta_datos
+    )
+    db.commit()
+
+    return JSONResponse(status_code=200, content=respuesta_datos)
+

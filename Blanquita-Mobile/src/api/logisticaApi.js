@@ -149,6 +149,28 @@ export const LogisticaApi = {
     }
   },
 
+  // 7. Alta de Nuevo Cliente en Ruta con asignación forzosa a sucursal y ruta (Fase 3)
+  async registrarNuevoCliente(payload, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    try {
+      const response = await apiClient.post("/api/movil/v1/chofer/clientes", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        codigo: response.data?.codigo || "EXITO",
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
   // 7. Subida multipart de fotos y comprobantes (Regla 4: fotos fuera de la cola JSON, <= 5MB)
   async subirArchivoComprobante(archivoUri, entidadOrigen = "COMPROBANTE_COBRO", idRegistroOrigen = 0) {
     try {

@@ -10,23 +10,111 @@ import {
 import { Colors } from "../../constants/Colors";
 import { useNotificaciones } from "../../context/NotificacionesContext";
 import { Header } from "../../components/common/Header";
-import { BellOff } from "lucide-react-native";
+import {
+  BellOff,
+  CheckCircle,
+  XCircle,
+  FileEdit,
+  TrendingUp,
+  AlertTriangle,
+  Clock,
+  Info,
+} from "lucide-react-native";
 
 export const BandejaAvisosScreen = ({ navigation }) => {
-  const { notificaciones, conteoNoLeidas, cargando, refrescarNotificaciones, manejarPresionarAviso } =
-    useNotificaciones();
+  const {
+    notificaciones,
+    conteoNoLeidas,
+    cargando,
+    refrescarNotificaciones,
+    manejarPresionarAviso,
+  } = useNotificaciones();
+
+  const obtenerIconoYColorPorTipo = (tipo) => {
+    switch (tipo) {
+      case "ABONO_APROBADO":
+        return {
+          icono: CheckCircle,
+          color: Colors.secondary,
+          fondoBadge: "#F0FDF4",
+          bordeBadge: "#86EFAC",
+          etiqueta: "Abono QR Aprobado",
+        };
+      case "ABONO_RECHAZADO":
+        return {
+          icono: XCircle,
+          color: Colors.danger,
+          fondoBadge: "#FEF2F2",
+          bordeBadge: "#FCA5A5",
+          etiqueta: "Abono QR Observado",
+        };
+      case "AJUSTE_NOTA":
+        return {
+          icono: FileEdit,
+          color: "#B45309",
+          fondoBadge: "#FFFBEB",
+          bordeBadge: "#FDE68A",
+          etiqueta: "Nota Modificada",
+        };
+      case "STOCK_ACTUALIZADO":
+      case "ALERTA_REVALORIZACION":
+        return {
+          icono: TrendingUp,
+          color: "#0369A1",
+          fondoBadge: "#F0F9FF",
+          bordeBadge: "#BAE6FD",
+          etiqueta: "Revalorización Stock",
+        };
+      case "RECORDATORIO_CIERRE":
+      case "FALTANTE_CIERRE":
+        return {
+          icono: AlertTriangle,
+          color: "#B45309",
+          fondoBadge: "#FFFBEB",
+          bordeBadge: "#FDE68A",
+          etiqueta: "Arqueo / Cierre",
+        };
+      case "CAMBIO_PRECIO":
+        return {
+          icono: Clock,
+          color: "#4338CA",
+          fondoBadge: "#EEF2FF",
+          bordeBadge: "#C7D2FE",
+          etiqueta: "Precios Actualizados",
+        };
+      default:
+        return {
+          icono: Info,
+          color: Colors.primary,
+          fondoBadge: "#F0F9FF",
+          bordeBadge: "#BAE6FD",
+          etiqueta: tipo || "Aviso Oficial",
+        };
+    }
+  };
 
   const renderItem = ({ item }) => {
+    const meta = obtenerIconoYColorPorTipo(item.tipo);
+    const IconoComponente = meta.icono;
+
     return (
       <TouchableOpacity
-        style={[styles.card, !item.leido && styles.cardNoLeida]}
+        style={[
+          styles.card,
+          !item.leido && styles.cardNoLeida,
+        ]}
         onPress={() => manejarPresionarAviso(item, navigation)}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${meta.etiqueta}: ${item.titulo}`}
       >
         <View style={styles.cardHeader}>
-          <Text style={[styles.tipo, !item.leido && styles.tipoNoLeido]}>
-            {item.tipo || "AVISO"}
-          </Text>
+          <View style={[styles.tipoBadge, { backgroundColor: meta.fondoBadge, borderColor: meta.bordeBadge }]}>
+            <IconoComponente size={14} color={meta.color} />
+            <Text style={[styles.tipoTexto, { color: meta.color }]}>
+              {meta.etiqueta}
+            </Text>
+          </View>
           <Text style={styles.fecha}>
             {item.fecha_creacion
               ? new Date(item.fecha_creacion).toLocaleTimeString([], {
@@ -36,11 +124,13 @@ export const BandejaAvisosScreen = ({ navigation }) => {
               : ""}
           </Text>
         </View>
+
         <Text style={styles.titulo}>{item.titulo}</Text>
         <Text style={styles.mensaje}>{item.mensaje}</Text>
+
         {!item.leido && (
           <View style={styles.badgePendiente}>
-            <Text style={styles.badgePendienteText}>PENDIENTE</Text>
+            <Text style={styles.badgePendienteText}>NUEVO • TOCAR PARA VER</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -53,13 +143,13 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         title="Bandeja de Avisos"
         subtitle={
           conteoNoLeidas > 0
-            ? `${conteoNoLeidas} avisos pendientes`
-            : "Todos los avisos leídos"
+            ? `${conteoNoLeidas} avisos pendientes de lectura`
+            : "Todos los avisos al día"
         }
       />
       <FlatList
         data={notificaciones}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item) => String(item.id || item.id_notificacion || Math.random())}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -72,10 +162,10 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <BellOff size={40} color={Colors.textMuted} />
+            <BellOff size={40} color={Colors.textSecondary} />
             <Text style={styles.emptyTitle}>Sin avisos pendientes</Text>
             <Text style={styles.emptySubtitle}>
-              Aquí se notificarán ajustes de ruta, cambios de precio y avisos de administración.
+              Aquí se notificarán aprobaciones/rechazos de cobros QR, ajustes de notas de venta y avisos de revalorización.
             </Text>
           </View>
         }
@@ -87,67 +177,77 @@ export const BandejaAvisosScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.backgroundDark,
   },
   listContent: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 4,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: Colors.border,
+    minHeight: 48,
   },
   cardNoLeida: {
     borderColor: Colors.primary,
     borderLeftWidth: 4,
-    backgroundColor: "#F0F9FF",
+    backgroundColor: "#FFFFFF",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  tipo: {
+  tipoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  tipoTexto: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  tipoNoLeido: {
-    color: Colors.primary,
-  },
   fecha: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: Colors.textSecondary,
+    fontVariant: ["tabular-nums"],
   },
   titulo: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: Colors.text,
     marginBottom: 4,
   },
   mensaje: {
     fontSize: 13,
-    color: "#475569",
+    color: Colors.textSecondary,
     lineHeight: 18,
   },
   badgePendiente: {
     alignSelf: "flex-start",
-    backgroundColor: "#E0F2FE",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 4,
-    marginTop: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   badgePendienteText: {
     fontSize: 10,
     fontWeight: "800",
     color: Colors.primary,
+    letterSpacing: 0.5,
   },
   emptyContainer: {
     paddingVertical: 60,
@@ -158,11 +258,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: Colors.text,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: Colors.textSecondary,
     textAlign: "center",
     paddingHorizontal: 24,
     lineHeight: 18,
