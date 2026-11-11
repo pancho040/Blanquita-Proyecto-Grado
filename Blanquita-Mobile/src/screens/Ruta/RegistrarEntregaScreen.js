@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,53 +15,77 @@ import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { NumericInput } from '../../components/common/NumericInput';
+import { SignaturePad } from '../../components/common/SignaturePad';
 import { ComprobanteModal } from '../../components/ruta/ComprobanteModal';
+import { LogisticaApi } from '../../api/logisticaApi';
 import {
   PackageCheck,
   UserCheck,
   MapPin,
   RotateCw,
-  Plus,
-  Minus,
+  Gift,
+  Truck,
+  FileCheck2,
 } from 'lucide-react-native';
 
 export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const { parada, pedido } = route.params;
   const { registrarEntrega, comprobanteActual, cerrarComprobante } = useRuta();
-  const { location, _gpsStatus, getCurrentCoords } = useLocation();
+  const { location, getCurrentCoords } = useLocation();
 
-  // Cantidades de los ítems
+  // Stock en camión cargado por el chofer
+  const [inventarioCamion, setInventarioCamion] = useState([]);
+  const [tipoEntrega, setTipoEntrega] = useState('TOTAL'); // 'TOTAL' | 'PARCIAL'
+
+  // Items a entregar
   const [items, setItems] = useState(
     (pedido?.items || []).map((i) => ({
       ...i,
-      cantidadEntregada: i.cantidad || 1,
+      presentacion_id: i.presentacion_id || i.IdPresentacion || i.id,
+      cantidadOriginal: Number(i.cantidad || i.Cantidad || 1),
+      cantidadEntregada: Number(i.cantidad || i.Cantidad || 1),
+      precio_unitario: Number(i.precio_unitario || i.PrecioUnitarioAplicado || 0),
+      es_bandeo: Boolean(i.es_bandeo || i.EsBandeo),
+      valor_bandeo: Number(i.valor_bandeo || i.ValorBandeo || 0),
     }))
   );
 
   const [receptorNombre, setReceptorNombre] = useState(
-    parada.cliente?.razon_social || ''
+    parada?.cliente?.razon_social || parada?.NombreCliente || ''
   );
   const [receptorCi, setReceptorCi] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [firmaChofer, setFirmaChofer] = useState(null);
   const [loading, setLoading] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
 
-  const actualizarCantidad = (index, delta) => {
-    setItems((prev) =>
-      prev.map((item, i) => {
-        if (i === index) {
-          const nuevaCant = Math.max(0, item.cantidadEntregada + delta);
-          return { ...item, cantidadEntregada: nuevaCant };
-        }
-        return item;
-      })
-    );
-  };
+  // Cargar inventario del camión para verificar saldo
+  useEffect(() => {
+    let activo = true;
+    async function cargarStock() {
+      const datos = await LogisticaApi.obtenerMiInventarioCamion();
+      if (activo && datos?.items) {
+        setInventarioCamion(datos.items);
+      }
+    }
+    cargarStock();
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const handleRefrescarGps = async () => {
     setGettingGps(true);
     await getCurrentCoords();
     setGettingGps(false);
+  };
+
+  const handleCambiarCantidad = (index, valor) => {
+    const num = Math.max(0, parseFloat(valor) || 0);
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, cantidadEntregada: num } : item))
+    );
   };
 
   const calcularTotalEntregado = () => {
@@ -78,56 +102,65 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
 
     const totalFardos = items.reduce((acc, i) => acc + (i.cantidadEntregada || 0), 0);
     if (totalFardos === 0) {
-      Alert.alert('Cantidad Inválida', 'La cantidad entregada debe ser mayor a 0 fardos.');
+      Alert.alert('Cantidad Inválida', 'La cantidad entregada debe ser mayor a 0 bultos.');
+      return;
+    }
+
+    // Regla 2: Firma digital táctil obligatoria del chofer
+    if (!firmaChofer) {
+      Alert.alert('Firma Requerida', 'El chofer debe estampar su firma digital táctil obligatoria.');
       return;
     }
 
     setLoading(true);
 
-    const datosEntrega = {
+    const payloadEntrega = {
+      id_pedido: pedido?.id || pedido?.IdPedido || parada?.IdPedido,
+      latitud: location?.latitude || -19.0483,
+      longitud: location?.longitude || -65.2598,
+      tipo_entrega: tipoEntrega,
       recibido_por: receptorNombre.trim(),
       ci_receptor: receptorCi.trim(),
       observaciones: observaciones.trim(),
+      firma_chofer: firmaChofer,
       items_entregados: items.map((i) => ({
-        producto_id: i.producto_id || i.id,
-        producto_nombre: i.producto_nombre || i.producto?.nombre,
+        presentacion_id: i.presentacion_id,
+        producto_nombre: i.producto_nombre || i.NombreProducto || 'Producto Blanquita',
         cantidad: i.cantidadEntregada,
         precio_unitario: i.precio_unitario,
-        subtotal: i.cantidadEntregada * (i.precio_unitario || 0),
+        subtotal: i.cantidadEntregada * i.precio_unitario,
       })),
       monto_total: calcularTotalEntregado(),
     };
 
-    const resultado = await registrarEntrega(parada.id, datosEntrega);
+    const resultado = await registrarEntrega(parada.id || parada.IdPuntoVenta, payloadEntrega);
     setLoading(false);
 
-    if (resultado.success) {
-      // El modal ComprobanteModal se abrirá automáticamente porque comprobanteActual fue seteado en el contexto
+    if (resultado.success || resultado.exito) {
+      if (resultado.alertaRevalorizacion) {
+        Alert.alert('Aviso de Tarifa', resultado.alertaRevalorizacion);
+      }
     } else {
-      Alert.alert('Error', resultado.message || 'No se pudo registrar la entrega.');
+      Alert.alert('Error', resultado.error || resultado.message || 'No se pudo registrar la entrega.');
     }
   };
 
   const handleCerrarComprobanteYVolver = () => {
     cerrarComprobante();
-    navigation.popToTop(); // Volver a Hoja de Ruta
+    navigation.popToTop();
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Header
         title="Registrar Entrega"
-        subtitle={parada.cliente?.razon_social || parada.cliente?.nombre_comercial}
+        subtitle={parada?.cliente?.razon_social || parada?.NombreCliente || 'Punto de Venta'}
         showBackButton
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Coordenadas de Entrega */}
-        <Card
-          title="Ubicación GPS"
-          icon={MapPin}
-          style={styles.gpsCard}
-        >
+        {/* Ubicación GPS */}
+        <Card title="Ubicación GPS" icon={MapPin} style={styles.gpsCard}>
           <View style={styles.gpsRow}>
             <View style={styles.gpsInfo}>
               <Text style={styles.gpsCoords}>
@@ -146,79 +179,112 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
               onPress={handleRefrescarGps}
               disabled={gettingGps}
             >
-              <RotateCw size={18} color={Colors.primary} />
+              <RotateCw size={18} color={Colors.primaryDark} />
             </TouchableOpacity>
           </View>
         </Card>
 
-        {/* Ajuste de Fardos / Productos */}
-        <Card
-          title="Verificación de Fardos"
-          icon={PackageCheck}
-          style={styles.cardSection}
-        >
-          {items.map((item, index) => (
-            <View key={index} style={styles.itemEditor}>
-              <View style={styles.itemEditorDetails}>
-                <Text style={styles.itemEditorName}>
-                  {item.producto_nombre || item.producto?.nombre || 'Fardo de Papel'}
-                </Text>
-                <Text style={styles.itemEditorPrice}>
-                  Bs. {Number(item.precio_unitario || 0).toFixed(2)} c/u
-                </Text>
-              </View>
+        {/* Modalidad de Entrega */}
+        <Card title="Tipo de Entrega" icon={Truck} style={styles.cardSection}>
+          <View style={styles.tipoRow}>
+            <TouchableOpacity
+              style={[styles.tipoBtn, tipoEntrega === 'TOTAL' && styles.tipoBtnActive]}
+              onPress={() => setTipoEntrega('TOTAL')}
+            >
+              <Text style={[styles.tipoBtnText, tipoEntrega === 'TOTAL' && styles.tipoBtnTextActive]}>
+                Entrega Total
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tipoBtn, tipoEntrega === 'PARCIAL' && styles.tipoBtnActive]}
+              onPress={() => setTipoEntrega('PARCIAL')}
+            >
+              <Text style={[styles.tipoBtnText, tipoEntrega === 'PARCIAL' && styles.tipoBtnTextActive]}>
+                Entrega Parcial
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
 
-              {/* Controles de incremento / decremento */}
-              <View style={styles.counterRow}>
-                <TouchableOpacity
-                  style={styles.counterBtn}
-                  onPress={() => actualizarCantidad(index, -1)}
-                >
-                  <Minus size={16} color={Colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.counterValue}>{item.cantidadEntregada}</Text>
-                <TouchableOpacity
-                  style={styles.counterBtn}
-                  onPress={() => actualizarCantidad(index, 1)}
-                >
-                  <Plus size={16} color={Colors.text} />
-                </TouchableOpacity>
+        {/* Verificación de Productos y Bandeo */}
+        <Card title="Productos a Entregar" icon={PackageCheck} style={styles.cardSection}>
+          {items.map((item, index) => {
+            const stockCamionItem = inventarioCamion.find(
+              (s) => s.presentacion_id === item.presentacion_id
+            );
+            const saldoCamion = stockCamionItem ? stockCamionItem.cantidad_remanente : null;
+
+            return (
+              <View key={index} style={styles.itemBox}>
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemTitle}>
+                    {item.producto_nombre || item.NombreProducto || 'Paquete Papel Blanquita'}
+                  </Text>
+                  <Text style={styles.itemPrice}>
+                    Bs. {item.precio_unitario.toFixed(2)} c/u
+                  </Text>
+                </View>
+
+                {/* Saldo en camión */}
+                {saldoCamion !== null && (
+                  <View style={styles.saldoRow}>
+                    <Truck size={14} color={Colors.textSecondary} />
+                    <Text style={styles.saldoText}>
+                      Saldo en tu camión: <Text style={styles.saldoNum}>{saldoCamion} bultos</Text>
+                    </Text>
+                  </View>
+                )}
+
+                {/* Bandeo de cortesía */}
+                {(item.es_bandeo || item.valor_bandeo > 0) && (
+                  <View style={styles.bandeoBadge}>
+                    <Gift size={14} color={Colors.accent} />
+                    <Text style={styles.bandeoText}>
+                      Promoción Bandeo: Incluye {item.valor_bandeo || 2} servilleta(s) de cortesía (Costo Bs. 0.00)
+                    </Text>
+                  </View>
+                )}
+
+                {/* Control de cantidad */}
+                <View style={styles.cantidadRow}>
+                  <Text style={styles.cantidadLabel}>Cantidad a entregar:</Text>
+                  <NumericInput
+                    value={item.cantidadEntregada}
+                    onChange={(val) => handleCambiarCantidad(index, val)}
+                    min={0}
+                    max={item.cantidadOriginal}
+                    style={styles.numericInput}
+                  />
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
 
           <View style={styles.totalBox}>
-            <Text style={styles.totalBoxLabel}>Total a Facturar / Entregar:</Text>
+            <Text style={styles.totalBoxLabel}>Total a Entregar / Cobrar:</Text>
             <Text style={styles.totalBoxAmount}>
               Bs. {calcularTotalEntregado().toFixed(2)}
             </Text>
           </View>
         </Card>
 
-        {/* Datos del Receptor */}
-        <Card
-          title="Receptor de Mercadería"
-          icon={UserCheck}
-          style={styles.cardSection}
-        >
+        {/* Receptor de Mercadería */}
+        <Card title="Receptor de Mercadería" icon={UserCheck} style={styles.cardSection}>
           <Input
             label="Nombre de quien recibe *"
-            placeholder="Ej: Juan Pérez (Encargado)"
+            placeholder="Ej: Doña Carmen / Encargado"
             value={receptorNombre}
             onChangeText={setReceptorNombre}
           />
-
           <Input
-            label="Cédula de Identidad (Receptor)"
-            placeholder="Ej: 5849301 LP"
+            label="Cédula de Identidad (Opcional)"
+            placeholder="Ej: 5849301 PT"
             value={receptorCi}
             onChangeText={setReceptorCi}
-            keyboardType="default"
           />
-
           <Input
-            label="Observaciones / Novedades"
-            placeholder="Ej: Entregado en piso 2, producto conforme."
+            label="Observaciones"
+            placeholder="Ej: Entregado conforme en trastienda"
             value={observaciones}
             onChangeText={setObservaciones}
             multiline
@@ -226,10 +292,27 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
           />
         </Card>
 
+        {/* Firma Táctil Obligatoria del Chofer (Regla 2) */}
+        <Card title="Firma Táctil de Conformidad *" icon={FileCheck2} style={styles.cardSection}>
+          <Text style={styles.firmaDesc}>
+            El chofer debe estampar su firma digital táctil obligatoria para certificar la entrega.
+          </Text>
+          <SignaturePad
+            onSign={(firmaSvg) => setFirmaChofer(firmaSvg)}
+            title="Firmar Entrega (Chofer)"
+            height={160}
+          />
+          {firmaChofer && (
+            <View style={styles.firmaOkRow}>
+              <Text style={styles.firmaOkText}>✓ Firma del chofer registrada</Text>
+            </View>
+          )}
+        </Card>
+
         {/* Botón de Confirmación */}
         <View style={styles.submitContainer}>
           <Button
-            title="Confirmar Entrega"
+            title="Confirmar y Registrar Entrega"
             icon={PackageCheck}
             variant="primary"
             size="large"
@@ -241,7 +324,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
 
       {/* Modal de Comprobante Digital */}
       <ComprobanteModal
-        visible={!!comprobanteActual}
+        visible={Boolean(comprobanteActual)}
         comprobante={comprobanteActual}
         onClose={handleCerrarComprobanteYVolver}
       />
@@ -252,7 +335,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: '#F8FAFC',
   },
   content: {
     padding: 16,
@@ -261,7 +344,8 @@ const styles = StyleSheet.create({
   gpsCard: {
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: Colors.primaryDark,
+    borderRadius: 4,
   },
   gpsRow: {
     flexDirection: 'row',
@@ -273,89 +357,156 @@ const styles = StyleSheet.create({
   },
   gpsCoords: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.text,
+    fontWeight: '600',
+    color: '#0F172A',
+    fontVariant: ['tabular-nums'],
   },
   gpsSub: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: '#475569',
     marginTop: 2,
   },
   refreshGpsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryMuted,
+    padding: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#64748B',
+    minWidth: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
   },
   cardSection: {
     marginBottom: 16,
+    borderRadius: 4,
   },
-  itemEditor: {
+  tipoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    gap: 8,
   },
-  itemEditorDetails: {
+  tipoBtn: {
     flex: 1,
-    marginRight: 10,
-  },
-  itemEditorName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  itemEditorPrice: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  counterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 8,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  counterBtn: {
-    padding: 8,
+    borderColor: '#64748B',
+    borderRadius: 4,
     alignItems: 'center',
+    minHeight: 48,
     justifyContent: 'center',
   },
-  counterValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.text,
-    minWidth: 32,
-    textAlign: 'center',
+  tipoBtnActive: {
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
-  totalBox: {
+  tipoBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  tipoBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  itemBox: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingVertical: 12,
+  },
+  itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+  },
+  itemPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontVariant: ['tabular-nums'],
+  },
+  saldoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 6,
+  },
+  saldoText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  saldoNum: {
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontVariant: ['tabular-nums'],
+  },
+  bandeoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginTop: 6,
+    gap: 6,
+  },
+  bandeoText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.accent,
+  },
+  cantidadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  cantidadLabel: {
+    fontSize: 13,
+    color: '#334155',
+  },
+  numericInput: {
+    width: 140,
+  },
+  totalBox: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#0F172A',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   totalBoxLabel: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#0F172A',
   },
   totalBoxAmount: {
     fontSize: 18,
-    fontWeight: '900',
-    color: Colors.secondary,
+    fontWeight: '800',
+    color: Colors.primaryDark,
+    fontVariant: ['tabular-nums'],
+  },
+  firmaDesc: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  firmaOkRow: {
+    marginTop: 6,
+  },
+  firmaOkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.success,
   },
   submitContainer: {
     marginTop: 8,
+    marginBottom: 32,
   },
 });
 

@@ -3,9 +3,11 @@ import { LogisticaApi } from "../api/logisticaApi";
 import { ClientesApi } from "../api/clientesApi";
 
 /**
- * Motor de Sincronización Asíncrona Automática
- * Cumple con HU-28: Sincronización automática de datos cifrados
- * Procesa la cola secuencialmente cuando se restablece la conexión
+ * Motor de Sincronización Asíncrona Automática (Fase 2)
+ * Cumple con HU-28 y Reglas 3 y 4 de Choferes Móviles:
+ * 1. Procesa la cola secuencialmente con X-Idempotency-Key.
+ * 2. Manejo diferido de fotos y firmas sin desbordar AsyncStorage (sube primero archivo y luego acción).
+ * 3. Notificación de alerta de revalorización si el servidor recalcula precios.
  */
 class SyncService {
   constructor() {
@@ -46,6 +48,7 @@ class SyncService {
 
     let exitosas = 0;
     let fallidas = 0;
+    const alertasRevalorizacion = [];
 
     try {
       const cola = await SyncQueue.obtenerCola();
@@ -65,57 +68,133 @@ class SyncService {
             mensaje: `Sincronizando ${item.tipo.toLowerCase()}...`,
           });
 
+          const idempotencyKey = item.idempotencyKey || item.id;
+
           // Procesar según el tipo de operación
           switch (item.tipo) {
             case "ENTREGA": {
-              // HU-31: Registrar entrega de pedido con coordenadas GPS
-              const payloadEntrega = {
+              // HU-31: Registrar entrega física (total/parcial)
+              let payloadEntrega = {
                 ...item.payload,
-                gps: item.gps,
-                fechaRegistroMovil: item.fechaCreacion,
+                latitud: item.gps?.latitud || item.payload?.latitud || -19.0483,
+                longitud: item.gps?.longitud || item.payload?.longitud || -65.2598,
               };
-              await LogisticaApi.registrarEntrega(payloadEntrega);
+
+              // Regla 4: Si tiene archivo de foto comprobante local, subirlo primero
+              if (item.payload?.foto_uri && !item.payload?.id_comprobante_archivo) {
+                const subida = await LogisticaApi.subirArchivoComprobante(
+                  item.payload.foto_uri,
+                  "COMPROBANTE_ENTREGA",
+                  item.payload.id_pedido || 0
+                );
+                if (subida.success) {
+                  payloadEntrega.id_comprobante_archivo = subida.idComprobante;
+                  payloadEntrega.url_comprobante = subida.urlArchivo;
+                } else if (subida.status >= 500 || !subida.status) {
+                  // Fallo de red/servidor al subir archivo: no procesar entrega para reintentar luego
+                  throw new Error(subida.error || "Fallo al subir foto de comprobante");
+                }
+              }
+
+              const resEntrega = await LogisticaApi.registrarEntrega(payloadEntrega, idempotencyKey);
+              if (!resEntrega.success) {
+                const err = new Error(resEntrega.error);
+                err.status = resEntrega.status;
+                throw err;
+              }
+
+              // Detectar alerta de revalorización emitida por el servidor
+              if (resEntrega.alertaRevalorizacion) {
+                alertasRevalorizacion.push(resEntrega.alertaRevalorizacion);
+                console.log("[SyncService] ALERTA DE REVALORIZACIÓN:", resEntrega.alertaRevalorizacion);
+              }
               break;
             }
 
             case "COBRO": {
-              // HU-32: Registrar cobro a cliente con coordenadas GPS
-              const payloadCobro = {
+              // HU-32: Registrar cobro (simple o mixto)
+              let payloadCobro = {
                 ...item.payload,
-                gps: item.gps,
-                fechaRegistroMovil: item.fechaCreacion,
+                latitud: item.gps?.latitud || item.payload?.latitud || -19.0483,
+                longitud: item.gps?.longitud || item.payload?.longitud || -65.2598,
               };
-              await LogisticaApi.registrarCobro(payloadCobro);
+
+              // Regla 4: Subir fotos locales de tramos QR/Transferencia antes de despachar cobro
+              if (Array.isArray(payloadCobro.pagos)) {
+                for (const tramo of payloadCobro.pagos) {
+                  if (tramo.foto_uri && !tramo.id_comprobante_archivo) {
+                    const subida = await LogisticaApi.subirArchivoComprobante(
+                      tramo.foto_uri,
+                      "COMPROBANTE_COBRO",
+                      payloadCobro.id_pedido || 0
+                    );
+                    if (subida.success) {
+                      tramo.id_comprobante_archivo = subida.idComprobante;
+                      tramo.url_comprobante = subida.urlArchivo;
+                    } else if (subida.status >= 500 || !subida.status) {
+                      throw new Error(subida.error || "Fallo al subir comprobante de cobro QR/Transferencia");
+                    }
+                  }
+                }
+              } else if (item.payload?.foto_uri && !item.payload?.id_comprobante_archivo) {
+                const subida = await LogisticaApi.subirArchivoComprobante(
+                  item.payload.foto_uri,
+                  "COMPROBANTE_COBRO",
+                  payloadCobro.id_pedido || 0
+                );
+                if (subida.success) {
+                  payloadCobro.id_comprobante_archivo = subida.idComprobante;
+                  payloadCobro.url_comprobante = subida.urlArchivo;
+                } else if (subida.status >= 500 || !subida.status) {
+                  throw new Error(subida.error || "Fallo al subir comprobante de pago");
+                }
+              }
+
+              const resCobro = await LogisticaApi.registrarCobro(payloadCobro, idempotencyKey);
+              if (!resCobro.success) {
+                const err = new Error(resCobro.error);
+                err.status = resCobro.status;
+                throw err;
+              }
+              break;
+            }
+
+            case "NO_ENTREGA": {
+              const resNoEntrega = await LogisticaApi.registrarNoEntrega(item.payload, idempotencyKey);
+              if (!resNoEntrega.success) {
+                const err = new Error(resNoEntrega.error);
+                err.status = resNoEntrega.status;
+                throw err;
+              }
               break;
             }
 
             case "NUEVO_CLIENTE": {
-              // HU-29: Registrar nuevo cliente creado en campo
               const payloadCliente = {
                 ...item.payload,
-                Latitud: item.gps.latitud,
-                Longitud: item.gps.longitud,
+                Latitud: item.gps?.latitud || item.payload?.Latitud,
+                Longitud: item.gps?.longitud || item.payload?.Longitud,
               };
               await ClientesApi.crearCliente(payloadCliente);
               break;
             }
 
             case "CIERRE_RUTA": {
-              // HU-34: Enviar paquete de liquidación y cierre de ruta
-              await LogisticaApi.cerrarYLiquidarRuta(
-                item.payload.idAsignacion,
-                item.payload
-              );
+              const resCierre = await LogisticaApi.registrarCierreTurno(item.payload, idempotencyKey);
+              if (!resCierre.success) {
+                const err = new Error(resCierre.error);
+                err.status = resCierre.status;
+                throw err;
+              }
               break;
             }
 
             case "PING_GPS": {
-              // HU-33: Telemetría de posición en tiempo real
               await LogisticaApi.enviarTelemetriaPing({
                 ...item.payload,
-                Latitud: item.gps.latitud,
-                Longitud: item.gps.longitud,
-                PrecisionMts: item.gps.precision,
+                Latitud: item.gps?.latitud || 0,
+                Longitud: item.gps?.longitud || 0,
+                PrecisionMts: item.gps?.precision || 0,
               });
               break;
             }
@@ -131,9 +210,9 @@ class SyncService {
         } catch (error) {
           console.error(`[SyncService] Error en item ${item.id} (${item.tipo}):`, error.message);
           fallidas++;
-          await SyncQueue.registrarFalloOperacion(item.id, error.friendlyMessage || error.message);
+          await SyncQueue.registrarFalloOperacion(item.id, error);
 
-          // Si el error es de conectividad (offline), detenemos el bucle para no reintentar en vano
+          // Si el error es de conectividad (offline), detener bucle
           if (error.isOffline || error.code === "ECONNABORTED" || error.message?.includes("Network")) {
             console.log("[SyncService] Red no disponible. Pausando sincronización.");
             break;
@@ -145,6 +224,7 @@ class SyncService {
       this.notificar({
         enProgreso: false,
         pendientes: restantes,
+        alertasRevalorizacion,
         mensaje: restantes === 0 ? "¡Todo sincronizado!" : `${restantes} operaciones pendientes.`,
       });
 
@@ -153,6 +233,7 @@ class SyncService {
         procesadas: exitosas,
         fallidas,
         pendientes: restantes,
+        alertasRevalorizacion,
       };
     } catch (globalError) {
       console.error("[SyncService] Error global en sincronización:", globalError);

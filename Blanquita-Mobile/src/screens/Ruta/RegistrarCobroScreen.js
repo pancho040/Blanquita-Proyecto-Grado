@@ -15,76 +15,175 @@ import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { PaymentSelector } from '../../components/common/PaymentSelector';
+import { PhotoCapture } from '../../components/common/PhotoCapture';
 import {
   DollarSign,
-  QrCode,
-  Banknote,
   Receipt,
-  MapPin,
-  CheckCircle2,
+  Clock,
+  Layers,
 } from 'lucide-react-native';
 
 export const RegistrarCobroScreen = ({ route, navigation }) => {
-  const { parada, cliente, pedido } = route.params;
+  const { parada, cliente, pedido } = route.params || {};
   const { registrarCobro } = useRuta();
   const { location } = useLocation();
 
-  const totalPedido = Number(pedido?.monto_total || 0);
+  const totalPedido = Number(pedido?.monto_total || pedido?.MontoTotal || 0);
   const saldoPendiente = Number(cliente?.saldo_pendiente || 0);
 
-  const [monto, setMonto] = useState(
-    totalPedido > 0 ? totalPedido.toFixed(2) : ''
-  );
-  const [metodoPago, setMetodoPago] = useState('EFECTIVO'); // 'EFECTIVO' | 'TRANSFERENCIA_QR'
-  const [tipoCobro, setTipoCobro] = useState('CONTADO'); // 'CONTADO' | 'ABONO'
-  const [referencia, setReferencia] = useState('');
+  // Modalidad de pago: SIMPLE o MIXTO
+  const [esMixto, setEsMixto] = useState(false);
+
+  // Cobro Simple
+  const [metodoSimple, setMetodoSimple] = useState('EFECTIVO');
+  const [montoSimple, setMontoSimple] = useState(totalPedido > 0 ? totalPedido.toFixed(2) : '');
+  const [referenciaSimple, setReferenciaSimple] = useState('');
+  const [fotoSimpleUri, setFotoSimpleUri] = useState(null);
+
+  // Cobro Mixto (Desglose)
+  const [montoEfectivo, setMontoEfectivo] = useState('');
+  const [montoQr, setMontoQr] = useState('');
+  const [referenciaQr, setReferenciaQr] = useState('');
+  const [fotoQrUri, setFotoQrUri] = useState(null);
+
+  const [montoTransferencia, setMontoTransferencia] = useState('');
+  const [referenciaTransf, setReferenciaTransf] = useState('');
+  const [fotoTransfUri, setFotoTransfUri] = useState(null);
+
+  const [montoCredito, setMontoCredito] = useState('');
+  const [diasCredito, setDiasCredito] = useState('15');
+
   const [observaciones, setObservaciones] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSeleccionarMontoSugerido = (val) => {
-    setMonto(val.toFixed(2));
+    if (!esMixto) {
+      setMontoSimple(val.toFixed(2));
+    } else {
+      setMontoEfectivo(val.toFixed(2));
+    }
+  };
+
+  const calcularTotalMixto = () => {
+    const ef = parseFloat(montoEfectivo) || 0;
+    const qr = parseFloat(montoQr) || 0;
+    const tr = parseFloat(montoTransferencia) || 0;
+    const cr = parseFloat(montoCredito) || 0;
+    return ef + qr + tr + cr;
   };
 
   const handleConfirmarCobro = async () => {
-    const numMonto = parseFloat(monto);
-    if (isNaN(numMonto) || numMonto <= 0) {
-      Alert.alert('Monto Inválido', 'Ingrese un importe válido mayor a 0 Bs.');
-      return;
-    }
+    let payload = {};
 
-    if (metodoPago === 'TRANSFERENCIA_QR' && !referencia.trim()) {
-      Alert.alert(
-        'Falta Referencia',
-        'Por favor ingrese el número de comprobante o referencia de la transferencia QR.'
-      );
-      return;
+    if (!esMixto) {
+      const numMonto = parseFloat(montoSimple);
+      if (isNaN(numMonto) || numMonto <= 0) {
+        Alert.alert('Monto Inválido', 'Ingrese un importe válido mayor a Bs. 0.');
+        return;
+      }
+
+      // Regla 3: QR y Transferencia exigen comprobante fotográfico obligatorio
+      if ((metodoSimple === 'QR' || metodoSimple === 'TRANSFERENCIA') && !fotoSimpleUri) {
+        Alert.alert(
+          'Comprobante Obligatorio',
+          `El cobro mediante ${metodoSimple} exige obligatoriamente fotografía del comprobante de transferencia bancaria.`
+        );
+        return;
+      }
+
+      payload = {
+        id_pedido: pedido?.id || pedido?.IdPedido || parada?.IdPedido,
+        monto_total: numMonto,
+        latitud: location?.latitude || -19.0483,
+        longitud: location?.longitude || -65.2598,
+        pagos: [
+          {
+            metodo: metodoSimple,
+            monto: numMonto,
+            numero_referencia: referenciaSimple.trim() || null,
+            foto_uri: fotoSimpleUri || null,
+          },
+        ],
+        observaciones: observaciones.trim() || null,
+      };
+    } else {
+      // Cobro Mixto
+      const ef = parseFloat(montoEfectivo) || 0;
+      const qr = parseFloat(montoQr) || 0;
+      const tr = parseFloat(montoTransferencia) || 0;
+      const cr = parseFloat(montoCredito) || 0;
+      const total = ef + qr + tr + cr;
+
+      if (total <= 0) {
+        Alert.alert('Monto Inválido', 'La suma de los tramos debe ser mayor a Bs. 0.');
+        return;
+      }
+
+      if (qr > 0 && !fotoQrUri) {
+        Alert.alert('Comprobante QR Requerido', 'Debe tomar o adjuntar la foto del comprobante QR.');
+        return;
+      }
+
+      if (tr > 0 && !fotoTransfUri) {
+        Alert.alert('Comprobante Transferencia Requerido', 'Debe tomar la foto del comprobante de transferencia.');
+        return;
+      }
+
+      const pagos = [];
+      if (ef > 0) pagos.push({ metodo: 'EFECTIVO', monto: ef });
+      if (qr > 0) {
+        pagos.push({
+          metodo: 'QR',
+          monto: qr,
+          numero_referencia: referenciaQr.trim() || null,
+          foto_uri: fotoQrUri || null,
+        });
+      }
+      if (tr > 0) {
+        pagos.push({
+          metodo: 'TRANSFERENCIA',
+          monto: tr,
+          numero_referencia: referenciaTransf.trim() || null,
+          foto_uri: fotoTransfUri || null,
+        });
+      }
+      if (cr > 0) {
+        pagos.push({
+          metodo: 'CREDITO',
+          monto: cr,
+          plazo_dias: parseInt(diasCredito, 10) || 15,
+        });
+      }
+
+      payload = {
+        id_pedido: pedido?.id || pedido?.IdPedido || parada?.IdPedido,
+        monto_total: total,
+        latitud: location?.latitude || -19.0483,
+        longitud: location?.longitude || -65.2598,
+        pagos,
+        observaciones: observaciones.trim() || null,
+      };
     }
 
     setLoading(true);
-
-    const datosCobro = {
-      cliente_id: cliente?.id || parada?.cliente_id,
-      pedido_id: pedido?.id || null,
-      monto: numMonto,
-      metodo_pago: metodoPago,
-      tipo_cobro: tipoCobro,
-      referencia_bancaria: referencia.trim() || null,
-      observaciones: observaciones.trim() || null,
-    };
-
-    const resultado = await registrarCobro(parada.id, datosCobro);
+    const resultado = await registrarCobro(parada?.id || parada?.IdPuntoVenta, payload);
     setLoading(false);
 
-    if (resultado.success) {
-      Alert.alert(
-        'Cobro Registrado',
-        `Se registró el cobro de Bs. ${numMonto.toFixed(2)} (${
-          metodoPago === 'EFECTIVO' ? 'Efectivo en mano' : 'Transferencia QR'
-        }).`,
-        [{ text: 'Aceptar', onPress: () => navigation.goBack() }]
-      );
+    if (resultado.success || resultado.exito) {
+      const tieneDigital = !esMixto
+        ? metodoSimple === 'QR' || metodoSimple === 'TRANSFERENCIA'
+        : (parseFloat(montoQr) || 0) > 0 || (parseFloat(montoTransferencia) || 0) > 0;
+
+      const mensajeAviso = tieneDigital
+        ? 'Cobro registrado. El tramo QR/Transferencia quedó como PENDIENTE_APROBACION para validación de tesorería.'
+        : 'Cobro en efectivo confirmado correctamente.';
+
+      Alert.alert('Cobro Procesado', mensajeAviso, [
+        { text: 'Aceptar', onPress: () => navigation.goBack() },
+      ]);
     } else {
-      Alert.alert('Error', resultado.message || 'No se pudo guardar el cobro.');
+      Alert.alert('Error', resultado.error || resultado.message || 'No se pudo guardar el cobro.');
     }
   };
 
@@ -92,13 +191,13 @@ export const RegistrarCobroScreen = ({ route, navigation }) => {
     <SafeAreaView style={styles.container}>
       <Header
         title="Registrar Cobro"
-        subtitle={cliente?.razon_social || cliente?.nombre_comercial}
+        subtitle={cliente?.razon_social || parada?.NombreCliente || 'Cliente'}
         showBackButton
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Resumen de Montos Pendientes */}
-        <Card title="Montos del Cliente" icon={DollarSign} style={styles.cardSection}>
+        {/* Resumen de Montos */}
+        <Card title="Montos del Pedido" icon={DollarSign} style={styles.cardSection}>
           <View style={styles.montosRow}>
             <TouchableOpacity
               style={styles.montoChip}
@@ -125,141 +224,197 @@ export const RegistrarCobroScreen = ({ route, navigation }) => {
           </View>
         </Card>
 
-        {/* Método de Pago (Efectivo vs QR) */}
-        <Card title="Método de Pago" icon={Receipt} style={styles.cardSection}>
-          <View style={styles.selectorGrid}>
+        {/* Modalidad: Cobro Simple vs Cobro Mixto */}
+        <Card title="Modalidad de Cobro" icon={Layers} style={styles.cardSection}>
+          <View style={styles.modalidadRow}>
             <TouchableOpacity
-              style={[
-                styles.selectorBtn,
-                metodoPago === 'EFECTIVO' && styles.selectorBtnActive,
-              ]}
-              onPress={() => setMetodoPago('EFECTIVO')}
+              style={[styles.modalidadBtn, !esMixto && styles.modalidadBtnActive]}
+              onPress={() => setEsMixto(false)}
             >
-              <Banknote
-                size={24}
-                color={metodoPago === 'EFECTIVO' ? Colors.primary : Colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.selectorBtnText,
-                  metodoPago === 'EFECTIVO' && styles.selectorBtnTextActive,
-                ]}
-              >
-                Efectivo
+              <Text style={[styles.modalidadText, !esMixto && styles.modalidadTextActive]}>
+                Cobro Simple (1 Método)
               </Text>
-              <Text style={styles.selectorBtnSub}>Dinero en Mano</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
-              style={[
-                styles.selectorBtn,
-                metodoPago === 'TRANSFERENCIA_QR' && styles.selectorBtnActive,
-              ]}
-              onPress={() => setMetodoPago('TRANSFERENCIA_QR')}
+              style={[styles.modalidadBtn, esMixto && styles.modalidadBtnActive]}
+              onPress={() => setEsMixto(true)}
             >
-              <QrCode
-                size={24}
-                color={metodoPago === 'TRANSFERENCIA_QR' ? Colors.primary : Colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.selectorBtnText,
-                  metodoPago === 'TRANSFERENCIA_QR' && styles.selectorBtnTextActive,
-                ]}
-              >
-                QR / Transferencia
+              <Text style={[styles.modalidadText, esMixto && styles.modalidadTextActive]}>
+                Cobro Mixto (Varios Métodos)
               </Text>
-              <Text style={styles.selectorBtnSub}>Banca Móvil</Text>
             </TouchableOpacity>
           </View>
         </Card>
 
-        {/* Tipo de Cobro (Contado vs Abono) */}
-        <Card title="Tipo de Cobro" icon={Receipt} style={styles.cardSection}>
-          <View style={styles.selectorGrid}>
-            <TouchableOpacity
-              style={[
-                styles.selectorBtn,
-                tipoCobro === 'CONTADO' && styles.selectorBtnActive,
-              ]}
-              onPress={() => setTipoCobro('CONTADO')}
-            >
-              <Text
-                style={[
-                  styles.selectorBtnText,
-                  tipoCobro === 'CONTADO' && styles.selectorBtnTextActive,
-                ]}
-              >
-                Pago Contado
-              </Text>
-              <Text style={styles.selectorBtnSub}>Cancela pedido completo</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.selectorBtn,
-                tipoCobro === 'ABONO' && styles.selectorBtnActive,
-              ]}
-              onPress={() => setTipoCobro('ABONO')}
-            >
-              <Text
-                style={[
-                  styles.selectorBtnText,
-                  tipoCobro === 'ABONO' && styles.selectorBtnTextActive,
-                ]}
-              >
-                Abono a Cuenta
-              </Text>
-              <Text style={styles.selectorBtnSub}>Pago parcial de deuda</Text>
-            </TouchableOpacity>
-          </View>
-        </Card>
-
-        {/* Formulario de Importe y Referencia */}
-        <Card title="Detalles del Pago" icon={DollarSign} style={styles.cardSection}>
-          <Input
-            label="Importe Cobrado (Bs.) *"
-            placeholder="0.00"
-            value={monto}
-            onChangeText={setMonto}
-            keyboardType="decimal-pad"
-            icon={DollarSign}
-          />
-
-          {metodoPago === 'TRANSFERENCIA_QR' ? (
-            <Input
-              label="Nº de Comprobante / Referencia Bancaria *"
-              placeholder="Ej: OP-984021 o últimos 4 dígitos"
-              value={referencia}
-              onChangeText={setReferencia}
+        {!esMixto ? (
+          /* FORMULARIO SIMPLE */
+          <Card title="Datos del Pago" icon={Receipt} style={styles.cardSection}>
+            <PaymentSelector
+              selectedMethod={metodoSimple}
+              onSelectMethod={(m) => setMetodoSimple(m)}
+              allowMultiple={false}
+              showQrBadge={true}
             />
-          ) : null}
 
+            <View style={{ marginTop: 12 }}>
+              <Input
+                label="Importe Cobrado (Bs.) *"
+                placeholder="0.00"
+                value={montoSimple}
+                onChangeText={setMontoSimple}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {(metodoSimple === 'QR' || metodoSimple === 'TRANSFERENCIA') && (
+              <View style={styles.qrSection}>
+                <View style={styles.avisoPendienteBox}>
+                  <Clock size={16} color={Colors.warning} />
+                  <Text style={styles.avisoPendienteText}>
+                    El pago por {metodoSimple} nacerá en estado PENDIENTE_APROBACION y será conciliado por Kevin en tesorería.
+                  </Text>
+                </View>
+
+                <Input
+                  label="Número de Referencia Bancaria (Opcional)"
+                  placeholder="Ej: BNB-QR-992812"
+                  value={referenciaSimple}
+                  onChangeText={setReferenciaSimple}
+                />
+
+                <PhotoCapture
+                  photoUri={fotoSimpleUri}
+                  onPhotoTaken={(uri) => setFotoSimpleUri(uri)}
+                  onPhotoRemoved={() => setFotoSimpleUri(null)}
+                  label="Foto del Comprobante Digital *"
+                  required={true}
+                />
+              </View>
+            )}
+          </Card>
+        ) : (
+          /* FORMULARIO MIXTO */
+          <Card title="Desglose de Pago Mixto" icon={Receipt} style={styles.cardSection}>
+            <Text style={styles.subtext}>
+              Ingrese los importes correspondientes a cada método aplicado:
+            </Text>
+
+            {/* Tramo Efectivo */}
+            <View style={styles.tramoBox}>
+              <Text style={styles.tramoTitulo}>1. Tramo en Efectivo</Text>
+              <Input
+                label="Monto Efectivo (Bs.)"
+                placeholder="0.00"
+                value={montoEfectivo}
+                onChangeText={setMontoEfectivo}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Tramo QR */}
+            <View style={styles.tramoBox}>
+              <Text style={styles.tramoTitulo}>2. Tramo QR (Banca Móvil)</Text>
+              <Input
+                label="Monto QR (Bs.)"
+                placeholder="0.00"
+                value={montoQr}
+                onChangeText={setMontoQr}
+                keyboardType="numeric"
+              />
+              {parseFloat(montoQr) > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <Input
+                    label="Referencia QR"
+                    placeholder="Ej: QR-48291"
+                    value={referenciaQr}
+                    onChangeText={setReferenciaQr}
+                  />
+                  <PhotoCapture
+                    photoUri={fotoQrUri}
+                    onPhotoTaken={(uri) => setFotoQrUri(uri)}
+                    onPhotoRemoved={() => setFotoQrUri(null)}
+                    label="Foto Comprobante QR *"
+                    required={true}
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Tramo Transferencia */}
+            <View style={styles.tramoBox}>
+              <Text style={styles.tramoTitulo}>3. Tramo Transferencia Bancaria</Text>
+              <Input
+                label="Monto Transferencia (Bs.)"
+                placeholder="0.00"
+                value={montoTransferencia}
+                onChangeText={setMontoTransferencia}
+                keyboardType="numeric"
+              />
+              {parseFloat(montoTransferencia) > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <Input
+                    label="Referencia Transferencia"
+                    placeholder="Ej: TRANSF-8812"
+                    value={referenciaTransf}
+                    onChangeText={setReferenciaTransf}
+                  />
+                  <PhotoCapture
+                    photoUri={fotoTransfUri}
+                    onPhotoTaken={(uri) => setFotoTransfUri(uri)}
+                    onPhotoRemoved={() => setFotoTransfUri(null)}
+                    label="Foto Comprobante Transferencia *"
+                    required={true}
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Tramo Crédito */}
+            <View style={styles.tramoBox}>
+              <Text style={styles.tramoTitulo}>4. Tramo a Crédito / Saldo Deudor</Text>
+              <Input
+                label="Monto a Crédito (Bs.)"
+                placeholder="0.00"
+                value={montoCredito}
+                onChangeText={setMontoCredito}
+                keyboardType="numeric"
+              />
+              {parseFloat(montoCredito) > 0 && (
+                <Input
+                  label="Plazo en días"
+                  placeholder="15"
+                  value={diasCredito}
+                  onChangeText={setDiasCredito}
+                  keyboardType="numeric"
+                />
+              )}
+            </View>
+
+            <View style={styles.totalMixtoBox}>
+              <Text style={styles.totalMixtoLabel}>Total Cobro Mixto:</Text>
+              <Text style={styles.totalMixtoMonto}>
+                Bs. {calcularTotalMixto().toFixed(2)}
+              </Text>
+            </View>
+          </Card>
+        )}
+
+        <Card title="Observaciones" style={styles.cardSection}>
           <Input
-            label="Observaciones"
-            placeholder="Ej: Pagó con billete de 200, cambio devuelto"
+            placeholder="Ej: Pago parcial, saldo el viernes"
             value={observaciones}
             onChangeText={setObservaciones}
             multiline
             numberOfLines={2}
           />
-
-          <View style={styles.gpsIndicatorRow}>
-            <MapPin size={16} color={Colors.primary} />
-            <Text style={styles.gpsIndicatorText}>
-              {location
-                ? `GPS Registrado: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
-                : 'GPS listo para captura automática'}
-            </Text>
-          </View>
         </Card>
 
         {/* Botón de Confirmación */}
         <View style={styles.submitContainer}>
           <Button
-            title={`Confirmar Cobro Bs. ${parseFloat(monto || 0).toFixed(2)}`}
-            icon={CheckCircle2}
-            variant="secondary"
+            title="Confirmar y Guardar Cobro"
+            icon={DollarSign}
+            variant="primary"
             size="large"
             loading={loading}
             onPress={handleConfirmarCobro}
@@ -273,7 +428,7 @@ export const RegistrarCobroScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: '#F8FAFC',
   },
   content: {
     padding: 16,
@@ -281,76 +436,120 @@ const styles = StyleSheet.create({
   },
   cardSection: {
     marginBottom: 16,
+    borderRadius: 4,
   },
   montosRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   montoChip: {
     flex: 1,
-    backgroundColor: Colors.surface,
     padding: 12,
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
+    borderColor: '#64748B',
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    minHeight: 48,
+    justifyContent: 'center',
   },
   chipLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 4,
+    color: '#475569',
+    marginBottom: 2,
   },
   chipVal: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontVariant: ['tabular-nums'],
   },
-  selectorGrid: {
+  modalidadRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
-  selectorBtn: {
+  modalidadBtn: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#64748B',
+    borderRadius: 4,
     alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
   },
-  selectorBtnActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryMuted,
+  modalidadBtnActive: {
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
-  selectorBtnText: {
+  modalidadText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  modalidadTextActive: {
+    color: '#FFFFFF',
+  },
+  qrSection: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 12,
+  },
+  avisoPendienteBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF3C7',
+    padding: 10,
+    borderRadius: 4,
+    gap: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  avisoPendienteText: {
+    fontSize: 11,
+    color: Colors.warning,
+    flex: 1,
+    lineHeight: 16,
+  },
+  subtext: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 12,
+  },
+  tramoBox: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  tramoTitulo: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
-    marginTop: 6,
+    color: '#0F172A',
+    marginBottom: 6,
   },
-  selectorBtnTextActive: {
-    color: Colors.primary,
-    fontWeight: '800',
-  },
-  selectorBtnSub: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  gpsIndicatorRow: {
+  totalMixtoBox: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-    paddingHorizontal: 4,
+    paddingTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: '#0F172A',
+    marginTop: 8,
   },
-  gpsIndicatorText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+  totalMixtoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  totalMixtoMonto: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.primaryDark,
+    fontVariant: ['tabular-nums'],
   },
   submitContainer: {
     marginTop: 8,
+    marginBottom: 32,
   },
 });
 

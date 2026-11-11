@@ -1,71 +1,210 @@
+/* global FormData */
 import apiClient from "./client";
 
 /**
- * Servicios de Logística, Rutas, Entregas y Telemetría para el Chofer.
- * Conexión exclusiva a través del Backend FastAPI.
+ * Servicios de Logística, Rutas, Entregas y Telemetría para el Chofer Móvil (Fase 2).
+ * Conexión exclusiva a través del Backend FastAPI bajo /api/movil/v1/chofer/*.
  * Toda operación encolada offline se gestiona en syncQueue sin comunicación directa a base de datos.
  */
 export const LogisticaApi = {
-  // Sincronización Batch Offline-First para Choferes
+  // 1. Obtener hoja de ruta activa especializada del chofer autenticado (Fase 2)
+  async obtenerHojaRutaActiva() {
+    try {
+      const response = await apiClient.get("/api/movil/v1/chofer/hoja-ruta/activa");
+      if (response.data && response.data.codigo === "EXITO") {
+        return response.data.datos;
+      }
+      return null;
+    } catch (err) {
+      console.log("[LogisticaApi] Fallo al consultar hoja de ruta activa:", err.message);
+      return null;
+    }
+  },
+
+  // 2. Obtener inventario actual en camión y desglose de bandeo a costo 0 (Fase 2)
+  async obtenerMiInventarioCamion() {
+    try {
+      const response = await apiClient.get("/api/movil/v1/chofer/mi-inventario");
+      if (response.data && response.data.codigo === "EXITO") {
+        return response.data.datos;
+      }
+      return null;
+    } catch (err) {
+      console.log("[LogisticaApi] Fallo al consultar inventario en camión:", err.message);
+      return null;
+    }
+  },
+
+  // 3. Registrar entrega de producto (Total o Parcial) con Firma, Idempotencia y Alerta de Revalorización
+  async registrarEntrega(payload, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    try {
+      // Intentar primero endpoint especializado Fase 2
+      const response = await apiClient.post("/api/movil/v1/chofer/entregar", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        alertaRevalorizacion: response.data?.datos?.alerta_revalorizacion || null,
+        codigo: response.data?.codigo || "EXITO",
+      };
+    } catch (err) {
+      // Fallback a endpoint telemetria si existiera
+      if (err.response?.status === 404) {
+        try {
+          const fallback = await apiClient.post("/logistica/telemetria/entrega", payload, { headers });
+          return { success: true, data: fallback.data };
+        } catch (fErr) {
+          return {
+            success: false,
+            error: fErr.friendlyMessage || fErr.message,
+            status: fErr.response?.status,
+          };
+        }
+      }
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
+  // 4. Registrar cobro simple o mixto (Efectivo, QR, Transferencia, Crédito) con Idempotencia
+  async registrarCobro(payload, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    try {
+      const response = await apiClient.post("/api/movil/v1/chofer/cobrar", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        codigo: response.data?.codigo || "EXITO",
+      };
+    } catch (err) {
+      if (err.response?.status === 404) {
+        try {
+          const fallback = await apiClient.post("/logistica/telemetria/cobro", payload, { headers });
+          return { success: true, data: fallback.data };
+        } catch (fErr) {
+          return {
+            success: false,
+            error: fErr.friendlyMessage || fErr.message,
+            status: fErr.response?.status,
+          };
+        }
+      }
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
+  // 5. Registrar no-entrega con georreferenciación y motivo
+  async registrarNoEntrega(payload, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    try {
+      const response = await apiClient.post("/api/movil/v1/chofer/no-entrega", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
+  // 6. Cierre de turno definitivo del chofer (Arqueo financiero, cuadre de bultos, mermas y firma)
+  async registrarCierreTurno(payload, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    try {
+      const response = await apiClient.post("/api/movil/v1/chofer/cierre-turno", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        codigo: response.data?.codigo || "EXITO",
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
+  // 7. Subida multipart de fotos y comprobantes (Regla 4: fotos fuera de la cola JSON, <= 5MB)
+  async subirArchivoComprobante(archivoUri, entidadOrigen = "COMPROBANTE_COBRO", idRegistroOrigen = 0) {
+    try {
+      const formData = new FormData();
+      const nombreArchivo = archivoUri.split("/").pop() || "comprobante.jpg";
+      const tipoMime = nombreArchivo.endsWith(".png") ? "image/png" : "image/jpeg";
+
+      formData.append("archivo", {
+        uri: archivoUri,
+        name: nombreArchivo,
+        type: tipoMime,
+      });
+      formData.append("entidad_origen", entidadOrigen);
+      formData.append("id_registro_origen", String(idRegistroOrigen));
+
+      const response = await apiClient.post("/api/movil/v1/chofer/subir-archivo", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 30000,
+      });
+
+      if (response.data && response.data.codigo === "EXITO") {
+        return {
+          success: true,
+          idComprobante: response.data.datos.id_comprobante,
+          urlArchivo: response.data.datos.url_archivo,
+        };
+      }
+      return { success: false, error: "Respuesta no exitosa al subir archivo" };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.detail || err.friendlyMessage || err.message,
+        status: err.response?.status,
+      };
+    }
+  },
+
+  // 8. Sincronización Batch Offline-First para Choferes
   async sincronizarBatch(operaciones) {
     if (!operaciones || operaciones.length === 0) return { success: true, sincronizados: [] };
     try {
-      const response = await apiClient.post("/logistica/chofer/sincronizar-batch", {
+      const response = await apiClient.post("/api/movil/v1/chofer/sincronizar-batch", {
         operaciones,
-      }, { timeout: 30000 });
+      }, { timeout: 35000 });
       return response.data;
     } catch (err) {
-      console.log("[LogisticaApi] Sincronización batch falló o sin red:", err.message);
-      return { success: false, error: err.friendlyMessage || err.message, sincronizados: [] };
-    }
-  },
-
-  // Obtener ruta activa especializada para el chofer
-  async obtenerRutaActivaChofer(idChofer) {
-    try {
-      const response = await apiClient.get("/logistica/chofer/mi-ruta-activa", {
-        params: idChofer ? { id_chofer: idChofer } : {},
-      });
-      if (response.data && response.data.success && response.data.asignacion) {
-        return response.data.asignacion;
+      try {
+        const fallback = await apiClient.post("/logistica/chofer/sincronizar-batch", { operaciones }, { timeout: 30000 });
+        return fallback.data;
+      } catch (fErr) {
+        return { success: false, error: fErr.friendlyMessage || fErr.message, sincronizados: [] };
       }
-    } catch (e) {
-      console.log("[LogisticaApi] Fallo consulta ruta chofer:", e.message);
     }
-    return null;
   },
 
-  // Obtener asignación de ruta activa del día para el repartidor
-  async obtenerAsignaciones(fecha, idRepartidor) {
-    try {
-      const params = {};
-      if (fecha) params.fecha = fecha;
-      if (idRepartidor) params.id_repartidor = idRepartidor;
-
-      const response = await apiClient.get("/logistica/asignaciones", { params });
-      if (response.data && response.data.length > 0) {
-        return response.data;
-      }
-    } catch (err) {
-      console.log("[LogisticaApi] Error al obtener asignaciones:", err.message);
-    }
-    return [];
-  },
-
-  // Obtener detalle completo de la asignación con paradas y pedidos
-  async obtenerTrackingAsignacion(idAsignacion) {
-    try {
-      const response = await apiClient.get(`/logistica/telemetria/asignacion/${idAsignacion}`);
-      if (response.data && response.data.paradas && response.data.paradas.length > 0) {
-        return response.data;
-      }
-    } catch (err) {
-      console.log("[LogisticaApi] Error al obtener tracking de asignación:", err.message);
-    }
-    return null;
-  },
-
-  // Enviar ping de ubicación GPS en tiempo real para rastreo en vivo
+  // 9. Enviar ping de telemetría GPS
   async enviarTelemetriaPing(payload) {
     try {
       const response = await apiClient.post("/logistica/telemetria/ping", payload, { timeout: 8000 });
@@ -75,43 +214,43 @@ export const LogisticaApi = {
     }
   },
 
-  // Registrar entrega de producto en parada con GPS e Idempotencia
-  async registrarEntrega(payload, idempotencyKey = null) {
-    const headers = {};
-    if (idempotencyKey) {
-      headers["X-Idempotency-Key"] = idempotencyKey;
+  // Métodos de retrocompatibilidad
+  async obtenerRutaActivaChofer(idChofer) {
+    const res = await this.obtenerHojaRutaActiva();
+    if (res && res.asignacion) {
+      return res.asignacion;
     }
     try {
-      const response = await apiClient.post("/logistica/telemetria/entrega", payload, { headers });
-      return response.data;
-    } catch (err) {
-      return {
-        success: false,
-        error: err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      const response = await apiClient.get("/logistica/chofer/mi-ruta-activa", {
+        params: idChofer ? { id_chofer: idChofer } : {},
+      });
+      return response.data?.asignacion || null;
+    } catch (_e) {
+      return null;
     }
   },
 
-  // Registrar cobro realizado a cliente con GPS e Idempotencia
-  async registrarCobro(payload, idempotencyKey = null) {
-    const headers = {};
-    if (idempotencyKey) {
-      headers["X-Idempotency-Key"] = idempotencyKey;
-    }
+  async obtenerAsignaciones(fecha, idRepartidor) {
     try {
-      const response = await apiClient.post("/logistica/telemetria/cobro", payload, { headers });
-      return response.data;
-    } catch (err) {
-      return {
-        success: false,
-        error: err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      const params = {};
+      if (fecha) params.fecha = fecha;
+      if (idRepartidor) params.id_repartidor = idRepartidor;
+      const response = await apiClient.get("/logistica/asignaciones", { params });
+      return response.data || [];
+    } catch (_err) {
+      return [];
     }
   },
 
-  // Obtener resumen de liquidación para el cierre de ruta
+  async obtenerTrackingAsignacion(idAsignacion) {
+    try {
+      const response = await apiClient.get(`/logistica/telemetria/asignacion/${idAsignacion}`);
+      return response.data || null;
+    } catch (_err) {
+      return null;
+    }
+  },
+
   async obtenerLiquidacionRuta(idAsignacion) {
     try {
       const response = await apiClient.get(`/logistica/asignaciones/${idAsignacion}/liquidacion`);
@@ -121,25 +260,14 @@ export const LogisticaApi = {
     }
   },
 
-  // Cerrar y liquidar ruta diaria del chofer (exige conexión obligatoria)
   async cerrarYLiquidarRuta(idAsignacion, payload) {
-    try {
-      const response = await apiClient.post(`/logistica/asignaciones/${idAsignacion}/liquidar`, payload);
-      return response.data;
-    } catch (err) {
-      return {
-        success: false,
-        error: err.friendlyMessage || err.message || "Error al liquidar ruta",
-        status: err.response?.status,
-      };
-    }
+    return this.registrarCierreTurno(payload);
   },
 
-  // Obtener lista de precios y productos vigentes
   async obtenerListaPrecios() {
     try {
       const response = await apiClient.get("/logistica/precios");
-      return response.data;
+      return response.data || [];
     } catch (_err) {
       return [];
     }

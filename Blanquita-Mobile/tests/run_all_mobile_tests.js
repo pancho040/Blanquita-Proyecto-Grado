@@ -13,6 +13,7 @@ const testFiles = [
   "calcular_contraste.js",
   "test_fase1_2_componentes_y_frescura.test.js",
   "test_componentes_react_test_renderer.test.js",
+  "test_fase2_flujos_chofer.test.js",
 ];
 
 console.log("==================================================================");
