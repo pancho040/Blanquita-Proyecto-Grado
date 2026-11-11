@@ -199,10 +199,10 @@ export default function EscanerQR({ abierto, onCerrar, onDetectar }) {
       {estado === "activo" ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="relative aspect-square w-[min(72vw,52vh,340px)]">
-            <span className="absolute -left-px -top-px h-10 w-10 rounded-tl-2xl border-l-4 border-t-4 border-c3" />
-            <span className="absolute -right-px -top-px h-10 w-10 rounded-tr-2xl border-r-4 border-t-4 border-c3" />
-            <span className="absolute -bottom-px -left-px h-10 w-10 rounded-bl-2xl border-b-4 border-l-4 border-c3" />
-            <span className="absolute -bottom-px -right-px h-10 w-10 rounded-br-2xl border-b-4 border-r-4 border-c3" />
+            <span className="absolute -left-px -top-px h-10 w-10 border-l-4 border-t-4 border-c3" />
+            <span className="absolute -right-px -top-px h-10 w-10 border-r-4 border-t-4 border-c3" />
+            <span className="absolute -bottom-px -left-px h-10 w-10 border-b-4 border-l-4 border-c3" />
+            <span className="absolute -bottom-px -right-px h-10 w-10 border-b-4 border-r-4 border-c3" />
           </div>
         </div>
       ) : null}
