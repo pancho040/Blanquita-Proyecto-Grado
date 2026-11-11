@@ -11,6 +11,7 @@ Garantiza:
 
 import os
 import secrets
+import jwt
 import pytest
 import httpx
 from fastapi.testclient import TestClient
@@ -63,6 +64,11 @@ def test_login_real_usuario_test_endpoints():
         assert "AccessToken" in data_web and len(data_web["AccessToken"]) > 20
         assert "RefreshToken" in data_web and len(data_web["RefreshToken"]) > 10
 
+        payload_web = jwt.decode(data_web["AccessToken"], options={"verify_signature": False})
+        meta_web = payload_web.get("app_metadata", {})
+        for req_claim in ("IdUsuario", "IdRol", "IdEstadoUsuario", "IsAdmin"):
+            assert req_claim in meta_web, f"Claim requerido {req_claim} no encontrado en app_metadata del JWT Web"
+
         # 2. Login vía /api/movil/v1/auth/login (Móvil)
         resp_movil = client.post("/api/movil/v1/auth/login", json={"ci": ci, "clave": test_pwd})
         assert resp_movil.status_code == 200, f"Fallo login /api/movil/v1/auth/login: {resp_movil.status_code} - {resp_movil.text}"
@@ -72,6 +78,12 @@ def test_login_real_usuario_test_endpoints():
         assert "refresh_token" in data_movil["datos"] and len(data_movil["datos"]["refresh_token"]) > 10
         assert data_movil["datos"]["usuario"]["ci"] == ci
         assert data_movil["datos"]["usuario"]["sucursal_defecto"] == 2
+
+        payload_movil = jwt.decode(data_movil["datos"]["access_token"], options={"verify_signature": False})
+        meta_movil = payload_movil.get("app_metadata", {})
+        for req_claim in ("IdUsuario", "IdRol", "IdEstadoUsuario", "IsAdmin"):
+            assert req_claim in meta_movil, f"Claim requerido {req_claim} no encontrado en app_metadata del JWT Móvil"
+        print(f"VERIFICACION_CLAIMS_JWT_HOOK_EXITOSA: claims presentes en app_metadata: {list(meta_movil.keys())}")
 
         # 3. Verificación de seguridad: Contraseña errónea -> 401 Credenciales inválidas
         resp_bad_pwd = client.post("/api/movil/v1/auth/login", json={"ci": ci, "clave": "ClaveIncorrecta999!"})
