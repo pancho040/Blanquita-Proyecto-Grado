@@ -2,19 +2,21 @@ import { manejarErrorBackend } from "@/utils/validators";
 import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
 // 1. DASHBOARD RESUMEN
-export async function ObtenerResumenRRHH() {
-  const response = await fetchConCache("/api/rrhh/resumen", {}, 30000);
+export async function ObtenerResumenRRHH(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const response = await fetchConCache(`/api/rrhh/resumen${query}`, {}, 30000);
   if (!response.ok) await manejarErrorBackend(response);
   return await response.json();
 }
 
 // 2. EMPLEADOS & DATOS LABORALES
-export async function ObtenerEmpleados(busqueda = "", area = "", activo = null) {
+export async function ObtenerEmpleados(busqueda = "", area = "", activo = null, idSucursal = null) {
   let url = "/api/rrhh/empleados?";
   const params = new URLSearchParams();
   if (busqueda) params.append("busqueda", busqueda);
   if (area && area !== "TODAS") params.append("area", area);
   if (activo !== null && activo !== undefined && activo !== "") params.append("activo", activo);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
   
   const response = await fetchConCache(url + params.toString(), {}, 30000);
   if (!response.ok) await manejarErrorBackend(response);
@@ -87,9 +89,10 @@ export async function EliminarTurno(idTurno) {
 }
 
 // 4. CRONOGRAMA DE TURNOS SEMANAL
-export async function ObtenerCronograma(fechaInicio, fechaFin, area = "") {
+export async function ObtenerCronograma(fechaInicio, fechaFin, area = "", idSucursal = null) {
   let url = `/api/rrhh/cronograma?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
   if (area && area !== "TODAS") url += `&area=${encodeURIComponent(area)}`;
+  if (idSucursal && idSucursal !== "todas") url += `&id_sucursal=${idSucursal}`;
   const response = await fetchConCache(url, {}, 20000);
   if (!response.ok) await manejarErrorBackend(response);
   return await response.json();
@@ -135,13 +138,15 @@ export async function ObtenerAsistencia(params = {}) {
   const fFin = params.FechaFin || params.fechaFin || fIni;
   const idU = params.IdUsuario || params.idUsuario || null;
   const area = params.Area || params.area || "";
-  return ObtenerAsistencias(fIni, fFin, idU, area);
+  const idSuc = params.id_sucursal || params.idSucursal || null;
+  return ObtenerAsistencias(fIni, fFin, idU, area, idSuc);
 }
 
-export async function ObtenerAsistencias(fechaInicio, fechaFin, idUsuario = null, area = "") {
+export async function ObtenerAsistencias(fechaInicio, fechaFin, idUsuario = null, area = "", idSucursal = null) {
   let url = `/api/rrhh/asistencia?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
   if (idUsuario) url += `&id_usuario=${idUsuario}`;
   if (area && area !== "TODAS") url += `&area=${encodeURIComponent(area)}`;
+  if (idSucursal && idSucursal !== "todas") url += `&id_sucursal=${idSucursal}`;
   const response = await fetchConCache(url, {}, 20000);
   if (!response.ok) await manejarErrorBackend(response);
   return await response.json();

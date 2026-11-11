@@ -13,6 +13,7 @@ export async function ObtenerNotasVenta({
   limit = 25,
   offset = 0,
   page = 1,
+  idSucursal = null,
 } = {}) {
   const params = new URLSearchParams();
   if (idCliente) params.append("id_cliente", idCliente);
@@ -20,6 +21,7 @@ export async function ObtenerNotasVenta({
   if (fechaDesde) params.append("fecha_desde", fechaDesde);
   if (fechaHasta) params.append("fecha_hasta", fechaHasta);
   if (busqueda) params.append("busqueda", busqueda);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
   params.append("limit", limit);
   params.append("offset", offset);
   if (page) params.append("page", page);
@@ -57,12 +59,14 @@ export async function ObtenerCuentasCobrar({
   limit = 25,
   offset = 0,
   page = 1,
+  idSucursal = null,
 } = {}) {
   const params = new URLSearchParams();
   if (idCliente) params.append("id_cliente", idCliente);
   if (estado && estado !== "TODOS") params.append("id_estado", estado);
   if (busqueda) params.append("busqueda", busqueda);
   if (soloVencidas) params.append("solo_vencidas", "true");
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
   params.append("limit", limit);
   params.append("offset", offset);
   if (page) params.append("page", page);
@@ -115,7 +119,7 @@ export async function RegistrarAbonoChofer(datos) {
 }
 
 export async function ObtenerAbonosPendientes(idSucursal = null) {
-  const url = idSucursal ? `/api/cxc/abonos/pendientes?id_sucursal=${idSucursal}` : "/api/cxc/abonos/pendientes";
+  const url = idSucursal && idSucursal !== "todas" ? `/api/cxc/abonos/pendientes?id_sucursal=${idSucursal}` : "/api/cxc/abonos/pendientes";
   const res = await fetch(url);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
@@ -168,14 +172,16 @@ export async function CierreTurnoChofer(datosCierre) {
   return await res.json();
 }
 
-export async function ObtenerCarteraResumen() {
-  const res = await fetchConCache("/api/cxc/cartera-resumen", {}, 20000);
+export async function ObtenerCarteraResumen(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/cxc/cartera-resumen${query}`, {}, 20000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
-export async function ObtenerClientesCxC() {
-  const res = await fetchConCache("/api/cxc/clientes", {}, 60000);
+export async function ObtenerClientesCxC(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/cxc/clientes${query}`, {}, 60000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }

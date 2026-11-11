@@ -3,6 +3,7 @@ import { Search, ChevronDown, Check, X } from "lucide-react";
 
 /**
  * Combobox reutilizable con filtro integrado en vivo.
+ * Diseño Industrial Minimalista ("modo operate") para ERP Papelera Blanquita.
  * @param {Array<{ value: string|number, label: string, sublabel?: string, badge?: string, icon?: any }>} options
  * @param {string|number} value
  * @param {Function} onChange
@@ -72,58 +73,58 @@ export default function BuscadorSelect({
         type="button"
         disabled={disabled}
         onClick={() => setAbierto(!abierto)}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-sm text-left transition-all ${
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded border text-xs text-left transition-colors ${
           disabled
-            ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+            ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
             : abierto
-            ? "border-[#20A7DB] ring-2 ring-[#20A7DB]/20 bg-white shadow-xs"
-            : "border-slate-300 hover:border-slate-400 bg-white text-slate-800 shadow-2xs"
+            ? "border-[#1C96C5] ring-1 ring-[#1C96C5] bg-white"
+            : "border-slate-300 hover:border-slate-400 bg-white text-slate-800"
         }`}
       >
         <div className="flex-1 truncate">
           {opcionSeleccionada ? (
             <div className="flex items-center gap-2 truncate">
               {opcionSeleccionada.icon && (
-                <span className="text-[#20A7DB] shrink-0">{opcionSeleccionada.icon}</span>
+                <span className="text-[#1C96C5] shrink-0">{opcionSeleccionada.icon}</span>
               )}
               <span className="font-medium text-slate-900 truncate">{opcionSeleccionada.label}</span>
               {opcionSeleccionada.sublabel && (
-                <span className="text-xs text-slate-500 truncate hidden sm:inline">
+                <span className="text-[11px] text-slate-600 truncate hidden sm:inline">
                   • {opcionSeleccionada.sublabel}
                 </span>
               )}
               {opcionSeleccionada.badge && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-semibold shrink-0">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-medium shrink-0">
                   {opcionSeleccionada.badge}
                 </span>
               )}
             </div>
           ) : (
-            <span className="text-slate-400">{placeholder}</span>
+            <span className="text-slate-500">{placeholder}</span>
           )}
         </div>
-        <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${abierto ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 text-slate-500 shrink-0 transition-transform ${abierto ? "rotate-180" : ""}`} />
       </button>
 
       {/* Popover flotante con Buscador y Lista de Opciones */}
       {abierto && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl bg-white border border-slate-200 shadow-xl overflow-hidden animate-in fade-in-0 duration-75">
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded bg-white border border-slate-200 shadow-sm overflow-hidden">
           {/* Input Buscador Integrado */}
-          <div className="p-2 border-b border-slate-100 bg-slate-50/60 relative">
-            <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
+          <div className="p-2 border-b border-slate-200 bg-slate-50 relative">
+            <Search className="absolute left-4 top-3.5 h-3.5 w-3.5 text-slate-500" />
             <input
               ref={inputBusquedaRef}
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:border-[#20A7DB] focus:ring-1 focus:ring-[#20A7DB] placeholder:text-slate-400"
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded border border-slate-300 bg-white focus:outline-none focus:border-[#1C96C5] focus:ring-1 focus:ring-[#1C96C5] placeholder:text-slate-500 text-slate-900"
             />
             {busqueda && (
               <button
                 type="button"
                 onClick={() => setBusqueda("")}
-                className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
+                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-800"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -131,9 +132,9 @@ export default function BuscadorSelect({
           </div>
 
           {/* Lista de Resultados con Scroll */}
-          <div className="max-h-60 overflow-y-auto p-1 divide-y divide-slate-50">
+          <div className="max-h-60 overflow-y-auto p-1 divide-y divide-slate-100">
             {opcionesFiltradas.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400 italic">
+              <div className="p-4 text-center text-xs text-slate-500 italic">
                 No se encontraron opciones que coincidan
               </div>
             ) : (
@@ -144,29 +145,29 @@ export default function BuscadorSelect({
                     key={opt.value}
                     type="button"
                     onClick={() => seleccionar(opt.value)}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs rounded-lg transition-colors ${
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs rounded transition-colors ${
                       esActivo
-                        ? "bg-sky-50 text-sky-900 font-semibold"
+                        ? "bg-sky-50 text-sky-950 font-semibold"
                         : "hover:bg-slate-50 text-slate-700"
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      {opt.icon && <span className="text-[#20A7DB] shrink-0">{opt.icon}</span>}
+                      {opt.icon && <span className="text-[#1C96C5] shrink-0">{opt.icon}</span>}
                       <div className="truncate">
                         <p className="truncate font-medium">{opt.label}</p>
                         {opt.sublabel && (
-                          <p className="text-[11px] text-slate-400 font-normal truncate">{opt.sublabel}</p>
+                          <p className="text-[11px] text-slate-600 font-normal truncate">{opt.sublabel}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {opt.badge && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                           {opt.badge}
                         </span>
                       )}
-                      {esActivo && <Check className="h-3.5 w-3.5 text-[#20A7DB]" />}
+                      {esActivo && <Check className="h-3.5 w-3.5 text-[#1C96C5]" />}
                     </div>
                   </button>
                 );

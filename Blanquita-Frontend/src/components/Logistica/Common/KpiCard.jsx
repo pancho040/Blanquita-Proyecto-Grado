@@ -1,5 +1,7 @@
+import React from "react";
+
 /**
- * Tarjeta de KPI unificada y reutilizable.
+ * Tarjeta de KPI unificada para Papelera Blanquita (Modo Operate / Industrial Minimalist).
  * @param {string} titulo
  * @param {string|number} valor
  * @param {any} icon
@@ -16,49 +18,51 @@ export default function KpiCard({
   const styles = {
     default: {
       card: "bg-white border-slate-200",
-      titulo: "text-slate-500",
+      titulo: "text-slate-600",
       valor: "text-slate-900",
-      icon: "text-slate-400"
+      icon: "text-slate-500"
     },
     sky: {
-      card: "bg-white border-sky-200 bg-sky-50/20",
-      titulo: "text-sky-700",
-      valor: "text-sky-800",
-      icon: "text-sky-500"
+      card: "bg-white border-sky-200",
+      titulo: "text-sky-800",
+      valor: "text-[#1C96C5]",
+      icon: "text-[#1C96C5]"
     },
     emerald: {
-      card: "bg-white border-emerald-200 bg-emerald-50/20",
-      titulo: "text-emerald-700",
-      valor: "text-emerald-800",
-      icon: "text-emerald-500"
+      card: "bg-white border-emerald-200",
+      titulo: "text-emerald-800",
+      valor: "text-emerald-700",
+      icon: "text-emerald-600"
     },
     amber: {
-      card: "bg-white border-amber-200 bg-amber-50/20",
-      titulo: "text-amber-700",
-      valor: "text-amber-800",
-      icon: "text-amber-500"
+      card: "bg-white border-amber-200",
+      titulo: "text-amber-800",
+      valor: "text-amber-700",
+      icon: "text-amber-600"
     },
     red: {
-      card: "bg-white border-red-200 bg-red-50/20",
-      titulo: "text-red-700",
-      valor: "text-red-800",
-      icon: "text-red-500"
+      card: "bg-white border-rose-200",
+      titulo: "text-rose-800",
+      valor: "text-rose-700",
+      icon: "text-rose-600"
     }
   };
 
   const estilo = styles[variant] || styles.default;
 
   return (
-    <div className={`p-4 rounded-xl border shadow-2xs transition-all ${estilo.card}`}>
-      <span className={`text-[11px] font-semibold uppercase tracking-wider block ${estilo.titulo}`}>
-        {titulo}
-      </span>
-      <div className="flex items-center justify-between mt-1">
-        <span className={`text-2xl font-bold font-sans ${estilo.valor}`}>{valor}</span>
-        {icon && <span className={`h-5 w-5 ${estilo.icon}`}>{icon}</span>}
+    <div className={`p-4 rounded border ${estilo.card}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={`text-xs font-medium uppercase tracking-wider block ${estilo.titulo}`}>
+          {titulo}
+        </span>
+        {icon && <span className={`h-4 w-4 shrink-0 ${estilo.icon}`}>{icon}</span>}
+      </div>
+      <div className="mt-2">
+        <span className={`text-2xl font-bold font-mono tabular-nums ${estilo.valor}`}>{valor}</span>
       </div>
       {subtexto && (
-        <p className="text-[11px] text-slate-400 mt-1 truncate">{subtexto}</p>
+        <p className="text-xs text-slate-600 mt-1 truncate">{subtexto}</p>
       )}
     </div>
   );

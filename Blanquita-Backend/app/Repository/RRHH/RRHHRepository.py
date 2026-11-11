@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.Repository.DbCaller import DbCaller
 from datetime import date, datetime
 from decimal import Decimal
+from app.core.cache import memory_cache
 
 class RRHHRepository:
     def __init__(self, db: Session):
@@ -36,7 +38,7 @@ class RRHHRepository:
             params["es_asegurado"] = es_asegurado
 
         if id_sucursal is not None:
-            where_clauses.append('COALESCE(d."IdSucursal", 1) = :id_sucursal')
+            where_clauses.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_sucursal')
             params["id_sucursal"] = id_sucursal
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
@@ -64,20 +66,23 @@ class RRHHRepository:
                 d."Banco",
                 COALESCE(d."Activo", true) as "Activo",
                 COALESCE(d."EsAsegurado", true) as "EsAsegurado",
-                COALESCE(d."IdSucursal", 1) as "IdSucursal",
+                COALESCE(d."IdSucursal", u."IdSucursal") as "IdSucursal",
                 s."nombre" as "NombreSucursal"
             FROM "Usuario" u
             JOIN "Rol" r ON u."IdRol" = r."IdRol"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
-            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", 1) = s."id"
+            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", u."IdSucursal") = s."id"
             {where_sql}
             ORDER BY COALESCE(d."Activo", true) DESC, d."Area" ASC, u."PrimerNombre" ASC;
         """
         return self.caller.LlamarFuncion(sql, params)
 
-    def ListarEmpleadosSimple(self, area: str = "") -> list[dict]:
+    def ListarEmpleadosSimple(self, area: str = "", id_sucursal: int | None = None) -> list[dict]:
         params = {}
         where = ['COALESCE(d."Activo", true) = true']
+        if id_sucursal is not None:
+            where.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
         if area and area != "TODAS":
             where.append('(d."Area" = :area OR d."Area" = ''General'')')
             params["area"] = area
@@ -88,7 +93,8 @@ class RRHHRepository:
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreCompleto",
                 u."Ci",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
-                COALESCE(d."Area", 'General') as "Area"
+                COALESCE(d."Area", 'General') as "Area",
+                COALESCE(d."IdSucursal", u."IdSucursal") as "IdSucursal"
             FROM "Usuario" u
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
             WHERE {" AND ".join(where)}
@@ -120,12 +126,12 @@ class RRHHRepository:
                 d."Banco",
                 COALESCE(d."Activo", true) as "Activo",
                 COALESCE(d."EsAsegurado", true) as "EsAsegurado",
-                COALESCE(d."IdSucursal", 1) as "IdSucursal",
+                COALESCE(d."IdSucursal", u."IdSucursal") as "IdSucursal",
                 s."nombre" as "NombreSucursal"
             FROM "Usuario" u
             JOIN "Rol" r ON u."IdRol" = r."IdRol"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
-            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", 1) = s."id"
+            LEFT JOIN "sucursales" s ON COALESCE(d."IdSucursal", u."IdSucursal") = s."id"
             WHERE u."IdUsuario" = :id_usuario;
         """
         return self.caller.LlamarUnRegistro(sql, {"id_usuario": id_usuario})
@@ -248,9 +254,13 @@ class RRHHRepository:
     # =========================================================================
     # 3. CRONOGRAMA DE TURNOS Y ASIGNACIONES
     # =========================================================================
-    def ListarCronograma(self, fecha_inicio: date, fecha_fin: date, area: str = "") -> list[dict]:
+    def ListarCronograma(self, fecha_inicio: date, fecha_fin: date, area: str = "", id_sucursal: int | None = None) -> list[dict]:
         params = {"fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin}
         where_clauses = ['a."Fecha" BETWEEN :fecha_inicio AND :fecha_fin']
+
+        if id_sucursal is not None:
+            where_clauses.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
 
         if area and area != "TODAS":
             where_clauses.append('COALESCE(a."Area", d."Area") = :area')
@@ -320,9 +330,14 @@ class RRHHRepository:
     # =========================================================================
     # 4. CONTROL DE ASISTENCIA Y MARCAS BIOMÉTRICAS
     # =========================================================================
-    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None, id_usuario: int | None = None, area: str = "") -> list[dict]:
+    def ListarAsistencias(self, fecha_inicio: date | None = None, fecha_fin: date | None = None,
+                          id_usuario: int | None = None, area: str = "", id_sucursal: int | None = None) -> list[dict]:
         params = {}
         where = ["1=1"]
+
+        if id_sucursal:
+            where.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
 
         if fecha_inicio:
             where.append('a."Fecha" >= :fecha_inicio')
@@ -471,6 +486,11 @@ class RRHHRepository:
     # 5. CONFIGURACIÓN LABORAL
     # =========================================================================
     def ListarConfiguracionLaboral(self) -> list[dict]:
+        cache_key = "rrhh:configuracion_laboral"
+        cached_data = memory_cache.get(cache_key)
+        if cached_data is not None:
+            return cached_data
+
         sql = """
             SELECT 
                 "IdConfiguracionLaboral",
@@ -481,9 +501,12 @@ class RRHHRepository:
             FROM "ConfiguracionLaboral"
             ORDER BY "IdConfiguracionLaboral" ASC;
         """
-        return self.caller.LlamarFuncion(sql, {})
+        res = self.caller.LlamarFuncion(sql, {})
+        memory_cache.set(cache_key, res, ttl=180)
+        return res
 
     def ActualizarParametroLaboral(self, id_config: int, valor: Decimal, descripcion: str | None = None) -> dict:
+        memory_cache.invalidate_prefix("rrhh:config")
         campos = ['"Valor" = :valor', '"FechaActualizacion" = now()']
         params = {"id_config": id_config, "valor": valor}
         if descripcion is not None:
@@ -499,10 +522,17 @@ class RRHHRepository:
         return self.caller.LlamarUnRegistro(sql, params)
 
     def ObtenerValorConfiguracion(self, parametro: str, default: Decimal = Decimal("0")) -> Decimal:
+        cache_key = f"rrhh:config:{parametro}"
+        cached_data = memory_cache.get(cache_key)
+        if cached_data is not None:
+            return cached_data
+
         sql = 'SELECT "Valor" FROM "ConfiguracionLaboral" WHERE "Parametro" = :param;'
         res = self.caller.LlamarUnRegistro(sql, {"param": parametro})
         if res and res.get("Valor") is not None:
-            return Decimal(str(res["Valor"]))
+            val = Decimal(str(res["Valor"]))
+            memory_cache.set(cache_key, val, ttl=180)
+            return val
         return default
 
     # =========================================================================
@@ -634,6 +664,27 @@ class RRHHRepository:
             ) RETURNING "IdDetallePlanilla";
         """
         return self.caller.LlamarUnRegistro(sql, datos)
+
+    def CrearDetallesPlanillaBatch(self, lista_datos: list[dict]) -> None:
+        if not lista_datos:
+            return
+        sql = """
+            INSERT INTO "DetallePlanilla" (
+                "IdPlanilla", "IdUsuario", "SueldoBasico", "MontoHorasExtra",
+                "MontoComisiones", "TotalBonos", "DescuentoAtrasos", "DescuentoFaltas",
+                "DescuentoNoVenta", "HorasTrabajadasAJ", "ValorHora",
+                "AporteAFP", "OtrasDeducciones", "TotalGanado", "TotalDescuento",
+                "LiquidoPagable", "Observacion"
+            ) VALUES (
+                :IdPlanilla, :IdUsuario, :SueldoBasico, :MontoHorasExtra,
+                :MontoComisiones, :TotalBonos, :DescuentoAtrasos, :DescuentoFaltas,
+                :DescuentoNoVenta, :HorasTrabajadasAJ, :ValorHora,
+                :AporteAFP, :OtrasDeducciones, :TotalGanado, :TotalDescuento,
+                :LiquidoPagable, :Observacion
+            );
+        """
+        self.caller.db.execute(text(sql), lista_datos)
+        self.caller.db.commit()
 
     def ListarDetallesPlanilla(self, id_planilla: int) -> list[dict]:
         sql = """
@@ -798,17 +849,29 @@ class RRHHRepository:
     # =========================================================================
     # 7. DASHBOARD RESUMEN DE RECURSOS HUMANOS
     # =========================================================================
-    def ObtenerKPIsResumenRRHH(self) -> dict:
-        sql = """
-            SELECT 
-                (SELECT COUNT(*) FROM "DatosLaboralesEmpleado" WHERE "Activo" = true) as "TotalEmpleadosActivos",
-                (SELECT COUNT(*) FROM "Turno") as "TotalTurnosConfigurados",
-                (SELECT COUNT(*) FROM "AsistenciaDiaria" WHERE "Fecha" = CURRENT_DATE AND "HoraEntrada" IS NOT NULL) as "AsistenciasHoy",
-                (SELECT COUNT(*) FROM "AsistenciaDiaria" WHERE "Fecha" = CURRENT_DATE AND "EsFalta" = true) as "FaltasHoy",
-                (SELECT COALESCE(SUM("SueldoBasico"), 0) FROM "DatosLaboralesEmpleado" WHERE "Activo" = true) as "MasaSalarialMensual",
-                (SELECT COUNT(*) FROM "Planilla" WHERE "Aprobada" = true) as "PlanillasAprobadas";
-        """
-        return self.caller.LlamarUnRegistro(sql, {}) or {}
+    def ObtenerKPIsResumenRRHH(self, id_sucursal: int | None = None) -> dict:
+        if id_sucursal is not None:
+            sql = """
+                SELECT 
+                    (SELECT COUNT(*) FROM "DatosLaboralesEmpleado" d JOIN "Usuario" u ON d."IdUsuario" = u."IdUsuario" WHERE d."Activo" = true AND COALESCE(d."IdSucursal", u."IdSucursal") = :id_s) as "TotalEmpleadosActivos",
+                    (SELECT COUNT(*) FROM "Turno") as "TotalTurnosConfigurados",
+                    (SELECT COUNT(*) FROM "AsistenciaDiaria" a JOIN "DatosLaboralesEmpleado" d ON a."IdUsuario" = d."IdUsuario" JOIN "Usuario" u ON d."IdUsuario" = u."IdUsuario" WHERE a."Fecha" = CURRENT_DATE AND a."HoraEntrada" IS NOT NULL AND COALESCE(d."IdSucursal", u."IdSucursal") = :id_s) as "AsistenciasHoy",
+                    (SELECT COUNT(*) FROM "AsistenciaDiaria" a JOIN "DatosLaboralesEmpleado" d ON a."IdUsuario" = d."IdUsuario" JOIN "Usuario" u ON d."IdUsuario" = u."IdUsuario" WHERE a."Fecha" = CURRENT_DATE AND a."EsFalta" = true AND COALESCE(d."IdSucursal", u."IdSucursal") = :id_s) as "FaltasHoy",
+                    (SELECT COALESCE(SUM(d."SueldoBasico"), 0) FROM "DatosLaboralesEmpleado" d JOIN "Usuario" u ON d."IdUsuario" = u."IdUsuario" WHERE d."Activo" = true AND COALESCE(d."IdSucursal", u."IdSucursal") = :id_s) as "MasaSalarialMensual",
+                    (SELECT COUNT(*) FROM "Planilla" WHERE "Aprobada" = true AND "IdSucursal" = :id_s) as "PlanillasAprobadas";
+            """
+            return self.caller.LlamarUnRegistro(sql, {"id_s": id_sucursal}) or {}
+        else:
+            sql = """
+                SELECT 
+                    (SELECT COUNT(*) FROM "DatosLaboralesEmpleado" WHERE "Activo" = true) as "TotalEmpleadosActivos",
+                    (SELECT COUNT(*) FROM "Turno") as "TotalTurnosConfigurados",
+                    (SELECT COUNT(*) FROM "AsistenciaDiaria" WHERE "Fecha" = CURRENT_DATE AND "HoraEntrada" IS NOT NULL) as "AsistenciasHoy",
+                    (SELECT COUNT(*) FROM "AsistenciaDiaria" WHERE "Fecha" = CURRENT_DATE AND "EsFalta" = true) as "FaltasHoy",
+                    (SELECT COALESCE(SUM("SueldoBasico"), 0) FROM "DatosLaboralesEmpleado" WHERE "Activo" = true) as "MasaSalarialMensual",
+                    (SELECT COUNT(*) FROM "Planilla" WHERE "Aprobada" = true) as "PlanillasAprobadas";
+            """
+            return self.caller.LlamarUnRegistro(sql, {}) or {}
 
     # =========================================================================
     # Integración contable y comisiones
@@ -844,6 +907,42 @@ class RRHHRepository:
 
         return max(total_pagos, total_caja)
 
+    def ObtenerTotalCobrosRepartidoresPeriodoBatch(self, fecha_inicio, fecha_fin) -> dict[int, Decimal]:
+        sql_pagos = """
+            SELECT ar."IdUsuarioRepartidor" as id_u, COALESCE(SUM(pp."Monto"), 0) as total
+            FROM "PagoPedido" pp
+            JOIN "Pedido" ped ON pp."IdPedido" = ped."IdPedido"
+            JOIN "AsignacionRuta" ar ON ped."IdAsignacionRuta" = ar."IdAsignacionRuta"
+            WHERE pp."FechaPago"::date >= :f_ini
+              AND pp."FechaPago"::date <= :f_fin
+            GROUP BY ar."IdUsuarioRepartidor";
+        """
+        filas_pagos = self.caller.LlamarFuncion(sql_pagos, {"f_ini": fecha_inicio, "f_fin": fecha_fin}, commit=False)
+        totales: dict[int, Decimal] = {}
+        for f in filas_pagos:
+            if f.get("id_u"):
+                totales[f["id_u"]] = Decimal(str(f["total"]))
+
+        sql_caja = """
+            SELECT mc."IdUsuario" as id_u, COALESCE(SUM(mc."Monto"), 0) as total
+            FROM "MovimientoCaja" mc
+            JOIN "CategoriaMovimientoCaja" cat ON mc."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            WHERE mc."IdUsuario" IS NOT NULL
+              AND cat."TipoMovimiento" = 'Ingreso'
+              AND (cat."NombreCategoria" ILIKE '%repart%' OR cat."NombreCategoria" ILIKE '%cobranza%')
+              AND mc."FechaMovimiento"::date >= :f_ini
+              AND mc."FechaMovimiento"::date <= :f_fin
+            GROUP BY mc."IdUsuario";
+        """
+        filas_caja = self.caller.LlamarFuncion(sql_caja, {"f_ini": fecha_inicio, "f_fin": fecha_fin}, commit=False)
+        for f in filas_caja:
+            uid = f.get("id_u")
+            if uid:
+                total_caja = Decimal(str(f["total"]))
+                totales[uid] = max(totales.get(uid, Decimal("0.00")), total_caja)
+
+        return totales
+
     def ObtenerTotalAnticiposEmpleadoPeriodo(self, id_usuario: int, nombre_empleado: str, fecha_inicio, fecha_fin) -> Decimal:
         """Descuento de anticipos otorgados en caja durante el periodo de nómina."""
         sql_ant = """
@@ -863,6 +962,18 @@ class RRHHRepository:
         nom_param = f"%{nombre_empleado}%" if nombre_empleado else "---"
         res = self.caller.LlamarUnRegistro(sql_ant, {"id_u": id_usuario, "nom": nom_param, "f_ini": fecha_inicio, "f_fin": fecha_fin})
         return Decimal(str(res.get("total", 0.0) if res else 0.0))
+
+    def ObtenerTotalAnticiposPeriodoBatch(self, fecha_inicio, fecha_fin) -> list[dict]:
+        sql_ant = """
+            SELECT mc."IdUsuario", mc."Solicitante", mc."Descripcion", mc."Monto"
+            FROM "MovimientoCaja" mc
+            JOIN "CategoriaMovimientoCaja" cat ON mc."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            WHERE cat."TipoMovimiento" = 'Egreso'
+              AND (cat."NombreCategoria" ILIKE '%anticipo%' OR cat."NombreCategoria" ILIKE '%adelanto%')
+              AND mc."FechaMovimiento"::date >= :f_ini
+              AND mc."FechaMovimiento"::date <= :f_fin;
+        """
+        return self.caller.LlamarFuncion(sql_ant, {"f_ini": fecha_inicio, "f_fin": fecha_fin}, commit=False)
 
     def CrearAsientoEgresoPlanilla(self, id_planilla: int, id_usuario_aprueba: int) -> dict:
         """Generar asiento contable en flujo de caja al aprobar la planilla salarial."""
@@ -986,18 +1097,24 @@ class RRHHRepository:
         """
         return self.caller.LlamarUnRegistro(sql, {"id_f": id_finiquito})
 
-    def ListarFiniquitos(self, id_usuario: int | None = None) -> list[dict]:
+    def ListarFiniquitos(self, id_usuario: int | None = None, id_sucursal: int | None = None) -> list[dict]:
         params = {}
-        where = ""
+        where_clauses = []
         if id_usuario:
-            where = 'WHERE f."IdUsuario" = :id_u'
+            where_clauses.append('f."IdUsuario" = :id_u')
             params["id_u"] = id_usuario
+        if id_sucursal is not None:
+            where_clauses.append('COALESCE(d."IdSucursal", u."IdSucursal") = :id_s')
+            params["id_s"] = id_sucursal
+
+        where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
         sql = f"""
             SELECT f.*, 
                    CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreCompleto",
                    u."Ci",
-                   COALESCE(d."Cargo", 'Operador') as "Cargo"
+                   COALESCE(d."Cargo", 'Operador') as "Cargo",
+                   COALESCE(d."IdSucursal", u."IdSucursal") as "IdSucursal"
             FROM "Finiquito" f
             JOIN "Usuario" u ON f."IdUsuario" = u."IdUsuario"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
@@ -1051,14 +1168,24 @@ class RRHHRepository:
             ORDER BY d."fecha_incidente" DESC, d."id" DESC;
         """
         deudas = self.caller.LlamarFuncion(sql, params)
+        if not deudas:
+            return []
+
+        deuda_ids = [d["id"] for d in deudas]
+        sql_det = """
+            SELECT det.*, CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreCompleto"
+            FROM "detalles_no_venta_empleado" det
+            JOIN "Usuario" u ON det."id_usuario" = u."IdUsuario"
+            WHERE det."deuda_no_venta_id" = ANY(:deuda_ids);
+        """
+        detalles = self.caller.LlamarFuncion(sql_det, {"deuda_ids": deuda_ids})
+        detalles_map = {}
+        for det in detalles:
+            detalles_map.setdefault(det["deuda_no_venta_id"], []).append(det)
+
         for d in deudas:
-            sql_det = """
-                SELECT det.*, CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreCompleto"
-                FROM "detalles_no_venta_empleado" det
-                JOIN "Usuario" u ON det."id_usuario" = u."IdUsuario"
-                WHERE det."deuda_no_venta_id" = :deuda_id;
-            """
-            d["Detalles"] = self.caller.LlamarFuncion(sql_det, {"deuda_id": d["id"]})
+            d["Detalles"] = detalles_map.get(d["id"], [])
+
         return deudas
 
     def ObtenerCuotasNoVentaPendientes(self, id_usuario: int) -> list[dict]:
@@ -1069,6 +1196,15 @@ class RRHHRepository:
             WHERE det."id_usuario" = :id_u AND det."aplicado" = false;
         """
         return self.caller.LlamarFuncion(sql, {"id_u": id_usuario})
+
+    def ObtenerTodasCuotasNoVentaPendientes(self) -> list[dict]:
+        sql = """
+            SELECT det."id", det."id_usuario", det."cuota_descuento", d."concepto", d."fecha_incidente"
+            FROM "detalles_no_venta_empleado" det
+            JOIN "deudas_no_venta" d ON det."deuda_no_venta_id" = d."id"
+            WHERE det."aplicado" = false;
+        """
+        return self.caller.LlamarFuncion(sql, {}, commit=False)
 
     def MarcarCuotasNoVentaAplicadas(self, detalles_ids: list[int], id_planilla: int) -> None:
         if not detalles_ids:

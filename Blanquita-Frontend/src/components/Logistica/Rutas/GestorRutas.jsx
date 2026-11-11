@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import { 
   ObtenerZonas, 
   CrearZona, 
@@ -11,8 +14,6 @@ import { ObtenerTodosPuntosVenta } from "@/services/Logistica/ClienteService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { 
@@ -20,7 +21,6 @@ import {
   Route, 
   Plus, 
   Loader2, 
-  Calendar, 
   ArrowUp, 
   ArrowDown, 
   Trash2, 
@@ -29,7 +29,6 @@ import {
   Navigation,
   Search,
   Store,
-  Layers,
   Radio
 } from "lucide-react";
 import MapaRuta from "./MapaRuta";
@@ -55,7 +54,12 @@ const OPCIONES_DIAS = Object.entries(DIAS_SEMANA).map(([num, nom]) => ({
   sublabel: `Día de reparto semanal`
 }));
 
-export default function GestorRutas() {
+export default function GestorRutas({ usuario = null }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: true,
+  });
+
   const [zonas, setZonas] = useState([]);
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,10 +110,13 @@ export default function GestorRutas() {
 
   const cargarDatos = useCallback(async (silencioso = false, forzar = false) => {
     try {
+      const sid = sucursal === "todas" ? null : sucursal;
+      const cacheKey = `logistica:${sid || "todas"}`;
+
       if (!silencioso && !forzar) {
-        const cZonas = cache.get("logistica:zonas");
-        const cRutas = cache.get("logistica:rutas");
-        const cPv = cache.get("logistica:todosPuntosVenta");
+        const cZonas = cache.get(`${cacheKey}:zonas`);
+        const cRutas = cache.get(`${cacheKey}:rutas`);
+        const cPv = cache.get(`${cacheKey}:todosPuntosVenta`);
         if (cZonas && cRutas && cPv) {
           setZonas(cZonas);
           setRutas(cRutas);
@@ -124,9 +131,9 @@ export default function GestorRutas() {
 
       if (!silencioso) setLoading(true);
       const [resZ, resR, resPv] = await Promise.allSettled([
-        ObtenerZonas(),
-        ObtenerRutas(),
-        ObtenerTodosPuntosVenta()
+        ObtenerZonas(sid),
+        ObtenerRutas(null, sid),
+        ObtenerTodosPuntosVenta(sid)
       ]);
       const z = resZ.status === "fulfilled" && Array.isArray(resZ.value) ? resZ.value : [];
       const r = resR.status === "fulfilled" && Array.isArray(resR.value) ? resR.value : [];
@@ -135,25 +142,33 @@ export default function GestorRutas() {
       setZonas(z);
       setRutas(r);
       setTodosPuntosVenta(pv);
-      cache.set("logistica:zonas", z, 300);
-      cache.set("logistica:rutas", r, 300);
-      cache.set("logistica:todosPuntosVenta", pv, 300);
+      cache.set(`${cacheKey}:zonas`, z, 300);
+      cache.set(`${cacheKey}:rutas`, r, 300);
+      cache.set(`${cacheKey}:todosPuntosVenta`, pv, 300);
 
-      if (r.length > 0 && !rutaSeleccionadaRef.current) {
+      if (r.length > 0 && (!rutaSeleccionadaRef.current || !r.some(item => item.IdRutaDistribucion === rutaSeleccionadaRef.current.IdRutaDistribucion))) {
         seleccionarRuta(r[0]);
+      } else if (r.length === 0) {
+        setRutaSeleccionada(null);
+        setPuntosRuta([]);
       }
     } catch (err) {
       if (!silencioso) toast.error(err.message || "Error al cargar rutas y zonas");
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, [seleccionarRuta]);
+  }, [sucursal, seleccionarRuta]);
 
-  // Carga inicial y auto-actualización silenciosa
+  // Carga reactiva al cambiar sucursal
   useEffect(() => {
-    cargarDatos();
+    if (!cargandoAlcance) {
+      cargarDatos(false, true);
+    }
+  }, [sucursal, cargandoAlcance, cargarDatos]);
 
-    // Auto-polling cada 45 segundos
+  // Auto-actualización silenciosa
+  useEffect(() => {
+    if (cargandoAlcance) return;
     const intervalo = setInterval(() => {
       cargarDatos(true);
     }, 45000);
@@ -165,7 +180,7 @@ export default function GestorRutas() {
       clearInterval(intervalo);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [cargarDatos]);
+  }, [cargandoAlcance, cargarDatos]);
 
   // Opciones para BuscadorSelect de Zonas
   const opcionesZonas = useMemo(() => {
@@ -245,7 +260,6 @@ export default function GestorRutas() {
     }
   };
 
-  // Agregar punto de venta seleccionado con BuscadorSelect
   const agregarPuntoDesdeSelector = (idPv) => {
     if (!idPv) return;
     const pvObj = todosPuntosVenta.find((p) => String(p.IdPuntoVenta) === String(idPv));
@@ -302,7 +316,7 @@ export default function GestorRutas() {
           OrdenVisita: p.OrdenVisita
         }))
       );
-      toast.success("¡Itinerario de ruta guardado con éxito!");
+      toast.success("Itinerario de ruta guardado con éxito");
       cargarDatos(true);
     } catch (err) {
       toast.error(err.message || "Error al guardar paradas");
@@ -312,72 +326,79 @@ export default function GestorRutas() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 1. Header con botones de creación */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900">
-            Rutas y Zonas
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-          <a
-            href="/supervisor/rutas/rastreo"
-            className="inline-flex items-center h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold gap-1.5 shadow-2xs transition-colors"
-          >
-            <Radio className="h-3.5 w-3.5" />
-            <span>Rastreo</span>
-          </a>
+      <PageHeader
+        title="Rutas y Zonas de Distribución"
+        subtitle="Configuración vial, paradas secuenciales y georreferenciación de itinerarios de distribución."
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      >
+        <a
+          href="/supervisor/rutas/rastreo"
+          className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
+        >
+          <Radio className="h-3.5 w-3.5" />
+          <span>Rastreo GPS</span>
+        </a>
 
-          <Button 
-            variant="outline" 
-            onClick={() => setModalZona(true)} 
-            className="h-9 text-slate-700 border-slate-300 gap-1.5 font-medium shadow-2xs text-xs"
-          >
-            <Plus className="h-3.5 w-3.5 text-[#20A7DB]" />
-            <span>Nueva Zona</span>
-          </Button>
-          <Button 
-            onClick={() => {
-              setNuevaRuta({
-                IdZonaDistribucion: zonas.length > 0 ? String(zonas[0].IdZonaDistribucion) : "",
-                NombreRuta: "",
-                DiaSemana: 1,
-                Descripcion: ""
-              });
-              setModalRuta(true);
-            }} 
-            className="h-10 bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 shadow-xs font-semibold px-4"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Nueva Ruta</span>
-          </Button>
-        </div>
-      </div>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setModalZona(true)} 
+          className="h-8 text-slate-700 border-slate-300 gap-1.5 font-medium text-xs rounded"
+        >
+          <Plus className="h-3.5 w-3.5 text-[#1C96C5]" />
+          <span>Nueva Zona</span>
+        </Button>
+        <Button 
+          size="sm"
+          onClick={() => {
+            setNuevaRuta({
+              IdZonaDistribucion: zonas.length > 0 ? String(zonas[0].IdZonaDistribucion) : "",
+              NombreRuta: "",
+              DiaSemana: 1,
+              Descripcion: ""
+            });
+            setModalRuta(true);
+          }} 
+          className="h-8 bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Nueva Ruta</span>
+        </Button>
+      </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* PANEL IZQUIERDO: Filtros y Lista de Rutas */}
         <div className="lg:col-span-4 space-y-4">
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="p-4 border-b border-slate-100 space-y-3">
+          <div className="border border-slate-200 bg-white rounded overflow-hidden">
+            <div className="p-3.5 border-b border-slate-200 space-y-2.5">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <Route className="h-4 w-4 text-[#20A7DB]" />
-                  <span>Rutas</span>
-                </CardTitle>
-                <Badge variant="outline" className="font-semibold text-sky-700 bg-sky-50 border-sky-200">
-                  {rutasFiltradas.length} de {rutas.length}
-                </Badge>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                  <Route className="h-4 w-4 text-[#1C96C5]" />
+                  <span>Rutas de Reparto</span>
+                </h3>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-700">
+                  {rutasFiltradas.length} / {rutas.length}
+                </span>
               </div>
 
               {/* Buscador de rutas */}
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
                 <Input
                   placeholder="Buscar por nombre o zona..."
                   value={busquedaRuta}
                   onChange={(e) => setBusquedaRuta(e.target.value)}
-                  className="pl-8 h-8 text-xs bg-slate-50 border-slate-200"
+                  className="pl-8 h-8 text-xs bg-white border-slate-300 rounded"
                 />
               </div>
 
@@ -386,7 +407,7 @@ export default function GestorRutas() {
                 <select
                   value={filtroZona}
                   onChange={(e) => setFiltroZona(e.target.value)}
-                  className="h-8 text-xs rounded-md border border-slate-200 bg-white px-2 text-slate-700 font-medium"
+                  className="h-8 text-xs rounded border border-slate-300 bg-white px-2 text-slate-800 font-medium"
                 >
                   <option value="TODAS">Todas las Zonas</option>
                   {zonas.map((z) => (
@@ -397,7 +418,7 @@ export default function GestorRutas() {
                 <select
                   value={filtroDia}
                   onChange={(e) => setFiltroDia(e.target.value)}
-                  className="h-8 text-xs rounded-md border border-slate-200 bg-white px-2 text-slate-700 font-medium"
+                  className="h-8 text-xs rounded border border-slate-300 bg-white px-2 text-slate-800 font-medium"
                 >
                   <option value="TODOS">Todos los Días</option>
                   {Object.entries(DIAS_SEMANA).map(([num, nom]) => (
@@ -405,16 +426,16 @@ export default function GestorRutas() {
                   ))}
                 </select>
               </div>
-            </CardHeader>
+            </div>
 
-            <CardContent className="p-3 space-y-2 max-h-[640px] overflow-y-auto">
+            <div className="p-3 space-y-2 max-h-[600px] overflow-y-auto">
               {loading ? (
                 <div className="py-12 flex flex-col justify-center items-center gap-2">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#20A7DB]" />
-                  <p className="text-xs text-slate-400">Cargando rutas...</p>
+                  <Loader2 className="h-6 w-6 animate-spin text-[#1C96C5]" />
+                  <p className="text-xs text-slate-500">Cargando rutas...</p>
                 </div>
               ) : rutasFiltradas.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
+                <div className="py-8 text-center text-xs text-slate-500">
                   No se encontraron rutas con los filtros aplicados.
                 </div>
               ) : (
@@ -424,53 +445,53 @@ export default function GestorRutas() {
                     <div
                       key={r.IdRutaDistribucion}
                       onClick={() => seleccionarRuta(r)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                      className={`p-3 rounded border transition-colors cursor-pointer ${
                         seleccionada
-                          ? "border-[#20A7DB] bg-sky-50/70 shadow-xs ring-1 ring-[#20A7DB]"
+                          ? "border-[#1C96C5] bg-sky-50 text-slate-900"
                           : "border-slate-200 bg-white hover:border-slate-300"
                       }`}
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div>
-                          <p className="font-bold text-slate-900 text-sm">{r.NombreRuta}</p>
-                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                            <MapPin className="h-3 w-3 text-[#20A7DB]" />
+                          <p className="font-bold text-slate-900 text-xs">{r.NombreRuta}</p>
+                          <p className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5">
+                            <MapPin className="h-3 w-3 text-[#1C96C5]" />
                             <span>{r.NombreZona}</span>
                           </p>
                         </div>
-                        <Badge className="bg-sky-100 text-[#20A7DB] hover:bg-sky-200 border-none font-semibold text-[11px] shrink-0">
+                        <span className="bg-sky-100 text-sky-900 border border-sky-200 font-medium text-[11px] px-1.5 py-0.5 rounded shrink-0">
                           {DIAS_SEMANA[r.DiaSemana] || "Flexible"}
-                        </Badge>
+                        </span>
                       </div>
-                      <div className="mt-2.5 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-                        <span>{r.TotalPuntosVenta || 0} paradas</span>
-                        <span className="text-[#20A7DB] font-semibold">
-                          {seleccionada ? "Ruta seleccionada" : "Seleccionar"}
+                      <div className="mt-2 flex items-center justify-between text-xs text-slate-600 pt-1.5 border-t border-slate-100">
+                        <span className="font-mono">{r.TotalPuntosVenta || 0} paradas</span>
+                        <span className={`text-[11px] font-semibold ${seleccionada ? "text-[#1C96C5]" : "text-slate-500"}`}>
+                          {seleccionada ? "Activa" : "Ver"}
                         </span>
                       </div>
                     </div>
                   );
                 })
               )}
-            </CardContent>
+            </div>
             {rutasFiltradas.length > 0 && (
               <PaginacionTabla {...paginacionRutas} opcionesPageSize={[6, 12, 24]} />
             )}
-          </Card>
+          </div>
         </div>
 
         {/* PANEL DERECHO: Mapa y Edición de Paradas */}
         <div className="lg:col-span-8 space-y-4">
-          <Card className="border-slate-200 shadow-xs">
-            <CardHeader className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="border border-slate-200 bg-white rounded overflow-hidden">
+            <div className="p-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Navigation className="h-4 w-4 text-[#20A7DB]" />
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Navigation className="h-4 w-4 text-[#1C96C5]" />
                   <span>Itinerario: {rutaSeleccionada ? rutaSeleccionada.NombreRuta : "Selecciona una ruta"}</span>
-                </CardTitle>
+                </h3>
                 {rutaSeleccionada && (
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Zona: <span className="font-semibold text-slate-800">{rutaSeleccionada.NombreZona}</span> • Día habitual: <span className="font-semibold text-slate-800">{DIAS_SEMANA[rutaSeleccionada.DiaSemana]}</span> • <strong className="text-[#20A7DB]">{puntosRuta.length} paradas configuradas</strong>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Zona: <span className="font-semibold text-slate-800">{rutaSeleccionada.NombreZona}</span> • Día habitual: <span className="font-semibold text-slate-800">{DIAS_SEMANA[rutaSeleccionada.DiaSemana]}</span> • <strong className="text-[#1C96C5] font-mono">{puntosRuta.length} paradas</strong>
                   </p>
                 )}
               </div>
@@ -478,24 +499,24 @@ export default function GestorRutas() {
                 <Button
                   onClick={guardarItinerario}
                   disabled={guardandoItinerario}
-                  className="bg-[#20A7DB] hover:bg-[#188cba] text-white shadow-xs font-semibold px-4 h-9"
+                  className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold px-3.5 h-8 text-xs rounded"
                 >
-                  {guardandoItinerario && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {guardandoItinerario && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                   Guardar Itinerario
                 </Button>
               )}
-            </CardHeader>
+            </div>
 
-            <CardContent className="p-4">
+            <div className="p-4">
               {rutaSeleccionada ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200 w-fit">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1 p-1 rounded bg-slate-100 border border-slate-200 w-fit">
                     <button
                       type="button"
                       onClick={() => setSubTabRuta("mapa")}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                         subTabRuta === "mapa"
-                          ? "bg-white text-slate-900 shadow-xs"
+                          ? "bg-white text-slate-900 border border-slate-200"
                           : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -505,9 +526,9 @@ export default function GestorRutas() {
                     <button
                       type="button"
                       onClick={() => setSubTabRuta("paradas")}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                         subTabRuta === "paradas"
-                          ? "bg-white text-slate-900 shadow-xs"
+                          ? "bg-white text-slate-900 border border-slate-200"
                           : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
@@ -518,7 +539,7 @@ export default function GestorRutas() {
 
                   {/* TAB 1: MAPA */}
                   {subTabRuta === "mapa" && (
-                    <div className="space-y-3 focus:outline-none">
+                    <div className="space-y-3">
                       <MapaRuta
                         puntosRuta={puntosRuta}
                         todosPuntosVenta={todosPuntosVenta}
@@ -530,121 +551,117 @@ export default function GestorRutas() {
 
                   {/* TAB 2: GESTIÓN DE PARADAS */}
                   {subTabRuta === "paradas" && (
-                    <div className="space-y-4 focus:outline-none">
-                    {/* Selector de clientes para agregar a la ruta */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                          <Store className="h-4 w-4 text-[#20A7DB]" />
-                          <span>Buscar y Agregar Comercio a la Ruta</span>
-                        </Label>
-                        <span className="text-[11px] text-slate-500 font-medium">
-                          {opcionesPuntosVentaDisponibles.length} comercios disponibles en Sucre
-                        </span>
+                    <div className="space-y-3">
+                      {/* Selector de clientes para agregar a la ruta */}
+                      <div className="p-3.5 rounded bg-slate-50 border border-slate-200 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <Store className="h-3.5 w-3.5 text-[#1C96C5]" />
+                            <span>Buscar y Agregar Comercio a la Ruta</span>
+                          </Label>
+                          <span className="text-[11px] text-slate-600 font-mono">
+                            {opcionesPuntosVentaDisponibles.length} comercios disponibles
+                          </span>
+                        </div>
+
+                        <BuscadorSelect
+                          options={opcionesPuntosVentaDisponibles}
+                          value={puntoSeleccionadoParaAgregar}
+                          onChange={(val) => {
+                            setPuntoSeleccionadoParaAgregar(val);
+                            agregarPuntoDesdeSelector(val);
+                          }}
+                          placeholder="Escribe el nombre del cliente o tienda para agregar..."
+                          searchPlaceholder="Buscar por cliente, sucursal o dirección..."
+                        />
                       </div>
 
-                      {/* COMBOBOX CON BUSCADOR PREDICTIVO REUTILIZABLE */}
-                      <BuscadorSelect
-                        options={opcionesPuntosVentaDisponibles}
-                        value={puntoSeleccionadoParaAgregar}
-                        onChange={(val) => {
-                          setPuntoSeleccionadoParaAgregar(val);
-                          agregarPuntoDesdeSelector(val);
-                        }}
-                        placeholder="Escribe el nombre del cliente o tienda para agregar a la parada..."
-                        searchPlaceholder="Buscar por cliente, sucursal o dirección..."
-                      />
-                    </div>
-
-                    {/* Lista de paradas ordenadas */}
-                    <div className="space-y-2">
-                      {puntosRuta.length === 0 ? (
-                        <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50">
-                          <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-1" />
-                          <p className="text-xs text-slate-600 font-medium">Esta ruta no tiene paradas agregadas</p>
-                          <p className="text-[11px] text-slate-400">Usa el buscador superior para agregar clientes a la secuencia.</p>
-                        </div>
-                      ) : (
-                        puntosRuta.map((p, idx) => (
-                          <div
-                            key={p.IdPuntoVenta}
-                            className="p-3.5 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-sky-200 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#20A7DB] font-extrabold text-xs shrink-0">
-                                #{idx + 1}
-                              </span>
-                              <div>
-                                <p className="font-bold text-sm text-slate-900">{p.NombreCliente}</p>
-                                <p className="text-xs text-slate-600">{p.Direccion || "Sin dirección"}</p>
-                                <span className="text-[11px] text-slate-400 ">
-                                  Punto: {p.NombrePuntoVenta}
+                      {/* Lista de paradas ordenadas */}
+                      <div className="space-y-2">
+                        {puntosRuta.length === 0 ? (
+                          <div className="text-center py-10 border border-dashed border-slate-300 rounded bg-slate-50">
+                            <Navigation className="h-7 w-7 text-slate-400 mx-auto mb-1" />
+                            <p className="text-xs text-slate-700 font-medium">Esta ruta no tiene paradas agregadas</p>
+                            <p className="text-[11px] text-slate-500">Usa el buscador superior para agregar clientes a la secuencia.</p>
+                          </div>
+                        ) : (
+                          puntosRuta.map((p, idx) => (
+                            <div
+                              key={p.IdPuntoVenta}
+                              className="p-3 rounded border border-slate-200 bg-white flex items-center justify-between gap-3 hover:border-sky-300 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center justify-center w-7 h-7 rounded bg-sky-50 text-[#1C96C5] border border-sky-200 font-mono font-bold text-xs shrink-0">
+                                  #{idx + 1}
                                 </span>
+                                <div>
+                                  <p className="font-bold text-xs text-slate-900">{p.NombreCliente}</p>
+                                  <p className="text-xs text-slate-700">{p.Direccion || "Sin dirección"}</p>
+                                  <span className="text-[11px] text-slate-500">
+                                    Punto: {p.NombrePuntoVenta}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={idx === 0}
+                                  onClick={() => moverParada(idx, -1)}
+                                  className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
+                                  title="Subir parada"
+                                >
+                                  <ArrowUp className="h-3.5 w-3.5 text-slate-700" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={idx === puntosRuta.length - 1}
+                                  onClick={() => moverParada(idx, 1)}
+                                  className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
+                                  title="Bajar parada"
+                                >
+                                  <ArrowDown className="h-3.5 w-3.5 text-slate-700" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => eliminarParada(idx)}
+                                  className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded"
+                                  title="Quitar parada"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={idx === 0}
-                                onClick={() => moverParada(idx, -1)}
-                                className="h-8 w-8 p-0 hover:bg-slate-100"
-                                title="Subir parada"
-                              >
-                                <ArrowUp className="h-4 w-4 text-slate-600" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={idx === puntosRuta.length - 1}
-                                onClick={() => moverParada(idx, 1)}
-                                className="h-8 w-8 p-0 hover:bg-slate-100"
-                                title="Bajar parada"
-                              >
-                                <ArrowDown className="h-4 w-4 text-slate-600" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => eliminarParada(idx)}
-                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                title="Quitar parada"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-center py-16 text-muted-foreground text-sm">
+                <div className="text-center py-16 text-slate-500 text-xs">
                   Selecciona una ruta en el panel izquierdo para ver su mapa y editar paradas.
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* MODAL 1: NUEVA ZONA (CON MAPA INTERACTIVO DE SUCRE)           */}
-      {/* ============================================================== */}
+      {/* MODAL 1: NUEVA ZONA */}
       {modalZona && (
       <Dialog open={modalZona} onOpenChange={setModalZona}>
-        <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-          <DialogHeader className="border-b border-slate-100 pb-3">
-            <DialogTitle className="text-xl font-bold text-[#20A7DB] flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
+          <DialogHeader className="border-b border-slate-200 pb-2">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-[#1C96C5]" />
               <span>Nueva Zona de Distribución en Sucre</span>
             </DialogTitle>
           </DialogHeader>
 
-          {/* MAPA INTERACTIVO PARA VISUALIZAR EL SECTOR */}
           <div className="pt-2">
             <MapaSelectorUbicacion
               lat={zonaCoords.lat}
@@ -663,29 +680,31 @@ export default function GestorRutas() {
             />
           </div>
 
-          <form onSubmit={handleCrearZona} className="space-y-4 pt-2">
+          <form onSubmit={handleCrearZona} className="space-y-3 pt-2">
             <div>
-              <Label className="text-xs font-semibold text-slate-700">Nombre de la Zona *</Label>
+              <Label className="text-xs font-semibold text-slate-800">Nombre de la Zona *</Label>
               <Input
                 value={nuevaZona.NombreZona}
                 onChange={(e) => setNuevaZona({ ...nuevaZona, NombreZona: e.target.value })}
                 placeholder="Ej. Mercado Campesino y Alrededores"
                 required
-                className="mt-1"
+                className="mt-1 h-8 text-xs rounded"
               />
             </div>
             <div>
-              <Label className="text-xs font-semibold text-slate-700">Descripción o Delimitación Geográfica</Label>
+              <Label className="text-xs font-semibold text-slate-800">Descripción o Delimitación Geográfica</Label>
               <Input
                 value={nuevaZona.Descripcion}
                 onChange={(e) => setNuevaZona({ ...nuevaZona, Descripcion: e.target.value })}
                 placeholder="Ej. Entre Av. Ostria Gutiérrez y Av. Marcelo Quiroga"
-                className="mt-1"
+                className="mt-1 h-8 text-xs rounded"
               />
             </div>
-            <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
-              <Button type="button" variant="outline" onClick={() => setModalZona(false)}>Cancelar</Button>
-              <Button type="submit" className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold">
+            <DialogFooter className="gap-2 pt-2 border-t border-slate-200">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalZona(false)} className="rounded h-8 text-xs">
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-5 font-semibold rounded h-8 text-xs">
                 Crear Zona
               </Button>
             </DialogFooter>
@@ -694,23 +713,21 @@ export default function GestorRutas() {
       </Dialog>
       )}
 
-      {/* ============================================================== */}
-      {/* MODAL 2: NUEVA RUTA (CON BUSCADORSELECT DE ZONAS)               */}
-      {/* ============================================================== */}
+      {/* MODAL 2: NUEVA RUTA */}
       {modalRuta && (
       <Dialog open={modalRuta} onOpenChange={setModalRuta}>
-        <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-          <DialogHeader className="border-b border-slate-100 pb-3">
-            <DialogTitle className="text-xl font-bold text-[#20A7DB] flex items-center gap-2">
-              <Route className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
+          <DialogHeader className="border-b border-slate-200 pb-2">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Route className="h-4 w-4 text-[#1C96C5]" />
               <span>Nueva Ruta de Distribución Vial</span>
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleCrearRuta} className="space-y-4 pt-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleCrearRuta} className="space-y-3 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs font-semibold text-slate-700 block mb-1">Zona de Cobertura *</Label>
+                <Label className="text-xs font-semibold text-slate-800 block mb-1">Zona de Cobertura *</Label>
                 <BuscadorSelect
                   options={opcionesZonas}
                   value={nuevaRuta.IdZonaDistribucion}
@@ -721,7 +738,7 @@ export default function GestorRutas() {
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-slate-700 block mb-1">Día Habitual de Reparto</Label>
+                <Label className="text-xs font-semibold text-slate-800 block mb-1">Día Habitual de Reparto</Label>
                 <BuscadorSelect
                   options={OPCIONES_DIAS}
                   value={String(nuevaRuta.DiaSemana)}
@@ -733,29 +750,31 @@ export default function GestorRutas() {
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-slate-700">Nombre de la Ruta *</Label>
+              <Label className="text-xs font-semibold text-slate-800">Nombre de la Ruta *</Label>
               <Input
                 value={nuevaRuta.NombreRuta}
                 onChange={(e) => setNuevaRuta({ ...nuevaRuta, NombreRuta: e.target.value })}
                 placeholder="Ej. Ruta A - Tiendas Minoristas y Abarrotes"
                 required
-                className="mt-1"
+                className="mt-1 h-8 text-xs rounded"
               />
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-slate-700">Descripción u Horario Estimado</Label>
+              <Label className="text-xs font-semibold text-slate-800">Descripción u Horario Estimado</Label>
               <Input
                 value={nuevaRuta.Descripcion}
                 onChange={(e) => setNuevaRuta({ ...nuevaRuta, Descripcion: e.target.value })}
                 placeholder="Ej. Salida 08:00 AM, atiende tiendas de barrio y minimarkets"
-                className="mt-1"
+                className="mt-1 h-8 text-xs rounded"
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
-              <Button type="button" variant="outline" onClick={() => setModalRuta(false)}>Cancelar</Button>
-              <Button type="submit" className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold">
+            <DialogFooter className="gap-2 pt-2 border-t border-slate-200">
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalRuta(false)} className="rounded h-8 text-xs">
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-5 font-semibold rounded h-8 text-xs">
                 Crear Ruta
               </Button>
             </DialogFooter>

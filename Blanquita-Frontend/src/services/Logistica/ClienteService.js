@@ -1,11 +1,14 @@
 import { manejarErrorBackend } from "@/utils/validators";
 import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
-export async function ObtenerClientes(busqueda = "", idEstado = null) {
-  let url = `/api/logistica/clientes?busqueda=${encodeURIComponent(busqueda)}`;
-  if (idEstado !== null) {
-    url += `&id_estado=${idEstado}`;
-  }
+export async function ObtenerClientes(busqueda = "", idEstado = null, idSucursal = null) {
+  const params = new URLSearchParams();
+  if (busqueda) params.append("busqueda", busqueda);
+  if (idEstado !== null) params.append("id_estado", idEstado);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
+
+  const q = params.toString();
+  const url = `/api/logistica/clientes${q ? `?${q}` : ""}`;
   const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
@@ -13,8 +16,12 @@ export async function ObtenerClientes(busqueda = "", idEstado = null) {
   return await response.json();
 }
 
-export async function ObtenerClientesSimple() {
-  const response = await fetchConCache("/api/logistica/clientes/simple", {}, 60000);
+export async function ObtenerClientesSimple(idSucursal = null) {
+  let url = "/api/logistica/clientes/simple";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetchConCache(url, {}, 60000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
@@ -68,8 +75,12 @@ export async function AgregarPuntoVenta(idCliente, puntoVenta) {
   return await response.json();
 }
 
-export async function ObtenerTodosPuntosVenta() {
-  const response = await fetchConCache("/api/logistica/clientes/puntos-venta/todos", {}, 45000);
+export async function ObtenerTodosPuntosVenta(idSucursal = null) {
+  let url = "/api/logistica/clientes/puntos-venta/todos";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetchConCache(url, {}, 45000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }

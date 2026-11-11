@@ -59,52 +59,38 @@ function TileAcceso({ subruta, href, destacado }) {
   return (
     <a
       href={href}
-      className={cn(
-        "group flex flex-col gap-3 rounded-2xl p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
-        destacado
-          ? "bg-gradient-to-br from-c3 to-c4 text-white"
-          : "bg-white text-slate-900 ring-1 ring-slate-200",
-      )}
+      className="group flex flex-col gap-3 rounded p-4 transition-colors border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
     >
-      <div
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-          destacado ? "bg-white/15" : "bg-c4/10",
+      <div className="flex items-center justify-between">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-700">
+          <Icono
+            size={16}
+            strokeWidth={2}
+          />
+        </div>
+        {destacado && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#1C96C5] bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+            Frecuente
+          </span>
         )}
-      >
-        <Icono
-          size={20}
-          strokeWidth={2}
-          className={destacado ? "text-white" : "text-c3"}
-        />
       </div>
 
       <div className="min-w-0">
-        <div className="text-[15px] font-extrabold leading-tight break-words">
+        <div className="text-sm font-bold text-slate-900 leading-snug break-words">
           {subruta.titulo}
         </div>
         {subruta.descripcion && (
-          <p
-            className={cn(
-              "mt-1 text-[13px] leading-snug break-words",
-              destacado ? "text-white/85" : "text-slate-500",
-            )}
-          >
+          <p className="mt-1 text-xs text-slate-600 leading-relaxed break-words">
             {subruta.descripcion}
           </p>
         )}
       </div>
 
-      <div
-        className={cn(
-          "mt-auto flex items-center gap-1 text-xs font-bold",
-          destacado ? "text-white/90" : "text-c3",
-        )}
-      >
-        Abrir
+      <div className="mt-auto pt-2 flex items-center gap-1 text-xs font-semibold text-[#1C96C5]">
+        <span>Acceder</span>
         <ArrowRight
-          size={14}
-          strokeWidth={2.75}
+          size={13}
+          strokeWidth={2}
           className="transition-transform group-hover:translate-x-0.5"
         />
       </div>
@@ -133,50 +119,50 @@ export default function InicioOperador({ usuario }) {
   };
 
   return (
-    <div className="contenido-con-sidebar flex min-h-screen flex-col bg-slate-50 pt-20 font-sans text-slate-900 md:pt-0">
-      <header className="bg-gradient-to-r from-c3 to-c4 px-5 py-5 text-white sm:px-7">
+    <div className="contenido-con-sidebar flex min-h-screen flex-col bg-[#F8FAFC] pt-20 font-sans text-slate-900 md:pt-0">
+      <header className="bg-slate-900 px-5 py-4 text-white sm:px-7 border-b border-slate-800">
         <div className="mx-auto w-full max-w-5xl">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 font-mono">
             {ahora
               ? `Turno ${turnoActual(ahora)} · ${capitalizar(fechaLarga(ahora))}`
               : " "}
           </div>
-          <div className="mt-0.5 text-xl font-extrabold">
+          <div className="mt-0.5 text-lg font-bold tracking-tight text-white">
             {/* TODO: nombre real cuando exista el GET del perfil de usuario */}
-            Hola, operador
+            Panel Operativo de Planta
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-6 sm:px-6">
-        <div className="mb-2 text-sm font-bold text-slate-700">
-          ¿En qué vas a trabajar?
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
+        <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+          ¿En qué área vas a trabajar?
         </div>
 
         <ToggleGroup
           value={[areaId]}
-          className="mb-6 flex w-full flex-wrap justify-start gap-2"
+          className="mb-5 flex w-full flex-wrap justify-start gap-2"
         >
           {AREAS_TRABAJO.map((a) => (
             <ToggleGroupItem
               key={a.id}
               value={a.id}
               onClick={() => seleccionar(a.id)}
-              className="h-auto gap-1.5 rounded-full border-2 border-slate-200 px-3.5 py-2 text-[12.5px] font-bold text-slate-600 data-[state=on]:border-c3/40 data-[state=on]:bg-c4/10 data-[state=on]:text-c3"
+              className="h-8 gap-1.5 rounded border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 data-[state=on]:border-[#1C96C5] data-[state=on]:bg-sky-50 data-[state=on]:text-[#1C96C5] hover:bg-slate-50 transition-colors cursor-pointer"
             >
               <IconoArea area={a} />
-              {a.titulo}
+              <span>{a.titulo}</span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
 
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <IconoArea area={area} size={18} className="text-c3" />
-          <span className="text-base font-extrabold text-slate-900">
+        <div className="mb-3.5 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2.5">
+          <IconoArea area={area} size={16} className="text-[#1C96C5]" />
+          <span className="text-sm font-bold text-slate-900">
             {area.titulo}
           </span>
           {area.descripcion && (
-            <span className="text-sm text-slate-500">· {area.descripcion}</span>
+            <span className="text-xs text-slate-500">· {area.descripcion}</span>
           )}
         </div>
 

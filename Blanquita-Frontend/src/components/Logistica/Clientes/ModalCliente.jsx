@@ -11,10 +11,7 @@ import {
   Store, 
   CreditCard, 
   Building2, 
-  MapPin, 
-  Calendar,
-  Layers,
-  CheckCircle2
+  MapPin
 } from "lucide-react";
 import MapaSelectorUbicacion from "../Common/MapaSelectorUbicacion";
 
@@ -35,10 +32,14 @@ const TIPOS_COMERCIO = [
   "Puesto de Mercado"
 ];
 
-export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuardado }) {
+export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuardado, sucursalActiva = null, sucursalesPermitidas = [] }) {
   if (!abierto) return null;
   const [loading, setLoading] = useState(false);
   const [tabActiva, setTabActiva] = useState("comercial"); // "comercial" | "ubicacion" | "credito"
+
+  const sucursalInicial = clienteEditar?.IdSucursal
+    ? clienteEditar.IdSucursal
+    : (sucursalActiva && sucursalActiva !== "todas" ? Number(sucursalActiva) : "");
 
   const [formData, setFormData] = useState({
     RazonSocial: "",
@@ -55,12 +56,17 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
     TipoNegocio: TIPOS_COMERCIO[0],
     NombrePuntoVentaPrincipal: "Tienda Principal",
     ReferenciaUbicacion: "Cerca al Mercado Campesino",
+    IdSucursal: sucursalInicial,
   });
 
   // Apertura instantánea: sincronizar campos sin bloqueos
   useEffect(() => {
     if (abierto) {
       setTabActiva("comercial");
+      const sid = clienteEditar?.IdSucursal
+        ? clienteEditar.IdSucursal
+        : (sucursalActiva && sucursalActiva !== "todas" ? Number(sucursalActiva) : "");
+
       if (clienteEditar) {
         setFormData({
           RazonSocial: clienteEditar.RazonSocial || "",
@@ -77,6 +83,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
           TipoNegocio: TIPOS_COMERCIO[0],
           NombrePuntoVentaPrincipal: "Tienda Principal",
           ReferenciaUbicacion: "",
+          IdSucursal: sid,
         });
       } else {
         setFormData({
@@ -94,10 +101,11 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
           TipoNegocio: TIPOS_COMERCIO[0],
           NombrePuntoVentaPrincipal: "Tienda Principal",
           ReferenciaUbicacion: "Cerca al Mercado Campesino",
+          IdSucursal: sid,
         });
       }
     }
-  }, [clienteEditar, abierto]);
+  }, [clienteEditar, abierto, sucursalActiva]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -125,6 +133,11 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
       setTabActiva("comercial");
       return;
     }
+    if (!formData.IdSucursal) {
+      toast.error("Debe seleccionar la sucursal de operación del cliente");
+      setTabActiva("comercial");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -141,11 +154,13 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
           LimiteCreditoBs: Number(formData.LimiteCreditoBs) || 0,
           DiasCredito: Number(formData.DiasCredito) || 0,
           Observacion: formData.Observacion,
+          IdSucursal: Number(formData.IdSucursal),
         });
         toast.success("Cliente actualizado exitosamente");
       } else {
         await CrearCliente({
           ...formData,
+          IdSucursal: Number(formData.IdSucursal),
           Latitud: Number(formData.Latitud) || null,
           Longitud: Number(formData.Longitud) || null,
           LimiteCreditoBs: Number(formData.LimiteCreditoBs) || 0,
@@ -164,22 +179,22 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-        <DialogHeader className="border-b border-slate-100 pb-3">
-          <DialogTitle className="text-xl font-bold text-[#20A7DB] flex items-center gap-2">
-            <Store className="h-6 w-6 text-[#20A7DB]" />
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
+        <DialogHeader className="border-b border-slate-200 pb-3">
+          <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Store className="h-5 w-5 text-[#1C96C5]" />
             <span>{clienteEditar ? "Editar Datos del Cliente" : "Registro de Nuevo Cliente"}</span>
           </DialogTitle>
 
-          {/* Selector de Pestañas (Tabs) para máxima fluidez y velocidad */}
+          {/* Selector de Pestañas (Tabs) */}
           <div className="flex border-b border-slate-200 gap-1 pt-3">
             <button
               type="button"
               onClick={() => setTabActiva("comercial")}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 tabActiva === "comercial"
-                  ? "border-[#20A7DB] text-[#20A7DB]"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "border-[#1C96C5] text-[#1C96C5]"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
               <Building2 className="h-3.5 w-3.5" />
@@ -189,10 +204,10 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
             <button
               type="button"
               onClick={() => setTabActiva("ubicacion")}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 tabActiva === "ubicacion"
-                  ? "border-[#20A7DB] text-[#20A7DB]"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "border-[#1C96C5] text-[#1C96C5]"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
               <MapPin className="h-3.5 w-3.5" />
@@ -202,10 +217,10 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
             <button
               type="button"
               onClick={() => setTabActiva("credito")}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 tabActiva === "credito"
-                  ? "border-[#20A7DB] text-[#20A7DB]"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "border-[#1C96C5] text-[#1C96C5]"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
               <CreditCard className="h-3.5 w-3.5" />
@@ -214,15 +229,48 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 pt-3">
-          <div className="min-h-[420px]">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="min-h-[380px]">
           {/* TAB 1: DATOS COMERCIALES */}
           {tabActiva === "comercial" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-150">
-              <div className="p-4 sm:p-5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div className="p-4 rounded bg-slate-50 border border-slate-200 space-y-3">
+                {/* Selector de Sucursal */}
+                <div>
+                  <Label htmlFor="IdSucursal" className="text-xs font-semibold text-slate-800">
+                    Sucursal de Operación *
+                  </Label>
+                  <select
+                    id="IdSucursal"
+                    name="IdSucursal"
+                    value={formData.IdSucursal || ""}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, IdSucursal: e.target.value ? Number(e.target.value) : "" }))}
+                    disabled={Boolean(clienteEditar) || (sucursalActiva && sucursalActiva !== "todas")}
+                    className="mt-1 w-full h-8 text-xs rounded border border-slate-300 bg-white px-2.5 text-slate-800 font-medium"
+                    required
+                  >
+                    <option value="">-- Seleccione Sucursal Obligatoria --</option>
+                    {sucursalesPermitidas && sucursalesPermitidas.length > 0 ? (
+                      sucursalesPermitidas.map((s) => (
+                        <option key={s.id} value={s.id}>{s.nombre}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="1">Sucursal Central Sucre</option>
+                        <option value="2">Sucursal Potosí</option>
+                      </>
+                    )}
+                  </select>
+                  {!formData.IdSucursal && (!sucursalActiva || sucursalActiva === "todas") && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      Requerido: seleccione la sucursal a la que pertenece territorialmente este cliente.
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="RazonSocial" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="RazonSocial" className="text-xs font-semibold text-slate-800">
                       Razón Social (Facturación) *
                     </Label>
                     <Input
@@ -232,12 +280,12 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       onChange={handleChange}
                       placeholder="Ej. Distribuidora San Francisco S.R.L."
                       required
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="NombreComercial" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="NombreComercial" className="text-xs font-semibold text-slate-800">
                       Nombre Comercial / Rótulo de la Tienda
                     </Label>
                     <Input
@@ -246,14 +294,14 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       value={formData.NombreComercial}
                       onChange={handleChange}
                       placeholder="Ej. Tienda Doña María o Minimarket Central"
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label htmlFor="NitCi" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="NitCi" className="text-xs font-semibold text-slate-800">
                       NIT o Carnet de Identidad (CI) *
                     </Label>
                     <Input
@@ -263,12 +311,12 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       onChange={handleChange}
                       placeholder="Ej. 10245678023"
                       required
-                      className="mt-1 bg-white border-slate-300 text-sm"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8 font-mono"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="Telefono" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="Telefono" className="text-xs font-semibold text-slate-800">
                       Teléfono / Celular WhatsApp
                     </Label>
                     <Input
@@ -277,12 +325,12 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       value={formData.Telefono}
                       onChange={handleChange}
                       placeholder="Ej. 71234567"
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="CorreoElectronico" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="CorreoElectronico" className="text-xs font-semibold text-slate-800">
                       Correo Electrónico
                     </Label>
                     <Input
@@ -292,18 +340,18 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       value={formData.CorreoElectronico}
                       onChange={handleChange}
                       placeholder="cliente@ejemplo.com"
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-semibold text-slate-700">Tipo de Negocio / Canal Comercial</Label>
+                  <Label className="text-xs font-semibold text-slate-800">Tipo de Negocio / Canal Comercial</Label>
                   <select
                     name="TipoNegocio"
                     value={formData.TipoNegocio}
                     onChange={handleChange}
-                    className="mt-1 w-full text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800"
+                    className="mt-1 w-full text-xs rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-800 h-8 font-medium"
                   >
                     {TIPOS_COMERCIO.map((t) => (
                       <option key={t} value={t}>{t}</option>
@@ -314,10 +362,10 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
             </div>
           )}
 
-          {/* TAB 2: GEORREFERENCIACIÓN & MAPA (Solo monta Leaflet al abrir la pestaña) */}
+          {/* TAB 2: GEORREFERENCIACIÓN & MAPA */}
           {tabActiva === "ubicacion" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-150">
-              <div className="p-4 sm:p-5 rounded-xl bg-sky-50/50 border border-sky-200/90 space-y-4">
+            <div className="space-y-3">
+              <div className="p-4 rounded bg-slate-50 border border-slate-200 space-y-3">
                 <MapaSelectorUbicacion
                   lat={formData.Latitud}
                   lng={formData.Longitud}
@@ -326,9 +374,9 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                   label="Selecciona la ubicación exacta de la tienda en el mapa:"
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                   <div>
-                    <Label htmlFor="Direccion" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="Direccion" className="text-xs font-semibold text-slate-800">
                       Dirección Física Completa en Sucre *
                     </Label>
                     <Input
@@ -336,14 +384,14 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       name="Direccion"
                       value={formData.Direccion}
                       onChange={handleChange}
-                      placeholder="Ej. Av. Ostria Gutiérrez #820, frente a parada de micros"
+                      placeholder="Ej. Av. Ostria Gutiérrez #820"
                       required
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="ReferenciaUbicacion" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="ReferenciaUbicacion" className="text-xs font-semibold text-slate-800">
                       Referencia de Llegada para el Repartidor
                     </Label>
                     <Input
@@ -352,14 +400,14 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       value={formData.ReferenciaUbicacion}
                       onChange={handleChange}
                       placeholder="Ej. Portón azul al lado de la farmacia..."
-                      className="mt-1 bg-white border-slate-300"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8"
                     />
                   </div>
                 </div>
 
                 {!clienteEditar && (
                   <div className="pt-1">
-                    <Label htmlFor="NombrePuntoVentaPrincipal" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="NombrePuntoVentaPrincipal" className="text-xs font-semibold text-slate-800">
                       Nombre de la Tienda o Punto de Entrega Principal
                     </Label>
                     <Input
@@ -367,7 +415,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       name="NombrePuntoVentaPrincipal"
                       value={formData.NombrePuntoVentaPrincipal}
                       onChange={handleChange}
-                      className="mt-1 bg-white border-slate-300 max-w-md"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8 max-w-md"
                     />
                   </div>
                 )}
@@ -377,11 +425,11 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
 
           {/* TAB 3: CONDICIONES DE CRÉDITO */}
           {tabActiva === "credito" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-150">
-              <div className="p-4 sm:p-5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="p-4 rounded bg-slate-50 border border-slate-200 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="LimiteCreditoBs" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="LimiteCreditoBs" className="text-xs font-semibold text-slate-800">
                       Límite de Crédito Autorizado (Bs.)
                     </Label>
                     <Input
@@ -392,7 +440,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       min="0"
                       value={formData.LimiteCreditoBs}
                       onChange={handleChange}
-                      className="mt-1 bg-white border-slate-300 font-bold text-slate-800"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8 font-mono font-bold text-slate-900"
                     />
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {PRESETS_CREDITO_BS.map((val) => (
@@ -400,7 +448,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                           key={val}
                           type="button"
                           onClick={() => setFormData((prev) => ({ ...prev, LimiteCreditoBs: val }))}
-                          className="text-xs px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-medium"
+                          className="text-[11px] px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-medium"
                         >
                           {val === 0 ? "Contado (0 Bs)" : `Bs. ${val.toLocaleString()}`}
                         </button>
@@ -409,7 +457,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                   </div>
 
                   <div>
-                    <Label htmlFor="DiasCredito" className="text-xs font-semibold text-slate-700">
+                    <Label htmlFor="DiasCredito" className="text-xs font-semibold text-slate-800">
                       Días de Crédito Máximos Permitidos
                     </Label>
                     <Input
@@ -419,7 +467,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                       min="0"
                       value={formData.DiasCredito}
                       onChange={handleChange}
-                      className="mt-1 bg-white border-slate-300 font-bold text-slate-800"
+                      className="mt-1 bg-white border-slate-300 rounded text-xs h-8 font-mono font-bold text-slate-900"
                     />
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {PRESETS_DIAS.map((p) => (
@@ -427,7 +475,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                           key={p.dias}
                           type="button"
                           onClick={() => setFormData((prev) => ({ ...prev, DiasCredito: p.dias }))}
-                          className="text-xs px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-medium"
+                          className="text-[11px] px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-medium"
                         >
                           {p.label}
                         </button>
@@ -437,7 +485,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                 </div>
 
                 <div>
-                  <Label htmlFor="Observacion" className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  <Label htmlFor="Observacion" className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
                     Observaciones Comerciales y Horarios de Descarga
                   </Label>
                   <Textarea
@@ -447,7 +495,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                     onChange={handleChange}
                     rows={2}
                     placeholder="Ej. Recibe mercadería únicamente por las mañanas de 08:00 a 11:30..."
-                    className="mt-1 bg-white border-slate-300 text-sm"
+                    className="mt-1 bg-white border-slate-300 rounded text-xs"
                   />
                 </div>
               </div>
@@ -455,7 +503,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
           )}
           </div>
 
-          <DialogFooter className="gap-2 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <DialogFooter className="gap-2 pt-3 border-t border-slate-200 flex items-center justify-between">
             <div className="flex gap-1.5">
               {tabActiva !== "comercial" && (
                 <Button 
@@ -463,6 +511,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                   variant="outline" 
                   size="sm" 
                   onClick={() => setTabActiva(tabActiva === "credito" ? "ubicacion" : "comercial")}
+                  className="rounded text-xs h-8"
                 >
                   Anterior
                 </Button>
@@ -473,6 +522,7 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
                   variant="outline" 
                   size="sm" 
                   onClick={() => setTabActiva(tabActiva === "comercial" ? "ubicacion" : "credito")}
+                  className="rounded text-xs h-8"
                 >
                   Siguiente
                 </Button>
@@ -480,15 +530,15 @@ export default function ModalCliente({ abierto, onCerrar, clienteEditar, onGuard
             </div>
 
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onCerrar} disabled={loading}>
+              <Button type="button" variant="outline" onClick={onCerrar} disabled={loading} className="rounded text-xs h-8">
                 Cancelar
               </Button>
               <Button 
                 type="submit" 
-                className="bg-[#20A7DB] hover:bg-[#188ebc] text-white px-7 font-semibold"
+                className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-5 font-semibold rounded text-xs h-8"
                 disabled={loading}
               >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                 {clienteEditar ? "Guardar Modificaciones" : "Registrar Cliente"}
               </Button>
             </div>

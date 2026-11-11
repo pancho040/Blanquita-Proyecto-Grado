@@ -5,16 +5,17 @@ import {
   DollarSign, 
   Package, 
   Clock, 
-  ArrowRight,
-  UserCheck,
-  Loader2,
-  X,
-  Truck,
-  RotateCcw
+  UserCheck, 
+  Loader2, 
+  X, 
+  Truck, 
+  RotateCcw,
+  Printer,
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ListarInventarioChofer } from "@/services/Logistica/InventarioComercialService";
 import { CierreTurnoChofer } from "@/services/Contabilidad/cuentasCobrarService";
@@ -148,63 +149,79 @@ export default function CierreTurnoChoferComponent({
     }
   };
 
+  const imprimirActa = () => {
+    window.print();
+  };
+
   if (cargando) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-700" />
+      <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-2">
+        <Loader2 className="w-6 h-6 animate-spin text-[#1C96C5]" />
         <p className="text-xs font-medium">Cargando datos de jornada y repartidores...</p>
       </div>
     );
   }
 
+  const hoyFormateado = new Date().toLocaleDateString("es-BO", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
   return (
-    <div className={`mx-auto space-y-5 ${enModal ? "max-w-full p-1" : "max-w-3xl p-4"}`}>
-      {/* Cabecera Principal */}
-      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold flex items-center gap-2">
-            <Clock className="w-5 h-5 text-sky-400" /> Cierre Diario de Turno y Rendición
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Liquidación física de existencias en camión, retorno al almacén y arqueo de valores
-          </p>
+    <div className={`space-y-4 ${enModal ? "p-1" : "w-full max-w-4xl mx-auto"}`}>
+      {/* Cabecera Sólida Industrial */}
+      <div className="bg-white border border-slate-200 rounded p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded flex items-center justify-center text-slate-800 shrink-0 mt-0.5">
+            <Clock className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">
+                Cierre Diario de Turno & Rendición
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border bg-slate-50 border-slate-200 text-slate-700">
+                Liquidación Oficial
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Conteo físico de existencias devueltas a bodega, reintegro al almacén y arqueo de caja.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/30 text-xs font-normal">
-            Jornada de Reparto
-          </Badge>
-          {onCerrar && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onCerrar}
-              className="text-white hover:bg-white/20 h-7 w-7 p-0 rounded-full"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
+
+        {onCerrar && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCerrar}
+            className="h-8 px-2.5 text-xs rounded border-slate-200 text-slate-600 hover:text-slate-900"
+          >
+            <X className="w-3.5 h-3.5 mr-1" /> Cerrar
+          </Button>
+        )}
       </div>
 
       {!resultadoCierre ? (
-        <form onSubmit={handleCerrarTurno} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-6">
-          {/* Selector de Chofer */}
-          <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <form onSubmit={handleCerrarTurno} className="bg-white border border-slate-200 rounded p-4 space-y-4">
+          {/* PASO 1: Selección de Repartidor & Estado del Camión */}
+          <div className="bg-slate-50 border border-slate-200 rounded p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="w-full sm:w-1/2">
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider block mb-1">
-                Chofer a Liquidar
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Paso 1: Chofer a Liquidar
               </label>
               {esChofer ? (
-                <div className="text-xs font-semibold text-slate-800 bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-sky-600" />
+                <div className="h-8 text-xs font-medium text-slate-800 bg-white border border-slate-300 px-2.5 rounded flex items-center gap-2">
+                  <UserCheck className="w-3.5 h-3.5 text-[#1C96C5]" />
                   <span>{usuario?.NombreCompleto || "Chofer"}</span>
                 </div>
               ) : (
                 <select
                   value={choferId || ""}
                   onChange={(e) => handleCambioChofer(e.target.value)}
-                  className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-medium"
+                  className="w-full h-8 text-xs rounded border border-slate-300 bg-white px-2 text-slate-800 focus:border-slate-900 focus:outline-none"
                   required
                 >
                   {repartidores.map((r) => (
@@ -216,86 +233,121 @@ export default function CierreTurnoChoferComponent({
               )}
             </div>
 
-            <div className="text-xs text-slate-500 flex items-center gap-2">
+            <div className="text-xs text-slate-600 flex items-center gap-2">
               {cargandoStock ? (
-                <span className="text-sky-600 flex items-center gap-1 font-medium">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando camión...
+                <span className="text-[#1C96C5] flex items-center gap-1 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando carga...
                 </span>
               ) : (
-                <span className="bg-slate-200/60 px-2.5 py-1 rounded-md text-slate-700">
-                  Total Presentaciones en Camión: <strong>{stockCamion.length}</strong>
+                <span className="bg-white border border-slate-200 px-2.5 py-1 rounded text-slate-700 font-mono text-[11px]">
+                  Presentaciones en Camión: <strong className="text-slate-900">{stockCamion.length}</strong>
                 </span>
               )}
             </div>
           </div>
 
-          {/* Sección 1: Conteo Físico de Retorno al Almacén */}
-          <div>
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Package className="w-4 h-4 text-sky-600" /> 1. Conteo Físico de Retorno al Almacén
-            </h2>
+          {/* PASO 2: Conteo Físico de Retorno al Almacén */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-slate-500" />
+                Paso 2: Conteo Físico de Retorno a Bodega
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Verifica las unidades descargadas físicamente del vehículo.
+              </span>
+            </div>
 
             {stockCamion.length === 0 ? (
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 text-center">
-                El repartidor <strong>{choferActualNombre}</strong> no registra carga remanente en su furgón/camión.
-                Si realizó cobros de notas de venta previas, ingrese el importe a rendir a continuación.
+              <div className="p-3 bg-slate-50 rounded border border-slate-200 text-xs text-slate-600">
+                El repartidor <strong>{choferActualNombre}</strong> no registra existencias pendientes en su vehículo.
+                Si cobró notas de venta en ruta, ingrese el efectivo a rendir en el Paso 3.
               </div>
             ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                <div className="bg-slate-100/80 p-2.5 font-semibold grid grid-cols-12 text-slate-700 uppercase tracking-wider text-[11px]">
-                  <span className="col-span-5">Producto / Presentación</span>
-                  <span className="col-span-2 text-center">Cargado</span>
-                  <span className="col-span-2 text-center text-emerald-700">Vendido</span>
-                  <span className="col-span-3 text-center font-bold text-sky-900">Físico Devuelto</span>
-                </div>
-                {stockCamion.map((stk) => {
-                  const presId = stk.presentacion_id;
-                  const devuelto = devolucionFisica[presId] ?? stk.cantidad_remanente;
-                  const faltante = Math.max(0, Number(stk.cantidad_remanente) - Number(devuelto || 0));
+              <div className="border border-slate-200 rounded overflow-hidden">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-3 py-2">Producto / Presentación</th>
+                      <th className="px-3 py-2 text-center w-24">Cargado</th>
+                      <th className="px-3 py-2 text-center w-24">Vendido</th>
+                      <th className="px-3 py-2 text-center w-24">Teórico</th>
+                      <th className="px-3 py-2 text-center w-32">Físico Devuelto</th>
+                      <th className="px-3 py-2 text-center w-28">Diferencia</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stockCamion.map((stk) => {
+                      const presId = stk.presentacion_id;
+                      const devuelto = devolucionFisica[presId] ?? stk.cantidad_remanente;
+                      const remanenteTeorico = Number(stk.cantidad_remanente) || 0;
+                      const devueltoNum = Number(devuelto || 0);
+                      const faltante = Math.max(0, remanenteTeorico - devueltoNum);
+                      const sobrante = Math.max(0, devueltoNum - remanenteTeorico);
 
-                  return (
-                    <div key={presId} className="p-2.5 grid grid-cols-12 items-center hover:bg-slate-50/80">
-                      <div className="col-span-5 pr-2">
-                        <span className="font-semibold text-slate-800 block">
-                          {stk.nombre_producto || stk.producto_nombre || "Producto"}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {stk.tipo_contenedor || stk.codigo_presentacion || ""} • Remanente teórico: {stk.cantidad_remanente}
-                        </span>
-                      </div>
-                      <span className="col-span-2 text-center text-slate-600 font-medium">{stk.cantidad_cargada}</span>
-                      <span className="col-span-2 text-center text-emerald-600 font-bold">{stk.cantidad_vendida}</span>
-                      <div className="col-span-3 flex flex-col items-center">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={devuelto}
-                          onChange={(e) => handleDevolucionChange(presId, e.target.value)}
-                          className="w-24 text-center font-bold text-sky-700 h-8 text-xs bg-white"
-                          required
-                        />
-                        {faltante > 0 && (
-                          <span className="text-[10px] text-red-600 font-semibold mt-0.5">
-                            Faltante: {faltante} u.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      return (
+                        <tr key={presId} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-3 py-2">
+                            <span className="font-semibold text-slate-900 block">
+                              {stk.nombre_producto || stk.producto_nombre || "Producto"}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">
+                              {stk.tipo_contenedor || stk.codigo_presentacion || "Presentación"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-center font-mono tabular-nums text-slate-700">
+                            {stk.cantidad_cargada}
+                          </td>
+                          <td className="px-3 py-2 text-center font-mono tabular-nums text-emerald-700 font-semibold">
+                            {stk.cantidad_vendida}
+                          </td>
+                          <td className="px-3 py-2 text-center font-mono tabular-nums text-slate-900 font-bold">
+                            {remanenteTeorico}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={devuelto}
+                              onChange={(e) => handleDevolucionChange(presId, e.target.value)}
+                              className="w-20 mx-auto text-center font-mono tabular-nums font-bold text-slate-900 h-8 text-xs bg-white rounded border-slate-300"
+                              required
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {faltante > 0 ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-50 text-red-700 border border-red-200">
+                                -{faltante} u. (Faltante)
+                              </span>
+                            ) : sobrante > 0 ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                +{sobrante} u. (Sobrante)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Exacto (0)
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
 
-          {/* Sección 2: Entrega y Rendición de Efectivo */}
-          <div>
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <DollarSign className="w-4 h-4 text-emerald-600" /> 2. Entrega y Rendición de Efectivo en Caja
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* PASO 3: Rendición de Efectivo y Cobros en Caja */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-100">
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              Paso 3: Rendición de Valores en Caja
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded p-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Monto Efectivo Entregado (Bs.)
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Monto Efectivo Entregado en Caja (Bs.) *
                 </label>
                 <Input
                   type="number"
@@ -304,28 +356,29 @@ export default function CierreTurnoChoferComponent({
                   placeholder="0.00"
                   value={efectivoEntregado}
                   onChange={(e) => setEfectivoEntregado(e.target.value)}
-                  className="h-9 text-xs"
+                  className="h-8 text-xs font-mono tabular-nums text-right bg-white rounded border-slate-300"
                   required
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Observaciones de Cierre / Mermas
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Observaciones de Cierre / Reporte de Mermas
                 </label>
                 <Input
                   placeholder="Sin novedades, empaques dañados, etc."
                   value={observaciones}
                   onChange={(e) => setObservaciones(e.target.value)}
-                  className="h-9 text-xs"
+                  className="h-8 text-xs bg-white rounded border-slate-300"
                 />
               </div>
             </div>
           </div>
 
+          {/* Botón de Envío */}
           <Button
             type="submit"
             disabled={enviando}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl shadow-xs gap-2"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium h-9 text-xs rounded shadow-xs flex items-center justify-center gap-2 transition-colors"
           >
             {enviando ? (
               <>
@@ -341,52 +394,108 @@ export default function CierreTurnoChoferComponent({
           </Button>
         </form>
       ) : (
-        /* Pantalla de Confirmación y Resultados del Cierre */
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+        /* PANTALLA OFICIAL: ACTA DE CIERRE DIARIO Y ARQUEO */
+        <div className="bg-white border border-slate-200 rounded p-6 space-y-6">
+          {/* Encabezado del Acta */}
+          <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-slate-800" />
+                <h2 className="text-base font-bold text-slate-900 tracking-tight uppercase">
+                  Acta Oficial de Cierre Diario & Rendición de Reparto
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Papelera Blanquita — Sucursal Sucre • Fecha: {hoyFormateado}
+              </p>
+            </div>
+            <div className="no-print flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={imprimirActa}
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-3 rounded border-slate-300 text-slate-700 hover:bg-slate-50 gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-600" /> Imprimir Acta
+              </Button>
+            </div>
+          </div>
+
+          {/* Estado de Conciliación */}
           <div
-            className={`p-4 rounded-xl border flex items-start gap-3 ${
+            className={`p-3.5 rounded border flex items-start gap-3 ${
               resultadoCierre.EstadoConciliacion === "CONCILIADO"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-amber-50 border-amber-200 text-amber-800"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                : "bg-amber-50 border-amber-200 text-amber-900"
             }`}
           >
             {resultadoCierre.EstadoConciliacion === "CONCILIADO" ? (
-              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
             ) : (
-              <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="font-bold text-sm">Estado del Cierre: {resultadoCierre.EstadoConciliacion}</p>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs uppercase tracking-wider">
+                  Estado de Conciliación:
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border bg-white border-current">
+                  {resultadoCierre.EstadoConciliacion}
+                </span>
+              </div>
               <p className="text-xs mt-1">
                 {resultadoCierre.EstadoConciliacion === "CONCILIADO"
-                  ? "Conciliación perfecta. Las existencias devueltas coinciden con el inventario y los valores fueron rendidos satisfactoriamente."
-                  : `Se liquidaron faltantes físicos o de caja imputables por un total de Bs. ${Number(resultadoCierre.MontoTotalFaltante || 0).toFixed(2)}.`}
+                  ? "Las existencias devueltas coinciden plenamente con el saldo de camión y los valores en efectivo fueron rendidos a satisfacción."
+                  : `Se registraron faltantes físicos o descuadres de caja por un importe total imputable de Bs. ${Number(resultadoCierre.MontoTotalFaltante || 0).toFixed(2)}.`}
               </p>
             </div>
           </div>
 
+          {/* Tarjetas Métricas de Arqueo */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
-              <span className="text-xs text-slate-500 font-medium">Total Ventas Registradas</span>
-              <p className="text-base font-bold text-slate-800 mt-1">
+            <div className="p-3 bg-slate-50 rounded border border-slate-200 text-center">
+              <span className="text-[11px] text-slate-600 font-medium uppercase tracking-wider block">
+                Total Ventas Registradas
+              </span>
+              <p className="text-base font-bold font-mono tabular-nums text-slate-900 mt-1">
                 Bs. {Number(resultadoCierre.TotalVentasBs || 0).toFixed(2)}
               </p>
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
-              <span className="text-xs text-emerald-700 font-medium">Efectivo Rendido en Caja</span>
-              <p className="text-base font-bold text-emerald-800 mt-1">
+            <div className="p-3 bg-emerald-50 rounded border border-emerald-200 text-center">
+              <span className="text-[11px] text-emerald-700 font-medium uppercase tracking-wider block">
+                Efectivo Rendido en Caja
+              </span>
+              <p className="text-base font-bold font-mono tabular-nums text-emerald-800 mt-1">
                 Bs. {Number(resultadoCierre.MontoEfectivoEntregado || 0).toFixed(2)}
               </p>
             </div>
-            <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-center">
-              <span className="text-xs text-red-600 font-medium">Faltante Imputable</span>
-              <p className="text-base font-bold text-red-700 mt-1">
+            <div className="p-3 bg-red-50 rounded border border-red-200 text-center">
+              <span className="text-[11px] text-red-700 font-medium uppercase tracking-wider block">
+                Faltante Imputable
+              </span>
+              <p className="text-base font-bold font-mono tabular-nums text-red-700 mt-1">
                 Bs. {Number(resultadoCierre.MontoTotalFaltante || 0).toFixed(2)}
               </p>
             </div>
           </div>
 
-          <div className="flex gap-2">
+          {/* Firmas de Conformidad del Acta para Impresión */}
+          <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs text-slate-600">
+            <div className="space-y-1">
+              <div className="border-b border-slate-300 w-48 mx-auto h-12" />
+              <p className="font-semibold text-slate-900">{choferActualNombre}</p>
+              <p className="text-[11px] text-slate-500">Chofer Repartidor Responsable</p>
+            </div>
+            <div className="space-y-1">
+              <div className="border-b border-slate-300 w-48 mx-auto h-12" />
+              <p className="font-semibold text-slate-900">{usuario?.NombreCompleto || "Administrador / Supervisor"}</p>
+              <p className="text-[11px] text-slate-500">Supervisor de Distribución / Caja</p>
+            </div>
+          </div>
+
+          {/* Acciones Finales */}
+          <div className="no-print flex gap-2 pt-2">
             <Button
               type="button"
               onClick={() => {
@@ -396,12 +505,16 @@ export default function CierreTurnoChoferComponent({
                 if (choferId) cargarStock(choferId);
               }}
               variant="outline"
-              className="flex-1 gap-1.5"
+              className="flex-1 h-8 text-xs rounded border-slate-300 text-slate-700 hover:bg-slate-50 gap-1.5"
             >
-              <RotateCcw className="w-4 h-4" /> Realizar Otro Cierre
+              <RotateCcw className="w-3.5 h-3.5" /> Realizar Otro Cierre
             </Button>
             {onCerrar && (
-              <Button type="button" onClick={onCerrar} className="flex-1 bg-slate-800 text-white">
+              <Button 
+                type="button" 
+                onClick={onCerrar} 
+                className="flex-1 h-8 text-xs rounded bg-slate-900 hover:bg-slate-800 text-white"
+              >
                 Finalizar y Salir
               </Button>
             )}

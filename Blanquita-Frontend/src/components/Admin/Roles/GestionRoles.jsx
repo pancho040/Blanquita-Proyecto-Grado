@@ -24,6 +24,7 @@ import {
   USUARIOS_INICIALES,
 } from "@/constants/RolesPermisos";
 import ModalPermisosUsuario from "./ModalPermisosUsuario";
+import StatusBadge from "@/components/common/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
@@ -213,35 +214,38 @@ export default function GestionRoles({ usuario: usuarioActual }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
       {/* ENCABEZADO */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             Gestión de Usuarios y Roles
           </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Administración de cuentas, niveles de acceso y asignación operativa por sucursal.
+          </p>
         </div>
 
         {/* ACCIONES Y PESTAÑAS */}
-        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           {tabActiva === "usuarios" && (
             <Button
               onClick={() => setModalCrearAbierto(true)}
-              className="bg-[#20A7DB] hover:bg-[#188cba] text-white text-xs gap-1.5 h-9 font-semibold shadow-xs"
+              className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs gap-1.5 h-8 font-semibold rounded cursor-pointer border border-transparent shadow-none"
             >
-              <Plus size={15} />
+              <Plus size={14} />
               <span>Nuevo Colaborador</span>
             </Button>
           )}
 
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
+          <div className="flex items-center gap-1 p-0.5 rounded bg-slate-100 border border-slate-200">
             <button
               type="button"
               onClick={() => setTabActiva("usuarios")}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-semibold rounded transition-colors cursor-pointer ${
                 tabActiva === "usuarios"
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white text-slate-900 border border-slate-200 shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -250,9 +254,9 @@ export default function GestionRoles({ usuario: usuarioActual }) {
             <button
               type="button"
               onClick={() => setTabActiva("matriz")}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-semibold rounded transition-colors cursor-pointer ${
                 tabActiva === "matriz"
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white text-slate-900 border border-slate-200 shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -264,17 +268,17 @@ export default function GestionRoles({ usuario: usuarioActual }) {
 
       {/* VISTA 1: TABLA DE USUARIOS Y ASIGNACIÓN DE ROLES */}
       {tabActiva === "usuarios" && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* BARRA DE FILTROS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 p-2.5 bg-white rounded border border-slate-200">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              <Search size={15} className="absolute left-2.5 top-2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Buscar por nombre, usuario o email..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 pl-8 pr-2.5 rounded border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               />
             </div>
 
@@ -282,7 +286,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               <select
                 value={filtroRol}
                 onChange={(e) => setFiltroRol(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 px-2.5 rounded border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="todos">Todos los Roles del Sistema</option>
                 {roles.map((r) => (
@@ -297,7 +301,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               <select
                 value={filtroSucursal}
                 onChange={(e) => setFiltroSucursal(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 px-2.5 rounded border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="todos">Todas las Sucursales</option>
                 <option value="1">Sucursal Central Sucre</option>
@@ -310,7 +314,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 px-2.5 rounded border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="todos">Todos los Estados</option>
                 <option value="activos">Sólo Usuarios Activos</option>
@@ -320,16 +324,16 @@ export default function GestionRoles({ usuario: usuarioActual }) {
           </div>
 
           {/* TABLA DE USUARIOS */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold uppercase tracking-wider sticky top-0">
                 <tr>
-                  <th className="py-3 px-4">Usuario / Colaborador</th>
-                  <th className="py-3 px-4">Rol Asignado</th>
-                  <th className="py-3 px-4">Sucursal Asignada</th>
-                  <th className="py-3 px-4">Régimen</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4 text-right">Acciones</th>
+                  <th className="py-2.5 px-3">Usuario / Colaborador</th>
+                  <th className="py-2.5 px-3">Rol Asignado</th>
+                  <th className="py-2.5 px-3">Sucursal Asignada</th>
+                  <th className="py-2.5 px-3">Régimen</th>
+                  <th className="py-2.5 px-3">Estado</th>
+                  <th className="py-2.5 px-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -342,95 +346,81 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                 ) : (
                   usuariosFiltrados.map((u) => {
                     const rolInfo = roles.find((r) => r.id === u.idRol);
-                    const iniciales = u.nombre
-                      .split(" ")
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .map((p) => p[0])
-                      .join("");
 
                     return (
-                      <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4">
+                      <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3">
                           <div>
-                            <div className="font-semibold text-slate-900 text-sm">
+                            <div className="font-semibold text-slate-900 text-xs">
                               {u.nombre}
                             </div>
-                            <div className="text-[11px] text-slate-500">
+                            <div className="text-[11px] text-slate-500 font-mono">
                               @{u.usuario} • {u.correo}
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3">
                           <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                              rolInfo?.badgeColor || "bg-slate-100 text-slate-700"
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
+                              rolInfo?.badgeColor || "bg-slate-100 text-slate-700 border-slate-200"
                             }`}
                           >
                             {rolInfo?.nombre || "Sin Rol"}
                           </span>
                         </td>
 
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3">
                           {u.idSucursal === 1 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-sky-50 text-sky-800 border border-sky-200">
                               <MapPin size={11} />
                               Sucre (Central)
                             </span>
                           ) : u.idSucursal === 2 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
                               <MapPin size={11} />
                               Potosí
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800 border border-slate-200">
                               <Building size={11} />
                               Multisede / Todas
                             </span>
                           )}
                         </td>
 
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3">
                           {u.personalizado ? (
-                            <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-medium">
+                            <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-medium">
                               Personalizado
                             </span>
                           ) : (
-                            <span className="text-slate-500 text-xs">
+                            <span className="text-slate-600 text-[11px]">
                               Estándar
                             </span>
                           )}
                         </td>
 
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3">
                           <button
                             type="button"
                             onClick={() => handleToggleEstadoUsuario(u.id)}
                             className="cursor-pointer"
                             title="Haga clic para alternar estado"
                           >
-                            {u.activo ? (
-                              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                Activo
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-rose-50 text-rose-700 border-rose-200">
-                                Inactivo
-                              </Badge>
-                            )}
+                            <StatusBadge estado={u.activo ? "ACTIVO" : "INACTIVO"} />
                           </button>
                         </td>
 
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 px-3 text-right">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleAbrirEditar(u)}
-                            className="gap-1.5 h-8 text-xs font-semibold hover:border-[#20A7DB] hover:text-[#20A7DB]"
+                            className="gap-1.5 h-7 text-xs font-medium rounded hover:bg-slate-50 cursor-pointer"
                           >
-                            <Sliders size={13} />
-                            Configurar Permisos
+                            <Sliders size={12} />
+                            <span>Permisos</span>
                           </Button>
                         </td>
                       </tr>
@@ -445,9 +435,9 @@ export default function GestionRoles({ usuario: usuarioActual }) {
 
       {/* VISTA 2: PLANTILLAS DE ROLES Y MATRIZ POR DEFECTO */}
       {tabActiva === "matriz" && (
-        <div className="space-y-6">
+        <div className="space-y-5">
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {roles.map((r) => {
               // Contar cuántos usuarios tienen este rol
               const countUsuarios = usuarios.filter((u) => u.idRol === r.id).length;
@@ -455,27 +445,27 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               return (
                 <div
                   key={r.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors"
+                  className="bg-white rounded border border-slate-200 p-3.5 flex flex-col justify-between hover:border-slate-300 transition-colors"
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1.5">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${r.badgeColor}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${r.badgeColor}`}
                       >
                         {r.nombre}
                       </span>
-                      <span className="text-xs font-semibold text-slate-500">
+                      <span className="text-[11px] font-mono text-slate-500">
                         {countUsuarios} {countUsuarios === 1 ? "usuario" : "usuarios"}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                       {r.descripcion}
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
                     <span>Módulos habilitados:</span>
-                    <span className="font-bold text-slate-800">
+                    <span className="font-semibold text-slate-900 font-mono">
                       {
                         Object.values(r.permisosPorDefecto).filter((mod) =>
                           Object.values(mod).some(Boolean)
@@ -490,22 +480,22 @@ export default function GestionRoles({ usuario: usuarioActual }) {
           </div>
 
           {/* TABLA COMPARATIVA DE PERMISOS POR ROL */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs p-5">
-            <h3 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
-              <Lock size={16} className="text-[#20A7DB]" />
-              Matriz Comparativa de Permisos por Rol
+          <div className="bg-white rounded border border-slate-200 overflow-hidden p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1 flex items-center gap-1.5">
+              <Lock size={15} className="text-[#1C96C5]" />
+              <span>Matriz Comparativa de Permisos por Rol</span>
             </h3>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-500 mb-3">
               Cada nuevo usuario asignado a un rol hereda automáticamente estos permisos. Los cambios son escalables sin necesidad de crear páginas independientes.
             </p>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border border-slate-200 rounded">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-100 text-slate-700">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 uppercase font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3 font-semibold">Módulo</th>
+                    <th className="py-2 px-3">Módulo</th>
                     {roles.map((r) => (
-                      <th key={r.id} className="py-2.5 px-3 text-center font-semibold">
+                      <th key={r.id} className="py-2 px-3 text-center">
                         {r.nombre}
                       </th>
                     ))}
@@ -513,8 +503,8 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {MODULOS_SISTEMA.map((mod) => (
-                    <tr key={mod.id} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 px-3 font-semibold text-slate-800">
+                    <tr key={mod.id} className="hover:bg-slate-50">
+                      <td className="py-2 px-3 font-medium text-slate-900">
                         {mod.nombre}
                       </td>
                       {roles.map((r) => {
@@ -524,16 +514,14 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                         const tieneAprobacion = perm.aprobar;
 
                         return (
-                          <td key={r.id} className="py-2.5 px-3 text-center">
+                          <td key={r.id} className="py-2 px-3 text-center">
                             {tieneLectura ? (
-                              <div className="inline-flex flex-col items-center gap-0.5">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                  <CheckCircle2 size={12} />
-                                  {tieneAprobacion ? "Total" : tieneEscritura ? "Edición" : "Lectura"}
-                                </span>
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                <CheckCircle2 size={11} />
+                                {tieneAprobacion ? "Total" : tieneEscritura ? "Edición" : "Lectura"}
+                              </span>
                             ) : (
-                              <span className="text-slate-300 font-bold">—</span>
+                              <span className="text-slate-300 font-mono">—</span>
                             )}
                           </td>
                         );
@@ -562,15 +550,15 @@ export default function GestionRoles({ usuario: usuarioActual }) {
 
       {/* MODAL DE REGISTRO DE NUEVO COLABORADOR */}
       <Dialog open={modalCrearAbierto} onOpenChange={setModalCrearAbierto}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="max-w-xl rounded border border-slate-200 p-5">
+          <DialogHeader className="border-b border-slate-100 pb-3">
             <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Users size={18} className="text-[#20A7DB]" />
-              Registrar Nuevo Colaborador
+              <Users size={16} className="text-[#1C96C5]" />
+              <span>Registrar Nuevo Colaborador</span>
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleCrearUsuario} className="space-y-4 pt-2 text-xs">
+          <form onSubmit={handleCrearUsuario} className="space-y-3.5 pt-2 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
@@ -583,7 +571,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                   onChange={(e) =>
                     setNuevoUsuario({ ...nuevoUsuario, nombre: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-8 text-xs rounded"
                 />
               </div>
 
@@ -598,7 +586,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                   onChange={(e) =>
                     setNuevoUsuario({ ...nuevoUsuario, usuario: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-8 text-xs rounded"
                 />
               </div>
             </div>
@@ -614,7 +602,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                   onChange={(e) =>
                     setNuevoUsuario({ ...nuevoUsuario, ci: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-8 text-xs rounded font-mono"
                 />
               </div>
 
@@ -628,7 +616,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                   onChange={(e) =>
                     setNuevoUsuario({ ...nuevoUsuario, celular: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-8 text-xs rounded font-mono"
                 />
               </div>
 
@@ -643,7 +631,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                   onChange={(e) =>
                     setNuevoUsuario({ ...nuevoUsuario, clave: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-8 text-xs rounded"
                 />
               </div>
             </div>
@@ -659,7 +647,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                 onChange={(e) =>
                   setNuevoUsuario({ ...nuevoUsuario, correo: e.target.value })
                 }
-                className="h-9 text-xs"
+                className="h-8 text-xs rounded"
               />
             </div>
 
@@ -676,7 +664,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                       idRol: Number(e.target.value),
                     })
                   }
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                  className="w-full h-8 px-2.5 rounded border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                 >
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -688,7 +676,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                  <MapPin size={13} className="text-[#20A7DB]" />
+                  <MapPin size={13} className="text-[#1C96C5]" />
                   Sucursal de Operación *
                 </label>
                 <select
@@ -702,7 +690,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
                           : Number(e.target.value),
                     })
                   }
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                  className="w-full h-8 px-2.5 rounded border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                 >
                   <option value={1}>Sucursal Central Sucre</option>
                   <option value={2}>Sucursal Potosí</option>
@@ -713,7 +701,7 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               </div>
             </div>
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-1">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-800">
                 Ámbito de Visibilidad y Operación:
               </p>
@@ -727,25 +715,27 @@ export default function GestionRoles({ usuario: usuarioActual }) {
               </p>
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
+            <DialogFooter className="gap-2 pt-2 border-t border-slate-100">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setModalCrearAbierto(false)}
-                className="text-xs h-9"
+                className="text-xs h-8 rounded"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 disabled={creandoUsuario}
-                className="bg-[#20A7DB] hover:bg-[#188cba] text-white text-xs h-9 font-semibold gap-1.5"
+                size="sm"
+                className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs h-8 font-semibold rounded gap-1.5 cursor-pointer border border-transparent shadow-none"
               >
                 {creandoUsuario ? (
                   <span>Registrando...</span>
                 ) : (
                   <>
-                    <Plus size={14} />
+                    <Plus size={13} />
                     <span>Guardar Colaborador</span>
                   </>
                 )}

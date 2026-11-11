@@ -7,10 +7,15 @@ class CuentasCobrarRepository:
 
     # --- Notas de Venta ---
     def ListarNotasVenta(self, id_cliente: int | None = None, destino: str | None = None,
-                         fecha_inicio = None, fecha_fin = None, busqueda: str = "") -> list[dict]:
+                         fecha_inicio = None, fecha_fin = None, busqueda: str = "",
+                         estado_pago: str | None = None, limit: int | None = None, offset: int | None = None,
+                         id_sucursal: int | None = None) -> list[dict]:
         where_clauses = []
         params = {}
 
+        if id_sucursal is not None:
+            where_clauses.append('nv."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
         if id_cliente is not None:
             where_clauses.append('nv."IdCliente" = :id_cliente')
             params["id_cliente"] = id_cliente
@@ -26,19 +31,55 @@ class CuentasCobrarRepository:
         if busqueda:
             where_clauses.append('(nv."NumeroNotaVenta" ILIKE :busqueda OR nv."NumeroNotaEntrega" ILIKE :busqueda OR nv."ClienteNombreLibre" ILIKE :busqueda OR c."RazonSocial" ILIKE :busqueda)')
             params["busqueda"] = f"%{busqueda}%"
+        if estado_pago and estado_pago.upper() != "TODOS":
+            if estado_pago.lower() == "pagado":
+                where_clauses.append('nv."SaldoPendiente" <= 0')
+            elif estado_pago.lower() == "pendiente":
+                where_clauses.append('nv."SaldoPendiente" > 0')
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset or 0
+
         sql = f"""
             SELECT 
-                nv.*,
-                COALESCE(c."RazonSocial", nv."ClienteNombreLibre") as "ClienteNombre"
+                nv."IdNotaVenta",
+                nv."NumeroNotaVenta",
+                nv."NumeroNotaEntrega",
+                nv."FechaVenta",
+                nv."IdCliente",
+                nv."ClienteNombreLibre",
+                nv."DestinoDepartamento",
+                nv."IdChofer",
+                nv."Chofer",
+                nv."PlacaCamion",
+                nv."CantidadCamiones",
+                nv."TotalVentaBruto",
+                nv."DescuentoBonificacion",
+                nv."Promocion",
+                nv."ImporteNeto",
+                nv."SaldoAnterior",
+                nv."TotalCancelado",
+                nv."SaldoPendiente",
+                nv."EstadoCobranza",
+                nv."MetodoPago",
+                nv."MontoEfectivo",
+                nv."MontoQR",
+                nv."MontoCredito",
+                nv."FirmaDigitalUrl",
+                COALESCE(c."RazonSocial", nv."ClienteNombreLibre") as "ClienteNombre",
+                COUNT(*) OVER() as total_count
             FROM "NotaVenta" nv
             LEFT JOIN "Cliente" c ON nv."IdCliente" = c."IdCliente"
             {where_sql}
-            ORDER BY nv."FechaVenta" DESC, nv."NumeroNotaVenta" DESC;
+            ORDER BY nv."FechaVenta" DESC, nv."NumeroNotaVenta" DESC
+            {limit_sql};
         """
-        return self.caller.LlamarFuncion(sql, params)
+        return self.caller.LlamarFuncion(sql, params, commit=False)
 
     def ObtenerNotaVentaPorId(self, id_nota: int) -> dict | None:
         sql = """
@@ -165,10 +206,16 @@ class CuentasCobrarRepository:
 
 
     # --- Cuentas por Cobrar (Ledger de Crédito) ---
-    def ListarCuentasCobrar(self, id_cliente: int | None = None, id_estado: int | None = None, solo_con_saldo: bool = True) -> list[dict]:
+    def ListarCuentasCobrar(self, id_cliente: int | None = None, id_estado: int | None = None,
+                            solo_con_saldo: bool = True, solo_vencidas: bool = False,
+                            busqueda: str | None = None, limit: int | None = None,
+                            offset: int | None = None, id_sucursal: int | None = None) -> list[dict]:
         where_clauses = []
         params = {}
 
+        if id_sucursal is not None:
+            where_clauses.append('cxc."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
         if id_cliente is not None:
             where_clauses.append('cxc."IdCliente" = :id_cliente')
             params["id_cliente"] = id_cliente
@@ -177,8 +224,25 @@ class CuentasCobrarRepository:
             params["id_estado"] = id_estado
         if solo_con_saldo:
             where_clauses.append('cxc."SaldoPendiente" > 0')
+        if solo_vencidas:
+            where_clauses.append('(cxc."SaldoPendiente" > 0 AND cxc."FechaVencimiento" IS NOT NULL AND (CURRENT_DATE - cxc."FechaVencimiento") > 15)')
+        if busqueda and busqueda.strip():
+            where_clauses.append("""
+                (cli."RazonSocial" ILIKE :busqueda OR 
+                 cli."CiudadDestino" ILIKE :busqueda OR 
+                 cxc."NumeroNotaVenta" ILIKE :busqueda OR 
+                 CAST(cxc."IdNotaVenta" AS TEXT) ILIKE :busqueda OR
+                 ('NV-' || CAST(cxc."IdNotaVenta" AS TEXT)) ILIKE :busqueda)
+            """)
+            params["busqueda"] = f"%{busqueda.strip()}%"
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset or 0
 
         sql = f"""
             SELECT 
@@ -191,14 +255,16 @@ class CuentasCobrarRepository:
                 cli."RazonSocial" as "RazonSocialCliente",
                 cli."CiudadDestino",
                 cli."LimiteCreditoBs",
-                ec."NombreEstado"
+                ec."NombreEstado",
+                COUNT(*) OVER() as total_count
             FROM "CuentaCobrar" cxc
             JOIN "Cliente" cli ON cxc."IdCliente" = cli."IdCliente"
             JOIN "EstadoCuentaCobrar" ec ON cxc."IdEstadoCuentaCobrar" = ec."IdEstadoCuentaCobrar"
             {where_sql}
-            ORDER BY cxc."FechaDespacho" DESC, cxc."IdCuentaCobrar" DESC;
+            ORDER BY cxc."FechaDespacho" DESC, cxc."IdCuentaCobrar" DESC
+            {limit_sql};
         """
-        return self.caller.LlamarFuncion(sql, params)
+        return self.caller.LlamarFuncion(sql, params, commit=False)
 
     def ObtenerCuentaCobrarPorId(self, id_cxc: int) -> dict | None:
         sql = """
@@ -279,8 +345,14 @@ class CuentasCobrarRepository:
 
 
     # --- Resumen de Cartera General (Hoja CXC) ---
-    def ObtenerResumenCartera(self) -> list[dict]:
-        sql = """
+    def ObtenerResumenCartera(self, id_sucursal: int | None = None) -> list[dict]:
+        where = ""
+        params = {}
+        if id_sucursal is not None:
+            where = 'WHERE c."IdSucursal" = :id_s'
+            params["id_s"] = id_sucursal
+
+        sql = f"""
             SELECT 
                 c."IdCliente",
                 c."RazonSocial" as "Distribuidor",
@@ -296,11 +368,12 @@ class CuentasCobrarRepository:
                 c."Observacion"
             FROM "Cliente" c
             LEFT JOIN "CuentaCobrar" cxc ON c."IdCliente" = cxc."IdCliente"
+            {where}
             GROUP BY c."IdCliente", c."RazonSocial", c."CiudadDestino", c."Observacion"
             HAVING COALESCE(SUM(cxc."MontoTotal"), 0) > 0 OR c."LimiteCreditoBs" > 0
             ORDER BY "SaldoPorCobrar" DESC, "MontoDespachoTotal" DESC;
         """
-        return self.caller.LlamarFuncion(sql)
+        return self.caller.LlamarFuncion(sql, params)
 
     # Verificación de mora y límite de crédito
     def VerificarEstadoCreditoCliente(self, id_cliente: int, nuevo_monto: float = 0.0) -> dict:

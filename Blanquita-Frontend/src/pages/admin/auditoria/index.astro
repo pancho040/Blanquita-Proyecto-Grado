@@ -1,8 +1,9 @@
 ---
 import Layout from '@/layouts/Layout.astro';
+const { usuario } = Astro.locals;
 import GestionAuditoria from '@/components/Admin/Auditoria/GestionAuditoria';
 ---
 
 <Layout title="Historial de Modificaciones | Papelera Blanquita">
-  <GestionAuditoria client:only="react" />
+  <GestionAuditoria client:only="react" usuario={usuario} />
 </Layout>

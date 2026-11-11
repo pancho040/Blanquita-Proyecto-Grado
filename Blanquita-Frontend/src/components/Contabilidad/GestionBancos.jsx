@@ -202,61 +202,61 @@ export default function GestionBancos({ usuario }) {
   return (
     <div className="space-y-6">
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded border border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
-            <Landmark className="h-7 w-7 text-[#20A7DB]" />
-            Cuentas Bancarias
+          <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Landmark className="h-5 w-5 text-[#1C96C5]" />
+            Cuentas Bancarias y Conciliación
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Control de saldos y movimientos bancarios.
+          <p className="text-xs text-slate-600 mt-0.5">
+            Control de saldos, cuentas corrientes y movimientos bancarios de Papelera Blanquita
           </p>
         </div>
 
         <Button
           onClick={() => setModalNuevoOpen(true)}
-          className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
+          className="bg-[#1C96C5] hover:bg-[#157A9E] text-white flex items-center gap-1.5 h-8 px-3 rounded text-xs font-medium border-0"
         >
-          <PlusCircle className="h-4 w-4" />
+          <PlusCircle className="h-3.5 w-3.5" />
           Nueva Cuenta
         </Button>
       </div>
 
       {/* Resumen de Fondos */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-200 p-4 rounded">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] uppercase font-semibold tracking-wider">Disponibilidad en Bolivianos (BOB)</span>
-            <Landmark className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+            <Landmark className="h-4 w-4 text-[#1C96C5]" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white mt-2">
+          <div className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-slate-900 mt-1">
             Bs. {totalBOB.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-xs text-slate-400 mt-1 block">Consolidado en cuentas nacionales</span>
+          <span className="text-[11px] text-slate-500 mt-0.5 block">Consolidado en cuentas nacionales</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs">
+        <div className="bg-white border border-slate-200 p-4 rounded">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] uppercase font-semibold tracking-wider">Disponibilidad en Dólares (USD)</span>
-            <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <DollarSign className="h-4 w-4 text-[#15803D]" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 dark:text-white mt-2">
+          <div className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-slate-900 mt-1">
             $us. {totalUSD.toLocaleString("es-BO", { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-xs text-slate-400 mt-1 block">Cuentas en moneda extranjera</span>
+          <span className="text-[11px] text-slate-500 mt-0.5 block">Cuentas en moneda extranjera</span>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-xs uppercase font-semibold text-slate-400">Total Cuentas Activas</span>
-          <div className="text-3xl font-bold text-slate-800 mt-2">
+        <div className="bg-white p-4 rounded border border-slate-200 flex flex-col justify-between">
+          <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500">Total Cuentas Activas</span>
+          <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
             {bancos.filter((b) => b.Activo).length} de {bancos.length}
           </div>
-          <span className="text-xs text-slate-400">Banco Unión, BNB, BMSC</span>
+          <span className="text-[11px] text-slate-500 mt-0.5">Banco Unión, BNB, BMSC y operativas</span>
         </div>
       </div>
 
       {/* Grid de Tarjetas Bancarias */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {bancos.map((b) => {
           const esUnion = b.NombreBanco.toLowerCase().includes("unión") || b.NombreBanco.toLowerCase().includes("union");
           const esBnb = b.NombreBanco.toLowerCase().includes("bnb");
@@ -266,48 +266,48 @@ export default function GestionBancos({ usuario }) {
             <div
               key={b.IdCuentaBancaria}
               onClick={() => seleccionarBanco(b, 1)}
-              className={`cursor-pointer rounded-2xl p-5 transition-all relative overflow-hidden border-2 ${
+              className={`cursor-pointer rounded p-4 transition-colors relative border ${
                 esSeleccionado
-                  ? "border-[#20A7DB] shadow-md ring-2 ring-[#20A7DB]/20"
-                  : "border-slate-200 hover:border-slate-300 shadow-xs bg-white"
+                  ? "border-[#1C96C5] bg-[#F0F9FF]"
+                  : "border-slate-200 hover:border-slate-300 bg-white"
               }`}
             >
               {/* Encabezado Tarjeta */}
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
                   <Building2
-                    className={`h-5 w-5 ${
-                      esUnion ? "text-blue-600" : esBnb ? "text-emerald-700" : "text-[#20A7DB]"
+                    className={`h-4 w-4 ${
+                      esUnion ? "text-blue-700" : esBnb ? "text-[#15803D]" : "text-[#1C96C5]"
                     }`}
                   />
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800">{b.NombreBanco}</h3>
-                    <span className="text-[11px] text-slate-400">{b.TipoCuenta}</span>
+                    <h3 className="font-bold text-xs text-slate-900">{b.NombreBanco}</h3>
+                    <span className="text-[11px] text-slate-500">{b.TipoCuenta}</span>
                   </div>
                 </div>
 
-                <Badge
-                  className={
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${
                     b.TipoMoneda === "USD"
-                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
-                      : "bg-blue-100 text-blue-800 border-blue-300 font-bold"
-                  }
+                      ? "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
+                      : "bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]"
+                  }`}
                 >
                   {b.TipoMoneda}
-                </Badge>
+                </span>
               </div>
 
               {/* Número de Cuenta y Titular */}
-              <div className="mt-4 text-xs font-semibold text-slate-600 tracking-wider">
+              <div className="mt-3 text-xs font-mono font-medium text-slate-800 tracking-wide">
                 {b.NumeroCuenta}
               </div>
-              <div className="text-[11px] text-slate-400 truncate mt-0.5">{b.Titular}</div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5">{b.Titular}</div>
 
               {/* Saldo y Acción */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-end">
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-between items-end">
                 <div>
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block">Saldo Actual</span>
-                  <span className="text-xl font-extrabold text-slate-800">
+                  <span className="text-base font-bold font-mono tabular-nums text-slate-900">
                     {b.TipoMoneda === "USD" ? "$us. " : "Bs. "}
                     {Number(b.SaldoActual || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
                   </span>
@@ -320,10 +320,10 @@ export default function GestionBancos({ usuario }) {
                     e.stopPropagation();
                     abrirEditar(b);
                   }}
-                  className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700"
+                  className="h-7 w-7 p-0 text-slate-400 hover:text-slate-800 rounded"
                   title="Editar cuenta"
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
@@ -333,73 +333,73 @@ export default function GestionBancos({ usuario }) {
 
       {/* Historial de Movimientos de la Cuenta Seleccionada */}
       {bancoSeleccionado && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="bg-white rounded border border-slate-200 overflow-hidden">
+          <div className="p-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-[#20A7DB]" />
-              <h2 className="font-bold text-sm text-slate-800">
+              <Building2 className="h-4 w-4 text-[#1C96C5]" />
+              <h2 className="font-bold text-xs text-slate-900">
                 Movimientos: {bancoSeleccionado.NombreBanco} ({bancoSeleccionado.NumeroCuenta})
               </h2>
             </div>
-            <span className="text-xs text-slate-500 font-medium">
+            <span className="text-xs font-mono text-slate-600">
               Total {totalMovs} transacciones
             </span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="sticky top-0 bg-slate-50 text-slate-600 text-xs uppercase font-semibold tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Fecha</th>
-                  <th className="py-3 px-4">N° Comprobante</th>
-                  <th className="py-3 px-4">Categoría</th>
-                  <th className="py-3 px-4">Beneficiario / Glosa</th>
-                  <th className="py-3 px-4 text-center">Tipo</th>
-                  <th className="py-3 px-4 text-right">Monto</th>
+                  <th className="py-2 px-3 text-center">Fecha</th>
+                  <th className="py-2 px-3">N° Comprobante</th>
+                  <th className="py-2 px-3">Categoría</th>
+                  <th className="py-2 px-3">Beneficiario / Glosa</th>
+                  <th className="py-2 px-3 text-center">Tipo</th>
+                  <th className="py-2 px-3 text-right">Monto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {cargandoMovs ? (
                   <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-400">
+                    <td colSpan="6" className="py-6 text-center text-xs text-slate-500 font-mono">
                       Cargando movimientos bancarios...
                     </td>
                   </tr>
                 ) : movimientosBanco.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-400">
+                    <td colSpan="6" className="py-6 text-center text-xs text-slate-500 font-mono">
                       No se registran movimientos asociados a esta cuenta bancaria.
                     </td>
                   </tr>
                 ) : (
                   movimientosBanco.map((m) => (
-                    <tr key={m.IdMovimiento} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 text-xs text-slate-500">
+                    <tr key={m.IdMovimiento} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center font-mono text-slate-600">
                         {m.FechaMovimiento ? new Date(m.FechaMovimiento).toLocaleDateString("es-BO") : "-"}
                       </td>
-                      <td className="py-3 px-4 text-xs font-semibold text-slate-700">
+                      <td className="py-2 px-3 font-mono font-medium text-slate-800">
                         {m.NumeroComprobante || `MOV-${m.IdMovimiento}`}
                       </td>
-                      <td className="py-3 px-4 text-xs font-medium text-slate-800">
+                      <td className="py-2 px-3 font-medium text-slate-800">
                         {m.NombreCategoria || "General"}
                       </td>
-                      <td className="py-3 px-4 max-w-xs truncate text-xs text-slate-600" title={m.Glosa}>
-                        {m.Beneficiario ? <strong>{m.Beneficiario} - </strong> : null}
+                      <td className="py-2 px-3 max-w-xs truncate text-slate-600" title={m.Glosa}>
+                        {m.Beneficiario ? <strong className="text-slate-800">{m.Beneficiario} - </strong> : null}
                         {m.Glosa}
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        {m.Tipo === "Ingreso" ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-xs">
-                            + Ingreso
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-xs">
-                            - Egreso
-                          </Badge>
-                        )}
+                      <td className="py-2 px-3 text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
+                            m.Tipo === "Ingreso"
+                              ? "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
+                              : "bg-[#FEF2F2] text-[#B91C1C] border-[#FCA5A5]"
+                          }`}
+                        >
+                          {m.Tipo === "Ingreso" ? "+ Ingreso" : "- Egreso"}
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-right font-bold whitespace-nowrap">
-                        <span className={m.Tipo === "Ingreso" ? "text-emerald-700" : "text-rose-700"}>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold whitespace-nowrap">
+                        <span className={m.Tipo === "Ingreso" ? "text-[#15803D]" : "text-[#B91C1C]"}>
                           Bs. {Number(m.Monto || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
                         </span>
                       </td>
@@ -433,14 +433,14 @@ export default function GestionBancos({ usuario }) {
       {/* MODAL NUEVA CUENTA */}
       {modalNuevoOpen && (
       <Dialog open={modalNuevoOpen} onOpenChange={setModalNuevoOpen}>
-        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <Landmark className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-2xl p-5 rounded border border-slate-300 bg-white">
+          <DialogHeader className="pb-2 border-b border-slate-200">
+            <DialogTitle className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Landmark className="h-4 w-4 text-[#1C96C5]" />
               Registrar Cuenta Bancaria
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCrearBanco} className="space-y-3.5">
+          <form onSubmit={handleCrearBanco} className="space-y-3 pt-2">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Entidad Financiera / Banco *
@@ -450,7 +450,7 @@ export default function GestionBancos({ usuario }) {
                 value={formBanco.nombre_banco}
                 onChange={(e) => setFormBanco({ ...formBanco, nombre_banco: e.target.value })}
                 placeholder="Ej: Banco Unión S.A."
-                className="text-sm"
+                className="h-8 text-xs rounded border-slate-300"
               />
             </div>
 
@@ -464,7 +464,7 @@ export default function GestionBancos({ usuario }) {
                   value={formBanco.numero_cuenta}
                   onChange={(e) => setFormBanco({ ...formBanco, numero_cuenta: e.target.value })}
                   placeholder="Ej: 1000003429182"
-                  className="text-sm"
+                  className="h-8 text-xs rounded border-slate-300 font-mono"
                 />
               </div>
 
@@ -475,7 +475,7 @@ export default function GestionBancos({ usuario }) {
                 <select
                   value={formBanco.tipo_moneda}
                   onChange={(e) => setFormBanco({ ...formBanco, tipo_moneda: e.target.value })}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
                 >
                   <option value="BOB">Bolivianos (BOB)</option>
                   <option value="USD">Dólares (USD)</option>
@@ -491,7 +491,7 @@ export default function GestionBancos({ usuario }) {
                 <select
                   value={formBanco.tipo_cuenta}
                   onChange={(e) => setFormBanco({ ...formBanco, tipo_cuenta: e.target.value })}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
                 >
                   <option value="Corriente">Cuenta Corriente</option>
                   <option value="Ahorro">Caja de Ahorro</option>
@@ -509,7 +509,7 @@ export default function GestionBancos({ usuario }) {
                   value={formBanco.saldo_actual}
                   onChange={(e) => setFormBanco({ ...formBanco, saldo_actual: e.target.value })}
                   placeholder="0.00"
-                  className="font-bold text-sm"
+                  className="h-8 font-mono tabular-nums text-right text-xs rounded border-slate-300"
                 />
               </div>
             </div>
@@ -522,15 +522,24 @@ export default function GestionBancos({ usuario }) {
                 value={formBanco.titular}
                 onChange={(e) => setFormBanco({ ...formBanco, titular: e.target.value })}
                 placeholder="Shema Asociados S.R.L."
-                className="text-sm"
+                className="h-8 text-xs rounded border-slate-300"
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalNuevoOpen(false)}>
+            <DialogFooter className="gap-2 pt-3 border-t border-slate-200">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setModalNuevoOpen(false)}
+                className="h-8 px-3 rounded text-xs border border-slate-300 text-slate-700"
+              >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={guardando} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+              <Button
+                type="submit"
+                disabled={guardando}
+                className="h-8 px-3 rounded text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-medium border-0"
+              >
                 {guardando ? "Guardando..." : "Guardar Cuenta"}
               </Button>
             </DialogFooter>
@@ -542,14 +551,14 @@ export default function GestionBancos({ usuario }) {
       {/* MODAL EDITAR CUENTA */}
       {modalEditarOpen && (
       <Dialog open={modalEditarOpen} onOpenChange={setModalEditarOpen}>
-        <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <Edit className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-2xl p-5 rounded border border-slate-300 bg-white">
+          <DialogHeader className="pb-2 border-b border-slate-200">
+            <DialogTitle className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Edit className="h-4 w-4 text-[#1C96C5]" />
               Actualizar Cuenta Bancaria
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleEditarBanco} className="space-y-3.5">
+          <form onSubmit={handleEditarBanco} className="space-y-3 pt-2">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Entidad Financiera *
@@ -558,7 +567,7 @@ export default function GestionBancos({ usuario }) {
                 required
                 value={formBanco.nombre_banco}
                 onChange={(e) => setFormBanco({ ...formBanco, nombre_banco: e.target.value })}
-                className="text-sm"
+                className="h-8 text-xs rounded border-slate-300"
               />
             </div>
 
@@ -571,7 +580,7 @@ export default function GestionBancos({ usuario }) {
                   required
                   value={formBanco.numero_cuenta}
                   onChange={(e) => setFormBanco({ ...formBanco, numero_cuenta: e.target.value })}
-                  className="text-sm"
+                  className="h-8 text-xs rounded border-slate-300 font-mono"
                 />
               </div>
 
@@ -584,7 +593,7 @@ export default function GestionBancos({ usuario }) {
                   step="0.01"
                   value={formBanco.saldo_actual}
                   onChange={(e) => setFormBanco({ ...formBanco, saldo_actual: e.target.value })}
-                  className="font-bold text-sm"
+                  className="h-8 font-mono tabular-nums text-right text-xs rounded border-slate-300"
                 />
               </div>
             </div>
@@ -596,15 +605,24 @@ export default function GestionBancos({ usuario }) {
               <Input
                 value={formBanco.titular}
                 onChange={(e) => setFormBanco({ ...formBanco, titular: e.target.value })}
-                className="text-sm"
+                className="h-8 text-xs rounded border-slate-300"
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalEditarOpen(false)}>
+            <DialogFooter className="gap-2 pt-3 border-t border-slate-200">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setModalEditarOpen(false)}
+                className="h-8 px-3 rounded text-xs border border-slate-300 text-slate-700"
+              >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={guardando} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+              <Button
+                type="submit"
+                disabled={guardando}
+                className="h-8 px-3 rounded text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-medium border-0"
+              >
                 {guardando ? "Actualizando..." : "Guardar Cambios"}
               </Button>
             </DialogFooter>

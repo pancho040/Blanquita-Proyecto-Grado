@@ -47,6 +47,10 @@ ROADMAP.md
 PRODUCT.md
 DESIGN.md
 PERFORMANCE_BASELINE.md
+BRANCH_AUDIT.md
+*_audit*.txt
+*routes_audit*.txt
+**/*audit*.txt
 
 # Archivos de hojas de calculo, datos y respaldos locales
 *.xlsx
@@ -69,3 +73,14 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.test_credentials*
+*.local.json
+backups/
+*.dump
+*.sql.bak
+
+# Herramientas locales y perfiles de terminal Antigravity
+scripts/
+.antigravity_accounts/
+.vscode/
+

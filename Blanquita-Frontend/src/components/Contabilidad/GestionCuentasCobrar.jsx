@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import {
   HandCoins,
   PlusCircle,
@@ -40,12 +43,19 @@ import {
 } from "@/services/Contabilidad/cuentasCobrarService";
 import { ObtenerCuentasBancarias } from "@/services/Contabilidad/tesoreriaService";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { SkeletonRow, SkeletonMetrics } from "@/components/common/LoadingStates";
 import ModalImportarExcel from "./ModalImportarExcel";
+import StatusBadge from "@/components/common/StatusBadge";
 import { ImportarCuentasCobrar } from "@/services/Contabilidad/importacionService";
 import { FileSpreadsheet } from "lucide-react";
 import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionCuentasCobrar({ usuario }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: true,
+  });
+
   const [cuentas, setCuentas] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [clientes, setClientes] = useState([]);
@@ -98,24 +108,14 @@ export default function GestionCuentasCobrar({ usuario }) {
   });
   const [guardandoAbono, setGuardandoAbono] = useState(false);
 
-  useEffect(() => {
-    cargarDatos();
-  }, [pagina, filtroEstado, filtroSoloVencidas]);
-
-  // Debounce para búsqueda
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      cargarDatos();
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [busqueda]);
-
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
+      const sid = sucursal === "todas" ? null : sucursal;
+      const cacheKeyClientes = `contabilidad:clientesCxC:${sid || "todas"}`;
 
       // Auxiliares desde caché
-      let clientesData = cache.get("contabilidad:clientesCxC");
+      let clientesData = cache.get(cacheKeyClientes);
       let bancosData = cache.get("contabilidad:cuentasBancarias");
 
       const peticiones = [
@@ -125,12 +125,13 @@ export default function GestionCuentasCobrar({ usuario }) {
           estado: filtroEstado !== "TODOS" ? filtroEstado : null,
           busqueda: busqueda.trim(),
           soloVencidas: filtroSoloVencidas,
+          idSucursal: sid,
         }),
-        ObtenerCarteraResumen().catch(() => null),
+        ObtenerCarteraResumen(sid).catch(() => null),
       ];
 
       if (!clientesData) {
-        peticiones.push(ObtenerClientesCxC().catch(() => []));
+        peticiones.push(ObtenerClientesCxC(sid).catch(() => []));
       }
       if (!bancosData) {
         peticiones.push(ObtenerCuentasBancarias().catch(() => []));
@@ -144,7 +145,7 @@ export default function GestionCuentasCobrar({ usuario }) {
       if (!clientesData) {
         const cRes = resultados[idx++];
         clientesData = Array.isArray(cRes) ? cRes : cRes?.items || [];
-        cache.set("contabilidad:clientesCxC", clientesData, 300);
+        cache.set(cacheKeyClientes, clientesData, 300);
       }
       if (!bancosData) {
         const bRes = resultados[idx++];
@@ -154,8 +155,9 @@ export default function GestionCuentasCobrar({ usuario }) {
 
       const items = Array.isArray(cuentasRes) ? cuentasRes : (cuentasRes?.items || []);
       setCuentas(items);
-      setTotalRegistros(cuentasRes?.total != null ? cuentasRes.total : items.length);
-      setTotalPaginas(cuentasRes?.total_paginas || 1);
+      const total = cuentasRes?.total != null ? cuentasRes.total : items.length;
+      setTotalRegistros(total);
+      setTotalPaginas(cuentasRes?.total_paginas || Math.max(1, Math.ceil(total / limite)));
 
       setResumen(resumenRes);
       setClientes(clientesData);
@@ -165,7 +167,31 @@ export default function GestionCuentasCobrar({ usuario }) {
     } finally {
       setCargando(false);
     }
-  };
+  }, [pagina, limite, filtroEstado, filtroSoloVencidas, busqueda, sucursal]);
+
+  useEffect(() => {
+    if (!cargandoAlcance) {
+      cargarDatos();
+    }
+  }, [pagina, filtroEstado, filtroSoloVencidas, sucursal, cargandoAlcance, cargarDatos]);
+
+  // Debounce de 250ms para búsqueda de cuentas
+  useEffect(() => {
+    if (cargandoAlcance) return;
+    const timer = setTimeout(() => {
+      cargarDatos();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [busqueda, cargandoAlcance, cargarDatos]);
+
+  // Renderizado optimizado: ventana virtual de registros para no sobrecargar el DOM
+  const cuentasAMostrar = useMemo(() => {
+    if (cuentas.length > limite) {
+      const inicio = (pagina - 1) * limite;
+      return cuentas.slice(inicio, inicio + limite);
+    }
+    return cuentas;
+  }, [cuentas, pagina, limite]);
 
   const abrirDetalle = async (cuenta) => {
     setCuentaSeleccionada(cuenta);
@@ -318,113 +344,117 @@ export default function GestionCuentasCobrar({ usuario }) {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2.5">
-            <HandCoins className="h-7 w-7 text-[#20A7DB]" />
-            Cuentas por Cobrar
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Cartera de clientes, estados de cuenta, mora y abonos.
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Encabezado Operativo */}
+      <PageHeader
+        title="Cuentas por Cobrar"
+        subtitle="Control de cartera de clientes, estados de cuenta, control de mora y registro de abonos bancarios."
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      >
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setModalImportarOpen(true)}
+          className="h-8 rounded border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 text-xs font-medium"
+          title="Importar cartera de clientes y cuentas por cobrar desde Excel"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5 text-[#15803D]" />
+          <span>Importar Excel</span>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setModalCrearOpen(true)}
+          className="h-8 rounded flex items-center gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium"
+        >
+          <PlusCircle className="h-3.5 w-3.5 text-[#1C96C5]" />
+          <span>Nueva Cuenta</span>
+        </Button>
+        <Button
+          onClick={() => abrirModalAbono()}
+          className="h-8 rounded bg-[#1C96C5] hover:bg-[#157A9E] text-white flex items-center gap-1.5 text-xs font-medium shadow-none"
+        >
+          <ArrowDownLeft className="h-3.5 w-3.5" />
+          <span>Registrar Abono</span>
+        </Button>
+      </PageHeader>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setModalImportarOpen(true)}
-            className="border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs font-semibold text-xs h-10"
-            title="Importar cartera de clientes y cuentas por cobrar desde Excel"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            <span>Importar Excel</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setModalCrearOpen(true)}
-            className="flex items-center gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
-          >
-            <PlusCircle className="h-4 w-4 text-[#20A7DB]" />
-            Nueva Cuenta
-          </Button>
-          <Button
-            onClick={() => abrirModalAbono()}
-            className="bg-[#20A7DB] hover:bg-[#1992c0] text-white flex items-center gap-2 shadow-xs"
-          >
-            <HandCoins className="h-4 w-4" />
-            Registrar Abono
-          </Button>
-        </div>
-      </div>
-
-      {/* Tarjetas Resumen de Cartera */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Total Cartera */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Total Cartera por Cobrar
-          </span>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-slate-800">
-              Bs. {(resumen?.TotalPorCobrar || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
-            </div>
-            <span className="text-xs text-slate-400">{resumen?.TotalCuentasActivas || 0} créditos pendientes</span>
-          </div>
-        </div>
-
-        {/* Cartera Vigente */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Cartera Vigente (&le; 15 días)
-          </span>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-emerald-600">
-              Bs. {(resumen?.CarteraVigente || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
-            </div>
-            <span className="text-xs text-emerald-600/80 font-medium">Dentro de plazo normal</span>
-          </div>
-        </div>
-
-        {/* Cartera Vencida */}
-        <div className="bg-white p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5" /> Mora &gt; 15 Días
+      {/* Tarjetas Resumen de Cartera (con Skeleton industrial) */}
+      {cargando && !resumen ? (
+        <SkeletonMetrics count={4} columnsClass="grid-cols-1 sm:grid-cols-2 md:grid-cols-4" />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Total Cartera */}
+          <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+              Total Cartera por Cobrar
             </span>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-rose-600">
-              Bs. {(resumen?.CarteraVencida || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+            <div className="mt-2">
+              <div className="text-xl font-bold font-mono tabular-nums text-slate-900">
+                Bs. {(resumen?.TotalPorCobrar || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-slate-500 mt-0.5 block">{resumen?.TotalCuentasActivas || 0} créditos pendientes</span>
             </div>
-            <span className="text-xs text-rose-500 font-semibold">
-              {resumen?.ClientesEnMora || 0} clientes en riesgo de bloqueo
-            </span>
           </div>
-        </div>
 
-        {/* Total Abonos del Período */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-2xs flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Total Recuperado / Abonos
-          </span>
-          <div className="mt-2">
-            <div className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
-              Bs. {(resumen?.TotalAbonado || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+          {/* Cartera Vigente */}
+          <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+              Cartera Vigente (&le; 15 días)
+            </span>
+            <div className="mt-2">
+              <div className="text-xl font-bold font-mono tabular-nums text-[#15803D]">
+                Bs. {(resumen?.CarteraVigente || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-[#15803D] font-medium mt-0.5 block">Dentro de plazo normal</span>
             </div>
-            <span className="text-xs text-slate-400 mt-1 block">Depositado en Banco Unión / BNB</span>
+          </div>
+
+          {/* Cartera Vencida */}
+          <div className="bg-[#FEF2F2] p-3.5 rounded border border-[#FCA5A5] flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-[#B91C1C] uppercase tracking-wider flex items-center gap-1">
+                <ShieldAlert className="h-3.5 w-3.5" /> Mora &gt; 15 Días
+              </span>
+            </div>
+            <div className="mt-2">
+              <div className="text-xl font-bold font-mono tabular-nums text-[#B91C1C]">
+                Bs. {(resumen?.CarteraVencida || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-[#B91C1C] font-medium mt-0.5 block">
+                {resumen?.ClientesEnMora || 0} clientes en riesgo de bloqueo
+              </span>
+            </div>
+          </div>
+
+          {/* Total Abonos del Período */}
+          <div className="bg-white border border-slate-200 p-3.5 rounded flex flex-col justify-between">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+              Total Recuperado / Abonos
+            </span>
+            <div className="mt-2">
+              <div className="text-xl font-bold font-mono tabular-nums text-slate-900">
+                Bs. {(resumen?.TotalAbonado || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-slate-500 mt-0.5 block">Depósitos bancarios verificados</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabla de Cuentas por Cobrar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden">
         {/* Barra de Filtros */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative flex-1 sm:w-80">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+        <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative flex-1 sm:w-80 w-full">
+            <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Buscar cliente, ciudad o nota de venta..."
               value={busqueda}
@@ -432,27 +462,27 @@ export default function GestionCuentasCobrar({ usuario }) {
                 setBusqueda(e.target.value);
                 setPagina(1);
               }}
-              className="pl-9 h-9 bg-white text-sm"
+              className="pl-8 h-8 rounded border-slate-300 bg-white text-xs w-full"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
             <button
               onClick={() => {
                 setFiltroSoloVencidas(!filtroSoloVencidas);
                 setPagina(1);
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${
+              className={`h-8 px-2.5 text-xs font-medium rounded border transition-colors flex items-center gap-1.5 ${
                 filtroSoloVencidas
-                  ? "bg-rose-600 text-white border-rose-600 shadow-xs"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  ? "bg-[#B91C1C] text-white border-[#B91C1C]"
+                  : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
               }`}
             >
               <AlertTriangle className="h-3.5 w-3.5" />
               Solo Vencidos (&gt;15 días)
             </button>
 
-            <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-medium text-slate-600">
+            <div className="flex rounded border border-slate-200 bg-white p-0.5 text-xs font-medium text-slate-600">
               {["TODOS", "Pendiente", "Parcial", "Pagada"].map((est) => (
                 <button
                   key={est}
@@ -460,8 +490,8 @@ export default function GestionCuentasCobrar({ usuario }) {
                     setFiltroEstado(est);
                     setPagina(1);
                   }}
-                  className={`px-3 py-1.5 rounded-md transition-colors ${
-                    filtroEstado === est ? "bg-[#20A7DB] text-white" : "hover:text-slate-900"
+                  className={`h-7 px-2.5 rounded text-xs transition-colors ${
+                    filtroEstado === est ? "bg-[#1C96C5] text-white font-medium" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   {est}
@@ -473,98 +503,95 @@ export default function GestionCuentasCobrar({ usuario }) {
 
         {/* Tabla */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase font-semibold text-slate-600 border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Cliente / Razón Social</th>
-                <th className="py-3 px-4">Ciudad</th>
-                <th className="py-3 px-4">Nota de Venta</th>
-                <th className="py-3 px-4">Fecha Emisión</th>
-                <th className="py-3 px-4 text-center">Días Mora</th>
-                <th className="py-3 px-4 text-right">Monto Original</th>
-                <th className="py-3 px-4 text-right">Saldo Pendiente</th>
-                <th className="py-3 px-4 text-center">Estado</th>
-                <th className="py-3 px-4 text-center">Acciones</th>
+                <th className="py-2.5 px-3">Cliente / Razón Social</th>
+                <th className="py-2.5 px-3">Ciudad</th>
+                <th className="py-2.5 px-3">Nota de Venta</th>
+                <th className="py-2.5 px-3">Fecha Emisión</th>
+                <th className="py-2.5 px-3 text-center">Días Mora</th>
+                <th className="py-2.5 px-3 text-right">Monto Original</th>
+                <th className="py-2.5 px-3 text-right">Saldo Pendiente</th>
+                <th className="py-2.5 px-3 text-center">Estado</th>
+                <th className="py-2.5 px-3 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {cargando ? (
-                <tr>
-                  <td colSpan="9" className="py-8 text-center text-slate-400">
-                    Cargando cuentas por cobrar...
-                  </td>
-                </tr>
-              ) : cuentas.length === 0 ? (
+                Array.from({ length: 6 }).map((_, idx) => (
+                  <SkeletonRow key={idx} cols={9} rowIdx={idx} />
+                ))
+              ) : cuentasAMostrar.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="py-8 text-center text-slate-400">
                     No se encontraron cuentas que coincidan con la búsqueda.
                   </td>
                 </tr>
               ) : (
-                cuentas.map((c) => {
+                cuentasAMostrar.map((c) => {
                   const diasMora = c.DiasMora || 0;
                   const esMoraGrave = diasMora > 15;
 
                   return (
-                    <tr key={c.IdCuentaCobrar} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800 text-xs">
+                    <tr key={c.IdCuentaCobrar} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3">
+                        <div className="font-semibold text-slate-900 text-xs">
                           {c.RazonSocial || c.NombreComercial}
                         </div>
-                        {c.NIT_CI && <div className="text-[11px] text-slate-400 ">NIT: {c.NIT_CI}</div>}
+                        {c.NIT_CI && <div className="text-[11px] font-mono text-slate-400">NIT: {c.NIT_CI}</div>}
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-600 font-medium">
+                      <td className="py-2 px-3 text-slate-600 font-medium">
                         {c.Ciudad || "Sucre"}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-xs text-[#20A7DB]">
+                      <td className="py-2 px-3 font-mono font-medium text-[#1C96C5]">
                         {c.NumeroNota || `NV-${c.IdNotaVenta || c.IdCuentaCobrar}`}
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-500">
+                      <td className="py-2 px-3 font-mono text-slate-500">
                         {c.FechaEmision ? new Date(c.FechaEmision).toLocaleDateString("es-BO") : "-"}
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center">
                         {c.Estado === "Pagada" ? (
-                          <span className="text-xs text-emerald-600 font-semibold">Al día</span>
+                          <span className="text-[11px] text-[#15803D] font-medium">Al día</span>
                         ) : esMoraGrave ? (
-                          <Badge className="bg-rose-100 text-rose-800 border-rose-300 font-bold text-xs flex items-center justify-center gap-1 mx-auto w-fit">
-                            <AlertTriangle className="h-3 w-3" /> {diasMora} días
-                          </Badge>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#FCA5A5] bg-[#FEF2F2] text-[#B91C1C] font-mono font-bold text-[11px]">
+                            <AlertTriangle className="h-3 w-3" /> {diasMora} d
+                          </span>
                         ) : diasMora > 0 ? (
-                          <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-medium text-xs">
-                            {diasMora} días
-                          </Badge>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-[#FDE68A] bg-[#FFFBEB] text-[#B45309] font-mono font-medium text-[11px]">
+                            {diasMora} d
+                          </span>
                         ) : (
-                          <span className="text-xs text-slate-400 font-medium">0 días</span>
+                          <span className="text-[11px] font-mono text-slate-400">0 d</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right font-medium text-slate-600 text-xs">
-                        Bs. {Number(c.MontoTotal || 0).toFixed(2)}
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-700">
+                        Bs. {Number(c.MontoTotal || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-800 whitespace-nowrap">
-                        <span className={Number(c.SaldoPendiente || 0) > 0 ? "text-rose-600" : "text-emerald-600"}>
-                          Bs. {Number(c.SaldoPendiente || 0).toFixed(2)}
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold whitespace-nowrap">
+                        <span className={Number(c.SaldoPendiente || 0) > 0 ? "text-[#B91C1C]" : "text-[#15803D]"}>
+                          Bs. {Number(c.SaldoPendiente || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        <Badge
-                          className={
+                      <td className="py-2 px-3 text-center">
+                        <StatusBadge
+                          status={
                             c.Estado === "Pagada"
-                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              ? "aprobado"
                               : c.Estado === "Parcial"
-                              ? "bg-blue-100 text-blue-800 border-blue-300"
-                              : "bg-amber-100 text-amber-800 border-amber-300"
+                              ? "info"
+                              : "pendiente"
                           }
-                        >
-                          {c.Estado}
-                        </Badge>
+                          label={c.Estado}
+                        />
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => abrirDetalle(c)}
-                            className="h-7 w-7 p-0 text-slate-500 hover:text-slate-800"
+                            className="h-7 w-7 p-0 rounded text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                             title="Ver historial de abonos"
                           >
                             <Eye className="h-3.5 w-3.5" />
@@ -575,7 +602,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => enviarRecordatorioMora(c)}
-                                className="h-7 px-2 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 flex items-center gap-1 font-semibold"
+                                className="h-7 px-2 text-[11px] rounded text-[#15803D] border-[#86EFAC] bg-[#F0FDF4] hover:bg-[#DCFCE7] flex items-center gap-1 font-medium"
                                 title="Enviar recordatorio de mora vía WhatsApp"
                               >
                                 <MessageSquare className="h-3 w-3" />
@@ -586,7 +613,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => abrirModalAbono(c)}
-                                className="h-7 px-2 text-xs text-[#20A7DB] border-[#20A7DB]/40 hover:bg-[#20A7DB]/10 flex items-center gap-1"
+                                className="h-7 px-2 text-[11px] rounded text-[#1C96C5] border-[#BAE6FD] bg-[#F0F9FF] hover:bg-[#E0F2FE] flex items-center gap-1 font-medium"
                               >
                                 <PlusCircle className="h-3 w-3" />
                                 Abonar
@@ -625,19 +652,19 @@ export default function GestionCuentasCobrar({ usuario }) {
       {/* MODAL NUEVA CUENTA POR COBRAR (EXCEL / MANUAL) */}
       {modalCrearOpen && (
         <Dialog open={modalCrearOpen} onOpenChange={setModalCrearOpen}>
-          <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
+          <DialogContent className="w-full sm:max-w-2xl p-5 rounded border border-slate-300 bg-white">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-slate-800">
-                <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
+              <DialogTitle className="flex items-center gap-2 text-slate-900 text-base font-semibold">
+                <PlusCircle className="h-4 w-4 text-[#1C96C5]" />
                 Registrar Cuenta por Cobrar
               </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleCrearCuenta} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleCrearCuenta} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Cliente */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     Cliente *
                   </label>
                   <select
@@ -653,7 +680,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                         destino: cli?.Ciudad || formCrear.destino,
                       });
                     }}
-                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                    className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                   >
                     <option value="">Seleccione Cliente...</option>
                     {clientes.map((c) => (
@@ -666,13 +693,13 @@ export default function GestionCuentasCobrar({ usuario }) {
 
                 {/* Destino */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     Destino / Ciudad *
                   </label>
                   <select
                     value={formCrear.destino}
                     onChange={(e) => setFormCrear({ ...formCrear, destino: e.target.value })}
-                    className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                    className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                   >
                     <option value="Sucre">Sucre</option>
                     <option value="Cochabamba">Cochabamba</option>
@@ -688,59 +715,59 @@ export default function GestionCuentasCobrar({ usuario }) {
 
                 {/* Celular */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     Teléfono / Celular
                   </label>
                   <Input
                     value={formCrear.celular}
                     onChange={(e) => setFormCrear({ ...formCrear, celular: e.target.value })}
                     placeholder="Ej: 71234567"
-                    className="text-xs h-9"
+                    className="text-xs h-8 rounded border-slate-300"
                   />
                 </div>
 
                 {/* Línea de Crédito */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     Línea de Crédito
                   </label>
                   <Input
                     value={formCrear.linea_credito}
                     onChange={(e) => setFormCrear({ ...formCrear, linea_credito: e.target.value })}
                     placeholder="Ej: 5000 Bs o 15 días"
-                    className="text-xs h-9"
+                    className="text-xs h-8 rounded border-slate-300"
                   />
                 </div>
 
                 {/* N° Nota de Venta */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     N° Nota de Venta
                   </label>
                   <Input
                     value={formCrear.numero_nota}
                     onChange={(e) => setFormCrear({ ...formCrear, numero_nota: e.target.value })}
                     placeholder="Ej: NV-1045"
-                    className="text-xs h-9"
+                    className="text-xs h-8 rounded border-slate-300 font-mono"
                   />
                 </div>
 
                 {/* N° Nota de Entrega */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     N° Nota de Entrega
                   </label>
                   <Input
                     value={formCrear.numero_entrega}
                     onChange={(e) => setFormCrear({ ...formCrear, numero_entrega: e.target.value })}
                     placeholder="Ej: NE-308"
-                    className="text-xs h-9"
+                    className="text-xs h-8 rounded border-slate-300 font-mono"
                   />
                 </div>
 
                 {/* Monto Total */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  <label className="text-xs font-medium text-slate-700 block mb-1">
                     Monto Total (Bs.) *
                   </label>
                   <Input
@@ -751,39 +778,39 @@ export default function GestionCuentasCobrar({ usuario }) {
                     value={formCrear.monto_total}
                     onChange={(e) => setFormCrear({ ...formCrear, monto_total: e.target.value })}
                     placeholder="0.00"
-                    className="text-xs h-9"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right"
                   />
                 </div>
 
                 {/* Fechas */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    <label className="text-xs font-medium text-slate-700 block mb-1">
                       Fecha Emisión
                     </label>
                     <Input
                       type="date"
                       value={formCrear.fecha_emision}
                       onChange={(e) => setFormCrear({ ...formCrear, fecha_emision: e.target.value })}
-                      className="text-xs h-9"
+                      className="text-xs h-8 rounded border-slate-300 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    <label className="text-xs font-medium text-slate-700 block mb-1">
                       Fecha Vencimiento
                     </label>
                     <Input
                       type="date"
                       value={formCrear.fecha_vencimiento}
                       onChange={(e) => setFormCrear({ ...formCrear, fecha_vencimiento: e.target.value })}
-                      className="text-xs h-9"
+                      className="text-xs h-8 rounded border-slate-300 font-mono"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Observaciones
                 </label>
                 <Textarea
@@ -791,15 +818,15 @@ export default function GestionCuentasCobrar({ usuario }) {
                   value={formCrear.observaciones}
                   onChange={(e) => setFormCrear({ ...formCrear, observaciones: e.target.value })}
                   placeholder="Acuerdo comercial, condiciones de pago..."
-                  className="text-xs"
+                  className="text-xs rounded border-slate-300"
                 />
               </div>
 
-              <DialogFooter className="gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setModalCrearOpen(false)}>
+              <DialogFooter className="gap-2 pt-2 border-t border-slate-200">
+                <Button type="button" variant="outline" onClick={() => setModalCrearOpen(false)} className="h-8 rounded text-xs border-slate-300">
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={guardandoCrear} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+                <Button type="submit" disabled={guardandoCrear} className="h-8 rounded bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium">
                   {guardandoCrear ? "Registrando..." : "Guardar Cuenta"}
                 </Button>
               </DialogFooter>
@@ -811,10 +838,10 @@ export default function GestionCuentasCobrar({ usuario }) {
       {/* MODAL REGISTRAR ABONO */}
       {modalAbonoOpen && (
       <Dialog open={modalAbonoOpen} onOpenChange={setModalAbonoOpen}>
-        <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
+        <DialogContent className="w-full sm:max-w-2xl p-5 rounded border border-slate-300 bg-white">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <PlusCircle className="h-5 w-5 text-[#20A7DB]" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 text-base font-semibold">
+              <PlusCircle className="h-4 w-4 text-[#1C96C5]" />
               Registrar Abono Bancario de Cliente
             </DialogTitle>
           </DialogHeader>
@@ -822,7 +849,7 @@ export default function GestionCuentasCobrar({ usuario }) {
           <form onSubmit={handleRegistrarAbono} className="space-y-3.5">
             {/* Cuenta por cobrar */}
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
+              <label className="text-xs font-medium text-slate-700 block mb-1">
                 Cuenta / Cliente a Abonar *
               </label>
               <select
@@ -838,7 +865,7 @@ export default function GestionCuentasCobrar({ usuario }) {
                     depositante: c ? c.RazonSocial || c.NombreComercial : formAbono.depositante,
                   });
                 }}
-                className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
               >
                 <option value="">Seleccione Cuenta o Cliente...</option>
                 {cuentas
@@ -855,7 +882,7 @@ export default function GestionCuentasCobrar({ usuario }) {
             <div className="grid grid-cols-2 gap-3">
               {/* Monto Abono en BOB */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Monto del Abono (Bs.) *
                 </label>
                 <Input
@@ -866,20 +893,20 @@ export default function GestionCuentasCobrar({ usuario }) {
                   value={formAbono.monto_abono}
                   onChange={(e) => setFormAbono({ ...formAbono, monto_abono: e.target.value })}
                   placeholder="0.00"
-                  className="font-bold text-base h-9 text-slate-800"
+                  className="font-mono tabular-nums text-right font-bold text-sm h-8 rounded border-slate-300 text-slate-900"
                 />
               </div>
 
               {/* Cuenta Bancaria de Destino */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Banco de Destino *
                 </label>
                 <select
                   required
                   value={formAbono.id_cuenta_bancaria}
                   onChange={(e) => setFormAbono({ ...formAbono, id_cuenta_bancaria: e.target.value })}
-                  className="w-full text-xs h-9 rounded-md border border-slate-300 bg-white px-2.5 font-medium text-slate-700"
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                 >
                   <option value="">Seleccione Banco...</option>
                   {bancos.map((b) => (
@@ -894,62 +921,62 @@ export default function GestionCuentasCobrar({ usuario }) {
             {/* Datos de Boleta / Comprobante */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   N° Boleta / Depósito Bancario
                 </label>
                 <Input
                   value={formAbono.numero_deposito}
                   onChange={(e) => setFormAbono({ ...formAbono, numero_deposito: e.target.value })}
                   placeholder="Ej: DEP-48921"
-                  className="text-xs h-9"
+                  className="text-xs h-8 rounded border-slate-300 font-mono"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-medium text-slate-700 block mb-1">
                   Nombre del Depositante
                 </label>
                 <Input
                   value={formAbono.depositante}
                   onChange={(e) => setFormAbono({ ...formAbono, depositante: e.target.value })}
                   placeholder="Ej: Juan Perez (Chofer)"
-                  className="text-xs h-9"
+                  className="text-xs h-8 rounded border-slate-300"
                 />
               </div>
             </div>
 
             {/* Conversión Dólares Opcional */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
+              <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block">
                 Equivalente en Dólares ($us) (Opcional)
               </span>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 block">Monto en $us</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Monto en $us</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formAbono.monto_dolares}
                     onChange={(e) => setFormAbono({ ...formAbono, monto_dolares: e.target.value })}
                     placeholder="0.00"
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 block">Tipo de Cambio</label>
+                  <label className="text-[11px] text-slate-500 block mb-1">Tipo de Cambio</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={formAbono.tipo_cambio}
                     onChange={(e) => setFormAbono({ ...formAbono, tipo_cambio: e.target.value })}
-                    className="text-xs h-8"
+                    className="text-xs h-8 rounded border-slate-300 font-mono text-right"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
+              <label className="text-xs font-medium text-slate-700 block mb-1">
                 Observaciones del Abono
               </label>
               <Textarea
@@ -957,15 +984,15 @@ export default function GestionCuentasCobrar({ usuario }) {
                 value={formAbono.observaciones}
                 onChange={(e) => setFormAbono({ ...formAbono, observaciones: e.target.value })}
                 placeholder="Detalle de transferencia interbancaria, retención o acuerdo de pago..."
-                className="text-xs"
+                className="text-xs rounded border-slate-300"
               />
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalAbonoOpen(false)}>
+            <DialogFooter className="gap-2 pt-2 border-t border-slate-200">
+              <Button type="button" variant="outline" onClick={() => setModalAbonoOpen(false)} className="h-8 rounded text-xs border-slate-300">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={guardandoAbono} className="bg-[#20A7DB] hover:bg-[#1992c0] text-white">
+              <Button type="submit" disabled={guardandoAbono} className="h-8 rounded bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium">
                 {guardandoAbono ? "Registrando..." : "Confirmar Abono"}
               </Button>
             </DialogFooter>
@@ -990,64 +1017,64 @@ export default function GestionCuentasCobrar({ usuario }) {
       {/* MODAL ESTADO DE CUENTA / HISTORIAL DE ABONOS */}
       {modalDetalleOpen && (
       <Dialog open={modalDetalleOpen} onOpenChange={setModalDetalleOpen}>
-        <DialogContent className="w-full sm:max-w-4xl max-h-[88vh] overflow-y-auto p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <FileText className="h-5 w-5 text-[#20A7DB]" />
+        <DialogContent className="w-full sm:max-w-4xl max-h-[88vh] overflow-y-auto p-5 rounded border border-slate-300 bg-white">
+          <DialogHeader className="border-b border-slate-200 pb-3">
+            <DialogTitle className="flex items-center gap-2 text-slate-900 text-base font-semibold">
+              <FileText className="h-4 w-4 text-[#1C96C5]" />
               Estado de Cuenta: {detalleCuenta?.Cliente?.RazonSocial || cuentaSeleccionada?.RazonSocial}
             </DialogTitle>
           </DialogHeader>
 
           {detalleCuenta && (
-            <div className="space-y-4">
+            <div className="space-y-4 pt-1">
               {/* Tarjeta de Resumen del Crédito */}
-              <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+              <div className="grid grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded text-xs">
                 <div>
-                  <span className="text-slate-400 block uppercase">Monto Total Nota:</span>
-                  <span className="font-bold text-slate-800 text-sm">
-                    Bs. {Number(detalleCuenta.MontoTotal || 0).toFixed(2)}
+                  <span className="text-slate-500 block uppercase text-[11px] font-medium">Monto Total Nota:</span>
+                  <span className="font-bold font-mono tabular-nums text-slate-900 text-sm">
+                    Bs. {Number(detalleCuenta.MontoTotal || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block uppercase">Total Abonado:</span>
-                  <span className="font-bold text-emerald-600 text-sm">
-                    Bs. {Number((detalleCuenta.MontoTotal || 0) - (detalleCuenta.SaldoPendiente || 0)).toFixed(2)}
+                  <span className="text-slate-500 block uppercase text-[11px] font-medium">Total Abonado:</span>
+                  <span className="font-bold font-mono tabular-nums text-[#15803D] text-sm">
+                    Bs. {Number((detalleCuenta.MontoTotal || 0) - (detalleCuenta.SaldoPendiente || 0)).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block uppercase">Saldo Deudor:</span>
-                  <span className="font-bold text-rose-600 text-sm">
-                    Bs. {Number(detalleCuenta.SaldoPendiente || 0).toFixed(2)}
+                  <span className="text-slate-500 block uppercase text-[11px] font-medium">Saldo Deudor:</span>
+                  <span className="font-bold font-mono tabular-nums text-[#B91C1C] text-sm">
+                    Bs. {Number(detalleCuenta.SaldoPendiente || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
 
               {/* Historial de Abonos */}
               <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2">
+                <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-600 mb-2">
                   Historial de Abonos y Depósitos Registrados
                 </h4>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <div className="border border-slate-200 rounded overflow-hidden">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-[11px] uppercase font-semibold text-slate-600 border-b border-slate-200">
                       <tr>
-                        <th className="py-2.5 px-3">Fecha</th>
-                        <th className="py-2.5 px-3">N° Depósito</th>
-                        <th className="py-2.5 px-3">Banco Destino</th>
-                        <th className="py-2.5 px-3">Depositante</th>
-                        <th className="py-2.5 px-3 text-right">Monto (Bs.)</th>
+                        <th className="py-2 px-3">Fecha</th>
+                        <th className="py-2 px-3">N° Depósito</th>
+                        <th className="py-2 px-3">Banco Destino</th>
+                        <th className="py-2 px-3">Depositante</th>
+                        <th className="py-2 px-3 text-right">Monto (Bs.)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {detalleCuenta.Abonos && detalleCuenta.Abonos.length > 0 ? (
                         detalleCuenta.Abonos.map((ab) => (
                           <tr key={ab.IdAbono} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-3">{ab.FechaAbono ? new Date(ab.FechaAbono).toLocaleDateString("es-BO") : "-"}</td>
-                            <td className="py-2.5 px-3 font-semibold text-slate-700">{ab.NumeroDeposito || "-"}</td>
-                            <td className="py-2.5 px-3 font-medium text-slate-700">{ab.NombreBanco || "Efectivo"}</td>
-                            <td className="py-2.5 px-3 text-slate-500">{ab.Depositante || "-"}</td>
-                            <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                              Bs. {Number(ab.MontoAbono || 0).toFixed(2)}
+                            <td className="py-2 px-3 font-mono">{ab.FechaAbono ? new Date(ab.FechaAbono).toLocaleDateString("es-BO") : "-"}</td>
+                            <td className="py-2 px-3 font-mono font-medium text-slate-800">{ab.NumeroDeposito || "-"}</td>
+                            <td className="py-2 px-3 font-medium text-slate-700">{ab.NombreBanco || "Efectivo"}</td>
+                            <td className="py-2 px-3 text-slate-600">{ab.Depositante || "-"}</td>
+                            <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-[#15803D]">
+                              Bs. {Number(ab.MontoAbono || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
                         ))
@@ -1065,18 +1092,18 @@ export default function GestionCuentasCobrar({ usuario }) {
             </div>
           )}
 
-          <DialogFooter className="flex justify-between items-center w-full">
+          <DialogFooter className="flex justify-between items-center w-full pt-3 border-t border-slate-200 print:hidden">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => window.print()}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
+              className="h-8 rounded gap-1.5 text-xs text-slate-700 hover:text-slate-900 border-slate-300"
             >
-              <Printer className="h-4 w-4 text-[#20A7DB]" />
+              <Printer className="h-3.5 w-3.5 text-[#1C96C5]" />
               <span>Imprimir Estado de Cuenta</span>
             </Button>
-            <Button variant="outline" onClick={() => setModalDetalleOpen(false)}>
+            <Button variant="outline" onClick={() => setModalDetalleOpen(false)} className="h-8 rounded text-xs border-slate-300">
               Cerrar
             </Button>
           </DialogFooter>

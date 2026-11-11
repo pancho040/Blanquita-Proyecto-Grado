@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
 import { 
   ObtenerAsignaciones, 
   CrearAsignacion, 
@@ -35,7 +38,9 @@ import {
   FileText,
   Printer,
   Radio,
-  Receipt
+  Receipt,
+  Boxes,
+  History
 } from "lucide-react";
 import MapaRuta from "../Rutas/MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
@@ -44,8 +49,11 @@ import GestionChoferesModal from "./GestionChoferesModal";
 import HojaDeRutaModal from "./HojaDeRutaModal";
 import EntregaChoferMovil from "../Reparto/EntregaChoferMovil";
 import CierreTurnoChoferComponent from "../Reparto/CierreTurnoChofer";
+import InventarioCamionTab from "../Reparto/InventarioCamionTab";
+import HistorialRepartoTab from "../Reparto/HistorialRepartoTab";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { SkeletonTable } from "@/components/common/LoadingStates";
 import { cache } from "@/lib/cacheService";
 
 const FLOTA_VEHICULOS = [
@@ -56,6 +64,13 @@ const FLOTA_VEHICULOS = [
 ];
 
 export default function TablaAsignaciones({ usuario = null, vistaInicial = "despachos" }) {
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+    usuario,
+    permiteTodas: false,
+  });
+
+  const esVistaChofer = vistaInicial === "entregas" || vistaInicial === "cierre" || usuario?.IdRol === 6;
+
   const hoyStr = new Date().toISOString().split("T")[0];
   const [fecha, setFecha] = useState(hoyStr);
   const [asignaciones, setAsignaciones] = useState([]);
@@ -68,6 +83,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       const tabParam = params.get("tab");
       if (tabParam === "entregas" || tabParam === "entrega") return "entregas";
       if (tabParam === "cierre" || tabParam === "turnos") return "cierre";
+      if (tabParam === "inventario" || tabParam === "camion") return "inventario";
+      if (tabParam === "historial" || tabParam === "reporte") return "historial";
     }
     return vistaInicial;
   });
@@ -121,43 +138,51 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const cargarAsignaciones = useCallback(async (silencioso = false) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = await ObtenerAsignaciones(fecha);
-      setAsignaciones(data);
+      const data = await ObtenerAsignaciones(fecha, null, sucursal);
+      setAsignaciones(Array.isArray(data) ? data : (data?.items || []));
     } catch (err) {
       if (!silencioso) toast.error(err.message || "Error al cargar despachos");
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, [fecha]);
+  }, [fecha, sucursal]);
+
+  const recargarAsignacionesSilencioso = useCallback(() => {
+    cargarAsignaciones(true);
+  }, [cargarAsignaciones]);
 
   // Precargar catálogos en segundo plano
   const precargarCatalogos = useCallback(async () => {
     try {
       const [r, rep, pv] = await Promise.all([
-        ObtenerRutas(),
-        ObtenerRepartidores(),
-        ObtenerTodosPuntosVenta()
+        ObtenerRutas(null, sucursal),
+        ObtenerRepartidores(sucursal),
+        ObtenerTodosPuntosVenta(sucursal)
       ]);
-      setRutas(r);
-      setRepartidores(rep);
-      setTodosPV(pv);
+      setRutas(Array.isArray(r) ? r : (r?.items || []));
+      setRepartidores(Array.isArray(rep) ? rep : (rep?.items || []));
+      setTodosPV(Array.isArray(pv) ? pv : []);
       setCatalogosCargados(true);
     } catch {
       // Sincronización silenciosa
     }
-  }, []);
+  }, [sucursal]);
 
-  // Carga inicial y auto-actualización sin botones manuales
+  // Precarga de catálogos y despachos al cambiar sucursal
   useEffect(() => {
-    cargarAsignaciones();
-    precargarCatalogos();
+    if (!cargandoAlcance) {
+      precargarCatalogos();
+      cargarAsignaciones();
+    }
+  }, [sucursal, cargandoAlcance, precargarCatalogos, cargarAsignaciones]);
 
-    // Auto-polling silencioso cada 30 segundos
+  // Auto-polling silencioso
+  useEffect(() => {
+    if (cargandoAlcance) return;
     const intervalo = setInterval(() => {
       cargarAsignaciones(true);
     }, 30000);
 
-    // Auto-refresco cuando el usuario vuelve a enfocar la ventana
     const handleFocus = () => cargarAsignaciones(true);
     window.addEventListener("focus", handleFocus);
 
@@ -165,7 +190,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       clearInterval(intervalo);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [cargarAsignaciones, precargarCatalogos]);
+  }, [cargandoAlcance, cargarAsignaciones]);
 
   // Apertura instantánea sin esperar peticiones
   const abrirModalProgramar = () => {
@@ -323,16 +348,28 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }
   };
 
+  const cambiarVista = (nuevaVista, choferData = null) => {
+    if (choferData) {
+      setChoferAccionRapida(choferData);
+    }
+    setVistaActiva(nuevaVista);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", nuevaVista);
+      window.history.replaceState(null, "", url.toString());
+    }
+  };
+
   const badgeEstado = (estado) => {
     switch (estado) {
       case "Finalizada":
-        return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium">Finalizada</Badge>;
+        return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded text-[11px] px-2 py-0.5">Finalizada</Badge>;
       case "En Ruta":
-        return <Badge className="bg-sky-500 hover:bg-sky-600 text-white font-medium animate-pulse">En Ruta</Badge>;
+        return <Badge className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-medium rounded text-[11px] px-2 py-0.5">En Ruta</Badge>;
       case "Cancelada":
-        return <Badge variant="destructive">Cancelada</Badge>;
+        return <Badge variant="destructive" className="rounded text-[11px] px-2 py-0.5">Cancelada</Badge>;
       default:
-        return <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 font-medium">Pendiente</Badge>;
+        return <Badge variant="outline" className="text-amber-800 border-amber-300 bg-amber-50 font-medium rounded text-[11px] px-2 py-0.5">Pendiente</Badge>;
     }
   };
 
@@ -341,111 +378,154 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 1. Header con botón principal y pestañas unificadas */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Truck className="h-6 w-6 text-[#20A7DB]" />
-            <span>Reparto y Despachos</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Gestión integral de flota, itinerarios de ruta, entregas en calle y liquidación diaria
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-          <a
-            href="/supervisor/rutas/rastreo"
-            className="inline-flex items-center h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold gap-1.5 shadow-2xs transition-colors"
-          >
-            <Radio className="h-3.5 w-3.5" />
-            <span>Rastreo</span>
-          </a>
+      <PageHeader
+        title="Centro Operativo de Reparto y Despachos"
+        subtitle="Mesa integral de flota, stock físico en camión, notas de venta en ruta y liquidación de turno"
+        branchFilter={
+          esVistaChofer ? null : (
+            <BranchFilter
+              sucursal={sucursal}
+              onChange={setSucursal}
+              sucursales={sucursalesPermitidas}
+              esMultisede={esMultisede}
+              permiteTodas={false}
+            />
+          )
+        }
+      >
+        <a
+          href="/supervisor/rutas/rastreo"
+          className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
+        >
+          <Radio className="h-3.5 w-3.5" />
+          <span>Rastreo GPS</span>
+        </a>
 
-          <Button 
-            type="button"
-            onClick={() => setModalChoferesAbierto(true)} 
-            variant="outline"
-            className="h-9 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 shadow-2xs px-3.5 font-medium text-xs"
-          >
-            <Users className="h-3.5 w-3.5 text-[#20A7DB]" />
-            <span>Choferes</span>
-          </Button>
+        <Button 
+          type="button"
+          onClick={() => setModalChoferesAbierto(true)} 
+          variant="outline"
+          className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
+        >
+          <Users className="h-3.5 w-3.5 text-[#1C96C5]" />
+          <span>Choferes</span>
+        </Button>
 
-          <Button 
-            onClick={abrirModalProgramar} 
-            className="h-9 bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 shadow-xs transition-all px-4 font-semibold text-xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Nuevo Despacho</span>
-          </Button>
-        </div>
-      </div>
+        <Button 
+          onClick={abrirModalProgramar} 
+          className="h-8 bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 transition-all px-3.5 font-semibold text-xs rounded shadow-none"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>Nuevo Despacho</span>
+        </Button>
+      </PageHeader>
 
       {/* Pestañas de Navegación del Hub de Reparto */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2">
         <button
           type="button"
-          onClick={() => setVistaActiva("despachos")}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+          onClick={() => cambiarVista("despachos")}
+          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
             vistaActiva === "despachos"
-              ? "bg-[#20A7DB] text-white shadow-xs"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
           }`}
         >
-          <Truck className="h-4 w-4" />
+          <Truck className="h-3.5 w-3.5" />
           <span>Despachos y Salidas</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${vistaActiva === "despachos" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+          <span className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${vistaActiva === "despachos" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
             {asignaciones.length}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => setVistaActiva("entregas")}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
-            vistaActiva === "entregas"
-              ? "bg-sky-600 text-white shadow-xs"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          onClick={() => cambiarVista("inventario")}
+          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
+            vistaActiva === "inventario"
+              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
           }`}
         >
-          <Receipt className="h-4 w-4" />
-          <span>Entregas en Ruta (Notas de Venta)</span>
+          <Boxes className="h-3.5 w-3.5" />
+          <span>Inventario en Camión (Stock)</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setVistaActiva("cierre")}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
-            vistaActiva === "cierre"
-              ? "bg-slate-900 text-white shadow-xs"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          onClick={() => cambiarVista("entregas")}
+          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
+            vistaActiva === "entregas"
+              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
           }`}
         >
-          <Clock className="h-4 w-4" />
+          <Receipt className="h-3.5 w-3.5" />
+          <span>Entregas en Ruta (NV-501)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => cambiarVista("cierre")}
+          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
+            vistaActiva === "cierre"
+              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5" />
           <span>Cierre de Turno y Rendición</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => cambiarVista("historial")}
+          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
+            vistaActiva === "historial"
+              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+          }`}
+        >
+          <History className="h-3.5 w-3.5" />
+          <span>Historial de Reparto</span>
         </button>
       </div>
 
+      {vistaActiva === "inventario" && (
+        <InventarioCamionTab
+          usuario={usuario}
+          choferPreseleccionado={choferAccionRapida?.idChofer}
+          asignacionPreseleccionada={choferAccionRapida?.asignacion}
+          alActualizar={recargarAsignacionesSilencioso}
+        />
+      )}
+
+      {vistaActiva === "historial" && (
+        <HistorialRepartoTab
+          usuario={usuario}
+          choferPreseleccionado={choferAccionRapida?.idChofer}
+          fechaInicial={fecha}
+          alActualizar={recargarAsignacionesSilencioso}
+        />
+      )}
+
       {vistaActiva === "entregas" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-5 shadow-xs">
-          <EntregaChoferMovil
-            usuario={usuario}
-            choferPreseleccionado={choferAccionRapida?.idChofer}
-            asignacionPreseleccionada={choferAccionRapida?.asignacion}
-            alCompletar={() => cargarAsignaciones(true)}
-          />
-        </div>
+        <EntregaChoferMovil
+          usuario={usuario}
+          choferPreseleccionado={choferAccionRapida?.idChofer}
+          asignacionPreseleccionada={choferAccionRapida?.asignacion}
+          alCompletar={recargarAsignacionesSilencioso}
+        />
       )}
 
       {vistaActiva === "cierre" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-5 shadow-xs">
-          <CierreTurnoChoferComponent
-            usuario={usuario}
-            choferPreseleccionado={choferAccionRapida?.idChofer}
-            alCompletar={() => cargarAsignaciones(true)}
-          />
-        </div>
+        <CierreTurnoChoferComponent
+          usuario={usuario}
+          choferPreseleccionado={choferAccionRapida?.idChofer}
+          alCompletar={recargarAsignacionesSilencioso}
+        />
       )}
 
       {vistaActiva === "despachos" && (
@@ -485,7 +565,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-[#20A7DB]" />
+                <Calendar className="h-4 w-4 text-[#1C96C5]" />
                 <span>Fecha:</span>
               </span>
               <Input
@@ -494,12 +574,12 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                 onChange={(e) => setFecha(e.target.value)}
                 className="w-auto h-9 bg-white border-slate-300 font-semibold text-slate-800 text-sm"
               />
-              <div className="inline-flex rounded-lg shadow-2xs border border-slate-200 bg-slate-50 p-0.5 text-xs">
+              <div className="inline-flex rounded shadow-2xs border border-slate-200 bg-slate-50 p-0.5 text-xs">
                 <button
                   type="button"
                   onClick={() => ajustarFechaRapida(0)}
                   className={`px-3 py-1 rounded font-medium transition-colors ${
-                    fecha === hoyStr ? "bg-white text-[#20A7DB] shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"
+                    fecha === hoyStr ? "bg-white text-[#1C96C5] shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   Hoy
@@ -537,7 +617,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
-                className="w-full h-9 text-xs rounded-lg border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
+                className="w-full h-9 text-xs rounded border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
               >
                 <option value="TODOS">Todos los Estados</option>
                 <option value="Pendiente">Solo Pendientes</option>
@@ -552,7 +632,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <select
                 value={filtroRepartidor}
                 onChange={(e) => setFiltroRepartidor(e.target.value)}
-                className="w-full h-9 text-xs rounded-lg border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
+                className="w-full h-9 text-xs rounded border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
               >
                 <option value="TODOS">Todos los Repartidores</option>
                 {repartidores.map((r) => (
@@ -566,7 +646,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <select
                 value={filtroZona}
                 onChange={(e) => setFiltroZona(e.target.value)}
-                className="w-full h-9 text-xs rounded-lg border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
+                className="w-full h-9 text-xs rounded border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
               >
                 <option value="TODAS">Todas las Zonas de Sucre</option>
                 {zonasUnicas.map((z) => (
@@ -597,9 +677,20 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         {/* 4. Tabla de Asignaciones */}
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex flex-col justify-center items-center py-20 gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
-              <p className="text-xs text-slate-500 font-medium">Cargando itinerarios y despachos...</p>
+            <div className="p-4">
+              <SkeletonTable
+                rows={6}
+                cols={7}
+                headers={[
+                  "Ruta & Zona",
+                  "Repartidor Asignado",
+                  "Estado",
+                  "Km Inicial",
+                  "Km Final",
+                  "Flota & Observaciones",
+                  "Acciones Rápidas",
+                ]}
+              />
             </div>
           ) : asignacionesFiltradas.length === 0 ? (
             <div className="text-center py-16 px-4">
@@ -608,7 +699,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
                 Puedes ajustar los filtros o programar una nueva salida con el botón superior.
               </p>
-              <Button onClick={abrirModalProgramar} size="sm" className="bg-[#20A7DB] text-white gap-2">
+              <Button onClick={abrirModalProgramar} size="sm" className="bg-[#1C96C5] text-white gap-2">
                 <Plus className="h-4 w-4" />
                 <span>Programar Despacho</span>
               </Button>
@@ -634,13 +725,13 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                         <td className="px-4 py-3.5">
                           <div className="font-semibold text-slate-900">{a.NombreRuta}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span className="inline-block w-2 h-2 rounded-full bg-[#20A7DB]" />
+                            <span className="inline-block w-2 h-2 rounded-full bg-[#1C96C5]" />
                             <span>{a.NombreZona}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="font-medium text-slate-800 flex items-center gap-1.5">
-                            <UserCheck className="h-4 w-4 text-[#20A7DB]" />
+                            <UserCheck className="h-4 w-4 text-[#1C96C5]" />
                             <span>{a.NombreRepartidor}</span>
                           </div>
                         </td>
@@ -670,43 +761,61 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => cambiarEstadoRapido(a, "En Ruta")}
-                                className="h-8 px-2 text-xs text-sky-600 hover:bg-sky-50"
+                                className="h-8 px-2 text-xs text-[#1C96C5] hover:bg-[#1C96C5]/10 rounded"
                                 title="Marcar como En Ruta"
                               >
                                 <PlayCircle className="h-4 w-4" />
                               </Button>
                             )}
 
+                            {/* Consultar Stock Físico en Camión */}
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setChoferAccionRapida({
+                                cambiarVista("inventario", {
                                   idChofer: a.IdUsuarioRepartidor,
                                   nombreChofer: a.NombreRepartidor,
                                   asignacion: a
                                 });
-                                setModalEntregaAbierto(true);
                               }}
-                              className="h-8 px-2.5 text-xs text-sky-700 border-sky-200 hover:bg-sky-50 shadow-2xs gap-1"
+                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
+                              title={`Consultar inventario cargado en el camión de ${a.NombreRepartidor}`}
+                            >
+                              <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
+                              <span>Stock</span>
+                            </Button>
+
+                            {/* Registrar Entrega / Nota de Venta */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                cambiarVista("entregas", {
+                                  idChofer: a.IdUsuarioRepartidor,
+                                  nombreChofer: a.NombreRepartidor,
+                                  asignacion: a
+                                });
+                              }}
+                              className="h-8 px-2 text-xs text-[#1C96C5] border-[#1C96C5]/40 hover:bg-[#1C96C5]/10 gap-1 rounded font-medium"
                               title={`Registrar entrega / Nota de Venta para ${a.NombreRepartidor}`}
                             >
-                              <Receipt className="h-3.5 w-3.5 text-sky-600" />
+                              <Receipt className="h-3.5 w-3.5" />
                               <span>Entrega</span>
                             </Button>
 
+                            {/* Cierre de Jornada y Rendición */}
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setChoferAccionRapida({
+                                cambiarVista("cierre", {
                                   idChofer: a.IdUsuarioRepartidor,
                                   nombreChofer: a.NombreRepartidor,
                                   asignacion: a
                                 });
-                                setModalCierreAbierto(true);
                               }}
-                              className="h-8 px-2.5 text-xs text-slate-800 border-slate-300 hover:bg-slate-100 shadow-2xs gap-1"
+                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
                               title={`Cierre de jornada y rendición para ${a.NombreRepartidor}`}
                             >
                               <Clock className="h-3.5 w-3.5 text-slate-600" />
@@ -717,7 +826,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               size="sm"
                               variant="outline"
                               onClick={() => setHojaRutaAsignacion(a)}
-                              className="h-8 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs gap-1"
+                              className="h-8 px-2 text-xs text-slate-700 border-slate-300 hover:bg-slate-50 gap-1 rounded"
                               title="Imprimir Hoja de Ruta Oficial para el Chofer"
                             >
                               <FileText className="h-3.5 w-3.5 text-slate-500" />
@@ -728,7 +837,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               size="sm"
                               variant="outline"
                               onClick={() => verRutaEnMapa(a)}
-                              className="h-8 px-2.5 text-xs text-[#20A7DB] border-sky-200 hover:bg-sky-50 shadow-2xs gap-1"
+                              className="h-8 px-2 text-xs text-[#1C96C5] border-slate-300 hover:bg-[#1C96C5]/10 gap-1 rounded"
                               title="Ver paradas de la ruta en mapa satelital OSRM"
                             >
                               <MapIcon className="h-3.5 w-3.5" />
@@ -739,7 +848,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               size="sm"
                               variant="outline"
                               onClick={() => abrirGestionarEstado(a)}
-                              className="h-8 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-100 shadow-2xs gap-1"
+                              className="h-8 px-2 text-xs text-slate-700 border-slate-300 hover:bg-slate-50 gap-1 rounded"
                               title="Gestionar estado y registrar odómetro final"
                             >
                               <Gauge className="h-3.5 w-3.5 text-slate-500" />
@@ -770,7 +879,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         <DialogContent className="w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-7">
           <DialogHeader className="border-b border-slate-100 pb-3">
             <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Truck className="h-5 w-5 text-[#20A7DB]" />
+              <Truck className="h-5 w-5 text-[#1C96C5]" />
               <span>Nuevo Despacho</span>
             </DialogTitle>
           </DialogHeader>
@@ -861,7 +970,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <Button 
                 type="submit" 
                 size="sm"
-                className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-5 font-semibold"
+                className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-5 font-semibold"
                 disabled={guardando || repartidores.length === 0}
               >
                 {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -881,7 +990,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         <DialogContent className="w-full sm:max-w-3xl p-6 sm:p-8">
           <DialogHeader className="border-b border-slate-100 pb-3">
             <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Gauge className="h-5 w-5 text-[#20A7DB]" />
+              <Gauge className="h-5 w-5 text-[#1C96C5]" />
               <span>Control de Despacho y Odómetro</span>
             </DialogTitle>
             {asignacionGestionar && (
@@ -897,7 +1006,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <select
                 value={nuevoEstado}
                 onChange={(e) => setNuevoEstado(e.target.value)}
-                className="mt-1 w-full text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 shadow-2xs font-medium"
+                className="mt-1 w-full text-sm rounded border border-slate-300 bg-white px-3 py-2 text-slate-800 shadow-2xs font-medium"
               >
                 <option value="Pendiente">Pendiente (En espera de salida)</option>
                 <option value="En Ruta">En Ruta (Vehículo en tránsito)</option>
@@ -906,7 +1015,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded border border-slate-200">
               <div className="flex flex-col justify-center">
                 <span className="text-[11px] text-slate-500 block font-medium">Km Inicial:</span>
                 <span className="text-base font-bold text-slate-800 mt-1">
@@ -924,7 +1033,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                   className="mt-1 h-9 text-sm bg-white font-bold text-emerald-700"
                 />
               </div>
-              <div className="flex flex-col justify-center bg-white p-2.5 rounded-lg border border-slate-200">
+              <div className="flex flex-col justify-center bg-white p-2.5 rounded border border-slate-200">
                 <span className="text-[11px] text-slate-500 block font-medium">Distancia Recorrida:</span>
                 <span className={`text-base font-bold mt-1 ${kmRecorridos ? "text-emerald-600" : "text-slate-400"}`}>
                   {kmRecorridos ? `${kmRecorridos} km` : "Pendiente"}
@@ -936,7 +1045,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
               <Button type="button" variant="outline" onClick={() => setModalEstadoAbierto(false)}>
                 Cerrar
               </Button>
-              <Button type="submit" className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold" disabled={guardandoEstado}>
+              <Button type="submit" className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-6 font-semibold" disabled={guardandoEstado}>
                 {guardandoEstado && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar Control
               </Button>
@@ -953,8 +1062,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       <Dialog open={modalMapa} onOpenChange={setModalMapa}>
         <DialogContent className="w-full sm:max-w-6xl max-h-[95vh] overflow-y-auto p-6 sm:p-7">
           <DialogHeader className="border-b border-slate-100 pb-3">
-            <DialogTitle className="text-xl font-bold text-[#20A7DB] flex items-center gap-2">
-              <MapIcon className="h-6 w-6 text-[#20A7DB]" />
+            <DialogTitle className="text-xl font-bold text-[#1C96C5] flex items-center gap-2">
+              <MapIcon className="h-6 w-6 text-[#1C96C5]" />
               <span>Mapa GPS Vial: {rutaMapa?.NombreRuta}</span>
             </DialogTitle>
             {rutaMapa && (
@@ -972,7 +1081,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
           {cargandoMapa ? (
             <div className="py-24 flex flex-col justify-center items-center gap-3">
-              <Loader2 className="h-10 w-10 animate-spin text-[#20A7DB]" />
+              <Loader2 className="h-10 w-10 animate-spin text-[#1C96C5]" />
               <p className="text-sm font-medium text-slate-600">Calculando trazado vial por calles de Sucre (OSRM)...</p>
             </div>
           ) : (
@@ -998,7 +1107,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                         key={p.IdPuntoVenta} 
                         className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs text-xs text-slate-800"
                       >
-                        <span className="font-extrabold text-[#20A7DB]">#{p.OrdenVisita}</span>
+                        <span className="font-extrabold text-[#1C96C5]">#{p.OrdenVisita}</span>
                         <span className="font-medium">{p.NombreCliente}</span>
                         <span className="text-[11px] text-slate-400 ">({p.NombrePuntoVenta})</span>
                         {i < puntosMapa.length - 1 && (

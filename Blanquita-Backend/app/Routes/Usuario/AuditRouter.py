@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import require_role
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_SUPERVISOR
 
 AuditRouter = APIRouter(prefix="/admin/auditoria", tags=["Administración - Auditoría Transaccional"])
@@ -24,11 +25,16 @@ def listar_auditoria(
     fecha_fin: Optional[date] = Query(None, description="Fecha hasta"),
     busqueda: Optional[str] = Query(None, description="Texto libre en detalle"),
     db: Session = Depends(get_db),
-    usuario_actual: dict = Depends(require_role(PERMISOS_AUDITORIA))
+    usuario_actual: dict = Depends(require_role(PERMISOS_AUDITORIA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     offset = (page - 1) * limit
     where_clauses = ["1=1"]
     params = {"limit": limit, "offset": offset}
+
+    if alcance.sucursal_efectiva:
+        where_clauses.append('u."IdSucursal" = :id_sucursal')
+        params["id_sucursal"] = alcance.sucursal_efectiva
 
     if tabla:
         where_clauses.append('a."TablaAfectada" ILIKE :tabla')
@@ -59,6 +65,7 @@ def listar_auditoria(
     sql_count = f"""
         SELECT COUNT(*) as total
         FROM "AuditLog" a
+        LEFT JOIN "Usuario" u ON a."IdUsuario" = u."IdUsuario"
         WHERE {where_sql};
     """
     total_res = db.execute(text(sql_count), params).fetchone()
@@ -101,7 +108,8 @@ def listar_auditoria(
 def obtener_detalle_auditoria(
     id_audit: int,
     db: Session = Depends(get_db),
-    usuario_actual: dict = Depends(require_role(PERMISOS_AUDITORIA))
+    usuario_actual: dict = Depends(require_role(PERMISOS_AUDITORIA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     sql = """
         SELECT 
@@ -109,6 +117,7 @@ def obtener_detalle_auditoria(
             a."IdUsuario",
             CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreUsuario",
             r."NombreRol",
+            u."IdSucursal",
             a."Accion",
             a."TablaAfectada",
             a."IdRegistroAfectado",
@@ -125,4 +134,6 @@ def obtener_detalle_auditoria(
     row = db.execute(text(sql), {"id_audit": id_audit}).mappings().fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro de auditoría no encontrado")
+    if row.get("IdSucursal"):
+        alcance.validar_recurso(row.get("IdSucursal"), nombre_recurso="auditoria", responder_404=True)
     return dict(row)

@@ -152,6 +152,8 @@ class MovimientoCajaCrear(BaseModel):
     IdCuentaBancaria: Optional[int] = Field(None, validation_alias=AliasChoices("IdCuentaBancaria", "id_cuenta_bancaria"))
     Descripcion: Optional[str] = Field(None, validation_alias=AliasChoices("Descripcion", "glosa", "descripcion"))
     Tipo: Optional[str] = Field(None, validation_alias=AliasChoices("Tipo", "tipo"))
+    IdSucursal: Optional[int] = Field(None, validation_alias=AliasChoices("IdSucursal", "id_sucursal"))
+    EsCorporativo: Optional[bool] = Field(False, validation_alias=AliasChoices("EsCorporativo", "es_corporativo"))
 
 class MovimientoCajaResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -174,6 +176,8 @@ class MovimientoCajaResponse(BaseModel):
     NombreBanco: Optional[str] = None
     Descripcion: Optional[str] = None
     Anulado: bool = False
+    IdSucursal: Optional[int] = None
+    es_corporativo: bool = False
 
     @property
     def IdMovimiento(self) -> int:

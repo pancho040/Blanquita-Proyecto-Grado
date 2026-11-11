@@ -111,11 +111,22 @@ export default function ModalPermisosUsuario({
         permisosPersonalizados: personalizado ? permisos : null,
       };
 
-      // Si existe el usuario en la base de datos, sincronizar sucursal
+      // Si existe el usuario en la base de datos, sincronizar sucursal y permisos territoriales
       if (usuario.id) {
         try {
-          const sidParam = sucursalSeleccionada !== null ? `id_sucursal=${sucursalSeleccionada}` : "";
-          await fetch(`/api/Usuario/${usuario.id}/sucursal?${sidParam}`, { method: "PUT" });
+          const esTodas = sucursalSeleccionada === null || sucursalSeleccionada === "todas";
+          const params = new URLSearchParams();
+          if (!esTodas && sucursalSeleccionada) {
+            params.append("id_sucursal", sucursalSeleccionada);
+            params.append("puede_ver_todas", "false");
+          } else {
+            params.append("puede_ver_todas", "true");
+          }
+          const res = await fetch(`/api/Usuario/${usuario.id}/sucursal?${params.toString()}`, { method: "PUT" });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(err.detail || "No se pudo actualizar el alcance territorial en el servidor");
+          }
         } catch {
           /* Fallback local */
         }
@@ -139,37 +150,37 @@ export default function ModalPermisosUsuario({
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-xl max-h-[85vh] overflow-y-auto p-5 sm:p-6">
+      <DialogContent className="w-full sm:max-w-xl max-h-[85vh] overflow-y-auto p-5 rounded border border-slate-200">
         <DialogHeader className="border-b border-slate-100 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-[#20A7DB]/15 text-[#20A7DB] flex items-center justify-center font-bold">
-                <ShieldCheck size={20} />
+              <div className="h-8 w-8 rounded border border-sky-200 bg-sky-50 text-[#1C96C5] flex items-center justify-center font-bold">
+                <ShieldCheck size={18} />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold text-slate-800">
+                <DialogTitle className="text-base font-bold text-slate-900">
                   Rol y Permisos
                 </DialogTitle>
                 <p className="text-xs text-slate-500">
-                  <strong className="text-slate-800 font-semibold">{usuario.nombre}</strong> ({usuario.usuario})
+                  <strong className="text-slate-800 font-semibold">{usuario.nombre}</strong> (@{usuario.usuario})
                 </p>
               </div>
             </div>
             {personalizado ? (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[11px]">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border border-amber-200 bg-amber-50 text-amber-800">
                 Personalizado
-              </Badge>
+              </span>
             ) : (
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[11px]">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border border-emerald-200 bg-emerald-50 text-emerald-800">
                 Estándar
-              </Badge>
+              </span>
             )}
           </div>
         </DialogHeader>
 
-        <div className="space-y-5 py-3">
+        <div className="space-y-4 py-3">
           {/* SELECCIÓN DE ROL Y SUCURSAL */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 rounded bg-slate-50 border border-slate-200">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">
                 Rol Asignado al Usuario
@@ -177,7 +188,7 @@ export default function ModalPermisosUsuario({
               <select
                 value={rolSeleccionado}
                 onChange={(e) => handleCambiarRol(Number(e.target.value))}
-                className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               >
                 {ROLES_CONFIG.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -197,7 +208,7 @@ export default function ModalPermisosUsuario({
               <select
                 value={sucursalSeleccionada === null || sucursalSeleccionada === "todas" ? "todas" : String(sucursalSeleccionada)}
                 onChange={(e) => setSucursalSeleccionada(e.target.value === "todas" ? null : Number(e.target.value))}
-                className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#20A7DB]"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
               >
                 <option value="todas">Multisede / General (Todas las Sedes)</option>
                 <option value="1">Sucursal Central Sucre</option>
@@ -220,7 +231,7 @@ export default function ModalPermisosUsuario({
                   id="chkPersonalizado"
                   checked={personalizado}
                   onChange={handleTogglePersonalizado}
-                  className="h-4 w-4 rounded border-slate-300 text-[#20A7DB] focus:ring-[#20A7DB] cursor-pointer"
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
                 />
                 <label
                   htmlFor="chkPersonalizado"
@@ -233,10 +244,10 @@ export default function ModalPermisosUsuario({
                 <button
                   type="button"
                   onClick={handleRestablecerDefecto}
-                  className="mt-2 text-[11px] text-sky-600 hover:text-sky-800 flex items-center gap-1 font-semibold cursor-pointer"
+                  className="mt-1.5 text-[11px] text-[#1C96C5] hover:text-[#157A9E] flex items-center gap-1 font-semibold cursor-pointer"
                 >
                   <RotateCcw size={12} />
-                  Restablecer a los permisos por defecto de {rolActualCfg?.nombre}
+                  <span>Restablecer a los permisos por defecto de {rolActualCfg?.nombre}</span>
                 </button>
               )}
             </div>
@@ -245,22 +256,22 @@ export default function ModalPermisosUsuario({
           {/* MATRIZ DE PERMISOS POR MÓDULO */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                <Sliders size={14} className="text-[#20A7DB]" />
-                Matriz de Accesos por Módulo
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Sliders size={13} className="text-[#1C96C5]" />
+                <span>Matriz de Accesos por Módulo</span>
               </h4>
-              <span className="text-[11px] text-slate-500 font-medium">
+              <span className="text-[11px] text-slate-500 font-mono">
                 {personalizado ? "Edición manual habilitada" : "Heredados del rol"}
               </span>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-slate-200 rounded overflow-hidden">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-100/80 text-slate-700 border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 uppercase font-semibold">
                   <tr>
-                    <th className="py-2.5 px-4 font-semibold">Módulo del Sistema</th>
+                    <th className="py-2 px-3">Módulo del Sistema</th>
                     {ACCIONES_PERMISO.map((act) => (
-                      <th key={act.id} className="py-2.5 px-2 text-center font-semibold">
+                      <th key={act.id} className="py-2 px-2 text-center">
                         {act.label}
                       </th>
                     ))}
@@ -268,24 +279,24 @@ export default function ModalPermisosUsuario({
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {MODULOS_SISTEMA.map((mod) => (
-                    <tr key={mod.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-4">
-                        <div className="font-semibold text-slate-800">{mod.nombre}</div>
+                    <tr key={mod.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3">
+                        <div className="font-semibold text-slate-900">{mod.nombre}</div>
                         <div className="text-[11px] text-slate-500">{mod.descripcion}</div>
                       </td>
                       {ACCIONES_PERMISO.map((act) => {
                         const tienePermiso = Boolean(permisos[mod.id]?.[act.id]);
 
                         return (
-                          <td key={act.id} className="py-2.5 px-2 text-center">
+                          <td key={act.id} className="py-2 px-2 text-center">
                             <button
                               type="button"
                               disabled={!personalizado}
                               onClick={() => handleToggleAccion(mod.id, act.id)}
-                              className={`h-7 w-7 rounded-lg inline-flex items-center justify-center transition-all ${
+                              className={`h-6 w-6 rounded inline-flex items-center justify-center transition-colors border ${
                                 tienePermiso
-                                  ? "bg-emerald-500 text-white shadow-2xs hover:scale-105"
-                                  : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                                  ? "bg-emerald-700 text-white border-emerald-800"
+                                  : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
                               } ${
                                 !personalizado
                                   ? "cursor-default opacity-85"
@@ -296,9 +307,9 @@ export default function ModalPermisosUsuario({
                               }`}
                             >
                               {tienePermiso ? (
-                                <CheckCircle2 size={15} />
+                                <CheckCircle2 size={13} strokeWidth={2.5} />
                               ) : (
-                                <span className="text-[11px] font-bold">—</span>
+                                <span className="text-[10px] font-mono text-slate-400">—</span>
                               )}
                             </button>
                           </td>
@@ -313,17 +324,18 @@ export default function ModalPermisosUsuario({
         </div>
 
         <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
-          <Button type="button" variant="outline" onClick={onCerrar}>
+          <Button type="button" variant="outline" size="sm" onClick={onCerrar} className="h-8 text-xs rounded">
             Cancelar
           </Button>
           <Button
             type="button"
             disabled={guardando}
+            size="sm"
             onClick={handleGuardar}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white gap-2 font-semibold shadow-xs"
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-8 text-xs font-semibold rounded cursor-pointer border border-transparent shadow-none"
           >
-            <Save size={16} />
-            {guardando ? "Guardando..." : "Guardar Cambios de Permisos"}
+            <Save size={14} />
+            <span>{guardando ? "Guardando..." : "Guardar Permisos"}</span>
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -89,10 +89,10 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
+      <DialogContent className="w-full sm:max-w-2xl p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
         <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300">
+            <div className="p-2 bg-slate-100 rounded border border-slate-200 text-slate-700">
               <Clock className="h-6 w-6" />
             </div>
             <div>
@@ -108,7 +108,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {/* Ficha rápida de turno */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-2 text-xs">
+          <div className="p-3 bg-slate-50 rounded border border-slate-200 grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-slate-400 block">Área & Cargo:</span>
               <span className="font-semibold text-slate-700 dark:text-slate-200">
@@ -215,7 +215,7 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
               onChange={handleChange}
               rows={3}
               placeholder="Ej. Marcación no registrada por huella dañada, confirmado por supervisor de planta..."
-              className="mt-1 w-full p-2.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full p-2 text-xs rounded border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
             />
           </div>
 
@@ -225,14 +225,14 @@ export default function ModalEditarAsistencia({ asistencia, abierto, onCerrar, o
               variant="outline"
               onClick={onCerrar}
               disabled={loading}
-              className="text-xs"
+              className="text-xs h-8 rounded border-slate-300"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 flex items-center gap-2"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-4 h-8 rounded flex items-center gap-1.5"
             >
               {loading ? (
                 <>

@@ -25,6 +25,9 @@ import ReporteHeaderFormal from "@/components/common/Reportes/ReporteHeaderForma
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { exportarAExcelCSV } from "@/components/common/Reportes/exportarCsv";
+import PageHeader from "@/components/common/PageHeader";
+import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
+import BranchFilter from "@/components/common/BranchFilter";
 import {
   getReporteFlujoCaja,
   getReporteCuentasCobrar,
@@ -39,7 +42,18 @@ const TABS = [
   { id: "notas_venta", label: "Notas de Venta", icon: Truck },
 ];
 
-export default function CentroReportesContabilidad() {
+export default function CentroReportesContabilidad({ usuario }) {
+  const {
+    sucursal,
+    setSucursal,
+    sucursales,
+    cargando: cargandoSucursal,
+    esMultisede,
+  } = usePaginaSucursal({
+    usuario,
+    permiteTodas: true,
+  });
+
   const [tabActiva, setTabActiva] = useState("flujo_caja");
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
@@ -64,6 +78,7 @@ export default function CentroReportesContabilidad() {
         fecha_inicio: fechaInicio || undefined,
         fecha_fin: fechaFin || undefined,
         busqueda: busqueda || undefined,
+        id_sucursal: sucursal === "todas" ? undefined : sucursal,
       };
 
       if (tabActiva === "flujo_caja") {
@@ -94,7 +109,7 @@ export default function CentroReportesContabilidad() {
     } finally {
       setLoading(false);
     }
-  }, [tabActiva, fechaInicio, fechaFin, busqueda, filtroTipo, filtroEstado, filtroUrgencia, filtroCondicion]);
+  }, [tabActiva, fechaInicio, fechaFin, busqueda, filtroTipo, filtroEstado, filtroUrgencia, filtroCondicion, sucursal]);
 
   useEffect(() => {
     cargarReporte();
@@ -261,51 +276,51 @@ export default function CentroReportesContabilidad() {
       />
 
       {/* Header en pantalla / Pestañas y Acciones */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-              <Wallet className="w-7 h-7 text-sky-600" />
-              Centro de Reportes de Contabilidad y Finanzas
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Consolidación de flujo de caja, cartera de clientes, cuentas por pagar y notas de venta con filtros y exportación formal.
-            </p>
-          </div>
+      <div className="no-print">
+        <PageHeader
+          titulo="Centro de Reportes de Contabilidad y Finanzas"
+          subtitulo="Consolidación de flujo de caja, cartera de clientes, cuentas por pagar y notas de venta con filtros y exportación formal."
+          icono={Wallet}
+          permiteTodas={true}
+          sucursal={sucursal}
+          setSucursal={setSucursal}
+          acciones={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={cargarReporte}
+                disabled={loading}
+                className="h-8 rounded gap-1.5 text-xs text-slate-700 hover:text-slate-900 border-slate-300"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
+                Actualizar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                className="h-8 rounded gap-1.5 text-xs text-slate-700 hover:text-slate-900 border-slate-300"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-600" />
+                Imprimir
+              </Button>
+              <Button
+                size="sm"
+                onClick={exportarCSVActual}
+                className="h-8 rounded gap-1.5 bg-[#15803D] hover:bg-[#166534] text-white text-xs font-medium"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Exportar CSV
+              </Button>
+            </div>
+          }
+        />
+      </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cargarReporte}
-              disabled={loading}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <RotateCw className={`w-4 h-4 ${loading ? "animate-spin text-sky-600" : ""}`} />
-              Actualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <Printer className="w-4 h-4 text-slate-600" />
-              Imprimir
-            </Button>
-            <Button
-              size="sm"
-              onClick={exportarCSVActual}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              Exportar CSV
-            </Button>
-          </div>
-        </div>
-
-        {/* Pestañas de Navegación idénticas a los otros módulos */}
-        <div className="flex border-b border-slate-200 mt-6 gap-2 overflow-x-auto">
+      <div className="no-print bg-white rounded border border-slate-200 p-4">
+        {/* Pestañas de Navegación */}
+        <div className="flex border-b border-slate-200 mt-4 gap-1 overflow-x-auto">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const activa = tabActiva === tab.id;
@@ -313,13 +328,13 @@ export default function CentroReportesContabilidad() {
               <button
                 key={tab.id}
                 onClick={() => setTabActiva(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activa
-                    ? "border-sky-600 text-sky-600 bg-sky-50/50 rounded-t-lg"
-                    : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                    ? "border-[#1C96C5] text-[#1C96C5] bg-[#F0F9FF] rounded-t-sm"
+                    : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${activa ? "text-sky-600" : "text-slate-400"}`} />
+                <Icon className={`w-3.5 h-3.5 ${activa ? "text-[#1C96C5]" : "text-slate-400"}`} />
                 {tab.label}
               </button>
             );
@@ -331,62 +346,62 @@ export default function CentroReportesContabilidad() {
       <ReporteKpisGrid items={getKpis()} loading={loading} />
 
       {/* Barra de Filtros */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex items-center gap-2 mb-3 text-slate-700 font-semibold text-sm">
-          <Filter className="w-4 h-4 text-sky-600" />
+      <div className="no-print bg-white rounded border border-slate-200 p-3.5">
+        <div className="flex items-center gap-2 mb-2.5 text-slate-800 font-semibold text-xs">
+          <Filter className="w-3.5 h-3.5 text-[#1C96C5]" />
           Filtros de Búsqueda y Parámetros
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="lg:col-span-2">
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">
+            <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
               Búsqueda Libre
             </Label>
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
               <Input
                 type="text"
                 placeholder="Buscar por cliente, proveedor, glosa, ref..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-8 text-sm h-9"
+                className="pl-8 text-xs h-8 rounded border-slate-300"
               />
             </div>
           </div>
 
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">
+            <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
               Desde Fecha
             </Label>
             <Input
               type="date"
               value={fechaInicio}
               onChange={(e) => setFechaInicio(e.target.value)}
-              className="text-sm h-9"
+              className="text-xs h-8 rounded border-slate-300 font-mono"
             />
           </div>
 
           <div>
-            <Label className="text-xs text-slate-500 font-medium mb-1 block">
+            <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
               Hasta Fecha
             </Label>
             <Input
               type="date"
               value={fechaFin}
               onChange={(e) => setFechaFin(e.target.value)}
-              className="text-sm h-9"
+              className="text-xs h-8 rounded border-slate-300 font-mono"
             />
           </div>
 
           {/* Filtros específicos por pestaña */}
           {tabActiva === "flujo_caja" && (
             <div>
-              <Label className="text-xs text-slate-500 font-medium mb-1 block">
+              <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
                 Tipo Movimiento
               </Label>
               <select
                 value={filtroTipo}
                 onChange={(e) => setFiltroTipo(e.target.value)}
-                className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:border-[#1C96C5]"
               >
                 <option value="TODOS">Todos los tipos</option>
                 <option value="Ingreso">Ingreso</option>
@@ -397,13 +412,13 @@ export default function CentroReportesContabilidad() {
 
           {tabActiva === "cuentas_cobrar" && (
             <div>
-              <Label className="text-xs text-slate-500 font-medium mb-1 block">
+              <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
                 Estado de Mora
               </Label>
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
-                className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:border-[#1C96C5]"
               >
                 <option value="TODOS">Todos los estados</option>
                 <option value="VIGENTE">Vigente (Al día)</option>
@@ -415,13 +430,13 @@ export default function CentroReportesContabilidad() {
 
           {tabActiva === "cuentas_pagar" && (
             <div>
-              <Label className="text-xs text-slate-500 font-medium mb-1 block">
+              <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
                 Nivel Urgencia
               </Label>
               <select
                 value={filtroUrgencia}
                 onChange={(e) => setFiltroUrgencia(e.target.value)}
-                className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:border-[#1C96C5]"
               >
                 <option value="TODOS">Todas las urgencias</option>
                 <option value="VENCIDO">Vencido</option>
@@ -433,13 +448,13 @@ export default function CentroReportesContabilidad() {
 
           {tabActiva === "notas_venta" && (
             <div>
-              <Label className="text-xs text-slate-500 font-medium mb-1 block">
+              <Label className="text-[11px] text-slate-500 font-medium mb-1 block">
                 Condición Venta
               </Label>
               <select
                 value={filtroCondicion}
                 onChange={(e) => setFiltroCondicion(e.target.value)}
-                className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+                className="w-full h-8 rounded border border-slate-300 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:border-[#1C96C5]"
               >
                 <option value="TODOS">Todas las condiciones</option>
                 <option value="CONTADO">Al Contado</option>
@@ -449,12 +464,12 @@ export default function CentroReportesContabilidad() {
           )}
         </div>
 
-        <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
+        <div className="flex justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100">
           <Button
             variant="outline"
             size="sm"
             onClick={limpiarFiltros}
-            className="text-xs h-9 px-3 border-slate-300 text-slate-600 hover:text-slate-800"
+            className="text-xs h-8 px-2.5 border-slate-300 text-slate-600 hover:text-slate-800 rounded"
           >
             Limpiar Filtros
           </Button>
@@ -462,72 +477,72 @@ export default function CentroReportesContabilidad() {
             size="sm"
             onClick={cargarReporte}
             disabled={loading}
-            className="bg-sky-600 hover:bg-sky-700 text-white text-xs h-9 px-4 gap-1.5 shadow-sm"
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs h-8 px-3 gap-1.5 rounded font-medium"
           >
-            <RotateCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RotateCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
             Aplicar Filtros
           </Button>
         </div>
       </div>
 
       {/* DOCUMENTO FORMAL IMPRESO & TABLA WEB */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4 sm:p-6 print:p-0 print:border-none print:shadow-none">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden p-4 print:p-0 print:border-none">
         {loading ? (
-          <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
-            <RotateCw className="h-7 w-7 animate-spin text-[#20A7DB]" />
-            <p className="text-xs font-semibold">Generando datos del reporte...</p>
+          <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+            <RotateCw className="h-6 w-6 animate-spin text-[#1C96C5]" />
+            <p className="text-xs font-medium">Generando datos del reporte...</p>
           </div>
         ) : !reporteData.data || !reporteData.data.length ? (
-          <div className="py-20 text-center text-slate-400 font-medium text-xs">
+          <div className="py-16 text-center text-slate-400 font-medium text-xs">
             No se encontraron registros contables para los filtros seleccionados.
           </div>
         ) : (
           <div className="overflow-x-auto">
             {/* 1. Tabla Flujo de Caja */}
             {tabActiva === "flujo_caja" && (
-              <table className="w-full border-collapse text-[11px] print:text-[9px]">
+              <table className="w-full border-collapse text-xs print:text-[9px]">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-left print:bg-gray-100 print:text-black">
-                    <th className="p-2.5 print:border print:border-black text-center w-10">#</th>
-                    <th className="p-2.5 print:border print:border-black">Fecha / Hora</th>
-                    <th className="p-2.5 print:border print:border-black">Tipo</th>
-                    <th className="p-2.5 print:border print:border-black">Categoría</th>
-                    <th className="p-2.5 print:border print:border-black">Glosa / Concepto</th>
-                    <th className="p-2.5 print:border print:border-black">Beneficiario</th>
-                    <th className="p-2.5 print:border print:border-black">Nro. Ref</th>
-                    <th className="p-2.5 print:border print:border-black">Método</th>
-                    <th className="p-2.5 print:border print:border-black text-right font-black">Monto (Bs.)</th>
+                  <tr className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px] text-left print:bg-gray-100 print:text-black">
+                    <th className="py-2.5 px-3 print:border print:border-black text-center w-10">#</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Fecha / Hora</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Tipo</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Categoría</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Glosa / Concepto</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Beneficiario</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Nro. Ref</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Método</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right font-bold">Monto (Bs.)</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                   {paginacion.itemsPaginados.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-2 text-center font-bold text-slate-400">
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center font-mono font-medium text-slate-400">
                         {paginacion.indiceInicio + idx}
                       </td>
-                      <td className="p-2 whitespace-nowrap">
-                        {new Date(item.fecha_hora).toLocaleDateString()} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">
+                        {new Date(item.fecha_hora).toLocaleDateString("es-BO")} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </td>
-                      <td className="p-2">
+                      <td className="py-2 px-3">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border ${
                             item.tipo === "Ingreso"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                              : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                              ? "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
+                              : "bg-[#FEF2F2] text-[#B91C1C] border-[#FCA5A5]"
                           }`}
                         >
                           {item.tipo}
                         </span>
                       </td>
-                      <td className="p-2 font-semibold">{item.categoria}</td>
-                      <td className="p-2 max-w-xs truncate">{item.glosa}</td>
-                      <td className="p-2">{item.beneficiario}</td>
-                      <td className="p-2 text-[10px]">{item.referencia}</td>
-                      <td className="p-2">{item.metodo_pago}</td>
+                      <td className="py-2 px-3 font-medium">{item.categoria}</td>
+                      <td className="py-2 px-3 max-w-xs truncate" title={item.glosa}>{item.glosa}</td>
+                      <td className="py-2 px-3">{item.beneficiario}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{item.referencia}</td>
+                      <td className="py-2 px-3">{item.metodo_pago}</td>
                       <td
-                        className={`p-2 text-right font-bold whitespace-nowrap ${
-                          item.tipo === "Ingreso" ? "text-emerald-600" : "text-rose-600"
+                        className={`py-2 px-3 text-right font-mono tabular-nums font-bold whitespace-nowrap ${
+                          item.tipo === "Ingreso" ? "text-[#15803D]" : "text-[#B91C1C]"
                         }`}
                       >
                         {formatCurrency(item.monto)}
@@ -538,27 +553,27 @@ export default function CentroReportesContabilidad() {
                 {/* Cuerpo impresión en papel con datos completos */}
                 <tbody className="hidden print:table-row-group text-black">
                   {(reporteData.data || []).map((item, idx) => (
-                    <tr key={`print-${item.id || idx}`}>
-                      <td className="text-center font-bold">{idx + 1}</td>
-                      <td className="whitespace-nowrap">
-                        {new Date(item.fecha_hora).toLocaleDateString()} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <tr key={`print-${item.id || idx}`} className="border-b border-gray-300">
+                      <td className="text-center font-mono">{idx + 1}</td>
+                      <td className="whitespace-nowrap font-mono">
+                        {new Date(item.fecha_hora).toLocaleDateString("es-BO")} {new Date(item.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td>{item.tipo}</td>
                       <td className="font-semibold">{item.categoria}</td>
                       <td>{item.glosa}</td>
                       <td>{item.beneficiario}</td>
-                      <td>{item.referencia}</td>
+                      <td className="font-mono">{item.referencia}</td>
                       <td>{item.metodo_pago}</td>
-                      <td className="text-right font-bold whitespace-nowrap">{formatCurrency(item.monto)}</td>
+                      <td className="text-right font-mono tabular-nums font-bold whitespace-nowrap">{formatCurrency(item.monto)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 print:bg-gray-200 print:text-black print:border-black">
-                    <td colSpan={8} className="p-2.5 text-right uppercase print:border print:border-black">
+                  <tr className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-300 print:bg-gray-200 print:text-black print:border-black">
+                    <td colSpan={8} className="py-2.5 px-3 text-right uppercase print:border print:border-black text-[11px]">
                       SALDO NETO DEL REPORTE:
                     </td>
-                    <td className="p-2.5 text-right font-black text-sm print:border print:border-black">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-sm text-[#1C96C5] print:text-black print:border print:border-black">
                       {formatCurrency(reporteData.metricas?.saldo_neto_bs)}
                     </td>
                   </tr>
@@ -568,91 +583,91 @@ export default function CentroReportesContabilidad() {
 
             {/* 2. Tabla Cuentas por Cobrar */}
             {tabActiva === "cuentas_cobrar" && (
-              <table className="w-full border-collapse text-[11px] print:text-[9px]">
+              <table className="w-full border-collapse text-xs print:text-[9px]">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-left print:bg-gray-100 print:text-black">
-                    <th className="p-2.5 print:border print:border-black text-center w-10">#</th>
-                    <th className="p-2.5 print:border print:border-black">Nro. Nota</th>
-                    <th className="p-2.5 print:border print:border-black">Cliente</th>
-                    <th className="p-2.5 print:border print:border-black">NIT / CI</th>
-                    <th className="p-2.5 print:border print:border-black">Ciudad</th>
-                    <th className="p-2.5 print:border print:border-black">Emisión</th>
-                    <th className="p-2.5 print:border print:border-black">Vencimiento</th>
-                    <th className="p-2.5 print:border print:border-black text-center">Días Mora</th>
-                    <th className="p-2.5 print:border print:border-black text-center">Urgencia</th>
-                    <th className="p-2.5 print:border print:border-black text-right">Monto Total</th>
-                    <th className="p-2.5 print:border print:border-black text-right">Abonado</th>
-                    <th className="p-2.5 print:border print:border-black text-right font-black">Saldo Deudor</th>
+                  <tr className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px] text-left print:bg-gray-100 print:text-black">
+                    <th className="py-2.5 px-3 print:border print:border-black text-center w-10">#</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Nro. Nota</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Cliente</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">NIT / CI</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Ciudad</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Emisión</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Vencimiento</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-center">Días Mora</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-center">Urgencia</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right">Monto Total</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right">Abonado</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right font-bold">Saldo Deudor</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                   {paginacion.itemsPaginados.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
-                      <td className="p-2 font-bold">{item.nro_nota}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.cliente_nombre}</td>
-                      <td className="p-2 text-[10px]">{item.cliente_nit}</td>
-                      <td className="p-2">{item.ciudad}</td>
-                      <td className="p-2 whitespace-nowrap">{item.fecha_emision}</td>
-                      <td className="p-2 whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
-                      <td className="p-2 text-center font-bold">
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center font-mono font-medium text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="py-2 px-3 font-mono font-medium text-[#1C96C5]">{item.nro_nota}</td>
+                      <td className="py-2 px-3 font-medium text-slate-900">{item.cliente_nombre}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{item.cliente_nit}</td>
+                      <td className="py-2 px-3">{item.ciudad}</td>
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">{item.fecha_emision}</td>
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">{item.fecha_vencimiento || "-"}</td>
+                      <td className="py-2 px-3 text-center font-mono">
                         {item.dias_mora > 0 ? (
-                          <span className={item.dias_mora > 15 ? "text-rose-600 font-black" : "text-amber-600"}>
+                          <span className={item.dias_mora > 15 ? "text-[#B91C1C] font-bold" : "text-[#B45309]"}>
                             {item.dias_mora} d
                           </span>
                         ) : (
-                          <span className="text-emerald-600">0 d</span>
+                          <span className="text-[#15803D]">0 d</span>
                         )}
                       </td>
-                      <td className="p-2 text-center">
+                      <td className="py-2 px-3 text-center">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border ${
                             item.urgencia === "VENCIDO"
-                              ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              ? "bg-[#FEF2F2] text-[#B91C1C] border-[#FCA5A5]"
                               : item.urgencia === "CRÍTICO"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              ? "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]"
                               : item.urgencia === "CANCELADO"
-                              ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              ? "bg-slate-100 text-slate-600 border-slate-200"
+                              : "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
                           }`}
                         >
                           {item.urgencia}
                         </span>
                       </td>
-                      <td className="p-2 text-right">{formatCurrency(item.monto_total)}</td>
-                      <td className="p-2 text-right text-emerald-600">{formatCurrency(item.total_abonado)}</td>
-                      <td className="p-2 text-right font-black text-rose-600">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums">{formatCurrency(item.monto_total)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-[#15803D]">{formatCurrency(item.total_abonado)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C]">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
                 {/* Cuerpo impresión en papel con datos completos */}
                 <tbody className="hidden print:table-row-group text-black">
                   {(reporteData.data || []).map((item, idx) => (
-                    <tr key={`print-${item.id || idx}`}>
-                      <td className="text-center font-bold">{idx + 1}</td>
-                      <td className="font-bold">{item.nro_nota}</td>
-                      <td className="font-bold">{item.cliente_nombre}</td>
-                      <td>{item.cliente_nit}</td>
+                    <tr key={`print-${item.id || idx}`} className="border-b border-gray-300">
+                      <td className="text-center font-mono">{idx + 1}</td>
+                      <td className="font-mono">{item.nro_nota}</td>
+                      <td className="font-semibold">{item.cliente_nombre}</td>
+                      <td className="font-mono">{item.cliente_nit}</td>
                       <td>{item.ciudad}</td>
-                      <td className="whitespace-nowrap">{item.fecha_emision}</td>
-                      <td className="whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
-                      <td className="text-center font-bold">{item.dias_mora || 0} d</td>
-                      <td className="text-center font-bold">{item.urgencia}</td>
-                      <td className="text-right">{formatCurrency(item.monto_total)}</td>
-                      <td className="text-right">{formatCurrency(item.total_abonado)}</td>
-                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="whitespace-nowrap font-mono">{item.fecha_emision}</td>
+                      <td className="whitespace-nowrap font-mono">{item.fecha_vencimiento || "-"}</td>
+                      <td className="text-center font-mono font-bold">{item.dias_mora || 0} d</td>
+                      <td className="text-center">{item.urgencia}</td>
+                      <td className="text-right font-mono tabular-nums">{formatCurrency(item.monto_total)}</td>
+                      <td className="text-right font-mono tabular-nums">{formatCurrency(item.total_abonado)}</td>
+                      <td className="text-right font-mono tabular-nums font-bold">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 print:bg-gray-200 print:text-black print:border-black">
-                    <td colSpan={9} className="p-2.5 text-right uppercase print:border print:border-black">
+                  <tr className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-300 print:bg-gray-200 print:text-black print:border-black">
+                    <td colSpan={9} className="py-2.5 px-3 text-right uppercase print:border print:border-black text-[11px]">
                       TOTAL CARTERA POR COBRAR:
                     </td>
-                    <td className="p-2.5 text-right print:border print:border-black">{formatCurrency(reporteData.metricas?.total_cartera_bs)}</td>
-                    <td className="p-2.5 text-right text-emerald-600 print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_abonado_bs)}</td>
-                    <td className="p-2.5 text-right font-black text-rose-600 print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_pendiente_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums print:border print:border-black">{formatCurrency(reporteData.metricas?.total_cartera_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#15803D] print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_abonado_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C] print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_pendiente_bs)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -660,47 +675,47 @@ export default function CentroReportesContabilidad() {
 
             {/* 3. Tabla Cuentas por Pagar */}
             {tabActiva === "cuentas_pagar" && (
-              <table className="w-full border-collapse text-[11px] print:text-[9px]">
+              <table className="w-full border-collapse text-xs print:text-[9px]">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-left print:bg-gray-100 print:text-black">
-                    <th className="p-2.5 print:border print:border-black text-center w-10">#</th>
-                    <th className="p-2.5 print:border print:border-black">Proveedor</th>
-                    <th className="p-2.5 print:border print:border-black">NIT</th>
-                    <th className="p-2.5 print:border print:border-black">Nro. Factura / Nota</th>
-                    <th className="p-2.5 print:border print:border-black">Concepto</th>
-                    <th className="p-2.5 print:border print:border-black">Recepción</th>
-                    <th className="p-2.5 print:border print:border-black">Vencimiento</th>
-                    <th className="p-2.5 print:border print:border-black text-center">Días Restantes</th>
-                    <th className="p-2.5 print:border print:border-black text-center">Urgencia</th>
-                    <th className="p-2.5 print:border print:border-black text-right font-black">Saldo Pendiente</th>
+                  <tr className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px] text-left print:bg-gray-100 print:text-black">
+                    <th className="py-2.5 px-3 print:border print:border-black text-center w-10">#</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Proveedor</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">NIT</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Nro. Factura / Nota</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Concepto</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Recepción</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Vencimiento</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-center">Días Restantes</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-center">Urgencia</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right font-bold">Saldo Pendiente</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                   {paginacion.itemsPaginados.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.proveedor_nombre}</td>
-                      <td className="p-2 text-[10px]">{item.proveedor_nit}</td>
-                      <td className="p-2">{item.nro_factura_o_nota}</td>
-                      <td className="p-2 max-w-xs truncate">{item.concepto}</td>
-                      <td className="p-2 whitespace-nowrap">{item.fecha_recepcion}</td>
-                      <td className="p-2 whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
-                      <td className="p-2 text-center font-bold">{item.dias_para_vencimiento} d</td>
-                      <td className="p-2 text-center">
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center font-mono font-medium text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="py-2 px-3 font-medium text-slate-900">{item.proveedor_nombre}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{item.proveedor_nit}</td>
+                      <td className="py-2 px-3 font-mono text-[#1C96C5]">{item.nro_factura_o_nota}</td>
+                      <td className="py-2 px-3 max-w-xs truncate" title={item.concepto}>{item.concepto}</td>
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">{item.fecha_recepcion}</td>
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">{item.fecha_vencimiento || "-"}</td>
+                      <td className="py-2 px-3 text-center font-mono">{item.dias_para_vencimiento} d</td>
+                      <td className="py-2 px-3 text-center">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase border ${
                             item.urgencia === "VENCIDO"
-                              ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              ? "bg-[#FEF2F2] text-[#B91C1C] border-[#FCA5A5]"
                               : item.urgencia === "CRÍTICO"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              ? "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]"
+                              : "bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]"
                           }`}
                         >
                           {item.urgencia}
                         </span>
                       </td>
-                      <td className="p-2 text-right font-black text-rose-600">
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C]">
                         {formatCurrency(item.saldo_pendiente_bs)}
                       </td>
                     </tr>
@@ -709,26 +724,26 @@ export default function CentroReportesContabilidad() {
                 {/* Cuerpo impresión en papel con datos completos */}
                 <tbody className="hidden print:table-row-group text-black">
                   {(reporteData.data || []).map((item, idx) => (
-                    <tr key={`print-${item.id || idx}`}>
-                      <td className="text-center font-bold">{idx + 1}</td>
-                      <td className="font-bold">{item.proveedor_nombre}</td>
-                      <td>{item.proveedor_nit}</td>
-                      <td>{item.nro_factura_o_nota}</td>
+                    <tr key={`print-${item.id || idx}`} className="border-b border-gray-300">
+                      <td className="text-center font-mono">{idx + 1}</td>
+                      <td className="font-semibold">{item.proveedor_nombre}</td>
+                      <td className="font-mono">{item.proveedor_nit}</td>
+                      <td className="font-mono">{item.nro_factura_o_nota}</td>
                       <td>{item.concepto}</td>
-                      <td className="whitespace-nowrap">{item.fecha_recepcion}</td>
-                      <td className="whitespace-nowrap">{item.fecha_vencimiento || "-"}</td>
-                      <td className="text-center font-bold">{item.dias_para_vencimiento} d</td>
-                      <td className="text-center font-bold">{item.urgencia}</td>
-                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente_bs)}</td>
+                      <td className="whitespace-nowrap font-mono">{item.fecha_recepcion}</td>
+                      <td className="whitespace-nowrap font-mono">{item.fecha_vencimiento || "-"}</td>
+                      <td className="text-center font-mono font-bold">{item.dias_para_vencimiento} d</td>
+                      <td className="text-center">{item.urgencia}</td>
+                      <td className="text-right font-mono tabular-nums font-bold">{formatCurrency(item.saldo_pendiente_bs)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 print:bg-gray-200 print:text-black print:border-black">
-                    <td colSpan={9} className="p-2.5 text-right uppercase print:border print:border-black">
+                  <tr className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-300 print:bg-gray-200 print:text-black print:border-black">
+                    <td colSpan={9} className="py-2.5 px-3 text-right uppercase print:border print:border-black text-[11px]">
                       TOTAL DEUDA PROVEEDORES:
                     </td>
-                    <td className="p-2.5 text-right font-black text-rose-600 print:text-black print:border print:border-black">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C] print:text-black print:border print:border-black">
                       {formatCurrency(reporteData.metricas?.deuda_total_acumulada_bs)}
                     </td>
                   </tr>
@@ -738,69 +753,69 @@ export default function CentroReportesContabilidad() {
 
             {/* 4. Tabla Notas de Venta */}
             {tabActiva === "notas_venta" && (
-              <table className="w-full border-collapse text-[11px] print:text-[9px]">
+              <table className="w-full border-collapse text-xs print:text-[9px]">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-left print:bg-gray-100 print:text-black">
-                    <th className="p-2.5 print:border print:border-black text-center w-10">#</th>
-                    <th className="p-2.5 print:border print:border-black">Nro. Nota</th>
-                    <th className="p-2.5 print:border print:border-black">Fecha</th>
-                    <th className="p-2.5 print:border print:border-black">Cliente</th>
-                    <th className="p-2.5 print:border print:border-black">Ciudad</th>
-                    <th className="p-2.5 print:border print:border-black">Chofer / Placa</th>
-                    <th className="p-2.5 print:border print:border-black">Condición</th>
-                    <th className="p-2.5 print:border print:border-black text-right">Total Bruto</th>
-                    <th className="p-2.5 print:border print:border-black text-right">Bonificación</th>
-                    <th className="p-2.5 print:border print:border-black text-right font-black">Importe Neto</th>
-                    <th className="p-2.5 print:border print:border-black text-right font-black">Saldo</th>
+                  <tr className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px] text-left print:bg-gray-100 print:text-black">
+                    <th className="py-2.5 px-3 print:border print:border-black text-center w-10">#</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Nro. Nota</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Fecha</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Cliente</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Ciudad</th>
+                    <th className="py-2.5 px-3 print:border print:border-black">Chofer / Placa</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-center">Condición</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right">Total Bruto</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right">Bonificación</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right font-bold">Importe Neto</th>
+                    <th className="py-2.5 px-3 print:border print:border-black text-right font-bold">Saldo</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300 print:hidden">
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                   {paginacion.itemsPaginados.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-2 text-center font-bold text-slate-400">{paginacion.indiceInicio + idx}</td>
-                      <td className="p-2 font-bold">{item.nro_nota}</td>
-                      <td className="p-2 whitespace-nowrap">{item.fecha_venta}</td>
-                      <td className="p-2 font-bold text-slate-800 dark:text-slate-100">{item.cliente_nombre}</td>
-                      <td className="p-2">{item.ciudad_destino}</td>
-                      <td className="p-2">{item.chofer} ({item.placa})</td>
-                      <td className="p-2">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${item.condicion_venta === "Contado" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center font-mono font-medium text-slate-400">{paginacion.indiceInicio + idx}</td>
+                      <td className="py-2 px-3 font-mono font-medium text-[#1C96C5]">{item.nro_nota}</td>
+                      <td className="py-2 px-3 whitespace-nowrap font-mono">{item.fecha_venta}</td>
+                      <td className="py-2 px-3 font-medium text-slate-900">{item.cliente_nombre}</td>
+                      <td className="py-2 px-3">{item.ciudad_destino}</td>
+                      <td className="py-2 px-3 font-mono text-[11px]">{item.chofer} ({item.placa})</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border ${item.condicion_venta === "Contado" ? "border-[#86EFAC] bg-[#F0FDF4] text-[#15803D]" : "border-[#BAE6FD] bg-[#F0F9FF] text-[#0369A1]"}`}>
                           {item.condicion_venta}
                         </span>
                       </td>
-                      <td className="p-2 text-right">{formatCurrency(item.total_bruto)}</td>
-                      <td className="p-2 text-right text-slate-500">{formatCurrency(item.descuento)}</td>
-                      <td className="p-2 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(item.importe_neto)}</td>
-                      <td className="p-2 text-right font-bold text-rose-600">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums">{formatCurrency(item.total_bruto)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-500">{formatCurrency(item.descuento)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-slate-900">{formatCurrency(item.importe_neto)}</td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C]">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
                 {/* Cuerpo impresión en papel con datos completos */}
                 <tbody className="hidden print:table-row-group text-black">
                   {(reporteData.data || []).map((item, idx) => (
-                    <tr key={`print-${item.id || idx}`}>
-                      <td className="text-center font-bold">{idx + 1}</td>
-                      <td className="font-bold">{item.nro_nota}</td>
-                      <td className="whitespace-nowrap">{item.fecha_venta}</td>
-                      <td className="font-bold">{item.cliente_nombre}</td>
+                    <tr key={`print-${item.id || idx}`} className="border-b border-gray-300">
+                      <td className="text-center font-mono">{idx + 1}</td>
+                      <td className="font-mono">{item.nro_nota}</td>
+                      <td className="whitespace-nowrap font-mono">{item.fecha_venta}</td>
+                      <td className="font-semibold">{item.cliente_nombre}</td>
                       <td>{item.ciudad_destino}</td>
-                      <td>{item.chofer} ({item.placa})</td>
+                      <td className="font-mono">{item.chofer} ({item.placa})</td>
                       <td>{item.condicion_venta}</td>
-                      <td className="text-right">{formatCurrency(item.total_bruto)}</td>
-                      <td className="text-right">{formatCurrency(item.descuento)}</td>
-                      <td className="text-right font-bold">{formatCurrency(item.importe_neto)}</td>
-                      <td className="text-right font-bold">{formatCurrency(item.saldo_pendiente)}</td>
+                      <td className="text-right font-mono tabular-nums">{formatCurrency(item.total_bruto)}</td>
+                      <td className="text-right font-mono tabular-nums">{formatCurrency(item.descuento)}</td>
+                      <td className="text-right font-mono tabular-nums font-bold">{formatCurrency(item.importe_neto)}</td>
+                      <td className="text-right font-mono tabular-nums font-bold">{formatCurrency(item.saldo_pendiente)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 print:bg-gray-200 print:text-black print:border-black">
-                    <td colSpan={7} className="p-2.5 text-right uppercase print:border print:border-black">TOTALES VENTAS:</td>
-                    <td className="p-2.5 text-right print:border print:border-black">{formatCurrency(reporteData.metricas?.total_bruto_bs)}</td>
-                    <td className="p-2.5 text-right print:border print:border-black">{formatCurrency(reporteData.metricas?.total_descuentos_bs)}</td>
-                    <td className="p-2.5 text-right font-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_neto_bs)}</td>
-                    <td className="p-2.5 text-right font-black text-rose-600 print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_saldo_pendiente_bs)}</td>
+                  <tr className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-300 print:bg-gray-200 print:text-black print:border-black">
+                    <td colSpan={7} className="py-2.5 px-3 text-right uppercase print:border print:border-black text-[11px]">TOTALES VENTAS:</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums print:border print:border-black">{formatCurrency(reporteData.metricas?.total_bruto_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-500 print:border print:border-black">{formatCurrency(reporteData.metricas?.total_descuentos_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-slate-900 print:border print:border-black">{formatCurrency(reporteData.metricas?.total_neto_bs)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-[#B91C1C] print:text-black print:border print:border-black">{formatCurrency(reporteData.metricas?.total_saldo_pendiente_bs)}</td>
                   </tr>
                 </tfoot>
               </table>

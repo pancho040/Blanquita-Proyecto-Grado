@@ -28,6 +28,9 @@ import {
 } from "lucide-react";
 import ModalTurno from "./ModalTurno";
 import { cache } from "@/lib/cacheService";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/stores/branchStore";
 
 const DIAS_SEMANA_NOMBRES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const AREAS_DEF = ["Rebobinado", "Servilletas", "Rodela", "Empaque", "Logística"];
@@ -44,7 +47,18 @@ function formatearFechaISO(d) {
   return d.toISOString().split("T")[0];
 }
 
-export default function CronogramaTurnos() {
+export default function CronogramaTurnos({ usuario = null }) {
+  const {
+    sucursal,
+    setSucursal,
+    esMultisede,
+    listoParaConsultar,
+    sucursalesPermitidas
+  } = usePaginaSucursal({
+    permiteTodas: false,
+    usuario
+  });
+
   const [lunesActual, setLunesActual] = useState(() => getLunes(new Date()));
   const [cronograma, setCronograma] = useState([]);
   const [turnos, setTurnos] = useState([]);
@@ -85,17 +99,18 @@ export default function CronogramaTurnos() {
   const fechaFinStr = diasSemana[5]?.fechaStr;
 
   const cargarDatos = useCallback(async (silencioso = false) => {
-    if (!fechaInicioStr || !fechaFinStr) return;
+    if (!fechaInicioStr || !fechaFinStr || !listoParaConsultar) return;
     try {
       if (!silencioso) setLoading(true);
+      const sid = Number(sucursal) || 1;
 
       // Usar caché para datos maestros (turnos y empleados)
       let turnosData = cache.get("rrhh:turnos");
-      let empsData = cache.get("rrhh:empleados_activos");
+      let empsData = cache.get(`rrhh:empleados_activos:${sid}`);
 
-      const promesas = [ObtenerCronograma(fechaInicioStr, fechaFinStr, areaSeleccionada)];
+      const promesas = [ObtenerCronograma(fechaInicioStr, fechaFinStr, areaSeleccionada, sid)];
       if (!turnosData) promesas.push(ObtenerTurnos());
-      if (!empsData) promesas.push(ObtenerEmpleados("", "", true));
+      if (!empsData) promesas.push(ObtenerEmpleados("", "", true, sid));
 
       const resultados = await Promise.all(promesas);
       const cronoData = resultados[0];
@@ -107,7 +122,7 @@ export default function CronogramaTurnos() {
       }
       if (!empsData) {
         empsData = resultados[rIdx++];
-        cache.set("rrhh:empleados_activos", empsData, 300);
+        cache.set(`rrhh:empleados_activos:${sid}`, empsData, 180);
       }
 
       setCronograma(cronoData);
@@ -122,11 +137,13 @@ export default function CronogramaTurnos() {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, [fechaInicioStr, fechaFinStr, areaSeleccionada]);
+  }, [fechaInicioStr, fechaFinStr, areaSeleccionada, sucursal, listoParaConsultar]);
 
   useEffect(() => {
-    cargarDatos();
-  }, [cargarDatos]);
+    if (listoParaConsultar) {
+      cargarDatos();
+    }
+  }, [cargarDatos, listoParaConsultar]);
 
   const moverSemana = (deltaDias) => {
     setLunesActual(prev => {
@@ -221,20 +238,21 @@ export default function CronogramaTurnos() {
 
   return (
     <div className="space-y-6">
-      {/* 1. HEADER & CONTROLES */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs print:hidden">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Calendar className="h-6 w-6 text-[#20A7DB]" />
-            <span>Turnos</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Asignación de cuadrillas y horarios de trabajo.
-          </p>
-        </div>
-
-        {/* Botones de acción */}
-        <div className="flex flex-wrap items-center gap-2">
+      {/* 1. HEADER INDUSTRIAL CON PAGEHEADER Y BRANCHFILTER */}
+      <div className="print:hidden">
+        <PageHeader
+          title="Turnos"
+          subtitle="Asignación de cuadrillas y horarios de trabajo."
+          branchFilter={
+            <BranchFilter
+              sucursal={sucursal}
+              onChange={setSucursal}
+              sucursales={sucursalesPermitidas}
+              esMultisede={esMultisede}
+              permiteTodas={false}
+            />
+          }
+        >
           <Button
             type="button"
             variant="outline"
@@ -242,21 +260,21 @@ export default function CronogramaTurnos() {
               setTurnoEditar(null);
               setModalTurnoAbierto(true);
             }}
-            className="border-slate-300 text-slate-700 hover:bg-slate-50 text-xs h-9 gap-1.5 shadow-2xs"
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 text-xs h-8 gap-1.5 rounded font-medium"
           >
-            <Clock className="h-4 w-4 text-[#20A7DB]" />
+            <Clock className="h-4 w-4 text-[#1C96C5]" />
             <span>Horarios</span>
           </Button>
 
           <Button
             type="button"
             onClick={handleImprimir}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white text-xs h-9 gap-1.5 font-semibold px-4 shadow-2xs"
+            className="bg-slate-900 hover:bg-slate-800 text-white text-xs h-8 gap-1.5 font-medium px-3 rounded"
           >
             <Printer className="h-4 w-4" />
             <span>Imprimir</span>
           </Button>
-        </div>
+        </PageHeader>
       </div>
 
       {/* 2. BARRA DE NAVEGACIÓN DE SEMANA & FILTROS */}
@@ -304,7 +322,7 @@ export default function CronogramaTurnos() {
             <select
               value={areaSeleccionada}
               onChange={(e) => setAreaSeleccionada(e.target.value)}
-              className="text-xs rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-slate-800 font-medium h-9"
+              className="text-xs rounded border border-slate-300 bg-white px-2.5 text-slate-800 font-medium h-8"
             >
               <option value="TODAS">Todas las Áreas de Planta</option>
               {AREAS_DEF.map((a) => (
@@ -316,7 +334,7 @@ export default function CronogramaTurnos() {
       </Card>
 
       {/* 3. MATRIZ VISUAL DEL CRONOGRAMA (FORMATO IDÉNTICO A LA HOJA DEL BIOMÉTRICO) */}
-      <div className="bg-white rounded-2xl border-2 border-slate-800 p-5 shadow-sm space-y-4 print:border-2 print:border-black print:p-2 print:rounded-none">
+      <div className="bg-white rounded border border-slate-300 p-4 sm:p-5 space-y-4 print:border print:border-black print:p-2 print:rounded-none">
         {/* MEMBRETE IMPRESO FORMAL */}
         <div className="text-center border-b-2 border-slate-800 pb-3">
           <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-slate-900">
@@ -332,7 +350,7 @@ export default function CronogramaTurnos() {
 
         {loading ? (
           <div className="py-24 flex flex-col justify-center items-center gap-3 print:hidden">
-            <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1C96C5]" />
             <p className="text-xs text-slate-500 font-medium">Cargando cronograma semanal...</p>
           </div>
         ) : (
@@ -383,14 +401,19 @@ export default function CronogramaTurnos() {
                                 asignados.map((asig) => (
                                   <div
                                     key={asig.IdAsistenciaDiaria}
-                                    style={{ borderLeftColor: asig.ColorTurno || "#20A7DB" }}
-                                    className="p-1.5 rounded bg-slate-50 border border-slate-200 border-l-4 flex items-center justify-between gap-1 shadow-2xs group"
+                                    className="p-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between gap-1 group"
                                   >
                                     <div>
-                                      <p className="font-bold text-xs text-slate-900 leading-tight">
-                                        {asig.PrimerNombre} {asig.ApellidoPaterno?.[0]}.
-                                      </p>
-                                      <span className="text-[10px] text-slate-500 block">
+                                      <div className="flex items-center gap-1.5">
+                                        <span
+                                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                                          style={{ backgroundColor: asig.ColorTurno || "#1C96C5" }}
+                                        />
+                                        <p className="font-bold text-xs text-slate-900 leading-tight">
+                                          {asig.PrimerNombre} {asig.ApellidoPaterno?.[0]}.
+                                        </p>
+                                      </div>
+                                      <span className="text-[10px] text-slate-500 font-mono tabular-nums block pl-3">
                                         {asig.TurnoHoraInicio} - {asig.TurnoHoraFin}
                                       </span>
                                     </div>
@@ -415,7 +438,7 @@ export default function CronogramaTurnos() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => abrirModalAsignar(dia, area)}
-                                className="w-full h-6 text-[10px] font-semibold text-slate-500 hover:text-[#20A7DB] hover:bg-sky-50 border border-dashed border-slate-200 gap-1 rounded"
+                                className="w-full h-6 text-[10px] font-semibold text-slate-500 hover:text-[#1C96C5] hover:bg-sky-50 border border-dashed border-slate-200 gap-1 rounded"
                               >
                                 <Plus className="h-2.5 w-2.5" />
                                 <span>Asignar</span>
@@ -447,8 +470,8 @@ export default function CronogramaTurnos() {
         <Dialog open={modalAsignar} onOpenChange={setModalAsignar}>
           <DialogContent className="w-full sm:max-w-2xl p-6 sm:p-8">
             <DialogHeader className="border-b border-slate-100 pb-3">
-              <DialogTitle className="text-base font-bold text-[#20A7DB] flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-[#20A7DB]" />
+              <DialogTitle className="text-base font-bold text-[#1C96C5] flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-[#1C96C5]" />
                 <span>Asignar Turno • {diaParaAsignar?.nombre} ({diaParaAsignar?.diaMes})</span>
               </DialogTitle>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -463,7 +486,7 @@ export default function CronogramaTurnos() {
                   value={empleadoSeleccionado}
                   onChange={(e) => setEmpleadoSeleccionado(e.target.value)}
                   required
-                  className="mt-1 w-full text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 font-medium"
+                  className="mt-1 w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 text-slate-800 font-medium"
                 >
                   <option value="">-- Seleccionar Empleado --</option>
                   {empleados.map((emp) => (
@@ -480,7 +503,7 @@ export default function CronogramaTurnos() {
                   value={turnoSeleccionado}
                   onChange={(e) => setTurnoSeleccionado(e.target.value)}
                   required
-                  className="mt-1 w-full text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 font-medium"
+                  className="mt-1 w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 text-slate-800 font-medium"
                 >
                   <option value="">-- Seleccionar Turno --</option>
                   {turnos.map((t) => (
@@ -493,7 +516,7 @@ export default function CronogramaTurnos() {
 
               <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
                 <Button type="button" variant="outline" onClick={() => setModalAsignar(false)}>Cancelar</Button>
-                <Button type="submit" disabled={guardandoAsignacion} className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold">
+                <Button type="submit" disabled={guardandoAsignacion} className="bg-slate-900 hover:bg-slate-800 text-white px-4 h-8 text-xs font-medium rounded">
                   {guardandoAsignacion && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Confirmar Asignación
                 </Button>

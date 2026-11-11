@@ -5,9 +5,15 @@ class ClienteRepository:
     def __init__(self, db: Session):
         self.caller = DbCaller(db)
 
-    def ListarClientes(self, busqueda: str = "", id_estado: int | None = None) -> list[dict]:
+    def ListarClientes(self, busqueda: str = "", id_estado: int | None = None,
+                       limit: int | None = None, offset: int | None = None,
+                       id_sucursal: int | None = None) -> list[dict]:
         params = {}
         where_clauses = []
+
+        if id_sucursal is not None:
+            where_clauses.append('c."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
 
         if busqueda:
             where_clauses.append('(c."RazonSocial" ILIKE :busqueda OR c."NitCi" ILIKE :busqueda OR c."NombreComercial" ILIKE :busqueda)')
@@ -18,6 +24,12 @@ class ClienteRepository:
             params["id_estado"] = id_estado
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset or 0
 
         sql = f"""
             SELECT 
@@ -37,15 +49,17 @@ class ClienteRepository:
                 c."BloqueadoPorMora",
                 c."FechaRegistro",
                 c."Observacion",
+                c."IdSucursal",
                 COUNT(pv."IdPuntoVenta") as "TotalPuntosVenta"
             FROM "Cliente" c
             JOIN "EstadoCliente" ec ON c."IdEstadoCliente" = ec."IdEstadoCliente"
             LEFT JOIN "PuntoVenta" pv ON c."IdCliente" = pv."IdCliente" AND pv."Activo" = TRUE
             {where_sql}
-            GROUP BY c."IdCliente", ec."NombreEstado"
-            ORDER BY c."RazonSocial" ASC;
+            GROUP BY c."IdCliente", ec."NombreEstado", c."IdSucursal"
+            ORDER BY c."RazonSocial" ASC, c."IdCliente" ASC
+            {limit_sql};
         """
-        return self.caller.LlamarFuncion(sql, params)
+        return self.caller.LlamarFuncion(sql, params, commit=False)
 
     def ListarClientesSimple(self) -> list[dict]:
         sql = """
@@ -79,7 +93,8 @@ class ClienteRepository:
                 c."DiasCredito",
                 c."BloqueadoPorMora",
                 c."FechaRegistro",
-                c."Observacion"
+                c."Observacion",
+                c."IdSucursal"
             FROM "Cliente" c
             JOIN "EstadoCliente" ec ON c."IdEstadoCliente" = ec."IdEstadoCliente"
             WHERE c."IdCliente" = :id_cliente;
@@ -95,11 +110,11 @@ class ClienteRepository:
             INSERT INTO "Cliente" (
                 "IdEstadoCliente", "RazonSocial", "NombreComercial", "NitCi", 
                 "Telefono", "CorreoElectronico", "Direccion", "Latitud", "Longitud", 
-                "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion"
+                "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion", "IdSucursal"
             ) VALUES (
                 :IdEstadoCliente, :RazonSocial, :NombreComercial, :NitCi,
                 :Telefono, :CorreoElectronico, :Direccion, :Latitud, :Longitud,
-                :LimiteCreditoBs, :DiasCredito, :IdUsuarioRegistro, :Observacion
+                :LimiteCreditoBs, :DiasCredito, :IdUsuarioRegistro, :Observacion, :IdSucursal
             ) RETURNING "IdCliente";
         """
         params = {
@@ -115,7 +130,8 @@ class ClienteRepository:
             "LimiteCreditoBs": datos.get("LimiteCreditoBs", 0),
             "DiasCredito": datos.get("DiasCredito", 0),
             "IdUsuarioRegistro": id_usuario_registro,
-            "Observacion": datos.get("Observacion")
+            "Observacion": datos.get("Observacion"),
+            "IdSucursal": datos.get("IdSucursal")
         }
         res = self.caller.LlamarUnRegistro(sql, params)
         return res
@@ -171,11 +187,19 @@ class ClienteRepository:
         }
         return self.caller.LlamarUnRegistro(sql, params)
 
-    def ListarTodosPuntosVentaActivos(self) -> list[dict]:
-        sql = """
+    def ListarTodosPuntosVentaActivos(self, id_sucursal: int | None = None) -> list[dict]:
+        where_clauses = ['pv."Activo" = TRUE', 'c."IdEstadoCliente" = 1']
+        params = {}
+        if id_sucursal is not None:
+            where_clauses.append('c."IdSucursal" = :id_sucursal')
+            params["id_sucursal"] = id_sucursal
+
+        where_sql = " AND ".join(where_clauses)
+        sql = f"""
             SELECT 
                 pv."IdPuntoVenta",
                 pv."IdCliente",
+                c."IdSucursal",
                 c."RazonSocial" as "NombreCliente",
                 pv."NombrePuntoVenta",
                 pv."Direccion",
@@ -184,7 +208,7 @@ class ClienteRepository:
                 pv."Referencia"
             FROM "PuntoVenta" pv
             JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
-            WHERE pv."Activo" = TRUE AND c."IdEstadoCliente" = 1
+            WHERE {where_sql}
             ORDER BY c."RazonSocial", pv."NombrePuntoVenta";
         """
-        return self.caller.LlamarFuncion(sql, {})
+        return self.caller.LlamarFuncion(sql, params)

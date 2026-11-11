@@ -157,9 +157,22 @@ class TesoreriaRepository:
 
 
     # --- Movimientos de Caja (Libro Diario de Caja) ---
-    def ListarMovimientosCaja(self, id_apertura: int | None = None, fecha_inicio = None, fecha_fin = None, tipo: str | None = None) -> list[dict]:
+    def ListarMovimientosCaja(self, id_apertura: int | None = None, fecha_inicio = None,
+                              fecha_fin = None, tipo: str | None = None,
+                              id_cuenta_bancaria: int | None = None, busqueda: str | None = None,
+                              limit: int | None = None, offset: int | None = None,
+                              id_sucursal: int | None = None,
+                              es_corporativo: bool | None = None) -> list[dict]:
         where_clauses = []
         params = {}
+
+        if es_corporativo is True:
+            where_clauses.append('m."es_corporativo" = true')
+        elif id_sucursal is not None:
+            where_clauses.append('m."IdSucursal" = :id_sucursal AND m."es_corporativo" = false')
+            params["id_sucursal"] = id_sucursal
+        elif es_corporativo is False:
+            where_clauses.append('m."es_corporativo" = false')
 
         if id_apertura is not None:
             where_clauses.append('m."IdAperturaCierreCaja" = :id_apertura')
@@ -173,8 +186,28 @@ class TesoreriaRepository:
         if tipo:
             where_clauses.append('cat."TipoMovimiento" = :tipo')
             params["tipo"] = tipo
+        if id_cuenta_bancaria is not None:
+            where_clauses.append('m."IdCuentaBancaria" = :id_cuenta_bancaria')
+            params["id_cuenta_bancaria"] = id_cuenta_bancaria
+        if busqueda and busqueda.strip():
+            where_clauses.append("""
+                (m."Descripcion" ILIKE :busqueda OR 
+                 m."Respaldo" ILIKE :busqueda OR 
+                 m."Solicitante" ILIKE :busqueda OR 
+                 m."NumeroReferencia" ILIKE :busqueda OR 
+                 m."NotaCodigo" ILIKE :busqueda OR 
+                 ('MOV-' || CAST(m."IdMovimientoCaja" AS TEXT)) ILIKE :busqueda OR
+                 cat."NombreCategoria" ILIKE :busqueda)
+            """)
+            params["busqueda"] = f"%{busqueda.strip()}%"
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset or 0
 
         sql = f"""
             SELECT 
@@ -195,31 +228,41 @@ class TesoreriaRepository:
                 m."IdCuentaBancaria",
                 b."NombreBanco",
                 m."Descripcion",
-                m."Anulado"
+                m."Anulado",
+                m."IdSucursal",
+                m."es_corporativo",
+                COUNT(*) OVER() as total_count
             FROM "MovimientoCaja" m
             JOIN "CategoriaMovimientoCaja" cat ON m."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
+            LEFT JOIN "AperturaCierreCaja" ac ON m."IdAperturaCierreCaja" = ac."IdAperturaCierreCaja"
+            LEFT JOIN "Caja" c ON ac."IdCaja" = c."IdCaja"
             LEFT JOIN "Usuario" u ON m."IdUsuario" = u."IdUsuario"
             LEFT JOIN "CuentaBancariaEmpresa" b ON m."IdCuentaBancaria" = b."IdCuentaBancaria"
             {where_sql}
-            ORDER BY m."FechaMovimiento" DESC, m."IdMovimientoCaja" DESC;
+            ORDER BY m."FechaMovimiento" DESC, m."IdMovimientoCaja" DESC
+            {limit_sql};
         """
-        return self.caller.LlamarFuncion(sql, params)
+        return self.caller.LlamarFuncion(sql, params, commit=False)
 
     def CrearMovimientoCaja(self, datos: dict, id_usuario: int | None = None) -> dict:
         sql = """
             INSERT INTO "MovimientoCaja" (
                 "IdAperturaCierreCaja", "IdCategoriaMovimientoCaja", "IdUsuario",
                 "Monto", "MetodoPago", "NumeroReferencia", "NotaCodigo",
-                "Solicitante", "Respaldo", "IdCuentaBancaria", "Descripcion"
+                "Solicitante", "Respaldo", "IdCuentaBancaria", "Descripcion",
+                "IdSucursal", "es_corporativo"
             ) VALUES (
                 :IdAperturaCierreCaja, :IdCategoriaMovimientoCaja, :IdUsuario,
                 :Monto, :MetodoPago, :NumeroReferencia, :NotaCodigo,
-                :Solicitante, :Respaldo, :IdCuentaBancaria, :Descripcion
+                :Solicitante, :Respaldo, :IdCuentaBancaria, :Descripcion,
+                :IdSucursal, :es_corporativo
             )
             RETURNING *;
         """
         payload = dict(datos)
         payload["IdUsuario"] = id_usuario
+        payload.setdefault("IdSucursal", None)
+        payload.setdefault("es_corporativo", False)
         return self.caller.LlamarUnRegistro(sql, payload)
 
     def ObtenerTotalesCaja(self, id_apertura: int) -> dict:
@@ -277,7 +320,10 @@ class TesoreriaRepository:
             print(f"Error al registrar log de auditoría: {e}")
 
     # --- Solicitudes de Caja Chica ---
-    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None, fecha_fin = None, id_sucursal: int | None = None) -> list[dict]:
+    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None,
+                                   fecha_fin = None, id_sucursal: int | None = None,
+                                   busqueda: str | None = None, limit: int | None = None,
+                                   offset: int | None = None) -> list[dict]:
         where_clauses = []
         params = {}
         if estado:
@@ -292,22 +338,38 @@ class TesoreriaRepository:
         if id_sucursal:
             where_clauses.append('COALESCE(s."IdSucursal", 1) = :id_s')
             params["id_s"] = id_sucursal
+        if busqueda and busqueda.strip():
+            where_clauses.append("""
+                (s."CodigoSolicitud" ILIKE :busqueda OR 
+                 s."NombreSolicitante" ILIKE :busqueda OR 
+                 s."CargoSolicitante" ILIKE :busqueda OR 
+                 s."DestinoJustificacion" ILIKE :busqueda)
+            """)
+            params["busqueda"] = f"%{busqueda.strip()}%"
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT :limit OFFSET :offset"
+            params["limit"] = limit
+            params["offset"] = offset or 0
 
         sql = f"""
             SELECT s.*, c."NombreCaja", cat."NombreCategoria",
                    comp."UrlArchivo" as "UrlComprobante",
                    COALESCE(s."AprobacionGerencia", 'PENDIENTE') as "AprobacionGerencia",
-                   s."MontoEntregado", s."MontoGastoReal", s."MontoReintegro"
+                   s."MontoEntregado", s."MontoGastoReal", s."MontoReintegro",
+                   COUNT(*) OVER() as total_count
             FROM "SolicitudCajaChica" s
             JOIN "Caja" c ON s."IdCaja" = c."IdCaja"
             LEFT JOIN "CategoriaMovimientoCaja" cat ON s."IdCategoriaMovimientoCaja" = cat."IdCategoriaMovimientoCaja"
             LEFT JOIN "ComprobanteArchivo" comp ON s."IdComprobanteArchivo" = comp."IdComprobante"
             {where_sql}
-            ORDER BY s."FechaSolicitud" DESC, s."IdSolicitudCajaChica" DESC;
+            ORDER BY s."FechaSolicitud" DESC, s."IdSolicitudCajaChica" DESC
+            {limit_sql};
         """
-        solicitudes = self.caller.LlamarFuncion(sql, params)
+        solicitudes = self.caller.LlamarFuncion(sql, params, commit=False)
         if not solicitudes:
             return []
 
@@ -319,7 +381,7 @@ class TesoreriaRepository:
                 WHERE "solicitud_id" = ANY(:ids)
                 ORDER BY "id" ASC;
             """
-            detalles = self.caller.LlamarFuncion(sql_detalles, {"ids": ids})
+            detalles = self.caller.LlamarFuncion(sql_detalles, {"ids": ids}, commit=False)
             for d in detalles:
                 sid = d.get("solicitud_id")
                 if sid not in detalles_por_solicitud:

@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from fastapi import HTTPException, status
 from app.Repository.Contabilidad.TesoreriaRepository import TesoreriaRepository
 from app.Models.Contabilidad.TesoreriaModel import (
@@ -148,19 +149,38 @@ class TesoreriaService:
     def ListarCategoriasMovimiento(self, tipo: str | None = None) -> list[dict]:
         return self.repo.ListarCategoriasMovimiento(tipo)
 
-    def ListarMovimientosCaja(self, id_apertura: int | None = None, fecha_inicio = None, fecha_fin = None, tipo: str | None = None) -> list[dict]:
-        return self.repo.ListarMovimientosCaja(id_apertura, fecha_inicio, fecha_fin, tipo)
+    def ListarMovimientosCaja(self, id_apertura: int | None = None, fecha_inicio = None,
+                              fecha_fin = None, tipo: str | None = None,
+                              id_cuenta_bancaria: int | None = None, busqueda: str | None = None,
+                              limit: int | None = None, offset: int | None = None,
+                              id_sucursal: int | None = None,
+                              es_corporativo: bool | None = None) -> list[dict]:
+        return self.repo.ListarMovimientosCaja(id_apertura, fecha_inicio, fecha_fin, tipo, id_cuenta_bancaria, busqueda, limit, offset, id_sucursal=id_sucursal, es_corporativo=es_corporativo)
 
     def RegistrarMovimientoCaja(self, dto: MovimientoCajaCrear, id_usuario: int | None = None) -> dict:
-        # Si no se pasó id_apertura, buscar la caja abierta actual
         id_apertura = dto.IdAperturaCierreCaja
-        if not id_apertura:
-            caja_abierta = self.repo.ObtenerCajaAbierta(1)
-            if caja_abierta:
-                id_apertura = caja_abierta["IdAperturaCierreCaja"]
+        id_sucursal = dto.IdSucursal
+        es_corp = bool(dto.EsCorporativo)
+
+        # Si viene apertura de caja, derivar sucursal desde la caja
+        if id_apertura:
+            sql_caja = text('SELECT c."IdSucursal" FROM "AperturaCierreCaja" acc JOIN "Caja" c ON acc."IdCaja" = c."IdCaja" WHERE acc."IdAperturaCierreCaja" = :id_ap')
+            row = self.repo.caller.db.execute(sql_caja, {"id_ap": id_apertura}).fetchone()
+            if row and row[0]:
+                id_sucursal = row[0]
+                es_corp = False
+
+        # Validación estricta: debe tener sede u origen, o ser corporativo explícito
+        if not id_sucursal and not es_corp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debe especificar la caja (apertura), la sucursal de destino o marcar el movimiento explícitamente como corporativo."
+            )
 
         payload = dto.model_dump()
         payload["IdAperturaCierreCaja"] = id_apertura
+        payload["IdSucursal"] = id_sucursal
+        payload["es_corporativo"] = es_corp
         mov = self.repo.CrearMovimientoCaja(payload, id_usuario)
 
         # Si involucra una cuenta bancaria, actualizar saldo bancario
@@ -204,8 +224,11 @@ class TesoreriaService:
 
 
     # --- Solicitudes de Caja Chica ---
-    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None, fecha_fin = None) -> list[dict]:
-        return self.repo.ListarSolicitudesCajaChica(estado, fecha_inicio, fecha_fin)
+    def ListarSolicitudesCajaChica(self, estado: str | None = None, fecha_inicio = None,
+                                   fecha_fin = None, id_sucursal: int | None = None,
+                                   busqueda: str | None = None, limit: int | None = None,
+                                   offset: int | None = None) -> list[dict]:
+        return self.repo.ListarSolicitudesCajaChica(estado, fecha_inicio, fecha_fin, id_sucursal, busqueda, limit, offset)
 
     def ObtenerSolicitudCajaChica(self, id_solicitud: int) -> dict:
         sol = self.repo.ObtenerSolicitudCajaChicaPorId(id_solicitud)
@@ -310,7 +333,8 @@ class TesoreriaService:
                 "NotaCodigo": sol["CodigoSolicitud"],
                 "Solicitante": sol["NombreSolicitante"],
                 "Respaldo": sol.get("RespaldoDoc"),
-                "Descripcion": f"Descargo Vale Caja Chica {sol['CodigoSolicitud']} - {sol['DestinoJustificacion']}"
+                "Descripcion": f"Descargo Vale Caja Chica {sol['CodigoSolicitud']} - {sol['DestinoJustificacion']}",
+                "IdSucursal": sol.get("IdSucursal") or 1
             }
             mov = self.RegistrarMovimientoCaja(MovimientoCajaCrear(**mov_datos), id_gerente)
             datos_actualizar["IdMovimientoCaja"] = mov["IdMovimientoCaja"]

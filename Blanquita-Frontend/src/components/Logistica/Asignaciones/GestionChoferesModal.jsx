@@ -111,7 +111,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
         <DialogHeader className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Users className="h-6 w-6 text-[#20A7DB]" />
+              <Users className="h-6 w-6 text-[#1C96C5]" />
               <span>Conductores</span>
             </DialogTitle>
           </div>
@@ -119,7 +119,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
           <Button
             type="button"
             onClick={() => setMostrandoFormulario(!mostrandoFormulario)}
-            className="bg-[#20A7DB] hover:bg-[#188cba] text-white gap-1.5 h-9 text-xs font-semibold px-3"
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-9 text-xs font-semibold px-3"
           >
             <UserPlus className="h-4 w-4" />
             <span>{mostrandoFormulario ? "Ver Lista" : "Nuevo Conductor"}</span>
@@ -129,9 +129,9 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
         {/* FORMULARIO PARA REGISTRAR NUEVO CHOFER */}
         {mostrandoFormulario ? (
           <form onSubmit={handleCrear} className="space-y-4 pt-2 animate-in fade-in-50 duration-150">
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+            <div className="p-4 rounded bg-slate-50 border border-slate-200 space-y-4">
               <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                <IdCard className="h-4 w-4 text-[#20A7DB]" />
+                <IdCard className="h-4 w-4 text-[#1C96C5]" />
                 <span>Datos del Conductor</span>
               </div>
 
@@ -235,7 +235,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                 <Button 
                   type="submit" 
                   size="sm" 
-                  className="bg-[#20A7DB] hover:bg-[#188cba] text-white px-6 font-semibold"
+                  className="bg-[#1C96C5] hover:bg-[#157A9E] text-white px-6 font-semibold"
                   disabled={guardando}
                 >
                   {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -249,11 +249,11 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
           <div className="space-y-4 pt-2">
             {loading ? (
               <div className="py-20 flex flex-col justify-center items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-[#20A7DB]" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#1C96C5]" />
                 <p className="text-xs text-slate-500 font-medium">Cargando nómina de conductores...</p>
               </div>
             ) : repartidores.length === 0 ? (
-              <div className="text-center py-16 border border-dashed border-slate-200 rounded-2xl bg-slate-50">
+              <div className="text-center py-16 border border-dashed border-slate-200 rounded bg-slate-50">
                 <Users className="h-10 w-10 text-slate-300 mx-auto mb-2" />
                 <p className="text-sm font-semibold text-slate-700">No hay choferes registrados</p>
                 <p className="text-xs text-slate-500 mt-0.5 mb-4">
@@ -262,15 +262,15 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                 <Button 
                   size="sm" 
                   onClick={() => setMostrandoFormulario(true)} 
-                  className="bg-[#20A7DB] text-white"
+                  className="bg-[#1C96C5] text-white"
                 >
                   Registrar Primer Chofer
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+              <div className="overflow-x-auto rounded border border-slate-200 shadow-none">
                 <table className="w-full text-sm text-left border-collapse">
-                  <thead className="bg-slate-50/90 text-xs text-slate-600 uppercase font-semibold border-b border-slate-200">
+                  <thead className="bg-slate-50 text-xs text-slate-600 uppercase font-semibold border-b border-slate-200">
                     <tr>
                       <th className="px-4 py-3">Nombre del Conductor</th>
                       <th className="px-4 py-3">CI</th>
@@ -305,7 +305,7 @@ export default function GestionChoferesModal({ abierto, onCerrar, onActualizado 
                           )}
                         </td>
                         <td className="px-4 py-3 text-center text-xs">
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200 font-mono tabular-nums text-[11px]">
                             {c.TotalAsignaciones || 0}
                           </span>
                         </td>

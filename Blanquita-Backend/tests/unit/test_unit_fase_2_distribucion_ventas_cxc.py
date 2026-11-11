@@ -18,10 +18,8 @@ from app.Models.Distribuidor.DistribuidorModel import (
 )
 
 @pytest.fixture
-def db_session():
-    session = SessionLocal()
-    yield session
-    session.close()
+def db_session(db_session_rollback):
+    return db_session_rollback
 
 
 # =============================================================================

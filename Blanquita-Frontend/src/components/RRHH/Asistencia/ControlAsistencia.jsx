@@ -1,3 +1,7 @@
+import StatusBadge from '@/components/common/StatusBadge';
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/stores/branchStore";
 import { useState, useEffect, useMemo } from "react";
 import { 
   ObtenerAsistencias, 
@@ -50,7 +54,18 @@ const ESTADOS = [
   "DESCANSO"
 ];
 
-export default function ControlAsistencia() {
+export default function ControlAsistencia({ usuario = null }) {
+  const {
+    sucursal,
+    setSucursal,
+    esMultisede,
+    listoParaConsultar,
+    sucursalesPermitidas
+  } = usePaginaSucursal({
+    permiteTodas: true,
+    usuario
+  });
+
   // Rango de fechas por defecto: desde el primer día del mes actual para ver historial reciente
   const [fechaInicio, setFechaInicio] = useState(() => {
     const d = new Date();
@@ -71,7 +86,9 @@ export default function ControlAsistencia() {
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
 
   const cargarDatos = async (forzar = false) => {
-    const cacheKey = `rrhh:asistencias:${fechaInicio}:${fechaFin}:${areaFiltro}`;
+    if (!listoParaConsultar) return;
+    const sid = sucursal === "todas" ? null : Number(sucursal);
+    const cacheKey = `rrhh:asistencias:${fechaInicio}:${fechaFin}:${areaFiltro}:${sucursal}`;
     try {
       if (!forzar) {
         const enCache = cache.get(cacheKey);
@@ -83,10 +100,10 @@ export default function ControlAsistencia() {
         cache.invalidate(cacheKey);
       }
       setCargando(true);
-      const data = await ObtenerAsistencias(fechaInicio, fechaFin, null, areaFiltro);
+      const data = await ObtenerAsistencias(fechaInicio, fechaFin, null, areaFiltro, sid);
       const lista = Array.isArray(data) ? data : [];
       setAsistencias(lista);
-      cache.set(cacheKey, lista, 180);
+      cache.set(cacheKey, lista, 120);
     } catch (err) {
       console.error(err);
       toast.error("Error al cargar asistencias");
@@ -96,8 +113,10 @@ export default function ControlAsistencia() {
   };
 
   useEffect(() => {
-    cargarDatos();
-  }, [fechaInicio, fechaFin, areaFiltro]);
+    if (listoParaConsultar) {
+      cargarDatos();
+    }
+  }, [fechaInicio, fechaFin, areaFiltro, sucursal, listoParaConsultar]);
 
   // Filtrado reactivo en memoria
   const asistenciasFiltradas = useMemo(() => {
@@ -187,47 +206,43 @@ export default function ControlAsistencia() {
 
   return (
     <div className="space-y-6">
-      {/* Cabecera y Botón de Importar Biométrico */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-lg">
-              <Fingerprint className="h-5 w-5" />
-            </span>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-              Asistencia
-            </h1>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Marcaciones, atrasos y horas extras.
-          </p>
-        </div>
+      {/* Cabecera con PageHeader y BranchFilter */}
+      <PageHeader
+        title="Asistencia"
+        subtitle="Marcaciones, atrasos y horas extras."
+        branchFilter={
+          <BranchFilter
+            sucursal={sucursal}
+            onChange={setSucursal}
+            sucursales={sucursalesPermitidas}
+            esMultisede={esMultisede}
+            permiteTodas={true}
+          />
+        }
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportarCSV}
+          className="text-xs font-medium text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 h-8 rounded"
+        >
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Exportar CSV
+        </Button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportarCSV}
-            className="text-xs font-medium text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Exportar CSV
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => setModalImportarAbierto(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 flex items-center gap-2 shadow-xs"
-          >
-            <Fingerprint className="h-4 w-4" />
-            Importar Biométrico
-          </Button>
-        </div>
-      </div>
+        <Button
+          size="sm"
+          onClick={() => setModalImportarAbierto(true)}
+          className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3 h-8 rounded flex items-center gap-1.5 cursor-pointer shadow-none"
+        >
+          <Fingerprint className="h-4 w-4" />
+          Importar Biométrico
+        </Button>
+      </PageHeader>
 
       {/* Tarjetas KPI de Resumen */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="bg-white p-3.5 rounded border border-slate-200">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Jornadas Registradas</span>
             <Users className="h-4 w-4 text-blue-500" />
@@ -238,7 +253,7 @@ export default function ControlAsistencia() {
           <span className="text-[11px] text-slate-400">Total en el rango de fechas</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="bg-white p-3.5 rounded border border-slate-200">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Atrasos Acumulados</span>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -249,7 +264,7 @@ export default function ControlAsistencia() {
           <span className="text-[11px] text-slate-400">Afecta planilla mensual</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="bg-white p-3.5 rounded border border-slate-200">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Horas Extras Totales</span>
             <TrendingUp className="h-4 w-4 text-blue-500" />
@@ -260,7 +275,7 @@ export default function ControlAsistencia() {
           <span className="text-[11px] text-slate-400">Recargo de ley 100%</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="bg-white p-3.5 rounded border border-slate-200">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-rose-600 dark:text-rose-400">Faltas Registradas</span>
             <XCircle className="h-4 w-4 text-rose-500" />
@@ -273,7 +288,7 @@ export default function ControlAsistencia() {
       </div>
 
       {/* Barra de Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+      <div className="bg-white p-3.5 rounded border border-slate-200 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
           {/* Fecha Inicio */}
           <div>
@@ -284,7 +299,7 @@ export default function ControlAsistencia() {
               type="date"
               value={fechaInicio}
               onChange={(e) => setFechaInicio(e.target.value)}
-              className="h-9 text-xs"
+              className="h-8 text-xs rounded border-slate-300"
             />
           </div>
 
@@ -297,7 +312,7 @@ export default function ControlAsistencia() {
               type="date"
               value={fechaFin}
               onChange={(e) => setFechaFin(e.target.value)}
-              className="h-9 text-xs"
+              className="h-8 text-xs rounded border-slate-300"
             />
           </div>
 
@@ -309,7 +324,7 @@ export default function ControlAsistencia() {
             <select
               value={areaFiltro}
               onChange={(e) => setAreaFiltro(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 px-2.5 rounded border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
             >
               {AREAS_PLANTA.map(a => (
                 <option key={a} value={a}>{a}</option>
@@ -325,7 +340,7 @@ export default function ControlAsistencia() {
             <select
               value={estadoFiltro}
               onChange={(e) => setEstadoFiltro(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 px-2.5 rounded border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
             >
               {ESTADOS.map(e => (
                 <option key={e} value={e}>{e}</option>
@@ -344,7 +359,7 @@ export default function ControlAsistencia() {
                 placeholder="Nombre o CI..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-8 h-9 text-xs"
+                className="pl-8 h-8 text-xs rounded border-slate-300"
               />
             </div>
           </div>
@@ -352,14 +367,14 @@ export default function ControlAsistencia() {
       </div>
 
       {/* Tabla de Asistencias */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-slate-500" />
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
               Registros de Jornada y Marcaciones
             </h2>
-            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded border border-slate-200 font-medium">
               {asistenciasFiltradas.length} filas
             </span>
           </div>
@@ -379,7 +394,7 @@ export default function ControlAsistencia() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider">
+              <tr className="sticky top-0 bg-slate-50 text-slate-700 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider">
                 <th className="py-3 px-4 font-semibold">Fecha</th>
                 <th className="py-3 px-4 font-semibold">Empleado</th>
                 <th className="py-3 px-4 font-semibold">Área & Cargo</th>
@@ -480,7 +495,7 @@ export default function ControlAsistencia() {
 
                       <td className="py-3 px-4 text-center ">
                         {tieneAtraso ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          <span className="px-2 py-0.5 rounded border border-amber-300 text-[10px] font-mono tabular-nums font-semibold bg-amber-50 text-amber-800">
                             +{a.MinutosAtraso} min
                           </span>
                         ) : (
@@ -490,7 +505,7 @@ export default function ControlAsistencia() {
 
                       <td className="py-3 px-4 text-center ">
                         {tieneHE ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                          <span className="px-2 py-0.5 rounded border border-sky-300 text-[10px] font-mono tabular-nums font-semibold bg-sky-50 text-sky-800">
                             +{Number(a.HorasExtraTrabajadas || a.HorasExtras || 0).toFixed(1)} h
                           </span>
                         ) : (
@@ -499,21 +514,7 @@ export default function ControlAsistencia() {
                       </td>
 
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          a.Estado === "PRESENTE" 
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : a.Estado === "ATRASO"
-                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            : a.Estado === "FALTA"
-                            ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                            : a.Estado === "PERMISO"
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                            : a.Estado === "VACACION"
-                            ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
-                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        }`}>
-                          {a.Estado}
-                        </span>
+                        <StatusBadge estado={a.Estado} />
                       </td>
 
                       <td className="py-3 px-4 max-w-xs truncate text-[11px] text-slate-500 dark:text-slate-400" title={a.Justificacion || ""}>
@@ -525,7 +526,7 @@ export default function ControlAsistencia() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditar(a)}
-                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                          className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-50 border border-slate-300 rounded font-medium"
                         >
                           <Edit3 className="h-3.5 w-3.5 mr-1" />
                           Editar

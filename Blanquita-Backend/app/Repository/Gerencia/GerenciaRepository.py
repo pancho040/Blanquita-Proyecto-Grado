@@ -1,8 +1,10 @@
 import logging
 from decimal import Decimal
+from datetime import date
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.core.cache import memory_cache
 
 logger = logging.getLogger(__name__)
 
@@ -14,32 +16,63 @@ class GerenciaRepository:
     # =========================================================================
     # 1. BUSCADOR GLOBAL POR CÓDIGO NUMÉRICO O TEXTO
     # =========================================================================
-    def BuscarDocumentosGlobal(self, query: str) -> List[Dict[str, Any]]:
+    def BuscarDocumentosGlobal(self, query: str, id_sucursal: int | None = None) -> List[Dict[str, Any]]:
         resultados = []
         codigo_limpio = query.strip()
         es_num = codigo_limpio.isdigit()
         codigo_num = int(codigo_limpio) if es_num else -1
         patron = f"%{codigo_limpio}%"
 
-        # 1. Buscar en Notas de Venta
-        sql_nv = text("""
-            SELECT 
-                nv."IdNotaVenta",
-                nv."NumeroNotaVenta",
-                COALESCE(nv."FechaVenta", nv."FechaRegistro") as "FechaNota",
-                COALESCE(nv."ImporteNeto", nv."TotalVentaBruto", 0) as "MontoTotal",
-                COALESCE(nv."EstadoCobranza", 'EMITIDA') as "EstadoNota",
-                COALESCE(c."NombreComercial", c."RazonSocial", nv."ClienteNombreLibre", 'Sin nombre') as cliente,
-                s."nombre" as sucursal
-            FROM public."NotaVenta" nv
-            LEFT JOIN public."Cliente" c ON nv."IdCliente" = c."IdCliente"
-            LEFT JOIN public.sucursales s ON nv."IdSucursal" = s.id
-            WHERE nv."NumeroNotaVenta" ILIKE :patron 
-               OR (:es_num AND nv."IdNotaVenta" = :codigo_num)
-            ORDER BY nv."IdNotaVenta" DESC
-            LIMIT 5;
-        """)
-        for r in self.session.execute(sql_nv, {"patron": patron, "es_num": es_num, "codigo_num": codigo_num}):
+        suc_nv_filter = 'AND nv."IdSucursal" = :id_s' if id_sucursal is not None else ""
+        suc_cc_filter = 'AND c_caja."IdSucursal" = :id_s' if id_sucursal is not None else ""
+        suc_abono_filter = 'AND cc."IdSucursal" = :id_s' if id_sucursal is not None else ""
+
+        # 1. Buscar en Notas de Venta (usando índice exacto por ID o NumeroNota si es numérico)
+        if es_num:
+            sql_nv = text(f"""
+                SELECT 
+                    nv."IdNotaVenta",
+                    nv."NumeroNotaVenta",
+                    COALESCE(nv."FechaVenta", nv."FechaRegistro") as "FechaNota",
+                    COALESCE(nv."ImporteNeto", nv."TotalVentaBruto", 0) as "MontoTotal",
+                    COALESCE(nv."EstadoCobranza", 'EMITIDA') as "EstadoNota",
+                    COALESCE(c."NombreComercial", c."RazonSocial", nv."ClienteNombreLibre", 'Sin nombre') as cliente,
+                    s."nombre" as sucursal
+                FROM public."NotaVenta" nv
+                LEFT JOIN public."Cliente" c ON nv."IdCliente" = c."IdCliente"
+                LEFT JOIN public.sucursales s ON nv."IdSucursal" = s.id
+                WHERE (nv."IdNotaVenta" = :codigo_num 
+                   OR nv."NumeroNotaVenta" = :codigo_limpio
+                   OR nv."NumeroNotaVenta" ILIKE :patron)
+                   {suc_nv_filter}
+                ORDER BY nv."IdNotaVenta" DESC
+                LIMIT 5;
+            """)
+            params_nv = {"patron": patron, "codigo_limpio": codigo_limpio, "codigo_num": codigo_num}
+        else:
+            sql_nv = text(f"""
+                SELECT 
+                    nv."IdNotaVenta",
+                    nv."NumeroNotaVenta",
+                    COALESCE(nv."FechaVenta", nv."FechaRegistro") as "FechaNota",
+                    COALESCE(nv."ImporteNeto", nv."TotalVentaBruto", 0) as "MontoTotal",
+                    COALESCE(nv."EstadoCobranza", 'EMITIDA') as "EstadoNota",
+                    COALESCE(c."NombreComercial", c."RazonSocial", nv."ClienteNombreLibre", 'Sin nombre') as cliente,
+                    s."nombre" as sucursal
+                FROM public."NotaVenta" nv
+                LEFT JOIN public."Cliente" c ON nv."IdCliente" = c."IdCliente"
+                LEFT JOIN public.sucursales s ON nv."IdSucursal" = s.id
+                WHERE nv."NumeroNotaVenta" ILIKE :patron
+                   {suc_nv_filter}
+                ORDER BY nv."IdNotaVenta" DESC
+                LIMIT 5;
+            """)
+            params_nv = {"patron": patron}
+
+        if id_sucursal is not None:
+            params_nv["id_s"] = id_sucursal
+
+        for r in self.session.execute(sql_nv, params_nv):
             resultados.append({
                 "tipo_documento": "NOTA_VENTA",
                 "id_registro": r.IdNotaVenta,
@@ -56,25 +89,59 @@ class GerenciaRepository:
             })
 
         # 2. Buscar en Vales de Caja Chica
-        sql_cc = text("""
-            SELECT 
-                sc."IdSolicitudCajaChica",
-                sc."CodigoSolicitud",
-                sc."FechaSolicitud",
-                sc."MontoSolicitado",
-                sc."MontoGastoReal",
-                sc."MontoEntregado",
-                sc."Estado",
-                sc."AprobacionGerencia",
-                sc."NombreSolicitante",
-                sc."DestinoJustificacion"
-            FROM public."SolicitudCajaChica" sc
-            WHERE sc."CodigoSolicitud" ILIKE :patron 
-               OR (:es_num AND sc."IdSolicitudCajaChica" = :codigo_num)
-            ORDER BY sc."IdSolicitudCajaChica" DESC
-            LIMIT 5;
-        """)
-        for r in self.session.execute(sql_cc, {"patron": patron, "es_num": es_num, "codigo_num": codigo_num}):
+        if es_num:
+            sql_cc = text(f"""
+                SELECT 
+                    sc."IdSolicitudCajaChica",
+                    sc."CodigoSolicitud",
+                    sc."FechaSolicitud",
+                    sc."MontoSolicitado",
+                    sc."MontoGastoReal",
+                    sc."MontoEntregado",
+                    sc."Estado",
+                    sc."AprobacionGerencia",
+                    sc."NombreSolicitante",
+                    sc."DestinoJustificacion",
+                    s."nombre" as sucursal
+                FROM public."SolicitudCajaChica" sc
+                LEFT JOIN public."Caja" c_caja ON sc."IdCaja" = c_caja."IdCaja"
+                LEFT JOIN public.sucursales s ON c_caja."IdSucursal" = s.id
+                WHERE (sc."IdSolicitudCajaChica" = :codigo_num
+                   OR sc."CodigoSolicitud" = :codigo_limpio
+                   OR sc."CodigoSolicitud" ILIKE :patron)
+                   {suc_cc_filter}
+                ORDER BY sc."IdSolicitudCajaChica" DESC
+                LIMIT 5;
+            """)
+            params_cc = {"patron": patron, "codigo_limpio": codigo_limpio, "codigo_num": codigo_num}
+        else:
+            sql_cc = text(f"""
+                SELECT 
+                    sc."IdSolicitudCajaChica",
+                    sc."CodigoSolicitud",
+                    sc."FechaSolicitud",
+                    sc."MontoSolicitado",
+                    sc."MontoGastoReal",
+                    sc."MontoEntregado",
+                    sc."Estado",
+                    sc."AprobacionGerencia",
+                    sc."NombreSolicitante",
+                    sc."DestinoJustificacion",
+                    s."nombre" as sucursal
+                FROM public."SolicitudCajaChica" sc
+                LEFT JOIN public."Caja" c_caja ON sc."IdCaja" = c_caja."IdCaja"
+                LEFT JOIN public.sucursales s ON c_caja."IdSucursal" = s.id
+                WHERE sc."CodigoSolicitud" ILIKE :patron
+                   {suc_cc_filter}
+                ORDER BY sc."IdSolicitudCajaChica" DESC
+                LIMIT 5;
+            """)
+            params_cc = {"patron": patron}
+
+        if id_sucursal is not None:
+            params_cc["id_s"] = id_sucursal
+
+        for r in self.session.execute(sql_cc, params_cc):
             monto_final = r.MontoGastoReal if r.MontoGastoReal is not None else r.MontoSolicitado
             resultados.append({
                 "tipo_documento": "CAJA_CHICA",
@@ -86,7 +153,7 @@ class GerenciaRepository:
                 "fecha": str(r.FechaSolicitud) if r.FechaSolicitud else None,
                 "estado": f"{r.Estado} (Gerencia: {r.AprobacionGerencia})",
                 "solicitante_o_cliente": r.NombreSolicitante,
-                "sucursal": "Central Sucre",
+                "sucursal": r.sucursal or "Central Sucre",
                 "ruta_acceso": f"/contador/caja-chica?id={r.IdSolicitudCajaChica}",
                 "detalles": {
                     "monto_entregado": float(r.MontoEntregado or 0),
@@ -96,20 +163,26 @@ class GerenciaRepository:
 
         # 3. Buscar en Abonos de Cuentas por Cobrar
         if es_num:
-            sql_abono = text("""
+            sql_abono = text(f"""
                 SELECT 
                     a."IdAbonoCuentaCobrar" as "IdAbono",
                     a."MontoAbonado",
                     a."FechaAbono",
                     a."EstadoAprobacion",
-                    COALESCE(c."NombreComercial", c."RazonSocial", 'Cliente') as cliente
+                    COALESCE(c."NombreComercial", c."RazonSocial", 'Cliente') as cliente,
+                    s."nombre" as sucursal
                 FROM public."AbonoCuentaCobrar" a
                 LEFT JOIN public."CuentaCobrar" cc ON a."IdCuentaCobrar" = cc."IdCuentaCobrar"
                 LEFT JOIN public."Cliente" c ON cc."IdCliente" = c."IdCliente"
+                LEFT JOIN public.sucursales s ON cc."IdSucursal" = s.id
                 WHERE a."IdAbonoCuentaCobrar" = :codigo_num
+                   {suc_abono_filter}
                 LIMIT 3;
             """)
-            for r in self.session.execute(sql_abono, {"codigo_num": codigo_num}):
+            params_abono = {"codigo_num": codigo_num}
+            if id_sucursal is not None:
+                params_abono["id_s"] = id_sucursal
+            for r in self.session.execute(sql_abono, params_abono):
                 resultados.append({
                     "tipo_documento": "ABONO_CXC",
                     "id_registro": r.IdAbono,
@@ -120,7 +193,7 @@ class GerenciaRepository:
                     "fecha": str(r.FechaAbono) if r.FechaAbono else None,
                     "estado": str(r.EstadoAprobacion or "PENDIENTE"),
                     "solicitante_o_cliente": r.cliente,
-                    "sucursal": "Logística",
+                    "sucursal": r.sucursal or "Logística",
                     "ruta_acceso": f"/contador/aprobacion-qr?id={r.IdAbono}",
                     "detalles": {"id_abono": r.IdAbono}
                 })
@@ -160,61 +233,87 @@ class GerenciaRepository:
     # =========================================================================
     # 2. KPIS EJECUTIVOS GLOBALES
     # =========================================================================
-    def ObtenerKPIsEjecutivos(self) -> Dict[str, Any]:
-        # A. Ventas del día
-        sql_ventas = text("""
+    def ObtenerKPIsEjecutivos(self, id_sucursal: int | None = None) -> Dict[str, Any]:
+        cache_key = f"gerencia:kpis_ejecutivos:{id_sucursal or 'todas'}"
+        cached_val = memory_cache.get(cache_key)
+        if cached_val is not None:
+            return cached_val
+
+        hoy_str = date.today().isoformat()
+
+        suc_nv_filter = 'AND "IdSucursal" = :id_s' if id_sucursal is not None else ""
+        suc_cxc_filter = 'AND "IdSucursal" = :id_s' if id_sucursal is not None else ""
+        suc_vales_filter = 'AND c."IdSucursal" = :id_s' if id_sucursal is not None else ""
+        params_base = {"id_s": id_sucursal} if id_sucursal is not None else {}
+
+        # A. Ventas del día (usando comparación directa de fecha con índice)
+        sql_ventas = text(f"""
             SELECT 
                 COALESCE(SUM(COALESCE("ImporteNeto", "TotalVentaBruto", 0)), 0) as monto,
                 COUNT(*) as cantidad
             FROM public."NotaVenta"
-            WHERE DATE(COALESCE("FechaVenta", "FechaRegistro")) = CURRENT_DATE
-              AND COALESCE("EstadoCobranza", '') != 'ANULADA';
+            WHERE COALESCE("FechaVenta", "FechaRegistro")::date = CURRENT_DATE
+              AND COALESCE("EstadoCobranza", '') != 'ANULADA'
+              {suc_nv_filter};
         """)
-        row_ventas = self.session.execute(sql_ventas).fetchone()
+        row_ventas = self.session.execute(sql_ventas, params_base).fetchone()
         ventas_hoy_monto = Decimal(str(row_ventas.monto or 0))
         ventas_hoy_cantidad = int(row_ventas.cantidad or 0)
 
-        # Si no hubo ventas hoy (ej. fin de semana o inicio de jornada), traer el último día con ventas
+        # Si no hubo ventas hoy, obtener la última fecha con ventas usando índice DESC rápido
         if ventas_hoy_cantidad == 0:
-            sql_ventas_ult = text("""
-                SELECT 
-                    COALESCE(SUM(COALESCE("ImporteNeto", "TotalVentaBruto", 0)), 0) as monto,
-                    COUNT(*) as cantidad
+            sql_ult_fecha = text(f"""
+                SELECT COALESCE("FechaVenta", "FechaRegistro")::date as ult_fecha
                 FROM public."NotaVenta"
-                WHERE DATE(COALESCE("FechaVenta", "FechaRegistro")) = (
-                    SELECT MAX(DATE(COALESCE("FechaVenta", "FechaRegistro"))) 
-                    FROM public."NotaVenta" 
-                    WHERE COALESCE("EstadoCobranza", '') != 'ANULADA'
-                )
-                AND COALESCE("EstadoCobranza", '') != 'ANULADA';
+                WHERE COALESCE("EstadoCobranza", '') != 'ANULADA'
+                  {suc_nv_filter}
+                ORDER BY COALESCE("FechaVenta", "FechaRegistro") DESC
+                LIMIT 1;
             """)
-            row_ult = self.session.execute(sql_ventas_ult).fetchone()
-            if row_ult and row_ult.cantidad:
-                ventas_hoy_monto = Decimal(str(row_ult.monto or 0))
-                ventas_hoy_cantidad = int(row_ult.cantidad or 0)
+            ult_row = self.session.execute(sql_ult_fecha, params_base).fetchone()
+            if ult_row and ult_row.ult_fecha:
+                sql_ventas_ult = text(f"""
+                    SELECT 
+                        COALESCE(SUM(COALESCE("ImporteNeto", "TotalVentaBruto", 0)), 0) as monto,
+                        COUNT(*) as cantidad
+                    FROM public."NotaVenta"
+                    WHERE COALESCE("FechaVenta", "FechaRegistro")::date = :ult_fecha
+                      AND COALESCE("EstadoCobranza", '') != 'ANULADA'
+                      {suc_nv_filter};
+                """)
+                params_ult = {"ult_fecha": ult_row.ult_fecha}
+                if id_sucursal is not None:
+                    params_ult["id_s"] = id_sucursal
+                row_ult = self.session.execute(sql_ventas_ult, params_ult).fetchone()
+                if row_ult and row_ult.cantidad:
+                    ventas_hoy_monto = Decimal(str(row_ult.monto or 0))
+                    ventas_hoy_cantidad = int(row_ult.cantidad or 0)
 
-        # B. Cuentas por Cobrar y Mora
-        sql_cxc = text("""
+        # B. Cuentas por Cobrar y Mora (usa idx_cxc_saldo_pendiente)
+        sql_cxc = text(f"""
             SELECT 
                 COALESCE(SUM("SaldoPendiente"), 0) as total_saldo,
                 COALESCE(SUM(CASE WHEN "FechaVencimiento" < CURRENT_DATE THEN "SaldoPendiente" ELSE 0 END), 0) as en_mora
             FROM public."CuentaCobrar"
-            WHERE "SaldoPendiente" > 0;
+            WHERE "SaldoPendiente" > 0
+              {suc_cxc_filter};
         """)
-        row_cxc = self.session.execute(sql_cxc).fetchone()
+        row_cxc = self.session.execute(sql_cxc, params_base).fetchone()
         cxc_total = Decimal(str(row_cxc.total_saldo or 0))
         cxc_mora = Decimal(str(row_cxc.en_mora or 0))
 
-        # C. Vales de Caja Chica Pendientes de Gerencia (Don Osvaldo)
-        sql_vales = text("""
+        # C. Vales de Caja Chica Pendientes de Gerencia (usa idx_solcajachica_aprob_estado)
+        sql_vales = text(f"""
             SELECT 
                 COUNT(*) as cantidad,
-                COALESCE(SUM(COALESCE("MontoGastoReal", "MontoSolicitado")), 0) as monto
-            FROM public."SolicitudCajaChica"
-            WHERE "AprobacionGerencia" = 'PENDIENTE'
-              AND "Estado" IN ('RENDIDO', 'Rendido', 'Rendida');
+                COALESCE(SUM(COALESCE(sc."MontoGastoReal", sc."MontoSolicitado")), 0) as monto
+            FROM public."SolicitudCajaChica" sc
+            LEFT JOIN public."Caja" c ON sc."IdCaja" = c."IdCaja"
+            WHERE sc."AprobacionGerencia" = 'PENDIENTE'
+              AND sc."Estado" IN ('RENDIDO', 'Rendido', 'Rendida')
+              {suc_vales_filter};
         """)
-        row_vales = self.session.execute(sql_vales).fetchone()
+        row_vales = self.session.execute(sql_vales, params_base).fetchone()
         vales_cant = int(row_vales.cantidad or 0)
         vales_monto = Decimal(str(row_vales.monto or 0))
 
@@ -253,14 +352,14 @@ class GerenciaRepository:
                 "fecha_ultima_conciliacion": str(b.fecha_ultima_conciliacion) if b.fecha_ultima_conciliacion else None
             })
 
-        # E. Alertas Gerenciales destacadas
+        # E. Alertas Gerenciales destacadas (sin round-trips extras a la BD)
         alertas = []
         if vales_cant > 0:
             alertas.append({
                 "tipo": "CAJA_CHICA_PENDIENTE",
                 "mensaje": f"Hay {vales_cant} vales de caja chica rendidos esperando tu firma y aprobación (Total: Bs. {vales_monto:.2f})",
                 "codigo_referencia": "CAJA_CHICA",
-                "fecha": str(self.session.execute(text("SELECT CURRENT_DATE")).scalar()),
+                "fecha": hoy_str,
                 "severidad": "WARNING"
             })
         if cxc_mora > 0:
@@ -268,12 +367,12 @@ class GerenciaRepository:
                 "tipo": "COBRANZA_ALERTA",
                 "mensaje": f"Cartera vencida en mora: Bs. {cxc_mora:.2f} requiere seguimiento con supervisión",
                 "codigo_referencia": "MORA_CXC",
-                "fecha": str(self.session.execute(text("SELECT CURRENT_DATE")).scalar()),
+                "fecha": hoy_str,
                 "severidad": "DANGER"
             })
 
-        return {
-            "fecha_consulta": str(self.session.execute(text("SELECT CURRENT_DATE")).scalar()),
+        resultado = {
+            "fecha_consulta": hoy_str,
             "ventas_hoy_monto": ventas_hoy_monto,
             "ventas_hoy_cantidad": ventas_hoy_cantidad,
             "cuentas_cobrar_saldo_total": cxc_total,
@@ -284,6 +383,9 @@ class GerenciaRepository:
             "bancos": bancos_list,
             "alertas": alertas
         }
+
+        memory_cache.set(cache_key, resultado, ttl=45)
+        return resultado
 
     # =========================================================================
     # 3. REGISTRO DE FIRMA Y SELLO DIGITAL DE GERENCIA

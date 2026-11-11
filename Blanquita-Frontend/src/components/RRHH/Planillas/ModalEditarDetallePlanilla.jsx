@@ -109,10 +109,10 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
 
   return (
     <Dialog open={abierto} onOpenChange={onCerrar}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-slate-300 shadow-md rounded">
         <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 rounded-lg text-blue-600 dark:text-blue-400">
+            <div className="p-2 bg-slate-100 rounded border border-slate-200 text-slate-700">
               <Calculator className="h-6 w-6" />
             </div>
             <div>
@@ -139,14 +139,14 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
               name="DiasTrabajados"
               value={formData.DiasTrabajados}
               onChange={handleChange}
-              className="mt-1 h-9 text-xs "
+              className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
             />
           </div>
 
           {/* Dos columnas: Haberes vs Descuentos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Columna Ingresos */}
-            <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-3">
+            <div className="p-3.5 bg-slate-50 rounded border border-slate-200 space-y-2">
               <h3 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center justify-between">
                 <span>Ingresos / Haberes</span>
                 <span className="text-emerald-700 dark:text-emerald-400">
@@ -162,7 +162,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="HaberBasico"
                   value={formData.HaberBasico}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -174,7 +174,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="BonoAntiguedad"
                   value={formData.BonoAntiguedad}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -186,7 +186,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="HorasExtrasMonto"
                   value={formData.HorasExtrasMonto}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -198,13 +198,13 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="OtrosBonos"
                   value={formData.OtrosBonos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
             </div>
 
             {/* Columna Descuentos */}
-            <div className="p-4 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl border border-rose-200 dark:border-rose-800 space-y-3">
+            <div className="p-3.5 bg-slate-50 rounded border border-slate-200 space-y-2">
               <h3 className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center justify-between">
                 <span>Descuentos y Deducciones</span>
                 <span className="text-rose-700 dark:text-rose-400">
@@ -220,7 +220,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoAFP"
                   value={formData.DescuentoAFP}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -232,7 +232,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoAtrasos"
                   value={formData.DescuentoAtrasos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -244,7 +244,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="DescuentoFaltas"
                   value={formData.DescuentoFaltas}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -256,7 +256,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="Anticipos"
                   value={formData.Anticipos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
 
@@ -268,14 +268,14 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   name="OtrosDescuentos"
                   value={formData.OtrosDescuentos}
                   onChange={handleChange}
-                  className="mt-1 h-8 text-xs bg-white dark:bg-slate-900"
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />
               </div>
             </div>
           </div>
 
           {/* Resultado Líquido Pagable */}
-          <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700 flex items-center justify-between">
+          <div className="p-3.5 bg-slate-50 rounded border border-slate-300 flex items-center justify-between">
             <div>
               <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block">
                 Líquido Pagable Calculado:
@@ -284,7 +284,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                 Total Ganado ({totalGanado.toFixed(2)}) - Total Descuentos ({totalDescuentos.toFixed(2)})
               </span>
             </div>
-            <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 ">
+            <div className="text-xl font-bold font-mono tabular-nums text-slate-900 ">
               Bs. {liquidoPagable.toFixed(2)}
             </div>
           </div>

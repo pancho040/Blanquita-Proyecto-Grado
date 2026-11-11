@@ -1,8 +1,12 @@
 import { manejarErrorBackend } from "@/utils/validators";
 import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 
-export async function ObtenerZonas() {
-  const response = await fetchConCache("/api/logistica/zonas", {}, 60000);
+export async function ObtenerZonas(idSucursal = null) {
+  let url = "/api/logistica/zonas";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetchConCache(url, {}, 60000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
@@ -22,11 +26,12 @@ export async function CrearZona(zona) {
   return await response.json();
 }
 
-export async function ObtenerRutas(idZona = null) {
-  let url = "/api/logistica/rutas";
-  if (idZona !== null) {
-    url += `?id_zona=${idZona}`;
-  }
+export async function ObtenerRutas(idZona = null, idSucursal = null) {
+  const params = new URLSearchParams();
+  if (idZona !== null) params.append("id_zona", idZona);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
+  const q = params.toString();
+  const url = `/api/logistica/rutas${q ? `?${q}` : ""}`;
   const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
@@ -81,11 +86,14 @@ export async function GuardarPuntosVentaRuta(idRuta, puntosVenta) {
   return await response.json();
 }
 
-export async function ObtenerAsignaciones(fecha = null, idRepartidor = null) {
-  let url = "/api/logistica/asignaciones?";
-  if (fecha) url += `fecha=${fecha}&`;
-  if (idRepartidor) url += `id_repartidor=${idRepartidor}&`;
+export async function ObtenerAsignaciones(fecha = null, idRepartidor = null, idSucursal = null) {
+  const params = new URLSearchParams();
+  if (fecha) params.append("fecha", fecha);
+  if (idRepartidor) params.append("id_repartidor", idRepartidor);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
 
+  const q = params.toString();
+  const url = `/api/logistica/asignaciones${q ? `?${q}` : ""}`;
   const response = await fetchConCache(url, {}, 15000);
   if (!response.ok) {
     await manejarErrorBackend(response);
@@ -119,8 +127,12 @@ export async function ActualizarAsignacion(idAsignacion, datos) {
   return await response.json();
 }
 
-export async function ObtenerRepartidores() {
-  const response = await fetchConCache("/api/logistica/repartidores", {}, 30000);
+export async function ObtenerRepartidores(idSucursal = null) {
+  let url = "/api/logistica/repartidores";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetchConCache(url, {}, 30000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }
@@ -155,8 +167,12 @@ export async function CambiarEstadoRepartidor(idUsuario, idEstado) {
 // -------------------------------------------------------------
 // Telemetría y rastreo GPS en vivo
 // -------------------------------------------------------------
-export async function ObtenerChoferesEnVivo() {
-  const response = await fetchConCache("/api/logistica/telemetria/en-vivo", {}, 3000);
+export async function ObtenerChoferesEnVivo(idSucursal = null) {
+  let url = "/api/logistica/telemetria/en-vivo";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetchConCache(url, {}, 3000);
   if (!response.ok) {
     await manejarErrorBackend(response);
   }

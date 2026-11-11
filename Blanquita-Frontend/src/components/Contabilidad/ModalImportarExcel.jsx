@@ -89,17 +89,17 @@ export default function ModalImportarExcel({
 
   return (
     <Dialog open={abierto} onOpenChange={handleCerrar}>
-      <DialogContent className="max-w-md sm:max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 p-6">
-        <DialogHeader className="space-y-1">
+      <DialogContent className="max-w-md sm:max-w-lg bg-white rounded border border-slate-300 shadow-md p-5">
+        <DialogHeader className="space-y-1 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200">
-              <FileSpreadsheet className="h-6 w-6" />
+            <div className="p-2 bg-[#F0FDF4] text-[#15803D] rounded border border-[#86EFAC]">
+              <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-bold text-slate-800">
+              <DialogTitle className="text-base font-bold text-slate-900">
                 {titulo}
               </DialogTitle>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-600 mt-0.5">
                 {descripcion}
               </p>
             </div>
@@ -107,7 +107,7 @@ export default function ModalImportarExcel({
         </DialogHeader>
 
         {/* Contenido Principal */}
-        <div className="space-y-4 py-2">
+        <div className="space-y-3 py-2">
           {/* Zona Drag & Drop */}
           <div
             onClick={() => fileInputRef.current?.click()}
@@ -117,12 +117,12 @@ export default function ModalImportarExcel({
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
-            className={`cursor-pointer transition-all border-2 border-dashed rounded-xl p-5 text-center ${
+            className={`cursor-pointer transition-colors border-2 border-dashed rounded p-4 text-center ${
               dragOver
-                ? "border-[#20A7DB] bg-sky-50/50"
+                ? "border-[#1C96C5] bg-[#F0F9FF]"
                 : archivo
-                ? "border-emerald-400 bg-emerald-50/40"
-                : "border-slate-200 hover:border-slate-300 bg-slate-50/60"
+                ? "border-[#86EFAC] bg-[#F0FDF4]"
+                : "border-slate-300 hover:border-slate-400 bg-slate-50"
             }`}
           >
             <input
@@ -134,14 +134,14 @@ export default function ModalImportarExcel({
             />
 
             {archivo ? (
-              <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-emerald-200 shadow-2xs">
-                <div className="flex items-center gap-2.5 overflow-hidden text-left">
-                  <FileCheck className="h-6 w-6 text-emerald-600 shrink-0" />
+              <div className="flex items-center justify-between gap-3 bg-white p-2.5 rounded border border-[#86EFAC]">
+                <div className="flex items-center gap-2 overflow-hidden text-left">
+                  <FileCheck className="h-5 w-5 text-[#15803D] shrink-0" />
                   <div className="truncate">
-                    <p className="text-sm font-semibold text-slate-800 truncate">
+                    <p className="text-xs font-semibold text-slate-900 truncate">
                       {archivo.name}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-[11px] font-mono text-slate-500">
                       {(archivo.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
@@ -152,21 +152,21 @@ export default function ModalImportarExcel({
                     e.stopPropagation();
                     setArchivo(null);
                   }}
-                  className="p-1 hover:bg-slate-100 rounded-md text-slate-400 hover:text-rose-500 transition-colors"
+                  className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-[#B91C1C] transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             ) : (
-              <div className="space-y-2 py-2">
-                <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                  <UploadCloud className="h-5 w-5" />
+              <div className="space-y-1.5 py-1">
+                <div className="mx-auto w-8 h-8 rounded bg-slate-200/70 flex items-center justify-center text-slate-600">
+                  <UploadCloud className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-xs font-semibold text-slate-800">
                     Haz clic o arrastra tu archivo Excel
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     Formatos admitidos: .XLSX o .XLS
                   </p>
                 </div>
@@ -175,25 +175,25 @@ export default function ModalImportarExcel({
           </div>
 
           {/* Opción rápida del archivo del servidor */}
-          <div className="relative">
+          <div className="relative my-2">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-slate-200" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2.5 text-slate-400 font-medium">
+            <div className="relative flex justify-center text-[11px] uppercase">
+              <span className="bg-white px-2.5 text-slate-500 font-medium">
                 o sincronizar archivo del servidor
               </span>
             </div>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between gap-3">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <Database className="h-4 w-4 text-[#20A7DB] shrink-0" />
+              <Database className="h-4 w-4 text-[#1C96C5] shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-700 truncate">
+                <p className="text-xs font-semibold text-slate-800 truncate">
                   {archivoPredeterminadoNombre}
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-500">
                   Archivo oficial en carpeta del servidor
                 </p>
               </div>
@@ -204,7 +204,7 @@ export default function ModalImportarExcel({
               size="sm"
               disabled={procesando}
               onClick={() => ejecutarImportacion(false)}
-              className="text-xs h-8 border-slate-300 hover:bg-white shrink-0 font-medium"
+              className="text-xs h-8 border-slate-300 hover:bg-white shrink-0 font-medium rounded text-slate-700"
             >
               Procesar Oficial
             </Button>
@@ -212,19 +212,19 @@ export default function ModalImportarExcel({
 
           {/* Resultado de la Importación */}
           {resultado && (
-            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-left space-y-1.5 animate-in fade-in">
-              <div className="flex items-center gap-2 text-emerald-800 text-xs font-bold">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <div className="p-3 bg-[#F0FDF4] border border-[#86EFAC] rounded text-left space-y-1">
+              <div className="flex items-center gap-2 text-[#15803D] text-xs font-bold">
+                <CheckCircle2 className="h-4 w-4 text-[#15803D]" />
                 <span>{resultado.mensaje || "Registros procesados exitosamente"}</span>
               </div>
               {resultado.detalle && (
-                <div className="text-[11.5px] text-emerald-950/80 space-y-0.5 pl-6 ">
+                <div className="text-[11px] text-slate-700 space-y-0.5 pl-6 font-mono">
                   {Object.entries(resultado.detalle)
                     .filter(([k]) => k !== "Archivo")
                     .map(([k, v]) => (
                       <div key={k} className="flex justify-between">
-                        <span>{k}:</span>
-                        <span className="font-bold">{String(v)}</span>
+                        <span className="text-slate-600">{k}:</span>
+                        <span className="font-bold tabular-nums text-slate-900">{String(v)}</span>
                       </div>
                     ))}
                 </div>
@@ -233,13 +233,13 @@ export default function ModalImportarExcel({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100">
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-200">
           <Button
             type="button"
             variant="ghost"
             onClick={handleCerrar}
             disabled={procesando}
-            className="text-slate-600 hover:bg-slate-100 text-xs h-9"
+            className="text-slate-700 hover:bg-slate-100 text-xs h-8 rounded"
           >
             {resultado ? "Cerrar" : "Cancelar"}
           </Button>
@@ -249,7 +249,7 @@ export default function ModalImportarExcel({
               type="button"
               onClick={() => ejecutarImportacion(true)}
               disabled={procesando}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 flex items-center gap-1.5 shadow-xs"
+              className="bg-[#15803D] hover:bg-green-800 text-white text-xs h-8 flex items-center gap-1.5 rounded font-medium border-0"
             >
               {procesando ? (
                 <>

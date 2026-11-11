@@ -9,7 +9,8 @@ export async function ObtenerLogsAuditoria({
   id_usuario = "",
   fecha_inicio = "",
   fecha_fin = "",
-  busqueda = ""
+  busqueda = "",
+  id_sucursal = null
 } = {}) {
   const params = new URLSearchParams();
   params.append("page", page);
@@ -20,6 +21,7 @@ export async function ObtenerLogsAuditoria({
   if (fecha_inicio) params.append("fecha_inicio", fecha_inicio);
   if (fecha_fin) params.append("fecha_fin", fecha_fin);
   if (busqueda) params.append("busqueda", busqueda);
+  if (id_sucursal && id_sucursal !== "todas") params.append("id_sucursal", id_sucursal);
 
   const url = `/api/admin/auditoria?${params.toString()}`;
   const response = await fetchConCache(url, {}, 30000);

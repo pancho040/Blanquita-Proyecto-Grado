@@ -30,8 +30,10 @@ class CuentasCobrarService:
     # NOTAS DE VENTA Y DESPACHO (Subagente A - Módulo 7)
     # =========================================================================
     def ListarNotasVenta(self, id_cliente: int | None = None, destino: str | None = None,
-                         fecha_inicio = None, fecha_fin = None, busqueda: str = "") -> list[dict]:
-        return self.repo.ListarNotasVenta(id_cliente, destino, fecha_inicio, fecha_fin, busqueda)
+                         fecha_inicio = None, fecha_fin = None, busqueda: str = "",
+                         estado_pago: str | None = None, limit: int | None = None, offset: int | None = None,
+                         id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarNotasVenta(id_cliente, destino, fecha_inicio, fecha_fin, busqueda, estado_pago, limit, offset, id_sucursal)
 
     def ObtenerNotaVentaDetalle(self, id_nota: int) -> dict:
         nota = self.repo.ObtenerNotaVentaPorId(id_nota)
@@ -303,8 +305,11 @@ class CuentasCobrarService:
     # =========================================================================
     # CUENTAS POR COBRAR Y COBRANZAS QR (Subagente B - Módulo 4)
     # =========================================================================
-    def ListarCuentasCobrar(self, id_cliente: int | None = None, id_estado: int | None = None, solo_con_saldo: bool = True) -> list[dict]:
-        return self.repo.ListarCuentasCobrar(id_cliente, id_estado, solo_con_saldo)
+    def ListarCuentasCobrar(self, id_cliente: int | None = None, id_estado: int | None = None,
+                            solo_con_saldo: bool = True, solo_vencidas: bool = False,
+                            busqueda: str | None = None, limit: int | None = None,
+                            offset: int | None = None, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarCuentasCobrar(id_cliente, id_estado, solo_con_saldo, solo_vencidas, busqueda, limit, offset, id_sucursal)
 
     def ObtenerCuentaCobrarDetalle(self, id_cxc: int) -> dict:
         cxc = self.repo.ObtenerCuentaCobrarPorId(id_cxc)
@@ -419,8 +424,8 @@ class CuentasCobrarService:
             "errores": errores
         }
 
-    def ObtenerResumenCartera(self) -> list[dict]:
-        return self.repo.ObtenerResumenCartera()
+    def ObtenerResumenCartera(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ObtenerResumenCartera(id_sucursal)
 
     def VerificarEstadoCredito(self, id_cliente: int, nuevo_monto: float = 0.0) -> dict:
         return self.repo.VerificarEstadoCreditoCliente(id_cliente, nuevo_monto)

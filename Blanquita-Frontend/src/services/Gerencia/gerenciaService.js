@@ -5,15 +5,21 @@ import { fetchConCache, invalidarCache } from "@/lib/api-cache";
 // SERVICIOS GERENCIALES - DON OSVALDO (FASE 4)
 // ==========================================
 
-export async function BuscarReporteGlobal(codigo) {
+export async function BuscarReporteGlobal(codigo, idSucursal = null, options = {}) {
   if (!codigo) return null;
-  const res = await fetch(`/api/gerencia/buscar-reporte?codigo=${encodeURIComponent(codigo)}`);
+  const params = new URLSearchParams();
+  params.append("codigo", codigo);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
+  const res = await fetch(`/api/gerencia/buscar-reporte?${params.toString()}`, {
+    signal: options?.signal,
+  });
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }
 
-export async function ObtenerKPIsEjecutivos() {
-  const res = await fetchConCache("/api/gerencia/kpis-ejecutivos", {}, 10000);
+export async function ObtenerKPIsEjecutivos(idSucursal = null) {
+  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  const res = await fetchConCache(`/api/gerencia/kpis-ejecutivos${query}`, {}, 10000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();
 }

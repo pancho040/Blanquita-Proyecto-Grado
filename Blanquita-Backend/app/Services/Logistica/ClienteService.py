@@ -7,8 +7,10 @@ class ClienteService:
     def __init__(self, db: Session):
         self.repo = ClienteRepository(db)
 
-    def ListarClientes(self, busqueda: str = "", id_estado: int | None = None) -> list[dict]:
-        return self.repo.ListarClientes(busqueda, id_estado)
+    def ListarClientes(self, busqueda: str = "", id_estado: int | None = None,
+                       limit: int | None = None, offset: int | None = None,
+                       id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarClientes(busqueda, id_estado, limit, offset, id_sucursal)
 
     def ListarClientesSimple(self) -> list[dict]:
         return self.repo.ListarClientesSimple()
@@ -58,5 +60,5 @@ class ClienteService:
         pv_res = self.repo.CrearPuntoVenta(id_cliente, dto.model_dump())
         return pv_res
 
-    def ListarTodosPuntosVentaActivos(self) -> list[dict]:
-        return self.repo.ListarTodosPuntosVentaActivos()
+    def ListarTodosPuntosVentaActivos(self, id_sucursal: int | None = None) -> list[dict]:
+        return self.repo.ListarTodosPuntosVentaActivos(id_sucursal=id_sucursal)

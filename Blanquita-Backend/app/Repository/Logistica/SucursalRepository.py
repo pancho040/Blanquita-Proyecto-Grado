@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.Repository.DbCaller import DbCaller
+from app.core.cache import memory_cache
 
 
 class SucursalRepository:
@@ -10,6 +11,11 @@ class SucursalRepository:
         self.caller = DbCaller(db)
 
     def listar_sucursales(self, solo_activas: bool = False) -> List[Dict[str, Any]]:
+        cache_key = f"sucursales:listar:{solo_activas}"
+        cached_data = memory_cache.get(cache_key)
+        if cached_data is not None:
+            return cached_data
+
         filtro = "WHERE activa = true" if solo_activas else ""
         sql = f"""
             SELECT id, nombre, ciudad, direccion, telefono, activa, created_at
@@ -17,17 +23,28 @@ class SucursalRepository:
             {filtro}
             ORDER BY id ASC;
         """
-        return self.caller.LlamarFuncion(sql, {})
+        resultado = self.caller.LlamarFuncion(sql, {})
+        memory_cache.set(cache_key, resultado, ttl=180)
+        return resultado
 
     def obtener_sucursal(self, id_sucursal: int) -> Optional[Dict[str, Any]]:
+        cache_key = f"sucursales:id:{id_sucursal}"
+        cached_data = memory_cache.get(cache_key)
+        if cached_data is not None:
+            return cached_data
+
         sql = """
             SELECT id, nombre, ciudad, direccion, telefono, activa, created_at
             FROM public.sucursales
             WHERE id = :id;
         """
-        return self.caller.LlamarUnRegistro(sql, {"id": id_sucursal})
+        resultado = self.caller.LlamarUnRegistro(sql, {"id": id_sucursal})
+        if resultado:
+            memory_cache.set(cache_key, resultado, ttl=180)
+        return resultado
 
     def crear_sucursal(self, datos: dict) -> Dict[str, Any]:
+        memory_cache.invalidate_prefix("sucursales:")
         sql = """
             INSERT INTO public.sucursales (nombre, ciudad, direccion, telefono, activa, created_at)
             VALUES (:nombre, :ciudad, :direccion, :telefono, :activa, NOW())
@@ -44,6 +61,7 @@ class SucursalRepository:
         return res
 
     def actualizar_sucursal(self, id_sucursal: int, datos: dict) -> Optional[Dict[str, Any]]:
+        memory_cache.invalidate_prefix("sucursales:")
         campos = []
         params = {"id": id_sucursal}
         for k, v in datos.items():

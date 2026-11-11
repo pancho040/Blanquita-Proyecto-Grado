@@ -1,10 +1,11 @@
 import { manejarErrorBackend } from "@/utils/validators";
 
-export async function ListarEnvios(estado = null) {
-  let url = "/api/logistica/envios";
-  if (estado) {
-    url += `?estado=${encodeURIComponent(estado)}`;
-  }
+export async function ListarEnvios(estado = null, idSucursal = null) {
+  const params = new URLSearchParams();
+  if (estado) params.append("estado", estado);
+  if (idSucursal && idSucursal !== "todas") params.append("id_sucursal", idSucursal);
+  const q = params.toString();
+  const url = `/api/logistica/envios${q ? `?${q}` : ""}`;
   const response = await fetch(url);
   if (!response.ok) {
     await manejarErrorBackend(response);

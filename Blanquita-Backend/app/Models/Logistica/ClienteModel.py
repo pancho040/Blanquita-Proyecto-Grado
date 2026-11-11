@@ -32,6 +32,7 @@ class ClienteBase(BaseModel):
     LimiteCreditoBs: float = 0.0
     DiasCredito: int = 0
     Observacion: Optional[str] = None
+    IdSucursal: Optional[int] = None
 
 class ClienteCrear(ClienteBase):
     IdEstadoCliente: int = 1
@@ -53,6 +54,7 @@ class ClienteActualizar(BaseModel):
     BloqueadoPorMora: Optional[bool] = None
     IdEstadoCliente: Optional[int] = None
     Observacion: Optional[str] = None
+    IdSucursal: Optional[int] = None
 
 class ClienteResponse(ClienteBase):
     IdCliente: int

@@ -1,3 +1,4 @@
+import StatusBadge from '@/components/common/StatusBadge';
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Clock,
@@ -29,6 +30,9 @@ import {
   getReporteAsistenciaPuntualidad,
   getReporteNominaHistorica,
 } from "@/services/Reportes/reportesService";
+import PageHeader from "@/components/common/PageHeader";
+import BranchFilter from "@/components/common/BranchFilter";
+import { usePaginaSucursal } from "@/stores/branchStore";
 
 const TABS = [
   { id: "asistencia", label: "Asistencia y Puntualidad", icon: Clock },
@@ -50,7 +54,18 @@ const MESES = [
   { val: 12, label: "Diciembre" },
 ];
 
-export default function CentroReportesRRHH() {
+export default function CentroReportesRRHH({ usuario = null }) {
+  const {
+    sucursal,
+    setSucursal,
+    esMultisede,
+    listoParaConsultar,
+    sucursalesPermitidas
+  } = usePaginaSucursal({
+    permiteTodas: true,
+    usuario
+  });
+
   const [tabActiva, setTabActiva] = useState("asistencia");
   const [loading, setLoading] = useState(false);
   const [reporteData, setReporteData] = useState({ metricas: {}, data: [] });
@@ -70,12 +85,14 @@ export default function CentroReportesRRHH() {
   const [gestion, setGestion] = useState(hoy.getFullYear());
 
   const cargarReporte = useCallback(async () => {
+    if (!listoParaConsultar) return;
     setLoading(true);
     try {
       let res = { metricas: {}, data: [] };
       const baseParams = {
         busqueda: busqueda || undefined,
         area: filtroArea !== "TODOS" ? filtroArea : undefined,
+        id_sucursal: sucursal === "todas" ? undefined : Number(sucursal),
       };
 
       if (tabActiva === "asistencia") {
@@ -98,7 +115,7 @@ export default function CentroReportesRRHH() {
     } finally {
       setLoading(false);
     }
-  }, [tabActiva, fechaInicio, fechaFin, mes, gestion, busqueda, filtroArea]);
+  }, [tabActiva, fechaInicio, fechaFin, mes, gestion, busqueda, filtroArea, sucursal, listoParaConsultar]);
 
   useEffect(() => {
     cargarReporte();
@@ -267,49 +284,50 @@ export default function CentroReportesRRHH() {
         }
       />
 
-      {/* Header en pantalla / Pestañas y Acciones */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-              <Users className="w-7 h-7 text-sky-600" />
-              Centro de Reportes de Recursos Humanos
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Control biométrico de puntualidad, atrasos, horas extraordinarias y consolidado de planillas salariales.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cargarReporte}
-              disabled={loading}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <RotateCw className={`w-4 h-4 ${loading ? "animate-spin text-sky-600" : ""}`} />
-              Actualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300"
-            >
-              <Printer className="w-4 h-4 text-slate-600" />
-              Imprimir
-            </Button>
-            <Button
-              size="sm"
-              onClick={exportarCSVActual}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              Exportar CSV
-            </Button>
-          </div>
-        </div>
+      {/* Header en pantalla con PageHeader y BranchFilter */}
+      <div className="no-print">
+        <PageHeader
+          title="Centro de Reportes de Recursos Humanos"
+          subtitle="Control biométrico de puntualidad, atrasos, horas extraordinarias y consolidado de planillas salariales."
+          branchFilter={
+            <BranchFilter
+              sucursal={sucursal}
+              onChange={setSucursal}
+              sucursales={sucursalesPermitidas}
+              esMultisede={esMultisede}
+              permiteTodas={true}
+            />
+          }
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cargarReporte}
+            disabled={loading}
+            className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 h-8 rounded"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-sky-600" : ""}`} />
+            Actualizar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            className="gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 h-8 rounded"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-600" />
+            Imprimir
+          </Button>
+          <Button
+            size="sm"
+            onClick={exportarCSVActual}
+            className="gap-1.5 bg-[#1C96C5] hover:bg-[#157A9E] text-white cursor-pointer h-8 rounded shadow-none"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Exportar CSV
+          </Button>
+        </PageHeader>
+      </div>
 
         {/* Pestañas de Navegación */}
         <div className="flex border-b border-slate-200 mt-6 gap-2 overflow-x-auto">
@@ -322,7 +340,7 @@ export default function CentroReportesRRHH() {
                 onClick={() => setTabActiva(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activa
-                    ? "border-sky-600 text-sky-600 bg-sky-50/50 rounded-t-lg"
+                    ? "border-sky-600 text-sky-600 bg-sky-50/50 rounded-t"
                     : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
                 }`}
               >
@@ -332,13 +350,12 @@ export default function CentroReportesRRHH() {
             );
           })}
         </div>
-      </div>
 
       {/* KPIs superiores */}
       {renderKpis()}
 
       {/* Barra de Filtros */}
-      <div className="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+      <div className="no-print bg-white rounded border border-slate-200 p-4">
         <div className="flex items-center gap-2 mb-3 text-slate-700 font-semibold text-sm">
           <Filter className="w-4 h-4 text-sky-600" />
           Filtros de Búsqueda y Parámetros
@@ -438,7 +455,7 @@ export default function CentroReportesRRHH() {
       </div>
 
       {/* Tablas de Datos */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
             <RotateCw className="w-8 h-8 animate-spin text-sky-600" />
@@ -455,17 +472,17 @@ export default function CentroReportesRRHH() {
             {tabActiva === "asistencia" && (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold tracking-wider">
-                    <th className="py-3 px-3">Fecha</th>
-                    <th className="py-3 px-3">Empleado</th>
-                    <th className="py-3 px-3">C.I.</th>
-                    <th className="py-3 px-3">Cargo</th>
-                    <th className="py-3 px-3">Turno</th>
-                    <th className="py-3 px-3 text-center">Entrada</th>
-                    <th className="py-3 px-3 text-center">Salida</th>
-                    <th className="py-3 px-3 text-center">Atraso</th>
-                    <th className="py-3 px-3 text-center">Horas Extra</th>
-                    <th className="py-3 px-3 text-center">Estado</th>
+                  <tr className="sticky top-0 bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold tracking-wider text-[11px] uppercase">
+                    <th className="py-2.5 px-3">Fecha</th>
+                    <th className="py-2.5 px-3">Empleado</th>
+                    <th className="py-2.5 px-3">C.I.</th>
+                    <th className="py-2.5 px-3">Cargo</th>
+                    <th className="py-2.5 px-3">Turno</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Entrada</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Salida</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Atraso</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Horas Extra</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Estado</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
@@ -474,18 +491,18 @@ export default function CentroReportesRRHH() {
                     const atraso = Number(item.minutos_atraso || 0);
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-3 text-slate-500 whitespace-nowrap font-medium">{item.fecha}</td>
-                        <td className="py-3 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
-                        <td className="py-3 px-3 text-slate-500">{item.ci}</td>
-                        <td className="py-3 px-3 font-medium text-slate-800">{item.cargo}</td>
-                        <td className="py-3 px-3 text-slate-600">{item.turno}</td>
-                        <td className="py-3 px-3 text-center text-slate-700">
+                        <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap font-medium">{item.fecha}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
+                        <td className="py-2.5 px-3 text-slate-500">{item.ci}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-800">{item.cargo}</td>
+                        <td className="py-2.5 px-3 text-slate-600">{item.turno}</td>
+                        <td className="py-2.5 px-3 text-center font-mono tabular-nums text-slate-700">
                           {item.hora_real_entrada ? String(item.hora_real_entrada).slice(0, 5) : "--:--"}
                         </td>
-                        <td className="py-3 px-3 text-center text-slate-700">
+                        <td className="py-2.5 px-3 text-center font-mono tabular-nums text-slate-700">
                           {item.hora_real_salida ? String(item.hora_real_salida).slice(0, 5) : "--:--"}
                         </td>
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center font-mono tabular-nums">
                           {atraso > 0 ? (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
                               {atraso} min
@@ -494,7 +511,7 @@ export default function CentroReportesRRHH() {
                             <span className="text-emerald-600 font-medium">0 min</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center font-medium">
+                        <td className="py-2.5 px-3 text-center font-mono tabular-nums font-medium">
                           {Number(item.horas_extra || 0) > 0 ? (
                             <span className="text-indigo-600 font-semibold">
                               +{Number(item.horas_extra).toFixed(1)} hrs
@@ -503,20 +520,8 @@ export default function CentroReportesRRHH() {
                             <span className="text-slate-400">0.0</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                              item.estado_asistencia === "PUNTUAL"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : item.estado_asistencia === "ATRASADO"
-                                ? "bg-amber-100 text-amber-800"
-                                : item.estado_asistencia === "FALTA"
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-sky-100 text-sky-800"
-                            }`}
-                          >
-                            {item.estado_asistencia}
-                          </span>
+                        <td className="py-2.5 px-3 text-center font-mono tabular-nums">
+                          <StatusBadge estado={item.estado_asistencia === "PUNTUAL" ? "APROBADO" : item.estado_asistencia === "ATRASADO" ? "OBSERVADO" : item.estado_asistencia === "FALTA" ? "RECHAZADO" : "PENDIENTE"} label={item.estado_asistencia} />
                         </td>
                       </tr>
                     );
@@ -541,16 +546,16 @@ export default function CentroReportesRRHH() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td colSpan={7} className="py-3 px-3 text-right">
+                    <td colSpan={7} className="py-2.5 px-3 text-right font-mono tabular-nums">
                       Totales del Período ({reporteData.metricas?.total_registros || 0} registros):
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-amber-700">
+                    <td className="py-2.5 px-3 text-center font-mono tabular-nums font-bold text-amber-700">
                       {reporteData.metricas?.total_minutos_atraso || 0} min
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-indigo-700">
+                    <td className="py-2.5 px-3 text-center font-mono tabular-nums font-bold text-indigo-700">
                       {Number(reporteData.metricas?.total_horas_extra || 0).toFixed(1)} hrs
                     </td>
-                    <td className="py-3 px-3 text-center font-bold text-emerald-700">
+                    <td className="py-2.5 px-3 text-center font-mono tabular-nums font-bold text-emerald-700">
                       {reporteData.metricas?.total_puntuales || 0} Puntuales
                     </td>
                   </tr>
@@ -561,60 +566,52 @@ export default function CentroReportesRRHH() {
             {tabActiva === "nomina" && (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold tracking-wider">
-                    <th className="py-3 px-3">Empleado</th>
-                    <th className="py-3 px-3">C.I.</th>
-                    <th className="py-3 px-3">Cargo</th>
-                    <th className="py-3 px-3 text-right">Haber Básico</th>
-                    <th className="py-3 px-3 text-right">Horas Extra</th>
-                    <th className="py-3 px-3 text-right">Comisiones</th>
-                    <th className="py-3 px-3 text-right">Total Ganado</th>
-                    <th className="py-3 px-3 text-right">AFP Ley</th>
-                    <th className="py-3 px-3 text-right">Anticipos</th>
-                    <th className="py-3 px-3 text-right">Total Desc.</th>
-                    <th className="py-3 px-3 text-right">Líquido Pagable</th>
-                    <th className="py-3 px-3 text-center">Estado</th>
+                  <tr className="sticky top-0 bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold tracking-wider text-[11px] uppercase">
+                    <th className="py-2.5 px-3">Empleado</th>
+                    <th className="py-2.5 px-3">C.I.</th>
+                    <th className="py-2.5 px-3">Cargo</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Haber Básico</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Horas Extra</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Comisiones</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Total Ganado</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">AFP Ley</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Anticipos</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Total Desc.</th>
+                    <th className="py-2.5 px-3 text-right font-mono tabular-nums">Líquido Pagable</th>
+                    <th className="py-2.5 px-3 text-center font-mono tabular-nums">Estado</th>
                   </tr>
                 </thead>
                 {/* Cuerpo pantalla con paginación */}
                 <tbody className="divide-y divide-slate-100 text-slate-700 print:hidden">
                   {paginacion.itemsPaginados.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
-                      <td className="py-3 px-3 text-slate-500">{item.ci}</td>
-                      <td className="py-3 px-3 font-medium text-slate-800">{item.cargo}</td>
-                      <td className="py-3 px-3 text-right ">{formatCurrency(item.sueldo_basico || 0)}</td>
-                      <td className="py-3 px-3 text-right text-emerald-600">
+                      <td className="py-2.5 px-3 font-semibold text-slate-900">{item.empleado_nombre}</td>
+                      <td className="py-2.5 px-3 text-slate-500">{item.ci}</td>
+                      <td className="py-2.5 px-3 font-medium text-slate-800">{item.cargo}</td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums ">{formatCurrency(item.sueldo_basico || 0)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-emerald-600">
                         {formatCurrency(item.horas_extra_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right text-emerald-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-emerald-600">
                         {formatCurrency(item.comisiones_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-semibold text-slate-900 bg-slate-50/50">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-slate-900 bg-slate-50/50">
                         {formatCurrency(item.total_ganado || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right text-rose-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-rose-600">
                         {formatCurrency(item.afp_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right text-rose-600">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums text-rose-600">
                         {formatCurrency(item.anticipos_bs || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-semibold text-rose-700 bg-rose-50/30">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-rose-700 bg-rose-50/30">
                         {formatCurrency(item.total_descuento || 0)}
                       </td>
-                      <td className="py-3 px-3 text-right font-bold text-emerald-700 bg-emerald-50/40">
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-emerald-700 bg-emerald-50/40">
                         {formatCurrency(item.liquido_pagable || 0)}
                       </td>
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            item.aprobada
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {item.aprobada ? "Aprobada" : "En Borrador"}
-                        </span>
+                      <td className="py-2.5 px-3 text-center font-mono tabular-nums">
+                        <StatusBadge estado={item.estado_asistencia === "PUNTUAL" ? "APROBADO" : item.estado_asistencia === "ATRASADO" ? "OBSERVADO" : item.estado_asistencia === "FALTA" ? "RECHAZADO" : "PENDIENTE"} label={item.estado_asistencia} />
                       </td>
                     </tr>
                   ))}
@@ -640,19 +637,19 @@ export default function CentroReportesRRHH() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100/80 font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td colSpan={3} className="py-3 px-3 text-right">
+                    <td colSpan={3} className="py-2.5 px-3 text-right font-mono tabular-nums">
                       Totales Nómina ({reporteData.metricas?.cantidad_boletas || 0} boletas):
                     </td>
-                    <td colSpan={3} className="py-3 px-3 text-right text-emerald-700">
+                    <td colSpan={3} className="py-2.5 px-3 text-right font-mono tabular-nums text-emerald-700">
                       Comisiones: {formatCurrency(reporteData.metricas?.total_comisiones_reparto_bs || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-bold text-slate-900">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-slate-900">
                       {formatCurrency(reporteData.metricas?.total_bruto_acumulado_bs || 0)}
                     </td>
-                    <td colSpan={3} className="py-3 px-3 text-right font-bold text-rose-700">
+                    <td colSpan={3} className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-rose-700">
                       {formatCurrency(reporteData.metricas?.total_deducciones_bs || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-800 text-sm">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-emerald-800 text-sm">
                       {formatCurrency(reporteData.metricas?.total_liquido_pagable_bs || 0)}
                     </td>
                     <td></td>
