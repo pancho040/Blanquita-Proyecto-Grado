@@ -21,11 +21,12 @@ import {
   Navigation,
   FileCheck,
   Package,
+  XCircle,
 } from 'lucide-react-native';
 
 export const DetalleParadaScreen = ({ route, navigation }) => {
   const { paradaId, parada: initialParada } = route.params;
-  const { hojaRuta } = useRuta();
+  const { hojaRuta, registrarNoEntrega } = useRuta();
 
   const parada =
     hojaRuta?.paradas?.find((p) => p.id === paradaId) || initialParada;
@@ -83,6 +84,33 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
     (sum, it) => sum + Number(it.cantidad || it.Cantidad || 0),
     0
   );
+
+  const handleReportarNoEntrega = () => {
+    Alert.alert(
+      'Reportar No Entrega',
+      'Seleccione el motivo del catálogo por el cual no se pudo concretar la entrega:',
+      [
+        { text: 'Local Cerrado', onPress: () => confirmarNoEntrega('LOCAL_CERRADO') },
+        { text: 'Cliente Ausente', onPress: () => confirmarNoEntrega('CLIENTE_AUSENTE') },
+        { text: 'Rechazo por Precio', onPress: () => confirmarNoEntrega('RECHAZO_PRECIO') },
+        { text: 'Sin Fondos', onPress: () => confirmarNoEntrega('SIN_FONDOS') },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
+  const confirmarNoEntrega = async (motivo) => {
+    try {
+      const res = await registrarNoEntrega(parada.id || parada.IdPuntoVenta, motivo);
+      if (res?.exito || res?.success) {
+        Alert.alert('No Entrega Registrada', `Motivo: ${motivo}. El pedido fue marcado como no entregado.`, [
+          { text: 'Aceptar', onPress: () => navigation.goBack() }
+        ]);
+      }
+    } catch (e) {
+      Alert.alert('Error', e.message || 'No se pudo registrar la no entrega');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -219,7 +247,20 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
                 pedido,
               })
             }
+            style={{ marginBottom: 10 }}
           />
+
+          {!yaEntregado && (
+            <Button
+              title="REPORTAR NO-ENTREGA"
+              icon={XCircle}
+              variant="outline"
+              size="medium"
+              onPress={handleReportarNoEntrega}
+              style={{ borderColor: Colors.danger }}
+              textStyle={{ color: Colors.danger }}
+            />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
