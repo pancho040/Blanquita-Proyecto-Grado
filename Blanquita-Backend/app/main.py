@@ -48,6 +48,7 @@ from app.Routes.RRHH.RRHHRouter import RRHHRouter
 from app.Routes.Usuario.AuditRouter import AuditRouter
 from app.Routes.Reportes.ReportesRouter import ReportesRouter
 from app.Routes.Gerencia.GerenciaRouter import router as GerenciaRouter
+from app.Routes.Movil.MovilRouter import MovilRouter
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -129,6 +130,10 @@ def Servidor():
 def health_check():
     """Endpoint liviano sin consulta a BD para monitor de keep-alive (UptimeRobot / cron-job.org)."""
     return {"status": "ok", "app": "Papelera Blanquita ERP"}
+
+
+# ROUTER MOVIL V1
+app.include_router(MovilRouter)
 
 
 #ROUTERS USUARIO
