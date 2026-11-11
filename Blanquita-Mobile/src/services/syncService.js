@@ -90,9 +90,11 @@ class SyncService {
                 if (subida.success) {
                   payloadEntrega.id_comprobante_archivo = subida.idComprobante;
                   payloadEntrega.url_comprobante = subida.urlArchivo;
-                } else if (subida.status >= 500 || !subida.status) {
-                  // Fallo de red/servidor al subir archivo: no procesar entrega para reintentar luego
-                  throw new Error(subida.error || "Fallo al subir foto de comprobante");
+                } else {
+                  // Si la subida falla por CUALQUIER motivo (4xx, 5xx, timeout o red), abortar y lanzar error con status
+                  const err = new Error(subida.error || "Fallo al subir foto de comprobante de entrega");
+                  err.status = subida.status || 500;
+                  throw err;
                 }
               }
 
@@ -131,9 +133,16 @@ class SyncService {
                     if (subida.success) {
                       tramo.id_comprobante_archivo = subida.idComprobante;
                       tramo.url_comprobante = subida.urlArchivo;
-                    } else if (subida.status >= 500 || !subida.status) {
-                      throw new Error(subida.error || "Fallo al subir comprobante de cobro QR/Transferencia");
+                    } else {
+                      // Si la subida falla por CUALQUIER motivo, abortar: jamás enviar cobro QR sin comprobante
+                      const err = new Error(subida.error || "Fallo al subir comprobante de cobro QR/Transferencia");
+                      err.status = subida.status || 500;
+                      throw err;
                     }
+                  } else if ((tramo.metodo === "QR" || tramo.metodo === "TRANSFERENCIA") && !tramo.id_comprobante_archivo && !tramo.foto_uri) {
+                    const err = new Error(`El método ${tramo.metodo} exige comprobante fotográfico.`);
+                    err.status = 422;
+                    throw err;
                   }
                 }
               } else if (item.payload?.foto_uri && !item.payload?.id_comprobante_archivo) {
@@ -145,8 +154,10 @@ class SyncService {
                 if (subida.success) {
                   payloadCobro.id_comprobante_archivo = subida.idComprobante;
                   payloadCobro.url_comprobante = subida.urlArchivo;
-                } else if (subida.status >= 500 || !subida.status) {
-                  throw new Error(subida.error || "Fallo al subir comprobante de pago");
+                } else {
+                  const err = new Error(subida.error || "Fallo al subir comprobante de pago");
+                  err.status = subida.status || 500;
+                  throw err;
                 }
               }
 

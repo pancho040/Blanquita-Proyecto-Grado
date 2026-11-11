@@ -25,6 +25,7 @@ const originalLoad = Module._load;
 
 let mockSubidaArchivoHandler = null;
 let mockRegistrarEntregaHandler = null;
+let mockRegistrarCobroHandler = null;
 
 const LogisticaApiMock = {
   subirArchivoComprobante: async (uri, entidad, idOrigen) => {
@@ -39,7 +40,12 @@ const LogisticaApiMock = {
     }
     return { success: true, data: { id_pedido: payload.id_pedido, estado: "Entregado" } };
   },
-  registrarCobro: async () => ({ success: true }),
+  registrarCobro: async (payload, idempKey) => {
+    if (mockRegistrarCobroHandler) {
+      return await mockRegistrarCobroHandler(payload, idempKey);
+    }
+    return { success: true, data: { id_pedido: payload.id_pedido } };
+  },
   registrarNoEntrega: async () => ({ success: true }),
   registrarCierreTurno: async () => ({ success: true }),
 };
@@ -164,7 +170,78 @@ async function runTests() {
   const colaFinal = await SyncQueue.obtenerCola();
   assert.strictEqual(colaFinal.length, 0, "La cola debe quedar limpia (0 pendientes) tras sincronización exitosa");
 
-  console.log("\n>>> [PASSED] Todas las pruebas de subida diferida y tolerancia a fallos 503 concluyeron satisfactoriamente.\n");
+  // --------------------------------------------------------------------------
+  // TEST 4: Subida diferida de comprobante en COBRO mixto y aborto ante 4xx/5xx
+  // --------------------------------------------------------------------------
+  console.log("\n>>> Test 4: Cobro mixto con tramo QR sube comprobante, inyecta id_comprobante y bloquea ante error 4xx/5xx");
+
+  const localQrUri = "file:///data/user/0/com.blanquita.app/cache/comprobante_qr_99.png";
+  const payloadCobroMixto = {
+    id_pedido: 2050,
+    monto_total: 180.0,
+    pagos: [
+      { metodo: "EFECTIVO", monto: 80.0 },
+      { metodo: "QR", monto: 100.0, foto_uri: localQrUri },
+    ],
+  };
+
+  await SyncQueue.encolarOperacion("COBRO", payloadCobroMixto);
+
+  // 4.1 Simular fallo 413 (Payload Too Large) al subir foto QR
+  mockSubidaArchivoHandler = async (uri, entidad, idOrigen) => {
+    return {
+      success: false,
+      status: 413,
+      error: "413 Payload Too Large: El archivo supera el tamaño máximo permitido",
+    };
+  };
+
+  let llamadaCobroRealizada = false;
+  mockRegistrarCobroHandler = async () => {
+    llamadaCobroRealizada = true;
+    return { success: true };
+  };
+
+  await syncService.procesarCola();
+
+  // El cobro jamás debe haberse enviado si la foto falló
+  assert.strictEqual(llamadaCobroRealizada, false, "NUNCA debe despacharse el cobro QR si falló la subida del comprobante");
+
+  const colaCobroFallo = await SyncQueue.obtenerCola();
+  assert.strictEqual(colaCobroFallo.length, 1, "La operación debe permanecer en cola");
+  assert.strictEqual(colaCobroFallo[0].esErrorPermanente, true, "Fallo 413 se clasifica como error permanente de validación");
+  assert.strictEqual(colaCobroFallo[0].estado, "error_validacion");
+  assert.strictEqual(colaCobroFallo[0].payload.pagos[1].foto_uri, localQrUri, "El foto_uri debe preservarse intacto");
+
+  // 4.2 Simular que se corrige o reintenta con subida exitosa (200 OK)
+  // Limpiamos cola y encolamos de nuevo para probar flujo exitoso
+  await AsyncStorageMock.clear();
+  await SyncQueue.encolarOperacion("COBRO", payloadCobroMixto);
+
+  mockSubidaArchivoHandler = async (uri, entidad, idOrigen) => {
+    return {
+      success: true,
+      status: 200,
+      idComprobante: 5544,
+      urlArchivo: "https://api.blanquita.com/archivos/comprobantes/5544.png",
+    };
+  };
+
+  let payloadCobroDespachado = null;
+  mockRegistrarCobroHandler = async (payload) => {
+    payloadCobroDespachado = payload;
+    return { success: true };
+  };
+
+  const resultadoCobroExito = await syncService.procesarCola();
+  assert.ok(resultadoCobroExito.exito, "El procesamiento debe concluir con éxito");
+  assert.ok(payloadCobroDespachado, "El cobro debe haberse despachado a la API");
+  assert.strictEqual(payloadCobroDespachado.pagos[1].id_comprobante_archivo, 5544, "Debe inyectar id_comprobante_archivo=5544 en tramo QR");
+
+  const colaCobroFinal = await SyncQueue.obtenerCola();
+  assert.strictEqual(colaCobroFinal.length, 0, "La cola debe quedar limpia tras despacho exitoso de cobro");
+
+  console.log("\n>>> [PASSED] Todas las pruebas de subida diferida y tolerancia a fallos 503/4xx concluyeron satisfactoriamente.\n");
 }
 
 runTests().catch((err) => {

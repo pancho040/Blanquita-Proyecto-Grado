@@ -1,4 +1,4 @@
-// import React from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Modal,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useRuta } from '../../context/RutaContext';
@@ -24,9 +25,19 @@ import {
   XCircle,
 } from 'lucide-react-native';
 
+// Catálogo cerrado de motivos de no entrega
+const MOTIVOS_NO_ENTREGA = [
+  { clave: 'LOCAL_CERRADO', etiqueta: 'Local Cerrado', detalle: 'Cortina metálica abajo o sin atención' },
+  { clave: 'CLIENTE_AUSENTE', etiqueta: 'Cliente Ausente', detalle: 'No responde llamadas ni se encuentra en sitio' },
+  { clave: 'RECHAZO_PRECIO', etiqueta: 'Rechazo por Precio', detalle: 'Disconformidad con importe o cotización' },
+  { clave: 'SIN_FONDOS', etiqueta: 'Sin Fondos', detalle: 'No dispone de efectivo ni método de pago' },
+];
+
 export const DetalleParadaScreen = ({ route, navigation }) => {
   const { paradaId, parada: initialParada } = route.params;
   const { hojaRuta, registrarNoEntrega } = useRuta();
+  const [modalNoEntregaVisible, setModalNoEntregaVisible] = useState(false);
+  const [guardandoNoEntrega, setGuardandoNoEntrega] = useState(false);
 
   const parada =
     hojaRuta?.paradas?.find((p) => p.id === paradaId) || initialParada;
@@ -86,22 +97,14 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
   );
 
   const handleReportarNoEntrega = () => {
-    Alert.alert(
-      'Reportar No Entrega',
-      'Seleccione el motivo del catálogo por el cual no se pudo concretar la entrega:',
-      [
-        { text: 'Local Cerrado', onPress: () => confirmarNoEntrega('LOCAL_CERRADO') },
-        { text: 'Cliente Ausente', onPress: () => confirmarNoEntrega('CLIENTE_AUSENTE') },
-        { text: 'Rechazo por Precio', onPress: () => confirmarNoEntrega('RECHAZO_PRECIO') },
-        { text: 'Sin Fondos', onPress: () => confirmarNoEntrega('SIN_FONDOS') },
-        { text: 'Cancelar', style: 'cancel' },
-      ]
-    );
+    setModalNoEntregaVisible(true);
   };
 
   const confirmarNoEntrega = async (motivo) => {
+    setGuardandoNoEntrega(true);
     try {
       const res = await registrarNoEntrega(parada.id || parada.IdPuntoVenta, motivo);
+      setModalNoEntregaVisible(false);
       if (res?.exito || res?.success) {
         Alert.alert('No Entrega Registrada', `Motivo: ${motivo}. El pedido fue marcado como no entregado.`, [
           { text: 'Aceptar', onPress: () => navigation.goBack() }
@@ -109,6 +112,8 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
       }
     } catch (e) {
       Alert.alert('Error', e.message || 'No se pudo registrar la no entrega');
+    } finally {
+      setGuardandoNoEntrega(false);
     }
   };
 
@@ -263,6 +268,52 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
           )}
         </View>
       </ScrollView>
+
+      {/* Modal Propio de Catálogo Cerrado para No Entrega (DESIGN.md - Touch Target >= 48px, Bordes Rectos) */}
+      <Modal
+        visible={modalNoEntregaVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !guardandoNoEntrega && setModalNoEntregaVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <XCircle size={22} color={Colors.danger} style={{ marginRight: 8 }} />
+              <Text style={styles.modalTitulo}>Reportar No-Entrega</Text>
+            </View>
+            <Text style={styles.modalSubtitulo}>
+              Seleccione el motivo del catálogo cerrado para registrar la visita no concretada:
+            </Text>
+
+            <View style={styles.modalListaMotivos}>
+              {MOTIVOS_NO_ENTREGA.map((m) => (
+                <TouchableOpacity
+                  key={m.clave}
+                  style={styles.modalOpcionMotivo}
+                  onPress={() => confirmarNoEntrega(m.clave)}
+                  disabled={guardandoNoEntrega}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modalOpcionTextoCol}>
+                    <Text style={styles.modalOpcionTitulo}>{m.etiqueta}</Text>
+                    <Text style={styles.modalOpcionSub}>{m.detalle}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalBotonCancelar}
+              onPress={() => setModalNoEntregaVisible(false)}
+              disabled={guardandoNoEntrega}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalBotonCancelarTexto}>Cancelar y Volver</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -443,6 +494,80 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     fontSize: 15,
     marginBottom: 16,
+  },
+  // Estilos del Modal de No Entrega (DESIGN.md - Touch Targets >= 48px, Bordes Rectos)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    padding: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modalTitulo: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSubtitulo: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginBottom: 14,
+    lineHeight: 18,
+  },
+  modalListaMotivos: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  modalOpcionMotivo: {
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 4,
+    justifyContent: 'center',
+  },
+  modalOpcionTextoCol: {
+    flexDirection: 'column',
+  },
+  modalOpcionTitulo: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalOpcionSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalBotonCancelar: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#94A3B8',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  modalBotonCancelarTexto: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
   },
 });
 
