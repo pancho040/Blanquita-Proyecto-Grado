@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from app.main import app
 from app.Config.supabase import SessionLocal
+from app.Auth.Limiter import limiter
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -70,6 +71,7 @@ def test_login_real_usuario_test_endpoints():
             assert req_claim in meta_web, f"Claim requerido {req_claim} no encontrado en app_metadata del JWT Web"
 
         # 2. Login vía /api/movil/v1/auth/login (Móvil)
+        limiter.reset()
         resp_movil = client.post("/api/movil/v1/auth/login", json={"ci": ci, "clave": test_pwd})
         assert resp_movil.status_code == 200, f"Fallo login /api/movil/v1/auth/login: {resp_movil.status_code} - {resp_movil.text}"
         data_movil = resp_movil.json()

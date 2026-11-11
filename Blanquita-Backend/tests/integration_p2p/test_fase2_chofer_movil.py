@@ -520,3 +520,339 @@ def test_subida_archivo_comprobante_limite_y_retencion(db_session_rollback, chof
     with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
         resp_pesado = client.post("/api/movil/v1/chofer/subir-archivo", files=archivos_pesados, data=form_data, headers=headers)
     assert resp_pesado.status_code == 413
+
+
+# ==============================================================================
+# TEST 7 (PUNTO 2A): IDEMPOTENCIA REAL: DOBLE ENVÍO RETORNA CACHE HIT SIN DUPLICAR STOCK NI PAGOS
+# ==============================================================================
+def test_idempotencia_doble_envio_cache_hit_sin_duplicar_stock_ni_pagos(db_session_rollback, chofer_test):
+    db = db_session_rollback
+    uid = chofer_test["IdUsuario"]
+    sid = chofer_test["IdSucursal"]
+    id_asig = _obtener_o_crear_asignacion(db, uid, sid)
+    id_cliente = _obtener_cliente_sucursal(db, sid)
+
+    pres_row = db.execute(text('SELECT "IdPresentacion" FROM public."PresentacionProducto" LIMIT 1;')).fetchone()
+    pid = pres_row[0]
+
+    # Setup Pedido 1 para entrega
+    ped_entrega = db.execute(text("""
+        INSERT INTO public."Pedido" (
+            "NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido",
+            "IdAsignacionRuta", "FechaPedido", "EsVentaDirecta", "MontoTotal"
+        ) VALUES (
+            :nro, :cli, :uid, 2, :asig, NOW(), false, 150.00
+        ) RETURNING "IdPedido";
+    """), {"nro": f"PED-IDEMP-E-{secrets.token_hex(3).upper()}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()[0]
+
+    db.execute(text("""
+        INSERT INTO public."DetallePedido" ("IdPedido", "IdPresentacion", "Cantidad", "PrecioUnitarioAplicado", "Subtotal")
+        VALUES (:id_ped, :pid, 3.0, 50.0, 150.0);
+    """), {"id_ped": ped_entrega, "pid": pid})
+
+    db.execute(text("""
+        DELETE FROM public.inventario_chofer WHERE "chofer_id" = :cid AND "presentacion_id" = :pid;
+        INSERT INTO public.inventario_chofer (
+            "chofer_id", "sucursal_id", "presentacion_id",
+            "cantidad_cargada", "cantidad_vendida", "cantidad_remanente",
+            "precio_vigente_carga", "fecha_carga"
+        ) VALUES (:cid, :sid, :pid, 20.0, 0.0, 20.0, 50.0, CURRENT_DATE);
+    """), {"cid": uid, "sid": sid, "pid": pid})
+    db.flush()
+
+    # 1. Probar doble envío en /entregar
+    clave_idemp_entrega = str(uuid.uuid4())
+    payload_entrega = {
+        "id_pedido": ped_entrega,
+        "latitud": -19.0483,
+        "longitud": -65.2598,
+        "tipo_entrega": "TOTAL",
+        "recibido_por": "Don José",
+        "firma_chofer": "data:image/svg+xml;utf8,<svg>M0 0 L10 10</svg>"
+    }
+    headers_entrega = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": clave_idemp_entrega
+    }
+
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_e1 = client.post("/api/movil/v1/chofer/entregar", json=payload_entrega, headers=headers_entrega)
+    assert resp_e1.status_code == 200
+
+    # Segundo envío idéntico con la misma clave
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_e2 = client.post("/api/movil/v1/chofer/entregar", json=payload_entrega, headers=headers_entrega)
+    assert resp_e2.status_code == 200
+    assert resp_e2.headers.get("X-Cache-Lookup") == "HIT"
+
+    # Verificar que inventario_chofer solo descontó 3 unidades (no 6)
+    stock_e = db.execute(text("""
+        SELECT "cantidad_vendida", "cantidad_remanente"
+        FROM public.inventario_chofer
+        WHERE "chofer_id" = :cid AND "presentacion_id" = :pid;
+    """), {"cid": uid, "pid": pid}).fetchone()
+    assert float(stock_e[0]) == 3.0
+    assert float(stock_e[1]) == 17.0
+
+    # 2. Probar doble envío en /cobrar
+    ped_cobro = db.execute(text("""
+        INSERT INTO public."Pedido" (
+            "NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido",
+            "IdAsignacionRuta", "FechaPedido", "EsVentaDirecta", "MontoTotal"
+        ) VALUES (
+            :nro, :cli, :uid, 2, :asig, NOW(), false, 80.00
+        ) RETURNING "IdPedido";
+    """), {"nro": f"PED-IDEMP-C-{secrets.token_hex(3).upper()}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()[0]
+    db.flush()
+
+    clave_idemp_cobro = str(uuid.uuid4())
+    payload_cobro = {
+        "id_pedido": ped_cobro,
+        "monto_total": 80.0,
+        "latitud": -19.0483,
+        "longitud": -65.2598,
+        "pagos": [
+            {"metodo": "EFECTIVO", "monto": 80.0}
+        ]
+    }
+    headers_cobro = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": clave_idemp_cobro
+    }
+
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_c1 = client.post("/api/movil/v1/chofer/cobrar", json=payload_cobro, headers=headers_cobro)
+    assert resp_c1.status_code == 200
+
+    # Segundo envío idéntico con la misma clave
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_c2 = client.post("/api/movil/v1/chofer/cobrar", json=payload_cobro, headers=headers_cobro)
+    assert resp_c2.status_code == 200
+    assert resp_c2.headers.get("X-Cache-Lookup") == "HIT"
+
+    # Verificar que en PagoPedido SOLO exista 1 registro para ese pedido
+    conteo_pagos = db.execute(text("""
+        SELECT COUNT(*) FROM public."PagoPedido" WHERE "IdPedido" = :id_ped;
+    """), {"id_ped": ped_cobro}).scalar()
+    assert conteo_pagos == 1
+
+
+# ==============================================================================
+# TEST 8 (PUNTO 2B): REGISTRO DE NO-ENTREGA CON MOTIVO DEL CATÁLOGO CERRADO
+# ==============================================================================
+def test_endpoint_no_entrega_motivo_catalogo_cerrado(db_session_rollback, chofer_test):
+    db = db_session_rollback
+    uid = chofer_test["IdUsuario"]
+    sid = chofer_test["IdSucursal"]
+    id_asig = _obtener_o_crear_asignacion(db, uid, sid)
+    id_cliente = _obtener_cliente_sucursal(db, sid)
+
+    pres_row = db.execute(text('SELECT "IdPresentacion" FROM public."PresentacionProducto" LIMIT 1;')).fetchone()
+    pid = pres_row[0]
+
+    ped_row = db.execute(text("""
+        INSERT INTO public."Pedido" (
+            "NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido",
+            "IdAsignacionRuta", "FechaPedido", "EsVentaDirecta", "MontoTotal"
+        ) VALUES (
+            :nro, :cli, :uid, 2, :asig, NOW(), false, 300.00
+        ) RETURNING "IdPedido";
+    """), {"nro": f"PED-NOENT-{secrets.token_hex(3).upper()}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()
+    id_ped = ped_row[0]
+
+    db.execute(text("""
+        DELETE FROM public.inventario_chofer WHERE "chofer_id" = :cid AND "presentacion_id" = :pid;
+        INSERT INTO public.inventario_chofer (
+            "chofer_id", "sucursal_id", "presentacion_id",
+            "cantidad_cargada", "cantidad_vendida", "cantidad_remanente",
+            "precio_vigente_carga", "fecha_carga"
+        ) VALUES (:cid, :sid, :pid, 15.0, 0.0, 15.0, 40.0, CURRENT_DATE);
+    """), {"cid": uid, "sid": sid, "pid": pid})
+    db.flush()
+
+    clave_idemp = str(uuid.uuid4())
+    payload_no_entrega = {
+        "id_pedido": id_ped,
+        "motivo": "LOCAL_CERRADO",
+        "observacion": "Tienda con rejas cerradas, no atiende llamadas",
+        "latitud": -19.0483,
+        "longitud": -65.2598
+    }
+    headers = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": clave_idemp
+    }
+
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp = client.post("/api/movil/v1/chofer/no-entrega", json=payload_no_entrega, headers=headers)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["codigo"] == "EXITO"
+    assert data["datos"]["motivo"] == "LOCAL_CERRADO"
+    assert data["datos"]["estado"] == "NO_ENTREGADO"
+
+    # Verificar que el pedido pasó a estado 4 (Cancelado / No entregado) con observación
+    ped_db = db.execute(text("""
+        SELECT "IdEstadoPedido", "Observacion" FROM public."Pedido" WHERE "IdPedido" = :id;
+    """), {"id": id_ped}).fetchone()
+    assert ped_db[0] == 4
+    assert "[NO ENTREGADO - Motivo: LOCAL_CERRADO]" in ped_db[1]
+
+    # Verificar que el stock en camión NO fue descontado
+    stock_db = db.execute(text("""
+        SELECT "cantidad_vendida", "cantidad_remanente"
+        FROM public.inventario_chofer
+        WHERE "chofer_id" = :cid AND "presentacion_id" = :pid;
+    """), {"cid": uid, "pid": pid}).fetchone()
+    assert float(stock_db[0]) == 0.0
+    assert float(stock_db[1]) == 15.0
+
+
+# ==============================================================================
+# TEST 9 (PUNTO 2C): SINCRONIZACIÓN BATCH OFFLINE CON IDEMPOTENCIA
+# ==============================================================================
+def test_sincronizar_batch_lote_offline_idempotente(db_session_rollback, chofer_test):
+    db = db_session_rollback
+    uid = chofer_test["IdUsuario"]
+    sid = chofer_test["IdSucursal"]
+    id_asig = _obtener_o_crear_asignacion(db, uid, sid)
+    id_cliente = _obtener_cliente_sucursal(db, sid)
+
+    p1 = db.execute(text("""
+        INSERT INTO public."Pedido" ("NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "MontoTotal")
+        VALUES (:nro, :cli, :uid, 2, :asig, NOW(), 50.00) RETURNING "IdPedido";
+    """), {"nro": f"PED-B1-{secrets.token_hex(2)}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()[0]
+
+    p2 = db.execute(text("""
+        INSERT INTO public."Pedido" ("NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "MontoTotal")
+        VALUES (:nro, :cli, :uid, 2, :asig, NOW(), 120.00) RETURNING "IdPedido";
+    """), {"nro": f"PED-B2-{secrets.token_hex(2)}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()[0]
+
+    p3 = db.execute(text("""
+        INSERT INTO public."Pedido" ("NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "MontoTotal")
+        VALUES (:nro, :cli, :uid, 2, :asig, NOW(), 75.00) RETURNING "IdPedido";
+    """), {"nro": f"PED-B3-{secrets.token_hex(2)}", "cli": id_cliente, "uid": uid, "asig": id_asig}).fetchone()[0]
+    db.flush()
+
+    clave_idemp_batch = str(uuid.uuid4())
+    payload_batch = {
+        "operaciones": [
+            {
+                "id": str(uuid.uuid4()),
+                "tipo": "ENTREGA",
+                "payload": {"id_pedido": p1, "recibido_por": "Doña Juana", "observacion": "Entregado offline"}
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "tipo": "COBRO",
+                "payload": {"id_pedido": p2, "monto_total": 120.0, "metodo": "EFECTIVO"}
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "tipo": "NO_ENTREGA",
+                "payload": {"id_pedido": p3, "motivo": "CLIENTE_AUSENTE"}
+            }
+        ]
+    }
+
+    headers = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": clave_idemp_batch
+    }
+
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp1 = client.post("/api/movil/v1/chofer/sincronizar-batch", json=payload_batch, headers=headers)
+
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert data1["codigo"] == "EXITO"
+    assert len(data1["datos"]["sincronizados"]) == 3
+
+    # Reenvío del mismo lote con la misma clave -> HIT de idempotencia
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp2 = client.post("/api/movil/v1/chofer/sincronizar-batch", json=payload_batch, headers=headers)
+    assert resp2.status_code == 200
+    assert resp2.headers.get("X-Cache-Lookup") == "HIT"
+
+
+# ==============================================================================
+# TEST 10 (PUNTO 2D): SEGURIDAD CRUZADA MULTISEDE Y VALIDACIÓN DE X-IDEMPOTENCY-KEY
+# ==============================================================================
+def test_seguridad_cruzada_chofer_ruta_ajena_y_sin_idempotencia(db_session_rollback, chofer_test):
+    db = db_session_rollback
+    uid = chofer_test["IdUsuario"] # Chofer Potosí (IdSucursal = 2)
+
+    # 1. Crear un pedido en Sucre (IdSucursal = 1) con ruta de Sucre
+    ruta_sucre = db.execute(text("""
+        SELECT "IdRutaDistribucion" FROM public."RutaDistribucion" WHERE "IdSucursal" = 1 LIMIT 1;
+    """)).fetchone()
+    assert ruta_sucre is not None
+    id_ruta_sucre = ruta_sucre[0]
+
+    cli_sucre = db.execute(text("""
+        SELECT "IdCliente" FROM public."Cliente" WHERE "IdSucursal" = 1 LIMIT 1;
+    """)).fetchone()
+    assert cli_sucre is not None
+    id_cli_sucre = cli_sucre[0]
+
+    asig_sucre = db.execute(text("""
+        INSERT INTO public."AsignacionRuta" ("IdRutaDistribucion", "IdUsuarioRepartidor", "FechaAsignacion", "Estado", "IdUsuarioAsigna")
+        VALUES (:rid, 4, CURRENT_DATE, 'En Ruta', 4)
+        RETURNING "IdAsignacionRuta";
+    """), {"rid": id_ruta_sucre}).fetchone()[0]
+
+    ped_sucre = db.execute(text("""
+        INSERT INTO public."Pedido" ("NumeroPedido", "IdCliente", "IdUsuarioRepartidor", "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "MontoTotal")
+        VALUES (:nro, :cli, 4, 2, :asig, NOW(), 200.00) RETURNING "IdPedido";
+    """), {"nro": f"PED-SUCRE-{secrets.token_hex(2)}", "cli": id_cli_sucre, "asig": asig_sucre}).fetchone()[0]
+    db.flush()
+
+    headers_con_idemp = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": str(uuid.uuid4())
+    }
+
+    # Chofer de Potosí intentando entregar pedido de Sucre -> 404
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_cruzada = client.post("/api/movil/v1/chofer/entregar", json={
+            "id_pedido": ped_sucre,
+            "latitud": -19.0483,
+            "longitud": -65.2598,
+            "tipo_entrega": "TOTAL",
+            "recibido_por": "Fraude",
+            "firma_chofer": "data:image/svg+xml;utf8,<svg></svg>"
+        }, headers=headers_con_idemp)
+    assert resp_cruzada.status_code == 404
+    assert "Pedido no encontrado o no asignado a su ruta" in resp_cruzada.json().get("detail", "")
+
+    # Chofer intentando operar SIN cabecera X-Idempotency-Key -> 400
+    headers_sin_idemp = _generar_auth_headers(chofer_test)
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_sin_key = client.post("/api/movil/v1/chofer/entregar", json={
+            "id_pedido": ped_sucre,
+            "latitud": -19.0483,
+            "longitud": -65.2598,
+            "tipo_entrega": "TOTAL",
+            "recibido_por": "Sin Clave",
+            "firma_chofer": "data:image/svg+xml;utf8,<svg></svg>"
+        }, headers=headers_sin_idemp)
+    assert resp_sin_key.status_code == 400
+    assert "X-Idempotency-Key (UUID v4) es obligatoria" in resp_sin_key.json().get("detail", "")
+
+    # Chofer intentando operar con clave que NO es UUID v4 -> 400
+    headers_key_invalida = {
+        **_generar_auth_headers(chofer_test),
+        "X-Idempotency-Key": "clave-no-uuid-12345"
+    }
+    with patch("app.Auth.Dependencies.verificar_token", return_value=_mock_verificar_token(chofer_test)):
+        resp_bad_uuid = client.post("/api/movil/v1/chofer/entregar", json={
+            "id_pedido": ped_sucre,
+            "latitud": -19.0483,
+            "longitud": -65.2598,
+            "tipo_entrega": "TOTAL",
+            "recibido_por": "Bad UUID",
+            "firma_chofer": "data:image/svg+xml;utf8,<svg></svg>"
+        }, headers=headers_key_invalida)
+    assert resp_bad_uuid.status_code == 400
+    assert "debe ser un UUID v4 válido" in resp_bad_uuid.json().get("detail", "")
