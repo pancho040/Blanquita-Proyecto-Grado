@@ -48,6 +48,10 @@ PRODUCT.md
 DESIGN.md
 PERFORMANCE_BASELINE.md
 BRANCH_AUDIT.md
+FRONTEND_BRANCH_AUDIT.md
+MOBILE_AUDIT.md
+movil.md
+.agents/
 *_audit*.txt
 *routes_audit*.txt
 **/*audit*.txt
