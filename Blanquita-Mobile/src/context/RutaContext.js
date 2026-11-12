@@ -10,7 +10,7 @@ import { useAuth } from "./AuthContext";
 const RutaContext = createContext(null);
 
 export function RutaProvider({ children }) {
-  const { isOnline, refrescarPendientes } = useNetwork();
+  const { isOnline, refrescarPendientes, pendientes } = useNetwork();
   const { obtenerUbicacionActual, iniciarTelemetria, detenerTelemetria } = useLocation();
   const { usuario } = useAuth();
 
@@ -155,7 +155,11 @@ export function RutaProvider({ children }) {
     try {
       gps = await obtenerUbicacionActual();
     } catch (_e) {
-      gps = { latitud: -19.0435, longitud: -65.2580, precision: 10 };
+      gps = {
+        latitud: detalleEntrega.latitud || -19.0435,
+        longitud: detalleEntrega.longitud || -65.2580,
+        precision: 10,
+      };
     }
 
     // 2. Generar correlativo de nota de entrega digital
@@ -169,22 +173,46 @@ export function RutaProvider({ children }) {
       Number(detalleEntrega.monto_total || detalleEntrega.montoTotal || 0) ||
       items.reduce((s, it) => s + Number(it.subtotal || (it.cantidad || 0) * (it.precio_unitario || 0)), 0);
 
+    // Contrato completo unificado con Chat 2 (Subagente D y handoff-sync.md)
     const datosOperacion = {
       idPuntoVenta,
+      id_punto_venta: idPuntoVenta,
+      id_pedido: detalleEntrega.id_pedido || detalleEntrega.idPedido || asignacionActiva?.IdPedido,
       idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta,
       numeroNota,
+      tipo_entrega: detalleEntrega.tipo_entrega || "TOTAL",
+      recibido_por: detalleEntrega.recibido_por || detalleEntrega.recibidoPor || "Cliente",
+      ci_receptor: detalleEntrega.ci_receptor || detalleEntrega.ciReceptor || "",
+      observaciones: detalleEntrega.observaciones || detalleEntrega.observacion || "",
+      firma_chofer: detalleEntrega.firma_chofer || detalleEntrega.firmaChofer || null,
+      firma_cliente: detalleEntrega.firma_cliente || detalleEntrega.firmaCliente || null,
+      items_entregados: items.map((it) => ({
+        presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
+        producto_nombre: it.producto_nombre || it.NombreProducto || "Producto",
+        cantidad: Number(it.cantidad || it.Cantidad || 0),
+        precio_unitario: Number(it.precio_unitario || it.PrecioUnitario || 0),
+        es_cortesia_bandeo: Boolean(it.es_cortesia_bandeo || it.es_bandeo),
+        subtotal: Number(it.subtotal || (it.cantidad || 0) * (it.precio_unitario || 0)),
+      })),
       productos: items,
       fardosTotales: totalFardos,
       montoTotal,
-      observacion: detalleEntrega.observaciones || detalleEntrega.observacion || "",
-      recibidoPor: detalleEntrega.recibido_por || detalleEntrega.recibidoPor || "Cliente",
-      ciReceptor: detalleEntrega.ci_receptor || detalleEntrega.ciReceptor || "",
+      monto_total: montoTotal,
+      cobro: detalleEntrega.cobro || null,
+      foto_uri: detalleEntrega.foto_uri || null,
       fechaHoraEntrega: new Date().toISOString(),
       gps,
+      latitud: gps?.latitud || detalleEntrega.latitud || -19.0435,
+      longitud: gps?.longitud || detalleEntrega.longitud || -65.2580,
     };
 
     // 3. Actualizar estado en la base local (HU-27)
     await LocalDB.actualizarEstadoParada(idPuntoVenta, "ENTREGADO", datosOperacion);
+
+    // Descontar inventario en camión local de forma optimista e inmediata (Subagente D)
+    if (items.length > 0) {
+      await LocalDB.descontarInventarioCamion(items);
+    }
 
     // 4. Actualizar estado en memoria
     let clienteNombre = "Cliente";
@@ -202,11 +230,14 @@ export function RutaProvider({ children }) {
             Estado: "ENTREGADO",
             estado: "ENTREGADO",
             entrega: datosOperacion,
+            estadoEnvio: "Guardado en el teléfono, pendiente de enviar",
           };
         }
         return p;
       });
-      return { ...prev, paradas: paradasActualizadas, Paradas: paradasActualizadas };
+      const nuevaRuta = { ...prev, paradas: paradasActualizadas, Paradas: paradasActualizadas };
+      LocalDB.guardarRutaActiva(nuevaRuta);
+      return nuevaRuta;
     });
 
     const comprobanteEmitido = {
@@ -218,13 +249,16 @@ export function RutaProvider({ children }) {
       fardosTotales: totalFardos,
       montoTotal,
       gps,
-      recibidoPor: datosOperacion.recibidoPor,
+      recibidoPor: datosOperacion.recibido_por,
+      cobro: datosOperacion.cobro,
+      estadoTexto: "Guardado en el teléfono, pendiente de enviar",
     };
 
     setComprobanteActual(comprobanteEmitido);
 
-    // 5. Encolar operación para sincronización asíncrona segura (HU-28)
-    await SyncQueue.encolarOperacion("ENTREGA", datosOperacion, gps);
+    // 5. Encolar operación única compuesta en la cola offline (Subagente D)
+    const tipoOp = detalleEntrega.cobro ? "ENTREGA_CON_COBRO" : "ENTREGA";
+    await SyncQueue.encolarOperacion(tipoOp, datosOperacion, gps, usuario?.IdUsuario);
     await refrescarPendientes();
 
     // 6. Disparar sincronización silenciosa en background si hay red
@@ -232,7 +266,14 @@ export function RutaProvider({ children }) {
       refrescarPendientes();
     });
 
-    return { exito: true, success: true, numeroNota, comprobante: comprobanteEmitido, datosOperacion };
+    return {
+      exito: true,
+      success: true,
+      numeroNota,
+      comprobante: comprobanteEmitido,
+      datosOperacion,
+      mensaje: "Guardado en el teléfono, pendiente de enviar",
+    };
   };
 
   /**
@@ -640,7 +681,7 @@ export function RutaProvider({ children }) {
         registrarNuevoCliente: registrarNuevoClienteCampo,
         cerrarRutaDiaria,
         cerrarRuta: cerrarRutaDiaria,
-        syncPendientes: paradasList.length > 0 ? 0 : 0,
+        syncPendientes: pendientes,
         ultimaSincronizacion,
       }}
     >
