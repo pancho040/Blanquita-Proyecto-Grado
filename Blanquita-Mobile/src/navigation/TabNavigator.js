@@ -4,11 +4,11 @@ import { Colors } from '../constants/Colors';
 import { useRuta } from '../context/RutaContext';
 import { useNotificaciones } from '../context/NotificacionesContext';
 import { HojaRutaScreen } from '../screens/Ruta/HojaRutaScreen';
-import { NuevoClienteScreen } from '../screens/Clientes/NuevoClienteScreen';
+import { MiInventarioScreen } from '../screens/Inventario/MiInventarioScreen';
 import { CierreRutaScreen } from '../screens/Cierre/CierreRutaScreen';
 import { SincronizacionScreen } from '../screens/Sync/SincronizacionScreen';
 import { BandejaAvisosScreen } from '../screens/Avisos/BandejaAvisosScreen';
-import { Truck, UserPlus, DollarSign, Database, Bell } from 'lucide-react-native';
+import { Truck, Boxes, DollarSign, Database, Bell } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 
@@ -59,11 +59,11 @@ export const TabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="NuevoClienteTab"
-        component={NuevoClienteScreen}
+        name="MiInventarioTab"
+        component={MiInventarioScreen}
         options={{
-          tabBarLabel: 'Nuevo',
-          tabBarIcon: ({ color, size }) => <UserPlus size={size} color={color} />,
+          tabBarLabel: 'Inventario',
+          tabBarIcon: ({ color, size }) => <Boxes size={size} color={color} />,
         }}
       />
       <Tab.Screen

@@ -125,6 +125,8 @@ export default function InventarioCamionTab({
     let totalVendido = 0;
     let totalRemanente = 0;
     let valorTotalRemanente = 0;
+    let valorTotalRevalorizado = 0;
+    let ajusteRevalorizacionTotal = 0;
     let itemsAgotados = 0;
 
     for (const item of inventario) {
@@ -132,12 +134,17 @@ export default function InventarioCamionTab({
       const vendido = Number(item.cantidad_vendida || 0);
       const remanente = Number(item.cantidad_remanente || 0);
       const precio = Number(item.precio_vigente_carga || 0);
+      const precioActual = Number(item.precio_vigente_actual ?? precio);
       const valor = Number(item.valor_remanente ?? (remanente * precio));
+      const valorReval = Number(item.valor_remanente_revalorizado ?? (remanente * precioActual));
+      const ajuste = Number(item.diferencia_revalorizacion_bs ?? (valorReval - valor));
 
       totalCargado += cargado;
       totalVendido += vendido;
       totalRemanente += remanente;
       valorTotalRemanente += valor;
+      valorTotalRevalorizado += valorReval;
+      ajusteRevalorizacionTotal += ajuste;
 
       if (remanente <= 0) {
         itemsAgotados += 1;
@@ -149,6 +156,8 @@ export default function InventarioCamionTab({
       totalVendido,
       totalRemanente,
       valorTotalRemanente,
+      valorTotalRevalorizado,
+      ajusteRevalorizacionTotal,
       itemsAgotados,
       totalItems: inventario.length
     };
@@ -354,14 +363,42 @@ export default function InventarioCamionTab({
         {/* KPI 4: Valor Total Remanente (Bs) */}
         <div className="bg-white border border-slate-200 rounded p-2.5 flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-600 text-xs font-medium">
-            <span>Valor Remanente</span>
-            <DollarSign className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            <span>Valor Remanente (Salida)</span>
+            <DollarSign className="h-4 w-4 text-slate-600" strokeWidth={1.75} />
           </div>
           <div className="mt-1.5 flex items-baseline justify-between">
             <span className="text-xl font-bold font-mono tabular-nums text-slate-900">
               Bs. {formatearBs(metricas.valorTotalRemanente)}
             </span>
-            <span className="text-[11px] text-slate-500">a liquidar</span>
+            <span className="text-[11px] text-slate-500">precio carga</span>
+          </div>
+        </div>
+
+        {/* KPI 5: Valor Revalorizado Vigente */}
+        <div className="col-span-2 sm:col-span-4 bg-emerald-50/50 border border-emerald-200 rounded p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-700" strokeWidth={2} />
+            <div>
+              <span className="text-xs font-bold text-emerald-900">
+                Valoración a Precio Vigente de Sucursal (Revalorización):
+              </span>
+              <p className="text-[11px] text-emerald-700">
+                Al cierre de turno o traspaso al día siguiente, el sobrante se rinde al precio vigente.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-baseline gap-3 self-end sm:self-auto">
+            <div className="text-right">
+              <span className="text-xs text-slate-600 mr-1.5">Ajuste Neto:</span>
+              <span className={`text-xs font-mono font-bold ${metricas.ajusteRevalorizacionTotal >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                {metricas.ajusteRevalorizacionTotal >= 0 ? "+" : ""}Bs. {formatearBs(metricas.ajusteRevalorizacionTotal)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-bold font-mono tabular-nums text-emerald-900">
+                Bs. {formatearBs(metricas.valorTotalRevalorizado)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -446,8 +483,9 @@ export default function InventarioCamionTab({
                   <th className="px-3 py-2 text-right">Carga Inicial</th>
                   <th className="px-3 py-2 text-right">Vendido en Ruta</th>
                   <th className="px-3 py-2 text-right">Remanente Camión</th>
-                  <th className="px-3 py-2 text-right">Precio Vigente (Bs)</th>
-                  <th className="px-3 py-2 text-right">Subtotal Bs.</th>
+                  <th className="px-3 py-2 text-right">P. Salida (Bs)</th>
+                  <th className="px-3 py-2 text-right">P. Vigente (Bs)</th>
+                  <th className="px-3 py-2 text-right">Subtotal Revalorizado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800 print:divide-slate-300">
@@ -455,8 +493,10 @@ export default function InventarioCamionTab({
                   const remanente = Number(item.cantidad_remanente || 0);
                   const cargado = Number(item.cantidad_cargada || 0);
                   const vendido = Number(item.cantidad_vendida || 0);
-                  const precio = Number(item.precio_vigente_carga || 0);
-                  const subtotal = Number(item.valor_remanente ?? (remanente * precio));
+                  const precioCarga = Number(item.precio_vigente_carga || 0);
+                  const precioActual = Number(item.precio_vigente_actual ?? precioCarga);
+                  const subtotalReval = Number(item.valor_remanente_revalorizado ?? (remanente * precioActual));
+                  const difReval = Number(item.diferencia_revalorizacion_bs ?? ((precioActual - precioCarga) * remanente));
                   const agotado = remanente <= 0;
 
                   return (
@@ -514,14 +554,24 @@ export default function InventarioCamionTab({
                         </div>
                       </td>
 
-                      {/* 6. Precio Vigente */}
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-700">
-                        {formatearBs(precio)}
+                      {/* 6. Precio Carga (Salida) */}
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-600">
+                        {formatearBs(precioCarga)}
                       </td>
 
-                      {/* 7. Subtotal Valorizado (Bs) */}
+                      {/* 7. Precio Vigente Sucursal */}
+                      <td className="px-3 py-2 text-right font-mono tabular-nums font-medium text-slate-900">
+                        {formatearBs(precioActual)}
+                        {difReval !== 0 && (
+                          <span className={`block text-[10px] ${difReval > 0 ? "text-emerald-700" : "text-red-700"}`}>
+                            {difReval > 0 ? "+" : ""}{formatearBs(difReval)} Bs
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 8. Subtotal Revalorizado (Bs) */}
                       <td className="px-3 py-2 text-right font-mono tabular-nums font-bold text-slate-900">
-                        {formatearBs(subtotal)}
+                        {formatearBs(subtotalReval)}
                       </td>
                     </tr>
                   );
@@ -550,14 +600,15 @@ export default function InventarioCamionTab({
                     )}
                   </td>
                   <td className="px-3 py-2 text-right text-slate-400 font-mono text-[11px]">-</td>
+                  <td className="px-3 py-2 text-right text-slate-400 font-mono text-[11px]">-</td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums font-bold text-emerald-800">
                     Bs. {formatearBs(
                       itemsFiltrados.reduce(
                         (acc, i) =>
                           acc +
                           Number(
-                            i.valor_remanente ??
-                              (Number(i.cantidad_remanente || 0) * Number(i.precio_vigente_carga || 0))
+                            i.valor_remanente_revalorizado ??
+                              (Number(i.cantidad_remanente || 0) * Number(i.precio_vigente_actual ?? i.precio_vigente_carga ?? 0))
                           ),
                         0
                       )

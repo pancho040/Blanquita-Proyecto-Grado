@@ -22,7 +22,7 @@ export const linkingConfig = {
         screens: {
           HojaRutaTab: 'ruta',
           AvisosTab: 'avisos',
-          NuevoClienteTab: 'nuevo-cliente',
+          MiInventarioTab: 'mi-inventario',
           CierreRutaTab: 'cierre',
           SincronizacionTab: 'sync',
         },

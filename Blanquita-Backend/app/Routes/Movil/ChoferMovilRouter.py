@@ -408,6 +408,15 @@ def obtener_mi_inventario_camion(
             ic.cantidad_remanente,
             ic.precio_vigente_carga,
             ROUND(ic.cantidad_remanente * ic.precio_vigente_carga, 2) as valor_remanente,
+            COALESCE((
+                SELECT pp."PrecioUnitario"
+                FROM public."PrecioProducto" pp
+                WHERE pp."IdPresentacion" = ic.presentacion_id
+                  AND (pp."IdSucursal" = ic.sucursal_id OR pp."IdSucursal" IS NULL)
+                  AND pp."Activo" = TRUE
+                ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC
+                LIMIT 1
+            ), ic.precio_vigente_carga) as precio_vigente_actual,
             COALESCE(pcc."EsBandeo", false) as es_bandeo,
             COALESCE(pcc."ValorBandeo", 0) as valor_bandeo
         FROM public.inventario_chofer ic
@@ -424,6 +433,8 @@ def obtener_mi_inventario_camion(
     total_entregados = 0.0
     total_saldo = 0.0
     valor_total_bs = 0.0
+    valor_total_revalorizado_bs = 0.0
+    ajuste_revalorizacion_total_bs = 0.0
 
     for r in filas:
         cargado = float(r["cantidad_cargada"])
@@ -432,10 +443,16 @@ def obtener_mi_inventario_camion(
         precio_u = float(r["precio_vigente_carga"])
         valor_rem = float(r["valor_remanente"] or (remanente * precio_u))
 
+        precio_actual = float(r["precio_vigente_actual"] if r["precio_vigente_actual"] is not None else precio_u)
+        valor_rem_reval = round(remanente * precio_actual, 2)
+        dif_reval = round((precio_actual - precio_u) * remanente, 2)
+
         total_cargados += cargado
         total_entregados += vendido
         total_saldo += remanente
         valor_total_bs += valor_rem
+        valor_total_revalorizado_bs += valor_rem_reval
+        ajuste_revalorizacion_total_bs += dif_reval
 
         cortesia_desc = None
         if r["es_bandeo"] and r["valor_bandeo"] > 0:
@@ -451,6 +468,9 @@ def obtener_mi_inventario_camion(
             cantidad_remanente=remanente,
             precio_vigente_carga=precio_u,
             valor_remanente=valor_rem,
+            precio_vigente_actual=precio_actual,
+            diferencia_revalorizacion_bs=dif_reval,
+            valor_remanente_revalorizado=valor_rem_reval,
             es_bandeo=r["es_bandeo"],
             valor_bandeo=r["valor_bandeo"],
             cortesia_bandeo_descripcion=cortesia_desc
@@ -462,7 +482,9 @@ def obtener_mi_inventario_camion(
         total_bultos_cargados=total_cargados,
         total_bultos_entregados=total_entregados,
         total_saldo_camion=total_saldo,
-        valor_total_camion_bs=valor_total_bs,
+        valor_total_camion_bs=round(valor_total_bs, 2),
+        valor_total_revalorizado_bs=round(valor_total_revalorizado_bs, 2),
+        ajuste_revalorizacion_total_bs=round(ajuste_revalorizacion_total_bs, 2),
         items=items
     )
 

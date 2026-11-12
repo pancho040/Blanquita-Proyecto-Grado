@@ -55,6 +55,33 @@ class InventarioComercialRepository:
                 ic.cantidad_remanente,
                 ic.precio_vigente_carga,
                 ROUND(ic.cantidad_remanente * ic.precio_vigente_carga, 2) as valor_remanente,
+                COALESCE((
+                    SELECT pp."PrecioUnitario" 
+                    FROM public."PrecioProducto" pp 
+                    WHERE pp."IdPresentacion" = ic.presentacion_id 
+                      AND (pp."IdSucursal" = ic.sucursal_id OR pp."IdSucursal" IS NULL) 
+                      AND pp."Activo" = TRUE 
+                    ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC 
+                    LIMIT 1
+                ), ic.precio_vigente_carga) as precio_vigente_actual,
+                ROUND(ic.cantidad_remanente * COALESCE((
+                    SELECT pp."PrecioUnitario" 
+                    FROM public."PrecioProducto" pp 
+                    WHERE pp."IdPresentacion" = ic.presentacion_id 
+                      AND (pp."IdSucursal" = ic.sucursal_id OR pp."IdSucursal" IS NULL) 
+                      AND pp."Activo" = TRUE 
+                    ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC 
+                    LIMIT 1
+                ), ic.precio_vigente_carga), 2) as valor_remanente_revalorizado,
+                ROUND(ic.cantidad_remanente * (COALESCE((
+                    SELECT pp."PrecioUnitario" 
+                    FROM public."PrecioProducto" pp 
+                    WHERE pp."IdPresentacion" = ic.presentacion_id 
+                      AND (pp."IdSucursal" = ic.sucursal_id OR pp."IdSucursal" IS NULL) 
+                      AND pp."Activo" = TRUE 
+                    ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC 
+                    LIMIT 1
+                ), ic.precio_vigente_carga) - ic.precio_vigente_carga), 2) as diferencia_revalorizacion_bs,
                 ic.fecha_carga
             FROM public.inventario_chofer ic
             JOIN public."Usuario" u ON ic.chofer_id = u."IdUsuario"

@@ -99,6 +99,9 @@ class ItemInventarioCamionDTO(BaseModel):
     cantidad_remanente: float
     precio_vigente_carga: float
     valor_remanente: float
+    precio_vigente_actual: float = 0.0
+    diferencia_revalorizacion_bs: float = 0.0
+    valor_remanente_revalorizado: float = 0.0
     es_bandeo: bool = False
     valor_bandeo: int = 0
     cortesia_bandeo_descripcion: Optional[str] = None
@@ -112,6 +115,8 @@ class ResumenInventarioChoferDTO(BaseModel):
     total_bultos_entregados: float
     total_saldo_camion: float
     valor_total_camion_bs: float
+    valor_total_revalorizado_bs: float = 0.0
+    ajuste_revalorizacion_total_bs: float = 0.0
     items: List[ItemInventarioCamionDTO]
 
 
