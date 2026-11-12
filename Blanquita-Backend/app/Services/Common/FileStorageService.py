@@ -17,13 +17,14 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "compro
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
-FORMATOS_PERMITIDOS = {".jpg", ".jpeg", ".png", ".pdf"}
+FORMATOS_PERMITIDOS = {".jpg", ".jpeg", ".png", ".pdf", ".svg"}
 
 # Configuración de Supabase Storage (Bucket privado)
-STORAGE_SUPABASE_ACTIVO = os.getenv("STORAGE_SUPABASE_ACTIVO", "false").lower() == "true"
+STORAGE_SUPABASE_ACTIVO = os.getenv("STORAGE_SUPABASE_ACTIVO", "true").lower() == "true"
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "comprobantes-privados")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+RETENCION_DIAS = int(os.getenv("STORAGE_RETENCION_DIAS", "90"))
 
 
 class FileStorageService:
@@ -128,21 +129,30 @@ class FileStorageService:
             ruta_objeto = f"sucursal/{sucursal_id}/chofer/{chofer_id}/{uuid_unico}{extension}"
             mime_type = archivo.content_type or "application/octet-stream"
             subida_ok = cls.subir_a_supabase_storage(ruta_objeto, contenido, mime_type)
-            if not subida_ok:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Error al subir el archivo al almacenamiento seguro de Supabase."
-                )
-            url_archivo = f"/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{ruta_objeto}"
+            if subida_ok:
+                provider = "supabase"
+                storage_path = ruta_objeto
+                url_archivo = f"/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{ruta_objeto}"
+            else:
+                logger.warning(f"Fallo al subir a Supabase Storage bucket {SUPABASE_STORAGE_BUCKET}. Aplicando fallback transparente a disco local.")
+                provider = "local"
+                timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                nombre_guardado = f"{entidad_origen.lower()}_{id_registro_origen}_{timestamp_str}_{sha256[:8]}{extension}"
+                ruta_archivo = UPLOAD_DIR / nombre_guardado
+                ruta_archivo.write_bytes(contenido)
+                storage_path = str(ruta_archivo)
+                url_archivo = f"/uploads/comprobantes/{nombre_guardado}"
         else:
             # Almacenamiento local en disco
+            provider = "local"
             timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             nombre_guardado = f"{entidad_origen.lower()}_{id_registro_origen}_{timestamp_str}_{sha256[:8]}{extension}"
             ruta_archivo = UPLOAD_DIR / nombre_guardado
             ruta_archivo.write_bytes(contenido)
+            storage_path = str(ruta_archivo)
             url_archivo = f"/uploads/comprobantes/{nombre_guardado}"
 
-        # Registrar metadatos en BD con expiración a 60 días
+        # Registrar metadatos en BD con expiración configurable (90 días)
         stmt = text("""
             INSERT INTO public."ComprobanteArchivo" (
                 "EntidadOrigen",
@@ -154,7 +164,9 @@ class FileStorageService:
                 "Sha256",
                 "ArchivoEliminado",
                 "FechaSubida",
-                "FechaExpiracion"
+                "FechaExpiracion",
+                "StorageProvider",
+                "StoragePath"
             ) VALUES (
                 :entidad,
                 :id_registro,
@@ -165,7 +177,9 @@ class FileStorageService:
                 :sha,
                 false,
                 NOW(),
-                NOW() + INTERVAL '60 days'
+                NOW() + (:retencion_dias || ' days')::INTERVAL,
+                :provider,
+                :storage_path
             ) RETURNING "IdComprobante", "FechaExpiracion";
         """)
 
@@ -176,7 +190,10 @@ class FileStorageService:
             "nombre_orig": nombre_original,
             "formato": extension.replace(".", "").upper(),
             "tamano": tamano_bytes,
-            "sha": sha256
+            "sha": sha256,
+            "retencion_dias": str(RETENCION_DIAS),
+            "provider": provider,
+            "storage_path": storage_path
         }).fetchone()
 
         session.flush()
@@ -187,7 +204,112 @@ class FileStorageService:
             "nombre_original": nombre_original,
             "tamano_bytes": tamano_bytes,
             "sha256": sha256,
-            "fecha_expiracion": res[1]
+            "fecha_expiracion": res[1],
+            "storage_provider": provider
+        }
+
+    @classmethod
+    def guardar_bytes_directo(
+        cls,
+        session: Session,
+        contenido: bytes,
+        nombre_archivo: str,
+        entidad_origen: str,
+        id_registro_origen: int,
+        id_sucursal: Optional[int] = 1,
+        id_chofer: Optional[int] = 1,
+        mime_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Almacena bytes directos (p. ej. firmas vectoriales SVG o PNG comprimidos)
+        con particionado en Supabase Storage y fallback a disco local.
+        """
+        extension = Path(nombre_archivo).suffix.lower() or ".svg"
+        if extension not in FORMATOS_PERMITIDOS:
+            extension = ".svg"
+        tamano_bytes = len(contenido)
+        sha256 = hashlib.sha256(contenido).hexdigest()
+        uuid_unico = uuid.uuid4().hex
+
+        provider = "local"
+        storage_path = None
+        url_archivo = None
+
+        if STORAGE_SUPABASE_ACTIVO:
+            sucursal_id = id_sucursal or 1
+            chofer_id = id_chofer or 1
+            ruta_objeto = f"sucursal/{sucursal_id}/chofer/{chofer_id}/{uuid_unico}{extension}"
+            m_type = mime_type or ("image/svg+xml" if extension == ".svg" else "image/png")
+            subida_ok = cls.subir_a_supabase_storage(ruta_objeto, contenido, m_type)
+            if subida_ok:
+                provider = "supabase"
+                storage_path = ruta_objeto
+                url_archivo = f"/storage/v1/object/{SUPABASE_STORAGE_BUCKET}/{ruta_objeto}"
+            else:
+                logger.warning(f"Fallo al subir firma/archivo directo a Supabase. Fallback a disco.")
+
+        if not url_archivo:
+            provider = "local"
+            timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            nombre_guardado = f"{entidad_origen.lower()}_{id_registro_origen}_{timestamp_str}_{sha256[:8]}{extension}"
+            ruta_archivo = UPLOAD_DIR / nombre_guardado
+            ruta_archivo.write_bytes(contenido)
+            storage_path = str(ruta_archivo)
+            url_archivo = f"/uploads/comprobantes/{nombre_guardado}"
+
+        stmt = text("""
+            INSERT INTO public."ComprobanteArchivo" (
+                "EntidadOrigen",
+                "IdRegistroOrigen",
+                "UrlArchivo",
+                "NombreOriginal",
+                "Formato",
+                "TamanoBytes",
+                "Sha256",
+                "ArchivoEliminado",
+                "FechaSubida",
+                "FechaExpiracion",
+                "StorageProvider",
+                "StoragePath"
+            ) VALUES (
+                :entidad,
+                :id_registro,
+                :url,
+                :nombre_orig,
+                :formato,
+                :tamano,
+                :sha,
+                false,
+                NOW(),
+                NOW() + (:retencion_dias || ' days')::INTERVAL,
+                :provider,
+                :storage_path
+            ) RETURNING "IdComprobante", "FechaExpiracion";
+        """)
+
+        res = session.execute(stmt, {
+            "entidad": entidad_origen,
+            "id_registro": id_registro_origen,
+            "url": url_archivo,
+            "nombre_orig": nombre_archivo,
+            "formato": extension.replace(".", "").upper(),
+            "tamano": tamano_bytes,
+            "sha": sha256,
+            "retencion_dias": str(RETENCION_DIAS),
+            "provider": provider,
+            "storage_path": storage_path
+        }).fetchone()
+
+        session.flush()
+
+        return {
+            "id_comprobante": res[0],
+            "url": url_archivo,
+            "nombre_original": nombre_archivo,
+            "tamano_bytes": tamano_bytes,
+            "sha256": sha256,
+            "fecha_expiracion": res[1],
+            "storage_provider": provider
         }
 
     @classmethod

@@ -23,9 +23,10 @@ class EntregaMovilRequest(BaseModel):
     tipo_entrega: str = Field("TOTAL", description="'TOTAL' o 'PARCIAL'")
     items_entregados: Optional[List[ItemEntregaDTO]] = None
     recibido_por: Optional[str] = Field("Cliente", validation_alias=AliasChoices("recibido_por", "RecibidoPor"))
+    ci_receptor: Optional[str] = Field(None, validation_alias=AliasChoices("ci_receptor", "CiReceptor"))
     observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "Observacion"))
     firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base64 o URL)")
-    firma_cliente: Optional[str] = Field(None, description="Firma digital opcional del cliente")
+    firma_cliente: str = Field(..., min_length=5, description="Firma digital obligatoria del cliente o receptor")
     fecha_dispositivo: Optional[str] = None
 
 
@@ -118,6 +119,7 @@ class ClienteMovilRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     razon_social: str = Field(..., min_length=2, validation_alias=AliasChoices("razon_social", "RazonSocial"))
     nombre_comercial: Optional[str] = Field(None, validation_alias=AliasChoices("nombre_comercial", "NombreComercial"))
+    nombre_propietario: Optional[str] = Field(None, validation_alias=AliasChoices("nombre_propietario", "NombrePropietario"))
     nit_ci: Optional[str] = Field(None, validation_alias=AliasChoices("nit_ci", "NitCi", "nit"))
     telefono: Optional[str] = Field(None, validation_alias=AliasChoices("telefono", "Telefono"))
     direccion: str = Field(..., min_length=3, validation_alias=AliasChoices("direccion", "Direccion"))

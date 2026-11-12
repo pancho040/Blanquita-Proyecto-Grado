@@ -57,6 +57,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const [receptorCi, setReceptorCi] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [firmaChofer, setFirmaChofer] = useState(null);
+  const [firmaCliente, setFirmaCliente] = useState(null);
   const [loading, setLoading] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
 
@@ -106,9 +107,14 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Regla 2: Firma digital táctil obligatoria del chofer
+    // Regla 2: Doble firma digital táctil obligatoria (Chofer y Cliente receptor)
     if (!firmaChofer) {
-      Alert.alert('Firma Requerida', 'El chofer debe estampar su firma digital táctil obligatoria.');
+      Alert.alert('Firma del Chofer Requerida', 'El chofer debe estampar su firma digital táctil obligatoria.');
+      return;
+    }
+
+    if (!firmaCliente) {
+      Alert.alert('Firma del Cliente Requerida', 'El cliente o receptor en tienda debe estampar su firma digital táctil de conformidad.');
       return;
     }
 
@@ -123,6 +129,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       ci_receptor: receptorCi.trim(),
       observaciones: observaciones.trim(),
       firma_chofer: firmaChofer,
+      firma_cliente: firmaCliente,
       items_entregados: items.map((i) => ({
         presentacion_id: i.presentacion_id,
         producto_nombre: i.producto_nombre || i.NombreProducto || 'Producto Blanquita',
@@ -292,19 +299,35 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
           />
         </Card>
 
-        {/* Firma Táctil Obligatoria del Chofer (Regla 2) */}
-        <Card title="Firma Táctil de Conformidad *" icon={FileCheck2} style={styles.cardSection}>
+        {/* Doble Firma Táctil Obligatoria: Chofer y Cliente (Regla 2) */}
+        <Card title="1. Firma Táctil del Chofer *" icon={FileCheck2} style={styles.cardSection}>
           <Text style={styles.firmaDesc}>
-            El chofer debe estampar su firma digital táctil obligatoria para certificar la entrega.
+            El chofer debe estampar su firma digital táctil obligatoria para certificar la salida y entrega de la carga.
           </Text>
           <SignaturePad
             onSign={(firmaSvg) => setFirmaChofer(firmaSvg)}
             title="Firmar Entrega (Chofer)"
-            height={160}
+            height={140}
           />
           {firmaChofer && (
             <View style={styles.firmaOkRow}>
               <Text style={styles.firmaOkText}>✓ Firma del chofer registrada</Text>
+            </View>
+          )}
+        </Card>
+
+        <Card title="2. Firma Táctil del Cliente Receptor *" icon={FileCheck2} style={styles.cardSection}>
+          <Text style={styles.firmaDesc}>
+            El cliente o receptor debe estampar su firma digital táctil en señal de conformidad de los bultos recibidos.
+          </Text>
+          <SignaturePad
+            onSign={(firmaSvg) => setFirmaCliente(firmaSvg)}
+            title="Firmar Recepción (Cliente)"
+            height={140}
+          />
+          {firmaCliente && (
+            <View style={styles.firmaOkRow}>
+              <Text style={styles.firmaOkText}>✓ Firma del cliente receptor registrada</Text>
             </View>
           )}
         </Card>

@@ -816,7 +816,7 @@ export default function HistorialRepartoTab({
                           {asig.NombreRepartidor || "Chofer"}
                         </td>
                         <td className="px-3 py-2 font-mono text-slate-600">
-                          {asig.Placa || asig.Observacion?.match(/\(([^)]+)\)/)?.[1] || "5738UPK"}
+                          {asig.Placa || asig.Observacion?.match(/\(([^)]+)\)/)?.[1] || "Sin Placa"}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <span
@@ -965,39 +965,50 @@ export default function HistorialRepartoTab({
                 </div>
               </div>
 
-              {/* Receptor y Firma Digital */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
-                <div className="bg-slate-50 border border-slate-200 rounded p-2.5 space-y-1">
-                  <h5 className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
-                    <User className="h-3 w-3 text-slate-500" />
-                    <span>Datos del Receptor</span>
-                  </h5>
-                  <p className="text-xs">
-                    <span className="font-semibold text-slate-600">Nombre:</span>{" "}
-                    {notaDetalle.FirmaNombre || notaDetalle.firma_nombre || "Receptor en Tienda"}
-                  </p>
-                  <p className="text-xs">
-                    <span className="font-semibold text-slate-600">C.I.:</span>{" "}
-                    {notaDetalle.FirmaCi || notaDetalle.firma_ci || "S/CI"}
-                  </p>
-                </div>
+              {/* Doble Firma Digital de Conformidad (Chofer y Cliente) */}
+              <div className="pt-2 border-t border-slate-200 space-y-2">
+                <h5 className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
+                  <PenTool className="h-3 w-3 text-slate-500" />
+                  <span>Doble Firma Digital de Conformidad</span>
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Firma Chofer */}
+                  <div className="bg-slate-50 border border-slate-200 rounded p-2.5 space-y-1">
+                    <p className="text-xs font-semibold text-slate-700">1. Firma del Chofer Repartidor</p>
+                    <p className="text-[11px] text-slate-500">
+                      Chofer: {notaDetalle.FirmaNombre || notaDetalle.firma_nombre || notaDetalle.Chofer || "Chofer Blanquita"}
+                    </p>
+                    {notaDetalle.FirmaDigitalUrl || notaDetalle.firma_digital_url ? (
+                      <div className="border border-slate-300 rounded bg-white p-1 flex justify-center">
+                        <img
+                          src={notaDetalle.FirmaDigitalUrl || notaDetalle.firma_digital_url}
+                          alt="Firma Chofer"
+                          className="max-h-16 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">Sin firma registrada de chofer.</p>
+                    )}
+                  </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded p-2.5 space-y-1">
-                  <h5 className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1">
-                    <PenTool className="h-3 w-3 text-slate-500" />
-                    <span>Firma Digital Capturada</span>
-                  </h5>
-                  {notaDetalle.FirmaDigitalUrl || notaDetalle.firma_digital_url ? (
-                    <div className="border border-slate-300 rounded bg-white p-1 flex justify-center">
-                      <img
-                        src={notaDetalle.FirmaDigitalUrl || notaDetalle.firma_digital_url}
-                        alt="Firma Receptor"
-                        className="max-h-16 object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400 italic">No se registró firma gráfica en pantalla.</p>
-                  )}
+                  {/* Firma Cliente Receptor */}
+                  <div className="bg-slate-50 border border-slate-200 rounded p-2.5 space-y-1">
+                    <p className="text-xs font-semibold text-slate-700">2. Firma del Cliente Receptor</p>
+                    <p className="text-[11px] text-slate-500">
+                      Receptor: {notaDetalle.FirmaClienteNombre || notaDetalle.firma_cliente_nombre || "Receptor en Tienda"} (CI: {notaDetalle.FirmaClienteCi || notaDetalle.firma_cliente_ci || "S/CI"})
+                    </p>
+                    {notaDetalle.FirmaClienteUrl || notaDetalle.firma_cliente_url ? (
+                      <div className="border border-slate-300 rounded bg-white p-1 flex justify-center">
+                        <img
+                          src={notaDetalle.FirmaClienteUrl || notaDetalle.firma_cliente_url}
+                          alt="Firma Cliente Receptor"
+                          className="max-h-16 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">Sin firma registrada del cliente.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

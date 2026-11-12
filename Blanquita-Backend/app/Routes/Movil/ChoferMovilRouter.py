@@ -547,21 +547,97 @@ async def registrar_entrega_movil(
             WHERE "chofer_id" = :cid AND "presentacion_id" = :pid;
         """), {"cant": cant_entregar, "cid": uid, "pid": pres_id})
 
-    # 5. Registrar firma del chofer (y cliente) en FirmaDigitalDocumento
+    # 5. Registrar doble firma digital (Chofer y Cliente receptor) con guardado en Storage y sync a NotaVenta
+    url_firma_chofer = dto.firma_chofer
+    url_firma_cliente = dto.firma_cliente
+
+    # Si vienen como data URIs o vectores SVG, almacenarlos como archivos formales
+    try:
+        if dto.firma_chofer and "data:" in dto.firma_chofer:
+            res_fc = FileStorageService.guardar_bytes_directo(
+                session=db,
+                contenido=dto.firma_chofer.encode("utf-8"),
+                nombre_archivo=f"firma_chofer_ped_{dto.id_pedido}.svg",
+                entidad_origen="FIRMA_CHOFER",
+                id_registro_origen=dto.id_pedido,
+                id_sucursal=sucursal_id,
+                id_chofer=uid,
+                mime_type="image/svg+xml"
+            )
+            url_firma_chofer = res_fc.get("url") or dto.firma_chofer
+
+        if dto.firma_cliente and "data:" in dto.firma_cliente:
+            res_cl = FileStorageService.guardar_bytes_directo(
+                session=db,
+                contenido=dto.firma_cliente.encode("utf-8"),
+                nombre_archivo=f"firma_cliente_ped_{dto.id_pedido}.svg",
+                entidad_origen="FIRMA_CLIENTE",
+                id_registro_origen=dto.id_pedido,
+                id_sucursal=sucursal_id,
+                id_chofer=uid,
+                mime_type="image/svg+xml"
+            )
+            url_firma_cliente = res_cl.get("url") or dto.firma_cliente
+    except Exception as ex_st:
+        logger.warning(f"Aviso: Guardado en Storage de firmas omitió fallback por: {ex_st}")
+
+    # Guardar en FirmaDigitalDocumento
     db.execute(text("""
         INSERT INTO public."FirmaDigitalDocumento" (
             "IdUsuario", "TipoDocumento", "IdRegistroDocumento", "CodigoReferencia",
             "UrlFotoFirmaSello", "Observaciones", "FechaFirma"
         ) VALUES (
-            :uid, 'ENTREGA_PEDIDO', :id_ped, :cod_ref,
+            :uid, 'FIRMA_CHOFER_ENTREGA', :id_ped, :cod_ref,
             :firma_chofer, :obs, NOW()
         );
     """), {
         "uid": uid,
         "id_ped": dto.id_pedido,
-        "cod_ref": f"PED-{dto.id_pedido}",
-        "firma_chofer": dto.firma_chofer,
-        "obs": f"Recibido por: {dto.recibido_por}. Firma cliente: {'PRESENTE' if dto.firma_cliente else 'NO_REGISTRADA'}"
+        "cod_ref": f"PED-{dto.id_pedido}-CHOFER",
+        "firma_chofer": url_firma_chofer,
+        "obs": f"Firma digital táctil del chofer #{uid}."
+    })
+
+    if url_firma_cliente:
+        db.execute(text("""
+            INSERT INTO public."FirmaDigitalDocumento" (
+                "IdUsuario", "TipoDocumento", "IdRegistroDocumento", "CodigoReferencia",
+                "UrlFotoFirmaSello", "Observaciones", "FechaFirma"
+            ) VALUES (
+                :uid, 'FIRMA_CLIENTE_ENTREGA', :id_ped, :cod_ref,
+                :firma_cliente, :obs, NOW()
+            );
+        """), {
+            "uid": uid,
+            "id_ped": dto.id_pedido,
+            "cod_ref": f"PED-{dto.id_pedido}-CLIENTE",
+            "firma_cliente": url_firma_cliente,
+            "obs": f"Recibido por: {dto.recibido_por} (CI: {dto.ci_receptor or 'S/CI'})."
+        })
+
+    # Sincronizar en NotaVenta para visualización inmediata en la Web
+    nombre_chofer_txt = f"{usuario.get('PrimerNombre', '')} {usuario.get('ApellidoPaterno', '')}".strip() or "Chofer"
+    db.execute(text("""
+        UPDATE public."NotaVenta"
+        SET "FirmaDigitalUrl" = COALESCE(:firma_chofer, "FirmaDigitalUrl"),
+            "FirmaNombre" = COALESCE(:nombre_chofer, "FirmaNombre"),
+            "FirmaClienteUrl" = COALESCE(:firma_cliente, "FirmaClienteUrl"),
+            "FirmaClienteNombre" = COALESCE(:recibido_por, "FirmaClienteNombre"),
+            "FirmaClienteCi" = COALESCE(:ci_receptor, "FirmaClienteCi"),
+            "FirmaFecha" = NOW()
+        WHERE "IdChofer" = :uid AND (
+            "IdNotaVenta" = (SELECT "IdNotaVenta" FROM public."CuentaCobrar" WHERE "IdPedido" = :id_ped LIMIT 1)
+            OR "NumeroNotaEntrega" = (SELECT "NumeroPedido" FROM public."Pedido" WHERE "IdPedido" = :id_ped LIMIT 1)
+            OR "IdCliente" = (SELECT "IdCliente" FROM public."Pedido" WHERE "IdPedido" = :id_ped LIMIT 1)
+        );
+    """), {
+        "firma_chofer": url_firma_chofer,
+        "nombre_chofer": nombre_chofer_txt,
+        "firma_cliente": url_firma_cliente,
+        "recibido_por": dto.recibido_por,
+        "ci_receptor": dto.ci_receptor,
+        "uid": uid,
+        "id_ped": dto.id_pedido
     })
 
     # 6. Actualizar pedido delegando en RutaService
