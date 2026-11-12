@@ -58,6 +58,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const [observaciones, setObservaciones] = useState('');
   const [firmaChofer, setFirmaChofer] = useState(null);
   const [firmaCliente, setFirmaCliente] = useState(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
 
@@ -165,7 +166,10 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
         showBackButton
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        scrollEnabled={scrollEnabled}
+        contentContainerStyle={styles.content}
+      >
         {/* Ubicación GPS */}
         <Card title="Ubicación GPS" icon={MapPin} style={styles.gpsCard}>
           <View style={styles.gpsRow}>
@@ -306,6 +310,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
           </Text>
           <SignaturePad
             onSign={(firmaSvg) => setFirmaChofer(firmaSvg)}
+            onDrawingChange={(drawing) => setScrollEnabled(!drawing)}
             title="Firmar Entrega (Chofer)"
             height={140}
           />
@@ -322,6 +327,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
           </Text>
           <SignaturePad
             onSign={(firmaSvg) => setFirmaCliente(firmaSvg)}
+            onDrawingChange={(drawing) => setScrollEnabled(!drawing)}
             title="Firmar Recepción (Cliente)"
             height={140}
           />

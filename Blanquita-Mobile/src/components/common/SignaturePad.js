@@ -16,6 +16,7 @@ export const SignaturePad = ({
   height = 150,
   onFirmaGuardada,
   onSign,
+  onDrawingChange,
 }) => {
   const labelTitulo = title || titulo;
   const callbackFirma = onSign || onFirmaGuardada;
@@ -32,9 +33,14 @@ export const SignaturePad = ({
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (evt) => {
           if (firmado) return;
+          if (onDrawingChange) onDrawingChange(true);
           setErrorValidacion(null);
           const { locationX, locationY } = evt.nativeEvent;
           const x = Math.round(locationX);
@@ -53,6 +59,7 @@ export const SignaturePad = ({
           setCurrentPath(currentPathRef.current.join(" "));
         },
         onPanResponderRelease: () => {
+          if (onDrawingChange) onDrawingChange(false);
           if (firmado) return;
           if (currentPathRef.current && currentPathRef.current.length > 1) {
             const finalPath = currentPathRef.current.join(" ");
@@ -61,8 +68,13 @@ export const SignaturePad = ({
           currentPathRef.current = [];
           setCurrentPath(null);
         },
+        onPanResponderTerminate: () => {
+          if (onDrawingChange) onDrawingChange(false);
+          currentPathRef.current = [];
+          setCurrentPath(null);
+        },
       }),
-    [firmado]
+    [firmado, onDrawingChange]
   );
 
   const handleLimpiarFirma = () => {

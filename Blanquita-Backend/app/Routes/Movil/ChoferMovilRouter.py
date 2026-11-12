@@ -105,6 +105,67 @@ def _resolver_id_metodo_pago(db: Session, nombre_metodo: str) -> int:
     return 1
 
 
+def _guardar_firma_como_archivo(
+    session: Session,
+    firma_str: Optional[str],
+    prefijo_archivo: str,
+    entidad_origen: str,
+    id_registro: int,
+    sucursal_id: int,
+    chofer_id: int
+) -> Optional[str]:
+    """
+    Garantiza que una firma digital se almacene estrictamente como ARCHIVO en Storage (Supabase o disco)
+    y NUNCA se guarde el contenido raw (data URI o SVG inline) en FirmaDigitalDocumento ni en NotaVenta.
+    Retorna la URL del archivo o None.
+    """
+    if not firma_str:
+        return None
+
+    # Si ya es una ruta relativa o URL pública almacenada, se devuelve tal cual
+    if not ("data:" in firma_str or "<svg" in firma_str):
+        return firma_str
+
+    try:
+        if "data:image/svg+xml" in firma_str or "<svg" in firma_str:
+            extension = ".svg"
+            mime_type = "image/svg+xml"
+            if ";base64," in firma_str:
+                import base64
+                contenido_bytes = base64.b64decode(firma_str.split(";base64,")[1])
+            elif ";utf8," in firma_str:
+                import urllib.parse
+                contenido_bytes = urllib.parse.unquote(firma_str.split(";utf8,")[1]).encode("utf-8")
+            else:
+                contenido_bytes = firma_str.encode("utf-8")
+        elif "data:image/png" in firma_str:
+            extension = ".png"
+            mime_type = "image/png"
+            import base64
+            contenido_b64 = firma_str.split(";base64,")[1] if ";base64," in firma_str else firma_str
+            contenido_bytes = base64.b64decode(contenido_b64)
+        else:
+            extension = ".svg"
+            mime_type = "image/svg+xml"
+            contenido_bytes = firma_str.encode("utf-8")
+
+        res = FileStorageService.guardar_bytes_directo(
+            session=session,
+            contenido=contenido_bytes,
+            nombre_archivo=f"{prefijo_archivo}_{id_registro}{extension}",
+            entidad_origen=entidad_origen,
+            id_registro_origen=id_registro,
+            id_sucursal=sucursal_id,
+            id_chofer=chofer_id,
+            mime_type=mime_type
+        )
+        return res.get("url")
+    except Exception as ex:
+        logger.error(f"Error al almacenar archivo de firma para {entidad_origen} id={id_registro}: {ex}")
+        return None
+
+
+
 def _asegurar_cxc_y_abono_bancario_chofer(
     db: Session,
     uid: int,
@@ -573,38 +634,25 @@ async def registrar_entrega_movil(
         """), {"cant": cant_entregar, "cid": uid, "pid": pres_id})
 
     # 5. Registrar doble firma digital (Chofer y Cliente receptor) con guardado en Storage y sync a NotaVenta
-    url_firma_chofer = dto.firma_chofer
-    url_firma_cliente = dto.firma_cliente
+    url_firma_chofer = _guardar_firma_como_archivo(
+        session=db,
+        firma_str=dto.firma_chofer,
+        prefijo_archivo="firma_chofer_ped",
+        entidad_origen="FIRMA_CHOFER",
+        id_registro=dto.id_pedido,
+        sucursal_id=sucursal_id,
+        chofer_id=uid
+    )
 
-    # Si vienen como data URIs o vectores SVG, almacenarlos como archivos formales
-    try:
-        if dto.firma_chofer and "data:" in dto.firma_chofer:
-            res_fc = FileStorageService.guardar_bytes_directo(
-                session=db,
-                contenido=dto.firma_chofer.encode("utf-8"),
-                nombre_archivo=f"firma_chofer_ped_{dto.id_pedido}.svg",
-                entidad_origen="FIRMA_CHOFER",
-                id_registro_origen=dto.id_pedido,
-                id_sucursal=sucursal_id,
-                id_chofer=uid,
-                mime_type="image/svg+xml"
-            )
-            url_firma_chofer = res_fc.get("url") or dto.firma_chofer
-
-        if dto.firma_cliente and "data:" in dto.firma_cliente:
-            res_cl = FileStorageService.guardar_bytes_directo(
-                session=db,
-                contenido=dto.firma_cliente.encode("utf-8"),
-                nombre_archivo=f"firma_cliente_ped_{dto.id_pedido}.svg",
-                entidad_origen="FIRMA_CLIENTE",
-                id_registro_origen=dto.id_pedido,
-                id_sucursal=sucursal_id,
-                id_chofer=uid,
-                mime_type="image/svg+xml"
-            )
-            url_firma_cliente = res_cl.get("url") or dto.firma_cliente
-    except Exception as ex_st:
-        logger.warning(f"Aviso: Guardado en Storage de firmas omitió fallback por: {ex_st}")
+    url_firma_cliente = _guardar_firma_como_archivo(
+        session=db,
+        firma_str=dto.firma_cliente,
+        prefijo_archivo="firma_cliente_ped",
+        entidad_origen="FIRMA_CLIENTE",
+        id_registro=dto.id_pedido,
+        sucursal_id=sucursal_id,
+        chofer_id=uid
+    )
 
     # Guardar en FirmaDigitalDocumento
     db.execute(text("""
@@ -986,7 +1034,17 @@ async def registrar_cierre_turno_movil(
     cxc_service = CuentasCobrarService(db)
     resultado_cierre = cxc_service.ProcesarCierreTurnoChofer(req_cierre, id_usuario=uid)
 
-    # Registrar firma digital de conformidad
+    # Registrar firma digital de conformidad en Storage
+    url_firma_cierre = _guardar_firma_como_archivo(
+        session=db,
+        firma_str=dto.firma_chofer,
+        prefijo_archivo="firma_cierre_asig",
+        entidad_origen="FIRMA_CIERRE_TURNO",
+        id_registro=dto.id_asignacion,
+        sucursal_id=sucursal_id,
+        chofer_id=uid
+    )
+
     db.execute(text("""
         INSERT INTO public."FirmaDigitalDocumento" (
             "IdUsuario", "TipoDocumento", "IdRegistroDocumento", "CodigoReferencia",
@@ -999,7 +1057,7 @@ async def registrar_cierre_turno_movil(
         "uid": uid,
         "id_asig": dto.id_asignacion,
         "cod_ref": f"ASIG-{dto.id_asignacion}",
-        "firma": dto.firma_chofer,
+        "firma": url_firma_cierre,
         "obs": f"Cierre de turno de conformidad por el chofer #{uid}."
     })
 

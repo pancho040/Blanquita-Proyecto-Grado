@@ -47,6 +47,7 @@ export const CierreRutaScreen = ({ navigation }) => {
   // Sobrante en camión y revalorización
   const [sobranteEnCamion, setSobranteEnCamion] = useState(true);
   const [valorSobranteReval, setValorSobranteReval] = useState(0);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   // Cuadre financiero interactivo en vivo
   const totalIngresado = useMemo(() => {
@@ -196,7 +197,10 @@ export const CierreRutaScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <Header title="Cierre de Turno" subtitle="Arqueo y Cuadre de Camión" />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        scrollEnabled={scrollEnabled}
+        contentContainerStyle={styles.content}
+      >
         {/* Validación de Condiciones de Cierre (Regla 5) */}
         {(!isOnline || pendientesCola > 0) && (
           <View style={styles.bloqueoAlertaBox}>
@@ -354,6 +358,7 @@ export const CierreRutaScreen = ({ navigation }) => {
           </Text>
           <SignaturePad
             onSign={(firmaSvg) => setFirmaChofer(firmaSvg)}
+            onDrawingChange={(drawing) => setScrollEnabled(!drawing)}
             title="Firmar Liquidación de Turno"
             height={160}
           />
