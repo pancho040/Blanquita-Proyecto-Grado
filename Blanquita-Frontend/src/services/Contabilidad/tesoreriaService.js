@@ -70,7 +70,9 @@ export async function ObtenerCajas(limit = 20, offset = 0) {
 }
 
 export async function ObtenerCajaActual(idSucursal = null) {
-  const query = idSucursal && idSucursal !== "todas" ? `?id_sucursal=${idSucursal}` : "";
+  // En pantalla operativa o consulta de caja física, asegurar siempre sede física resuelta (fallback a 1 Sucre)
+  const sid = idSucursal && idSucursal !== "todas" ? idSucursal : "1";
+  const query = `?sucursal=${sid}&id_sucursal=${sid}`;
   const res = await fetchConCache(`/api/tesoreria/cajas/actual${query}`, {}, 15000);
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();

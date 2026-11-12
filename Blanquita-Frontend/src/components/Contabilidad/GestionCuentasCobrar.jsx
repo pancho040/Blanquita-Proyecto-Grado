@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import BranchFilter from "@/components/common/BranchFilter";
 import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
@@ -186,11 +186,12 @@ export default function GestionCuentasCobrar({ usuario }) {
 
   // Renderizado optimizado: ventana virtual de registros para no sobrecargar el DOM
   const cuentasAMostrar = useMemo(() => {
-    if (cuentas.length > limite) {
+    const lista = Array.isArray(cuentas) ? cuentas : [];
+    if (lista.length > limite) {
       const inicio = (pagina - 1) * limite;
-      return cuentas.slice(inicio, inicio + limite);
+      return lista.slice(inicio, inicio + limite);
     }
-    return cuentas;
+    return lista;
   }, [cuentas, pagina, limite]);
 
   const abrirDetalle = async (cuenta) => {

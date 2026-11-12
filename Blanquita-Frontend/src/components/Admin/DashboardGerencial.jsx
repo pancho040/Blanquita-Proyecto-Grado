@@ -82,6 +82,7 @@ export default function DashboardGerencial({ usuario = null }) {
     try {
       const hoyStr = new Date().toISOString().split("T")[0];
       const sid = sucursal === "todas" ? null : Number(sucursal);
+      const sidCaja = sid || 1;
 
       const [
         kpisRes,
@@ -96,7 +97,7 @@ export default function DashboardGerencial({ usuario = null }) {
       ] = await Promise.all([
         ObtenerDashboardKPIs(sid).catch(() => null),
         ObtenerCuentasBancarias(true).catch(() => []),
-        ObtenerCajaActual(sid).catch(() => null),
+        ObtenerCajaActual(sidCaja).catch(() => null),
         ObtenerCarteraResumen(sid).catch(() => null),
         ObtenerKpisCxP().catch(() => null),
         ObtenerResumenRRHH(sid).catch(() => null),

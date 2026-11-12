@@ -249,7 +249,7 @@ export default function GestionBancos({ usuario }) {
         <div className="bg-white p-4 rounded border border-slate-200 flex flex-col justify-between">
           <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-500">Total Cuentas Activas</span>
           <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
-            {bancos.filter((b) => b.Activo).length} de {bancos.length}
+            {(bancos || []).filter((b) => b?.Activo).length} de {(bancos || []).length}
           </div>
           <span className="text-[11px] text-slate-500 mt-0.5">Banco Unión, BNB, BMSC y operativas</span>
         </div>
@@ -257,7 +257,7 @@ export default function GestionBancos({ usuario }) {
 
       {/* Grid de Tarjetas Bancarias */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {bancos.map((b) => {
+        {(bancos || []).map((b) => {
           const esUnion = b.NombreBanco.toLowerCase().includes("unión") || b.NombreBanco.toLowerCase().includes("union");
           const esBnb = b.NombreBanco.toLowerCase().includes("bnb");
           const esSeleccionado = bancoSeleccionado?.IdCuentaBancaria === b.IdCuentaBancaria;

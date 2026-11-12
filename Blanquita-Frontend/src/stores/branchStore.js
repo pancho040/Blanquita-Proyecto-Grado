@@ -279,6 +279,18 @@ export function getSnapshot() {
   return estado;
 }
 
+const serverSnapshot = {
+  sucursalActiva: "1",
+  sucursalesPermitidas: [{ id: 1, nombre: "Sucursal Central Sucre", ciudad: "Sucre" }],
+  puedeVerTodas: false,
+  sucursalAsignada: 1,
+  inicializado: false
+};
+
+export function getServerSnapshot() {
+  return serverSnapshot;
+}
+
 export function subscribe(callback) {
   suscriptores.add(callback);
   return () => suscriptores.delete(callback);
@@ -292,17 +304,21 @@ export function useBranch(usuarioInicial = null) {
     inicializarAlcanceUsuario(usuarioInicial);
   }
 
-  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   return {
     sucursalActiva: snap.sucursalActiva,
     sucursalIdNumerico: snap.sucursalActiva === "todas" ? null : Number(snap.sucursalActiva),
-    sucursalesPermitidas: snap.sucursalesPermitidas,
+    sucursalesPermitidas: snap.sucursalesPermitidas || [],
     puedeVerTodas: snap.puedeVerTodas,
-    esMultisede: snap.sucursalesPermitidas.length > 1 || snap.puedeVerTodas,
+    esMultisede: (snap.sucursalesPermitidas?.length || 0) > 1 || snap.puedeVerTodas,
     cambiarSucursal: cambiarSucursalActiva,
     sucursalAsignada: snap.sucursalAsignada,
-    inicializado: snap.inicializado
+    inicializado: snap.inicializado,
+    // Alias y compatibilidad para componentes
+    sucursales: snap.sucursalesPermitidas || [],
+    cargando: !snap.inicializado,
+    cargandoAlcance: !snap.inicializado
   };
 }
 
@@ -315,7 +331,7 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     inicializarAlcanceUsuario(usuario);
   }
 
-  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   // Resolver sucursal efectiva para la pantalla
   let sucursalEfectiva = snap.sucursalActiva;
@@ -323,7 +339,8 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     sucursalEfectiva = String(snap.sucursalAsignada || (snap.sucursalesPermitidas[0]?.id ?? 1));
   }
 
-  const esMultisede = snap.sucursalesPermitidas.length > 1 || snap.puedeVerTodas;
+  const sucursales = snap.sucursalesPermitidas || [];
+  const esMultisede = sucursales.length > 1 || snap.puedeVerTodas;
   const listoParaConsultar = snap.inicializado;
 
   const setSucursal = (nueva) => {
@@ -334,6 +351,10 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     cambiarSucursalActiva(nueva);
   };
 
+  const nombreSucursalActual =
+    sucursales.find((s) => String(s.id) === String(sucursalEfectiva))?.nombre ||
+    (sucursalEfectiva === "todas" ? "Todas las Sedes (Consolidado)" : (sucursalEfectiva ? `Sucursal ${sucursalEfectiva}` : "Sin sucursal"));
+
   return {
     sucursal: sucursalEfectiva, // "todas" | "1" | "2"
     sucursalIdNumerico: sucursalEfectiva === "todas" ? null : Number(sucursalEfectiva),
@@ -341,7 +362,12 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     esMultisede,
     listoParaConsultar,
     puedeVerTodas: snap.puedeVerTodas && permiteTodas,
-    sucursalesPermitidas: snap.sucursalesPermitidas,
-    sucursalAsignada: snap.sucursalAsignada
+    sucursalesPermitidas: sucursales,
+    sucursalAsignada: snap.sucursalAsignada,
+    // Propiedades adicionales esperadas por componentes
+    sucursales,
+    cargando: !snap.inicializado,
+    cargandoAlcance: !snap.inicializado,
+    nombreSucursalActual
   };
 }

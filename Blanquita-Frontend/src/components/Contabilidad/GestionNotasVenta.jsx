@@ -345,21 +345,21 @@ export default function GestionNotasVenta({ usuario }) {
         <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Ventas al Contado</span>
           <div className="text-xl font-bold font-mono tabular-nums text-[#15803D] mt-2">
-            {notas.filter((n) => n.CondicionVenta === "Contado").length}
+            {(notas || []).filter((n) => n.CondicionVenta === "Contado").length}
           </div>
           <span className="text-[11px] text-[#15803D] font-medium mt-0.5 block">Cobro inmediato</span>
         </div>
         <div className="bg-white p-3.5 rounded border border-slate-200 flex flex-col justify-between">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Ventas a Crédito</span>
           <div className="text-xl font-bold font-mono tabular-nums text-[#0369A1] mt-2">
-            {notas.filter((n) => n.CondicionVenta === "Crédito").length}
+            {(notas || []).filter((n) => n.CondicionVenta === "Crédito").length}
           </div>
           <span className="text-[11px] text-[#0369A1] font-medium mt-0.5 block">Plazo de 15 días</span>
         </div>
         <div className="bg-[#FFFBEB] p-3.5 rounded border border-[#FDE68A] flex flex-col justify-between">
           <span className="text-[11px] font-semibold text-[#B45309] uppercase tracking-wider">Pendientes de Cobro</span>
           <div className="text-xl font-bold font-mono tabular-nums text-[#B45309] mt-2">
-            {notas.filter((n) => n.EstadoPago === "Pendiente" || n.EstadoPago === "Parcial").length}
+            {(notas || []).filter((n) => n.EstadoPago === "Pendiente" || n.EstadoPago === "Parcial").length}
           </div>
           <span className="text-[11px] text-[#B45309] font-medium mt-0.5 block">En seguimiento CxC</span>
         </div>
@@ -575,7 +575,7 @@ export default function GestionNotasVenta({ usuario }) {
                   className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
                 >
                   <option value="">Seleccione Cliente...</option>
-                  {clientes.map((c) => (
+                  {(clientes || []).map((c) => (
                     <option key={c.IdCliente} value={c.IdCliente}>
                       {c.RazonSocial || c.NombreComercial} ({c.Ciudad})
                     </option>

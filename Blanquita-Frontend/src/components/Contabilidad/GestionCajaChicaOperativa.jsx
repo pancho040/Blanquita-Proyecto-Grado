@@ -76,13 +76,15 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
   const [datosImpresion, setDatosImpresion] = useState(null);
 
+  const sucursalEfectivaNum = sucursal !== "todas" && sucursal ? Number(sucursal) : (usuario?.IdSucursal ? Number(usuario.IdSucursal) : 1);
+
   // Formulario Solicitud (Kevin)
   const [formNueva, setFormNueva] = useState({
     solicitante: usuario?.NombreCompleto || "Kevin Poveda",
     departamento: "Contabilidad",
     monto_solicitado: "",
     justificacion: "",
-    IdSucursal: sucursal !== "todas" ? Number(sucursal) : 1
+    IdSucursal: sucursalEfectivaNum
   });
 
   // Formulario Entrega de Fondos
@@ -150,7 +152,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
         departamento: "Contabilidad",
         monto_solicitado: "",
         justificacion: "",
-        IdSucursal: sucursalUsuario
+        IdSucursal: sucursalEfectivaNum
       });
       await cargarDatos();
     } catch (err) {
@@ -675,7 +677,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                     onChange={(e) => setFormNueva({ ...formNueva, IdSucursal: Number(e.target.value) })}
                     className="w-full h-8 px-2.5 rounded border border-slate-300 bg-white text-xs font-medium text-slate-700"
                   >
-                    {sucursales.filter((s) => s.id !== "todas").map((s) => (
+                    {(sucursales || sucursalesPermitidas || []).filter((s) => s.id !== "todas").map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.nombre}
                       </option>

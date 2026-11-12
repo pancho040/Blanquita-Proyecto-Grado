@@ -243,3 +243,19 @@
   3. Integración en `feat/repartidores`:
      - Fusión limpia sin conflictos de `feat/movil` sobre la rama principal `feat/repartidores`.
      - Confirmación de una única cabeza lineal de migraciones en Alembic.
+
+
+## [2026-11-11 20:20] - Hotfix Frontend Web y Auditoría de Runtime en Navegador
+- **Subagente:** Lead Fullstack / Arquitectura
+- **Rama:** `feat/repartidores` (y sincronización a `feat/movil`)
+- **Acciones Realizadas:**
+  1. `GestionCuentasCobrar.jsx`: Se agregó `useMemo` al bloque de importación de React y defensas en `cuentasAMostrar`.
+  2. `GestionCajaChicaOperativa.jsx`: Se corrigió el acceso desprotegido `sucursales.filter`, se corrigió la variable `sucursalUsuario` por `sucursalEfectivaNum`, y se añadieron fallbacks para respuestas paginadas.
+  3. Paridad SSR e Hidratación (`BranchFilter.jsx` + `branchStore.js`): Se implementó `mounted` en `BranchFilter` y `getServerSnapshot` en `branchStore.js` para asegurar paridad estricta entre el HTML de Astro/SSR y el primer frame de cliente (0 hydration mismatch).
+  4. Estado de Caja Física (`SideBar.jsx`, `tesoreriaService.js`, `AlcanceSucursal.py`, `InicioContador.jsx`, `DashboardGerencial.jsx`): Se eliminó la precarga a ciegas de `/cajas/actual` en `SideBar.jsx`, se garantizó que las consultas operativas envíen la sede resuelta (`?sucursal=1`), y se habilitó el alias `sucursal` en `DependenciaAlcanceSucursal`.
+  5. Auditoría preventiva en 222 archivos: 0 hooks huérfanos o sin importar; protecciones defensivas en `GestionBancos.jsx` y `GestionNotasVenta.jsx`.
+- **Verificación:**
+  - `verificar_frontend_runtime_y_ssr.cjs`: 0 hooks faltantes, 0 discrepancias de hidratación SSR.
+  - `npm run build` en `Blanquita-Frontend`: Código de salida 0.
+  - `pytest` en `Blanquita-Backend`: 210/210 pruebas pasadas.
+  - `verificar_zona_protegida.py`: Zona de planta íntegra.

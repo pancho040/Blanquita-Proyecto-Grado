@@ -247,15 +247,16 @@ def resolver_alcance_usuario(
 def DependenciaAlcanceSucursal(
     id_sucursal: Optional[Union[int, str]] = Query(None, alias="id_sucursal"),
     filtro_sucursal_id: Optional[Union[int, str]] = Query(None, alias="sucursal_id"),
+    sucursal: Optional[Union[int, str]] = Query(None, alias="sucursal"),
     usuario: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> AlcanceUsuario:
     """
     Inyección de dependencia FastAPI para endpoints con alcance multi-sucursal.
-    Acepta tanto ?id_sucursal=X como ?sucursal_id=X para máxima compatibilidad.
+    Acepta ?id_sucursal=X, ?sucursal_id=X o ?sucursal=X para máxima compatibilidad.
     """
     id_usuario = int(usuario.get("IdUsuario") or usuario.get("id") or 0)
-    solicitada = id_sucursal if id_sucursal is not None else filtro_sucursal_id
+    solicitada = id_sucursal if id_sucursal is not None else (filtro_sucursal_id if filtro_sucursal_id is not None else sucursal)
     return resolver_alcance_usuario(
         id_usuario=id_usuario,
         db=db,

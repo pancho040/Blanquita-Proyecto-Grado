@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Building2 } from "lucide-react";
 import { useBranch } from "@/stores/branchStore";
 
@@ -23,11 +23,17 @@ export default function BranchFilter({
   onCambio = null,
   className = ""
 }) {
+  const [mounted, setMounted] = useState(false);
   const store = useBranch();
 
-  // Si el usuario no es multisede (solo tiene 1 sucursal y no puede ver todas),
-  // se aplica el fallo cerrado y NO se renderiza ningún selector.
-  if (!store.esMultisede) {
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevenir discrepancia de hidratación SSR vs Cliente (React 19 / Astro):
+  // Durante SSR y el primer frame de hidratación en cliente devuelve null,
+  // garantizando exactamente el mismo árbol HTML (0 hydration mismatch).
+  if (!mounted || !store.esMultisede) {
     return null;
   }
 
@@ -65,7 +71,7 @@ export default function BranchFilter({
         {store.puedeVerTodas && permiteTodas && (
           <option value="todas">Todas las Sedes (Consolidado)</option>
         )}
-        {store.sucursalesPermitidas.map((s) => (
+        {(store.sucursalesPermitidas || []).map((s) => (
           <option key={`branch-opt-${s.id}`} value={String(s.id)}>
             {s.nombre || `Sucursal ${s.id}`}
           </option>

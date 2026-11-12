@@ -64,14 +64,15 @@ export default function InicioContador({ usuario }) {
     }
 
     try {
-      const sid = sucursal === "todas" ? null : sucursal;
+      const sidFiltro = sucursal === "todas" ? null : sucursal;
+      const sidCaja = sucursal && sucursal !== "todas" ? sucursal : "1";
 
       const [kpisRes, cajaRes, bancosRes, movsRes, carteraRes, cxpRes] = await Promise.all([
-        ObtenerDashboardKPIs(sid).catch(() => null),
-        ObtenerCajaActual(sid).catch(() => null),
+        ObtenerDashboardKPIs(sidFiltro).catch(() => null),
+        ObtenerCajaActual(sidCaja).catch(() => null),
         ObtenerCuentasBancarias(true).catch(() => []),
-        ObtenerMovimientosCaja({ limit: 7, idSucursal: sid }).catch(() => []),
-        ObtenerCarteraResumen(sid).catch(() => null),
+        ObtenerMovimientosCaja({ limit: 7, idSucursal: sidFiltro }).catch(() => []),
+        ObtenerCarteraResumen(sidFiltro).catch(() => null),
         ObtenerKpisCxP().catch(() => null),
       ]);
 
