@@ -107,7 +107,7 @@ app.add_exception_handler(
 
 @app.on_event("startup")
 def startup_event():
-    """Precarga JWKS y calienta el pool de conexiones a la base de datos."""
+    """Precarga JWKS, calienta el pool de conexiones y reintenta comprobantes pendientes de resubida."""
     try:
         precargar_jwks()
     except Exception:
@@ -117,6 +117,16 @@ def startup_event():
             conn.execute(text("SELECT 1"))
     except Exception as e:
         print("[Startup] Error al calentar conexión de base de datos:", e)
+
+    try:
+        from app.Services.Common.FileStorageService import FileStorageService
+        from app.Config.supabase import SessionLocal
+        with SessionLocal() as db_session:
+            reintentados = FileStorageService.reintentar_subidas_pendientes(db_session)
+            if reintentados > 0:
+                print(f"[Startup] Resubidos {reintentados} comprobantes pendientes a Supabase Storage.")
+    except Exception as e:
+        print("[Startup] Error al reintentar subida de comprobantes pendientes:", e)
 
 
 @app.get("/")

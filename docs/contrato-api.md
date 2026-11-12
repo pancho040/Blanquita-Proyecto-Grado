@@ -159,7 +159,7 @@ Este documento define de forma vinculante los contratos de datos, nuevas columna
 * **Comportamiento:**
   1. Si `STORAGE_SUPABASE_ACTIVO=true`: Sube al bucket `comprobantes-privados` particionado por sucursal y chofer.
   2. Si falla Supabase o `STORAGE_SUPABASE_ACTIVO=false`: Fallback automático a almacenamiento local en `/uploads/comprobantes` sin interrumpir la operación del repartidor.
-  3. Retención: Se programa expiración de 90 días en `ComprobanteArchivo`.
+  3. Retención: Se programa expiración unificada de 60 días (2 meses) en `ComprobanteArchivo` conforme a ADR-004.
 
 ---
 

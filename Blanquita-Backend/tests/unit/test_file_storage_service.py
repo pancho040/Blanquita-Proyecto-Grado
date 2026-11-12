@@ -76,3 +76,54 @@ def test_generacion_url_firmada_mock():
 
         url_firmada = FileStorageService.generar_url_firmada("sucursal/1/chofer/9/test.png", duracion_segundos=1800)
         assert "/storage/v1/object/sign/comprobantes-privados/token123" in url_firmada
+
+
+def test_fallback_a_disco_marca_resubida_pendiente(tmp_path):
+    """Si la subida a Supabase falla, se guarda en disco local y se marca ResubidaPendiente=True."""
+    contenido = b"foto de comprobante que fallo"
+    upload = UploadFile(filename="recibo.png", file=io.BytesIO(contenido))
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.fetchone.return_value = (102, "2027-01-09T00:00:00")
+    conteo_inicial = FileStorageService.FALLBACK_DISCO_COUNT
+
+    with patch("app.Services.Common.FileStorageService.STORAGE_SUPABASE_ACTIVO", True), \
+         patch.object(FileStorageService, "subir_a_supabase_storage", return_value=False), \
+         patch("app.Services.Common.FileStorageService.UPLOAD_DIR", tmp_path):
+
+        resultado = FileStorageService.guardar_comprobante(
+            session=mock_session,
+            archivo=upload,
+            entidad_origen="COBRO",
+            id_registro_origen=88
+        )
+
+        assert resultado["storage_provider"] == "local"
+        assert resultado["resubida_pendiente"] is True
+        assert FileStorageService.FALLBACK_DISCO_COUNT == conteo_inicial + 1
+        
+        # Validar parámetros del INSERT en base de datos
+        insert_args = mock_session.execute.call_args[0][1]
+        assert insert_args["resubida_pendiente"] is True
+        assert insert_args["provider"] == "local"
+
+
+def test_reintentar_subidas_pendientes(tmp_path):
+    """Verifica que el proceso de reintento sube los archivos pendientes y actualiza la BD."""
+    archivo_local = tmp_path / "cobro_88_20261112_abcd1234.png"
+    archivo_local.write_bytes(b"datos de prueba en disco")
+
+    mock_session = MagicMock()
+    # Fila simulada de ComprobanteArchivo pendiente
+    mock_session.execute.return_value.fetchall.return_value = [
+        (102, f"/uploads/comprobantes/{archivo_local.name}", str(archivo_local), "PNG", "recibo.png")
+    ]
+
+    with patch("app.Services.Common.FileStorageService.STORAGE_SUPABASE_ACTIVO", True), \
+         patch.object(FileStorageService, "subir_a_supabase_storage", return_value=True) as mock_subir, \
+         patch("app.Services.Common.FileStorageService.UPLOAD_DIR", tmp_path):
+
+        resubidos = FileStorageService.reintentar_subidas_pendientes(mock_session)
+        assert resubidos == 1
+        mock_subir.assert_called_once()
+        mock_session.commit.assert_called_once()
