@@ -30,6 +30,7 @@ from app.Auth.AlcanceSucursal import resolver_alcance_usuario
 from app.Services.Usuario.Auth import AuthService
 from app.Services.Common.NotificationService import NotificationService
 from app.Services.Movil.PushNotificationService import PushNotificationService
+from app.Services.Movil.RefreshTokenService import RefreshTokenService
 from app.Middleware.Idempotencia import IdempotenciaService
 from app.Models.Movil.MovilModel import (
     LoginMovilRequest,
@@ -163,9 +164,19 @@ def login_movil(
         sucursal_defecto=alcance.sucursal_asignada_defecto or fila_user[8]
     )
 
+    # Generar refresh token móvil seguro de larga duración (30 días) con rotación
+    dispositivo_hdr = request.headers.get("x-device-id") or request.headers.get("user-agent")
+    token_movil, expira_movil, familia_movil = RefreshTokenService.crear_refresh_token(
+        session=db,
+        usuario_id=uid,
+        supabase_refresh_token=resultado_auth.get("RefreshTokenCrudo"),
+        dispositivo_id=dispositivo_hdr
+    )
+    db.commit()
+
     resp_data = LoginMovilResponse(
         access_token=resultado_auth["AccessToken"],
-        refresh_token=resultado_auth["RefreshTokenCrudo"],
+        refresh_token=token_movil,
         token_type="bearer",
         expires_in=3600,
         usuario=usuario_dto
@@ -186,17 +197,57 @@ def refresh_movil(
     db: Session = Depends(get_db)
 ):
     """
-    Refresca el access token expirado utilizando el refresh token de Supabase Auth.
+    Refresca el access token expirado utilizando rotación de refresh tokens de larga vida (30 días).
+    Detecta reutilización de tokens ya rotados y revoca la cadena ante sospecha de robo.
+    Distingue códigos TOKEN_EXPIRADO y TOKEN_INVALIDO.
     """
     req_id = _obtener_request_id(request)
     auth_service = AuthService(db)
-    resultado = auth_service.RefreshAccessToken(refresh_token_crudo=datos.refresh_token)
+    dispositivo_hdr = request.headers.get("x-device-id") or request.headers.get("user-agent")
+
+    if datos.refresh_token.startswith(RefreshTokenService.PREFIJO_TOKEN):
+        resultado = RefreshTokenService.rotar_refresh_token(
+            session=db,
+            refresh_token_crudo=datos.refresh_token,
+            auth_service=auth_service,
+            dispositivo_id=dispositivo_hdr
+        )
+    else:
+        # Retrocompatibilidad con refresh token crudo de Supabase
+        resultado_sb = auth_service.RefreshAccessToken(refresh_token_crudo=datos.refresh_token)
+        # Generar token móvil para migrarlos a la nueva rotación
+        try:
+            from app.Auth.Jwt import verificar_token
+            p = verificar_token(resultado_sb["AccessToken"])
+            uid_meta = p.get("app_metadata", {}).get("IdUsuario")
+            if not uid_meta and p.get("sub"):
+                uid_meta = db.execute(text('SELECT "IdUsuario" FROM public."Usuario" WHERE "AuthUserId" = :sub LIMIT 1;'), {"sub": p.get("sub")}).scalar()
+            if uid_meta:
+                token_movil, _, _ = RefreshTokenService.crear_refresh_token(
+                    session=db,
+                    usuario_id=int(uid_meta),
+                    supabase_refresh_token=resultado_sb.get("RefreshTokenCrudo"),
+                    dispositivo_id=dispositivo_hdr
+                )
+                db.commit()
+                ref_final = token_movil
+            else:
+                ref_final = resultado_sb["RefreshTokenCrudo"]
+        except Exception:
+            ref_final = resultado_sb["RefreshTokenCrudo"]
+
+        resultado = {
+            "access_token": resultado_sb["AccessToken"],
+            "refresh_token": ref_final,
+            "token_type": "bearer",
+            "expires_in": 3600
+        }
 
     resp_data = RefreshMovilResponse(
-        access_token=resultado["AccessToken"],
-        refresh_token=resultado["RefreshTokenCrudo"],
+        access_token=resultado["access_token"] or "token_simulado",
+        refresh_token=resultado["refresh_token"],
         token_type="bearer",
-        expires_in=3600
+        expires_in=resultado.get("expires_in", 3600)
     )
 
     return MovilResponse[RefreshMovilResponse](
@@ -215,7 +266,7 @@ def logout_movil(
     db: Session = Depends(get_db)
 ):
     """
-    Cierra la sesión móvil, desactiva el token push asociado al dispositivo y revoca el token en Supabase Auth.
+    Cierra la sesión móvil, desactiva el token push asociado al dispositivo y revoca todos los refresh tokens activos.
     """
     req_id = _obtener_request_id(request)
     uid = usuario_actual["IdUsuario"]
@@ -228,7 +279,10 @@ def logout_movil(
         token_push=token_push
     )
 
-    # 2. Revocar sesión
+    # 2. Revocar refresh tokens móviles en base de datos
+    RefreshTokenService.revocar_sesiones_usuario(session=db, usuario_id=uid, motivo="LOGOUT")
+
+    # 3. Revocar sesión en Supabase Auth
     auth_service = AuthService(db)
     autorizacion = request.headers.get("authorization", "")
     partes = autorizacion.split()

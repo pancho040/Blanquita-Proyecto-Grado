@@ -1,6 +1,7 @@
 import os
 from typing import Optional
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.Routes.Usuario.UsuarioRouter import UsuarioRouter
@@ -105,6 +106,21 @@ app.add_exception_handler(
     RateLimitExceeded,
     _rate_limit_exceeded_handler
 )
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    if isinstance(exc.detail, dict):
+        contenido = dict(exc.detail)
+        if "codigo" not in contenido:
+            contenido["codigo"] = "ERROR"
+        if "detail" not in contenido:
+            contenido["detail"] = contenido.get("mensaje", "")
+        return JSONResponse(status_code=exc.status_code, content=contenido, headers=exc.headers)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "codigo": "ERROR", "mensaje": str(exc.detail)},
+        headers=exc.headers
+    )
 
 @app.on_event("startup")
 def startup_event():

@@ -56,10 +56,10 @@ def verificar_token(token: str) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expirado"
+            detail={"codigo": "TOKEN_EXPIRADO", "mensaje": "Token expirado", "detail": "Token expirado"}
         )
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido"
+            detail={"codigo": "TOKEN_INVALIDO", "mensaje": "Token inválido", "detail": "Token inválido"}
         )
