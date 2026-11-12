@@ -205,6 +205,51 @@ export const SyncQueue = {
     }
   },
 
+  // Resetear estado de error para forzar reintento manual (Subagente C)
+  async resetearErrorOperacion(idOperacion) {
+    try {
+      const cola = await this.obtenerCola();
+      const actualizada = cola.map((item) => {
+        if (item.id === idOperacion) {
+          return {
+            ...item,
+            esErrorPermanente: false,
+            estado: "pendiente de sincronizar",
+            ultimoError: null,
+          };
+        }
+        return item;
+      });
+      await this.guardarCola(actualizada);
+      return true;
+    } catch (e) {
+      console.error("Error reseteando error de operación:", e);
+      return false;
+    }
+  },
+
+  // Resetear todos los errores permanentes de la cola
+  async resetearTodosLosErrores(usuarioId = null) {
+    try {
+      const cola = await this.obtenerCola();
+      const actualizada = cola.map((item) => {
+        if (usuarioId === null || usuarioId === undefined || item.id_usuario === usuarioId) {
+          return {
+            ...item,
+            esErrorPermanente: false,
+            estado: "pendiente de sincronizar",
+          };
+        }
+        return item;
+      });
+      await this.guardarCola(actualizada);
+      return true;
+    } catch (e) {
+      console.error("Error reseteando errores de la cola:", e);
+      return false;
+    }
+  },
+
   // Limpiar cola (opcionalmente solo de un usuario específico)
   async limpiarCola(usuarioId = null) {
     try {

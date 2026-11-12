@@ -1,7 +1,6 @@
-// import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Colors } from '../constants/Colors';
-import { useRuta } from '../context/RutaContext';
+import { useNetwork } from '../context/NetworkContext';
 import { useNotificaciones } from '../context/NotificacionesContext';
 import { HojaRutaScreen } from '../screens/Ruta/HojaRutaScreen';
 import { MiInventarioScreen } from '../screens/Inventario/MiInventarioScreen';
@@ -13,7 +12,7 @@ import { Truck, Boxes, DollarSign, Database, Bell } from 'lucide-react-native';
 const Tab = createBottomTabNavigator();
 
 export const TabNavigator = () => {
-  const { syncPendientes } = useRuta();
+  const { pendientes } = useNetwork();
   const { conteoNoLeidas } = useNotificaciones();
 
   return (
@@ -79,7 +78,7 @@ export const TabNavigator = () => {
         component={SincronizacionScreen}
         options={{
           tabBarLabel: 'Conexión',
-          tabBarBadge: syncPendientes > 0 ? syncPendientes : undefined,
+          tabBarBadge: pendientes > 0 ? pendientes : undefined,
           tabBarBadgeStyle: {
             backgroundColor: Colors.accent,
             fontSize: 10,

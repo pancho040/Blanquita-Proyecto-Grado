@@ -153,6 +153,49 @@ export const LocalDB = {
     }
   },
 
+  async descontarInventarioCamion(itemsEntregados = []) {
+    try {
+      const inv = await this.obtenerInventarioCamion();
+      if (!inv || !Array.isArray(inv.items)) return false;
+
+      const itemsActualizados = inv.items.map((itemCamion) => {
+        const idPresentacionCamion = itemCamion.presentacion_id || itemCamion.IdPresentacion || itemCamion.id;
+        const entregado = itemsEntregados.find(
+          (it) => (it.presentacion_id || it.IdPresentacion || it.id) === idPresentacionCamion
+        );
+        if (entregado) {
+          const cantEntregada = Number(entregado.cantidad || entregado.Cantidad || 0);
+          const saldoPrevio = Number(itemCamion.saldo_camion ?? itemCamion.cantidad_disponible ?? itemCamion.cantidad ?? 0);
+          const nuevoSaldo = Math.max(0, saldoPrevio - cantEntregada);
+          const nuevoEntregado = Number(itemCamion.total_entregado || 0) + cantEntregada;
+          return {
+            ...itemCamion,
+            saldo_camion: nuevoSaldo,
+            cantidad_disponible: nuevoSaldo,
+            total_entregado: nuevoEntregado,
+          };
+        }
+        return itemCamion;
+      });
+
+      const totalEntregados = itemsActualizados.reduce((acc, it) => acc + Number(it.total_entregado || 0), 0);
+      const totalSaldo = itemsActualizados.reduce((acc, it) => acc + Number(it.saldo_camion || 0), 0);
+
+      const invActualizado = {
+        ...inv,
+        items: itemsActualizados,
+        total_bultos_entregados: totalEntregados,
+        total_saldo_camion: totalSaldo,
+      };
+
+      await this.guardarInventarioCamion(invActualizado);
+      return true;
+    } catch (e) {
+      console.error("Error descontando inventario en camión:", e);
+      return false;
+    }
+  },
+
   // -------------------------------------------------------------
   // CLIENTES EN CACHÉ (HU-29)
   // -------------------------------------------------------------
@@ -207,6 +250,27 @@ export const LocalDB = {
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       console.error("Error leyendo liquidación local:", e);
+      return null;
+    }
+  },
+
+  // -------------------------------------------------------------
+  // REGISTRO DE ÚLTIMA SINCRONIZACIÓN EXITOSA
+  // -------------------------------------------------------------
+  async guardarUltimaSincronizacion(fechaIso = null) {
+    try {
+      const fecha = fechaIso || new Date().toISOString();
+      await AsyncStorage.setItem("@blanquita_ultima_sync_exitosa", fecha);
+      return fecha;
+    } catch (_e) {
+      return null;
+    }
+  },
+
+  async obtenerUltimaSincronizacion() {
+    try {
+      return await AsyncStorage.getItem("@blanquita_ultima_sync_exitosa");
+    } catch (_e) {
       return null;
     }
   },

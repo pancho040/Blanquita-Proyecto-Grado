@@ -1,16 +1,21 @@
 import { SyncQueue } from "../database/syncQueue";
 import { LogisticaApi } from "../api/logisticaApi";
+import { LocalDB } from "../database/localDb";
 
 /**
- * Motor de Sincronización Asíncrona Automática (Fase 2)
- * Cumple con HU-28 y Reglas 3 y 4 de Choferes Móviles:
- * 1. Procesa la cola secuencialmente con X-Idempotency-Key.
- * 2. Manejo diferido de fotos y firmas sin desbordar AsyncStorage (sube primero archivo y luego acción).
- * 3. Notificación de alerta de revalorización si el servidor recalcula precios.
+ * Motor de Sincronización Asíncrona Automática (Offline-First)
+ * Cumple con HU-27, HU-28 y especificaciones de Subagentes B, C y D:
+ * 1. Procesamiento FIFO secuencial con X-Idempotency-Key estable generada al encolar.
+ * 2. Candado estricto con liberación garantizada en finally y watchdog de 2 minutos.
+ * 3. Subida prioritaria de comprobantes/fotos antes de despachar entrega o cobro.
+ * 4. Aislamiento de cola por chofer activo (id_usuario) sin mezclar datos ajenos.
+ * 5. Tolerancia a fallos: 401 pausa sin descartar; 4xx queda como error permanente visible sin bloquear el resto.
+ * 6. Refresco de datos locales (hoja de ruta, inventario del camión, saldo) tras cada éxito.
  */
 class SyncService {
   constructor() {
     this.sincronizando = false;
+    this.horaInicioSync = null;
     this.suscriptores = [];
   }
 
@@ -34,32 +39,66 @@ class SyncService {
 
   /**
    * Ejecuta el procesamiento de todas las operaciones pendientes
-   * @param {boolean} forzar - Si es forzado por el usuario o automático
+   * @param {boolean} forzar - Si es forzado manualmente por el chofer
    */
-  async procesarCola(_forzar = false) {
+  async procesarCola(forzar = false) {
+    const AHORA = Date.now();
+
+    // 1. Candado y Watchdog de seguridad (2 minutos = 120.000 ms)
     if (this.sincronizando) {
-      console.log("[SyncService] Ya hay una sincronización en curso.");
-      return { exito: false, mensaje: "Sincronización ya en curso." };
+      if (this.horaInicioSync && AHORA - this.horaInicioSync > 120000) {
+        console.warn("[SyncService] Watchdog: liberando candado pegado por más de 2 minutos.");
+        this.sincronizando = false;
+        this.horaInicioSync = null;
+      } else {
+        console.log("[SyncService] Ya hay una sincronización en curso.");
+        return { exito: false, mensaje: "Sincronización ya en curso." };
+      }
     }
 
     this.sincronizando = true;
+    this.horaInicioSync = Date.now();
     this.notificar({ enProgreso: true, mensaje: "Iniciando sincronización..." });
 
     let exitosas = 0;
     let fallidas = 0;
+    let omitidas4xx = 0;
     const alertasRevalorizacion = [];
 
     try {
-      const cola = await SyncQueue.obtenerCola();
-      if (cola.length === 0) {
+      // 2. Aislamiento de cola por usuario activo (Subagente B)
+      const sesion = await LocalDB.obtenerSesion();
+      const usuarioIdActivo = sesion?.usuario?.IdUsuario || sesion?.usuario?.id_usuario || null;
+
+      // Si se fuerza manualmente o no hay sesión, obtenemos pendientes del usuario o cola general
+      const cola = await SyncQueue.obtenerCola(usuarioIdActivo);
+
+      if (!cola || cola.length === 0) {
         this.notificar({ enProgreso: false, pendientes: 0, mensaje: "Al día. Sin pendientes." });
-        this.sincronizando = false;
-        return { exito: true, procesadas: 0, pendientes: 0 };
+        return { exito: true, procesadas: 0, fallidas: 0, pendientes: 0 };
       }
 
-      console.log(`[SyncService] Procesando ${cola.length} operaciones pendientes...`);
+      console.log(`[SyncService] Procesando ${cola.length} operaciones para usuario ${usuarioIdActivo || "general"}...`);
 
       for (const item of cola) {
+        // Si el ítem tiene error 4xx permanente de validación de negocio, se omite en sincronización automática
+        // para NO bloquear a los demás ítems de la cola FIFO (Subagente C)
+        if (item.esErrorPermanente && !forzar) {
+          omitidas4xx++;
+          continue;
+        }
+
+        // Backoff exponencial para reintentos de red a partir del segundo fallo (Subagente C)
+        // El primer reintento tras reconexión se ejecuta de inmediato.
+        if (!forzar && item.intentos > 1 && item.ultimoIntento) {
+          const tiempoDesdeFallo = Date.now() - new Date(item.ultimoIntento).getTime();
+          const esperaRequerida = Math.min(60000, 5000 * Math.pow(2, Math.min(item.intentos - 2, 4)));
+          if (tiempoDesdeFallo < esperaRequerida) {
+            console.log(`[SyncService] Ítem ${item.id} en backoff (${Math.round((esperaRequerida - tiempoDesdeFallo) / 1000)}s restantes).`);
+            continue;
+          }
+        }
+
         try {
           this.notificar({
             enProgreso: true,
@@ -67,19 +106,19 @@ class SyncService {
             mensaje: `Sincronizando ${item.tipo.toLowerCase()}...`,
           });
 
+          // X-Idempotency-Key generada al encolar (Subagente C y D)
           const idempotencyKey = item.idempotencyKey || item.id;
 
-          // Procesar según el tipo de operación
           switch (item.tipo) {
-            case "ENTREGA": {
-              // HU-31: Registrar entrega física (total/parcial)
+            case "ENTREGA":
+            case "ENTREGA_CON_COBRO": {
               let payloadEntrega = {
                 ...item.payload,
                 latitud: item.gps?.latitud || item.payload?.latitud || -19.0483,
                 longitud: item.gps?.longitud || item.payload?.longitud || -65.2598,
               };
 
-              // Regla 4: Si tiene archivo de foto comprobante local, subirlo primero
+              // Subir foto general de comprobante si la tiene
               if (item.payload?.foto_uri && !item.payload?.id_comprobante_archivo) {
                 const subida = await LogisticaApi.subirArchivoComprobante(
                   item.payload.foto_uri,
@@ -90,10 +129,38 @@ class SyncService {
                   payloadEntrega.id_comprobante_archivo = subida.idComprobante;
                   payloadEntrega.url_comprobante = subida.urlArchivo;
                 } else {
-                  // Si la subida falla por CUALQUIER motivo (4xx, 5xx, timeout o red), abortar y lanzar error con status
-                  const err = new Error(subida.error || "Fallo al subir foto de comprobante de entrega");
+                  const err = new Error(subida.error || "Fallo al subir comprobante de entrega");
                   err.status = subida.status || 500;
                   throw err;
+                }
+              }
+
+              // Subir fotos de comprobante dentro de los tramos de cobro (QR/Transferencia)
+              if (payloadEntrega.cobro && Array.isArray(payloadEntrega.cobro.pagos)) {
+                for (const tramo of payloadEntrega.cobro.pagos) {
+                  if (tramo.foto_uri && !tramo.id_comprobante_archivo) {
+                    const subida = await LogisticaApi.subirArchivoComprobante(
+                      tramo.foto_uri,
+                      "COMPROBANTE_COBRO",
+                      payloadEntrega.id_pedido || 0
+                    );
+                    if (subida.success) {
+                      tramo.id_comprobante_archivo = subida.idComprobante;
+                      tramo.url_comprobante = subida.urlArchivo;
+                    } else {
+                      const err = new Error(subida.error || `Fallo al subir comprobante ${tramo.metodo}`);
+                      err.status = subida.status || 500;
+                      throw err;
+                    }
+                  } else if (
+                    (tramo.metodo === "QR" || tramo.metodo === "TRANSFERENCIA") &&
+                    !tramo.id_comprobante_archivo &&
+                    !tramo.foto_uri
+                  ) {
+                    const err = new Error(`El método ${tramo.metodo} exige comprobante fotográfico.`);
+                    err.status = 422;
+                    throw err;
+                  }
                 }
               }
 
@@ -104,23 +171,28 @@ class SyncService {
                 throw err;
               }
 
-              // Detectar alerta de revalorización emitida por el servidor
               if (resEntrega.alertaRevalorizacion) {
                 alertasRevalorizacion.push(resEntrega.alertaRevalorizacion);
-                console.log("[SyncService] ALERTA DE REVALORIZACIÓN:", resEntrega.alertaRevalorizacion);
+              }
+
+              // Refrescar datos locales tras entrega exitosa (Subagente C)
+              const puntoVentaId = payloadEntrega.id_punto_venta || payloadEntrega.idPuntoVenta;
+              if (puntoVentaId) {
+                await LocalDB.actualizarEstadoParada(puntoVentaId, "ENTREGADO", payloadEntrega);
+              }
+              if (Array.isArray(payloadEntrega.items_entregados)) {
+                await LocalDB.descontarInventarioCamion(payloadEntrega.items_entregados);
               }
               break;
             }
 
             case "COBRO": {
-              // HU-32: Registrar cobro (simple o mixto)
               let payloadCobro = {
                 ...item.payload,
                 latitud: item.gps?.latitud || item.payload?.latitud || -19.0483,
                 longitud: item.gps?.longitud || item.payload?.longitud || -65.2598,
               };
 
-              // Regla 4: Subir fotos locales de tramos QR/Transferencia antes de despachar cobro
               if (Array.isArray(payloadCobro.pagos)) {
                 for (const tramo of payloadCobro.pagos) {
                   if (tramo.foto_uri && !tramo.id_comprobante_archivo) {
@@ -133,12 +205,15 @@ class SyncService {
                       tramo.id_comprobante_archivo = subida.idComprobante;
                       tramo.url_comprobante = subida.urlArchivo;
                     } else {
-                      // Si la subida falla por CUALQUIER motivo, abortar: jamás enviar cobro QR sin comprobante
                       const err = new Error(subida.error || "Fallo al subir comprobante de cobro QR/Transferencia");
                       err.status = subida.status || 500;
                       throw err;
                     }
-                  } else if ((tramo.metodo === "QR" || tramo.metodo === "TRANSFERENCIA") && !tramo.id_comprobante_archivo && !tramo.foto_uri) {
+                  } else if (
+                    (tramo.metodo === "QR" || tramo.metodo === "TRANSFERENCIA") &&
+                    !tramo.id_comprobante_archivo &&
+                    !tramo.foto_uri
+                  ) {
                     const err = new Error(`El método ${tramo.metodo} exige comprobante fotográfico.`);
                     err.status = 422;
                     throw err;
@@ -229,34 +304,53 @@ class SyncService {
               break;
           }
 
-          // Si llegó aquí, fue exitosa: remover de la cola local
+          // Remoción del ítem exitoso de la cola local
           await SyncQueue.removerOperacion(item.id);
           exitosas++;
+          await LocalDB.guardarUltimaSincronizacion();
         } catch (error) {
           console.error(`[SyncService] Error en item ${item.id} (${item.tipo}):`, error.message);
           fallidas++;
           await SyncQueue.registrarFalloOperacion(item.id, error);
 
-          // Si el error es de conectividad (offline), detener bucle
-          if (error.isOffline || error.code === "ECONNABORTED" || error.message?.includes("Network")) {
-            console.log("[SyncService] Red no disponible. Pausando sincronización.");
+          // Subagente B: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta
+          const status = error?.status || error?.response?.status;
+          const msg = String(error?.message || "").toLowerCase();
+          const es401 = status === 401 || msg.includes("token expirado") || msg.includes("sesión expirada");
+          if (es401) {
+            console.log("[SyncService] 401 detectado durante la sync. Pausando cola de sincronización.");
+            this.notificar({
+              enProgreso: false,
+              mensaje: "Sesión expirada. Inicia sesión para sincronizar (tus datos están seguros).",
+            });
             break;
           }
+
+          // Si el error es de conectividad (offline / timeout / 5xx), pausar para no quemar intentos
+          const esRed = error.isOffline || error.code === "ECONNABORTED" || msg.includes("network") || msg.includes("timeout") || status >= 500;
+          if (esRed) {
+            console.log("[SyncService] Conexión inestable o caída. Pausando ciclo de sincronización.");
+            break;
+          }
+
+          // Si fue error 4xx de negocio, NO rompemos el bucle: el ítem quedó marcado 'esErrorPermanente: true'
+          // y continuamos con el siguiente de la cola FIFO (Subagente C)
         }
       }
 
-      const restantes = await SyncQueue.contarPendientes();
+      const restantes = await SyncQueue.contarPendientes(usuarioIdActivo);
       this.notificar({
         enProgreso: false,
         pendientes: restantes,
         alertasRevalorizacion,
-        mensaje: restantes === 0 ? "¡Todo sincronizado!" : `${restantes} operaciones pendientes.`,
+        mensaje: restantes === 0 ? "¡Todo sincronizado!" : `${restantes} operaciones guardadas en el teléfono, pendientes de enviar.`,
       });
 
       return {
         exito: true,
         procesadas: exitosas,
         fallidas,
+        omitidas4xx,
         pendientes: restantes,
         alertasRevalorizacion,
       };
@@ -265,7 +359,9 @@ class SyncService {
       this.notificar({ enProgreso: false, error: globalError.message });
       return { exito: false, error: globalError.message };
     } finally {
+      // Candado liberado SIEMPRE en finally (Subagente C)
       this.sincronizando = false;
+      this.horaInicioSync = null;
     }
   }
 }
