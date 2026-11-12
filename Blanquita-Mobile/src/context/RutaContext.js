@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { LogisticaApi } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
@@ -30,10 +30,20 @@ export function RutaProvider({ children }) {
     cantidadCobros: 0,
   });
 
+  const refrescarPendientesRef = useRef(refrescarPendientes);
+  refrescarPendientesRef.current = refrescarPendientes;
+
+  const detenerTelemetriaRef = useRef(detenerTelemetria);
+  detenerTelemetriaRef.current = detenerTelemetria;
+
+  const cargarHojaRutaRef = useRef(null);
+
   // Auto-sincronización Offline-First en background
   useEffect(() => {
     const unsub = iniciarAutoSync(() => {
-      refrescarPendientes();
+      if (refrescarPendientesRef.current) {
+        refrescarPendientesRef.current();
+      }
     });
     return () => {
       if (unsub) unsub();
@@ -43,10 +53,14 @@ export function RutaProvider({ children }) {
   // Cargar ruta diaria al iniciar o al cambiar usuario
   useEffect(() => {
     if (usuario) {
-      cargarHojaRuta();
+      if (cargarHojaRutaRef.current) {
+        cargarHojaRutaRef.current();
+      }
     } else {
       setAsignacionActiva(null);
-      detenerTelemetria();
+      if (detenerTelemetriaRef.current) {
+        detenerTelemetriaRef.current();
+      }
     }
   }, [usuario]);
 
@@ -107,6 +121,7 @@ export function RutaProvider({ children }) {
       }
     }
   };
+  cargarHojaRutaRef.current = cargarHojaRuta;
 
   const recalcularRecaudacion = (ruta) => {
     if (!ruta || !ruta.paradas) return;

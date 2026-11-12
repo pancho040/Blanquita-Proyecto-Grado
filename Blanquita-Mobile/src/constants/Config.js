@@ -29,6 +29,7 @@ export const CONFIG = {
     CLAVE_STORAGE_RUTA: "@blanquita_ruta_activa",
     CLAVE_STORAGE_CLIENTES: "@blanquita_clientes_cache",
     CLAVE_STORAGE_PRODUCTOS: "@blanquita_productos_cache",
+    CLAVE_STORAGE_INVENTARIO: "@blanquita_inventario_camion",
     CLAVE_STORAGE_LIQUIDACION: "@blanquita_liquidacion_local",
   },
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
-import { Camera, Image as ImageIcon, Trash2, RefreshCw } from "lucide-react-native";
+import { Camera, Trash2, RefreshCw } from "lucide-react-native";
 import { Colors } from "../../constants/Colors";
 
 export const PhotoCapture = ({

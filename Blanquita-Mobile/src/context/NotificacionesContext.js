@@ -20,6 +20,21 @@ export function NotificacionesProvider({ children, navigationRef }) {
   const backoffIntervalMs = useRef(INTERVALO_BASE_MS);
   const timerRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const sincronizarRef = useRef(null);
+
+  const reiniciarTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (!sesionActiva) return;
+
+    timerRef.current = setTimeout(() => {
+      if (sincronizarRef.current) {
+        sincronizarRef.current();
+      }
+    }, backoffIntervalMs.current);
+  }, [sesionActiva]);
 
   const sincronizarNotificaciones = useCallback(async () => {
     if (!sesionActiva) return;
@@ -39,19 +54,11 @@ export function NotificacionesProvider({ children, navigationRef }) {
       setCargando(false);
       reiniciarTimer();
     }
-  }, [sesionActiva]);
+  }, [sesionActiva, reiniciarTimer]);
 
-  const reiniciarTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (!sesionActiva) return;
-
-    timerRef.current = setTimeout(() => {
-      sincronizarNotificaciones();
-    }, backoffIntervalMs.current);
-  }, [sesionActiva, sincronizarNotificaciones]);
+  useEffect(() => {
+    sincronizarRef.current = sincronizarNotificaciones;
+  }, [sincronizarNotificaciones]);
 
   // 1. Polling al montar o cambiar de usuario
   useEffect(() => {

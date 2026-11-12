@@ -122,6 +122,38 @@ export const LocalDB = {
   },
 
   // -------------------------------------------------------------
+  // INVENTARIO EN CAMIÓN Y REVALORIZACIÓN (FASE 2)
+  // -------------------------------------------------------------
+  async guardarInventarioCamion(inventario) {
+    try {
+      const payload = {
+        ...inventario,
+        fechaGuardado: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(
+        CONFIG.SYNC.CLAVE_STORAGE_INVENTARIO || "@blanquita_inventario_camion",
+        JSON.stringify(payload)
+      );
+      return true;
+    } catch (e) {
+      console.error("Error guardando inventario en camión:", e);
+      return false;
+    }
+  },
+
+  async obtenerInventarioCamion() {
+    try {
+      const raw = await AsyncStorage.getItem(
+        CONFIG.SYNC.CLAVE_STORAGE_INVENTARIO || "@blanquita_inventario_camion"
+      );
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error("Error leyendo inventario en camión:", e);
+      return null;
+    }
+  },
+
+  // -------------------------------------------------------------
   // CLIENTES EN CACHÉ (HU-29)
   // -------------------------------------------------------------
   async guardarClientesCache(clientes) {
@@ -187,6 +219,7 @@ export const LocalDB = {
         CONFIG.SYNC.CLAVE_STORAGE_RUTA,
         CONFIG.SYNC.CLAVE_STORAGE_CLIENTES,
         CONFIG.SYNC.CLAVE_STORAGE_PRODUCTOS,
+        CONFIG.SYNC.CLAVE_STORAGE_INVENTARIO || "@blanquita_inventario_camion",
         CONFIG.SYNC.CLAVE_STORAGE_LIQUIDACION,
       ]);
       return true;

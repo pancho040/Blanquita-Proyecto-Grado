@@ -39,6 +39,7 @@
     "@babel/core": "^7.25.2",
     "@babel/register": "^7.29.13",
     "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "react-test-renderer": "^18.3.1"
   },
   "private": true

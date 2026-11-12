@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,20 +19,21 @@ import {
   AlertCircle,
   Gift,
   DollarSign,
-  Truck,
 } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { Header } from '../../components/common/Header';
 import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { logisticaApi } from '../../api/logisticaApi';
+import { LocalDB } from '../../database/localDb';
 import { useAuth } from '../../context/AuthContext';
 
-export const MiInventarioScreen = ({ navigation }) => {
+export const MiInventarioScreen = () => {
   const { user } = useAuth();
   const [inventario, setInventario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
+  const [esCache, setEsCache] = useState(false);
 
   const cargarDatos = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -44,24 +45,42 @@ export const MiInventarioScreen = ({ navigation }) => {
 
     try {
       const data = await logisticaApi.obtenerMiInventarioCamion();
-      if (data) {
+      if (data && data.items) {
         setInventario(data);
+        setEsCache(false);
+        await LocalDB.guardarInventarioCamion(data);
       } else {
-        // Fallback estructura vacía
-        setInventario({
-          chofer_id: user?.IdUsuario,
-          sucursal_id: user?.IdSucursal || 1,
-          total_bultos_cargados: 0,
-          total_bultos_entregados: 0,
-          total_saldo_camion: 0,
-          valor_total_camion_bs: 0,
-          valor_total_revalorizado_bs: 0,
-          ajuste_revalorizacion_total_bs: 0,
-          items: [],
-        });
+        // Fallback a caché local persistida
+        const cache = await LocalDB.obtenerInventarioCamion();
+        if (cache && cache.items) {
+          setInventario(cache);
+          setEsCache(true);
+          setError('Servidor no disponible. Mostrando datos de la última sincronización.');
+        } else {
+          setInventario({
+            chofer_id: user?.IdUsuario,
+            sucursal_id: user?.IdSucursal || 1,
+            total_bultos_cargados: 0,
+            total_bultos_entregados: 0,
+            total_saldo_camion: 0,
+            valor_total_camion_bs: 0,
+            valor_total_revalorizado_bs: 0,
+            ajuste_revalorizacion_total_bs: 0,
+            items: [],
+          });
+          setEsCache(false);
+          setError('No se pudo obtener el inventario del camión.');
+        }
       }
-    } catch (err) {
-      setError('No se pudo sincronizar el inventario del camión.');
+    } catch (_err) {
+      const cache = await LocalDB.obtenerInventarioCamion();
+      if (cache && cache.items) {
+        setInventario(cache);
+        setEsCache(true);
+        setError('Sin respuesta del servidor. Mostrando datos de la última sincronización.');
+      } else {
+        setError('No se pudo sincronizar el inventario del camión.');
+      }
     } finally {
       setCargando(false);
       setRefrescando(false);
@@ -72,7 +91,7 @@ export const MiInventarioScreen = ({ navigation }) => {
     cargarDatos();
   }, [cargarDatos]);
 
-  const items = inventario?.items || [];
+  const items = useMemo(() => inventario?.items || [], [inventario?.items]);
   const ajusteReval = Number(inventario?.ajuste_revalorizacion_total_bs || 0);
   const valorReval = Number(inventario?.valor_total_revalorizado_bs || 0);
   const valorBase = Number(inventario?.valor_total_camion_bs || 0);
@@ -192,6 +211,14 @@ export const MiInventarioScreen = ({ navigation }) => {
         showSyncButton
       />
       <OfflineBanner />
+      {error && (
+        <View style={styles.errorAvisoBanner}>
+          <AlertCircle size={16} color={Colors.warning} />
+          <Text style={styles.errorAvisoTexto}>
+            {error} {esCache ? "(Datos respaldados en local)" : ""}
+          </Text>
+        </View>
+      )}
 
       {cargando && !refrescando ? (
         <View style={styles.loaderContainer}>
@@ -620,5 +647,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  errorAvisoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.warning,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  errorAvisoTexto: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
   },
 });
