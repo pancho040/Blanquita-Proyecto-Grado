@@ -71,6 +71,10 @@ class CuentasCobrarRepository:
                 nv."MontoQR",
                 nv."MontoCredito",
                 nv."FirmaDigitalUrl",
+                nv."FirmaNombre",
+                nv."FirmaClienteUrl",
+                nv."FirmaClienteNombre",
+                nv."FirmaClienteCi",
                 COALESCE(c."RazonSocial", nv."ClienteNombreLibre") as "ClienteNombre",
                 COUNT(*) OVER() as total_count
             FROM "NotaVenta" nv

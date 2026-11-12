@@ -166,6 +166,189 @@ def _guardar_firma_como_archivo(
 
 
 
+def _sincronizar_o_crear_nota_venta_entrega(
+    db: Session,
+    id_pedido: int,
+    uid: int,
+    nombre_chofer: str,
+    url_firma_chofer: Optional[str],
+    url_firma_cliente: Optional[str],
+    recibido_por: Optional[str],
+    ci_receptor: Optional[str],
+    sucursal_id: int,
+    datos_cobro: Optional[dict] = None,
+    observacion: Optional[str] = None
+) -> Optional[int]:
+    """Asegura la creación o actualización de NotaVenta y DetalleNotaVenta para visualización inmediata en panel web."""
+    ped_row = db.execute(text("""
+        SELECT p."NumeroPedido", p."IdCliente", p."MontoTotal", c."RazonSocial"
+        FROM public."Pedido" p
+        LEFT JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        WHERE p."IdPedido" = :id_ped;
+    """), {"id_ped": id_pedido}).fetchone()
+
+    if not ped_row:
+        return None
+
+    nro_pedido = ped_row[0]
+    id_cliente = ped_row[1]
+    monto_total_ped = float(ped_row[2] or 0.0)
+    cliente_nombre = ped_row[3] or recibido_por or "Cliente"
+
+    if datos_cobro:
+        total_venta = float(datos_cobro.get("monto_total") or monto_total_ped)
+        total_cancelado = float(datos_cobro.get("monto_pagado") or 0.0)
+        saldo_pendiente = float(datos_cobro.get("saldo_credito") or 0.0)
+        tramos = datos_cobro.get("tramos") or []
+        monto_ef = sum(t["monto"] for t in tramos if t["metodo"] == "EFECTIVO")
+        monto_qr = sum(t["monto"] for t in tramos if t["metodo"] in ("QR", "TRANSFERENCIA"))
+        monto_cr = saldo_pendiente
+        comp_id = next((t.get("id_comprobante_archivo") for t in tramos if t.get("id_comprobante_archivo")), None)
+
+        hay_pendientes = any(t.get("estado") == "PENDIENTE_APROBACION" for t in tramos)
+        if hay_pendientes:
+            estado_cobranza = "Pendiente Aprobación"
+        elif saldo_pendiente <= 0:
+            estado_cobranza = "Liquidado"
+        else:
+            estado_cobranza = "Pendiente"
+
+        if monto_ef > 0 and monto_qr > 0:
+            metodo_pago = "Mixto"
+        elif monto_qr > 0:
+            metodo_pago = "QR"
+        elif monto_ef > 0:
+            metodo_pago = "Efectivo"
+        else:
+            metodo_pago = "Crédito"
+    else:
+        total_venta = monto_total_ped
+        total_cancelado = 0.0
+        saldo_pendiente = monto_total_ped
+        monto_ef = 0.0
+        monto_qr = 0.0
+        monto_cr = monto_total_ped
+        comp_id = None
+        estado_cobranza = "Pendiente"
+        metodo_pago = "Pendiente Cobro"
+
+    sql_check = text("""
+        SELECT "IdNotaVenta"
+        FROM public."NotaVenta"
+        WHERE "NumeroNotaEntrega" = :nro_ped
+           OR "IdNotaVenta" = (SELECT "IdNotaVenta" FROM public."CuentaCobrar" WHERE "IdPedido" = :id_ped LIMIT 1)
+        LIMIT 1;
+    """)
+    existente = db.execute(sql_check, {"nro_ped": nro_pedido, "id_ped": id_pedido}).fetchone()
+
+    if existente:
+        id_nv = existente[0]
+        db.execute(text("""
+            UPDATE public."NotaVenta"
+            SET "IdChofer" = :uid,
+                "Chofer" = :chofer,
+                "TotalVentaBruto" = :total,
+                "ImporteNeto" = :total,
+                "TotalCancelado" = :cancelado,
+                "SaldoPendiente" = :saldo,
+                "EstadoCobranza" = :estado,
+                "MetodoPago" = :metodo,
+                "MontoEfectivo" = :ef,
+                "MontoQR" = :qr,
+                "MontoCredito" = :cr,
+                "ComprobanteQRArchivoId" = COALESCE(:comp, "ComprobanteQRArchivoId"),
+                "FirmaDigitalUrl" = COALESCE(:f_ch, "FirmaDigitalUrl"),
+                "FirmaNombre" = :chofer,
+                "FirmaClienteUrl" = COALESCE(:f_cl, "FirmaClienteUrl"),
+                "FirmaClienteNombre" = :rec,
+                "FirmaClienteCi" = :ci,
+                "FirmaFecha" = NOW()
+            WHERE "IdNotaVenta" = :id_nv;
+        """), {
+            "uid": uid,
+            "chofer": nombre_chofer,
+            "total": total_venta,
+            "cancelado": total_cancelado,
+            "saldo": saldo_pendiente,
+            "estado": estado_cobranza,
+            "metodo": metodo_pago,
+            "ef": monto_ef,
+            "qr": monto_qr,
+            "cr": monto_cr,
+            "comp": comp_id,
+            "f_ch": url_firma_chofer,
+            "f_cl": url_firma_cliente,
+            "rec": recibido_por,
+            "ci": ci_receptor,
+            "id_nv": id_nv
+        })
+    else:
+        num_nv = f"NV-{nro_pedido}"
+        sql_insert = text("""
+            INSERT INTO public."NotaVenta" (
+                "NumeroNotaVenta", "NumeroNotaEntrega", "FechaVenta", "IdCliente",
+                "ClienteNombreLibre", "DestinoDepartamento", "IdChofer", "Chofer",
+                "CantidadCamiones", "TotalVentaBruto", "DescuentoBonificacion", "Promocion",
+                "ImporteNeto", "SaldoAnterior", "TotalCancelado", "SaldoPendiente",
+                "EstadoCobranza", "Observacion", "IdUsuarioRegistro", "IdSucursal",
+                "MetodoPago", "MontoEfectivo", "MontoQR", "MontoCredito",
+                "ComprobanteQRArchivoId", "FirmaDigitalUrl", "FirmaNombre",
+                "FirmaClienteUrl", "FirmaClienteNombre", "FirmaClienteCi", "FirmaFecha", "FechaRegistro"
+            ) VALUES (
+                :num_nv, :nro_ped, CURRENT_DATE, :id_cli,
+                :cli_nom, 'Sucre', :uid, :chofer,
+                1.0, :total, 0.0, 0.0,
+                :total, 0.0, :cancelado, :saldo,
+                :estado, :obs, :uid, :sid,
+                :metodo, :ef, :qr, :cr,
+                :comp, :f_ch, :chofer,
+                :f_cl, :rec, :ci, NOW(), NOW()
+            ) RETURNING "IdNotaVenta";
+        """)
+        id_nv = db.execute(sql_insert, {
+            "num_nv": num_nv,
+            "nro_ped": nro_pedido,
+            "id_cli": id_cliente,
+            "cli_nom": cliente_nombre,
+            "uid": uid,
+            "chofer": nombre_chofer,
+            "total": total_venta,
+            "cancelado": total_cancelado,
+            "saldo": saldo_pendiente,
+            "estado": estado_cobranza,
+            "obs": observacion or f"Entrega móvil pedido #{id_pedido}",
+            "sid": sucursal_id,
+            "metodo": metodo_pago,
+            "ef": monto_ef,
+            "qr": monto_qr,
+            "cr": monto_cr,
+            "comp": comp_id,
+            "f_ch": url_firma_chofer,
+            "f_cl": url_firma_cliente,
+            "rec": recibido_por,
+            "ci": ci_receptor
+        }).scalar()
+
+        db.execute(text("""
+            INSERT INTO public."DetalleNotaVenta" (
+                "IdNotaVenta", "IdPresentacion", "NombreProducto", "Cantidad", "PrecioUnitario", "Subtotal", "EsBonificacionBandeo"
+            )
+            SELECT :id_nv, dp."IdPresentacion", COALESCE(pr."NombreProducto", pp."CodigoPresentacion", 'Producto'), dp."Cantidad", dp."PrecioUnitarioAplicado", dp."Subtotal", false
+            FROM public."DetallePedido" dp
+            LEFT JOIN public."PresentacionProducto" pp ON dp."IdPresentacion" = pp."IdPresentacion"
+            LEFT JOIN public."Producto" pr ON pp."IdProducto" = pr."IdProducto"
+            WHERE dp."IdPedido" = :id_ped;
+        """), {"id_nv": id_nv, "id_ped": id_pedido})
+
+    db.execute(text("""
+        UPDATE public."CuentaCobrar"
+        SET "IdNotaVenta" = :id_nv
+        WHERE "IdPedido" = :id_ped AND "IdNotaVenta" IS NULL;
+    """), {"id_nv": id_nv, "id_ped": id_pedido})
+
+    return id_nv
+
+
 def _asegurar_cxc_y_abono_bancario_chofer(
     db: Session,
     uid: int,
@@ -711,32 +894,8 @@ async def registrar_entrega_movil(
             "obs": f"Recibido por: {dto.recibido_por} (CI: {dto.ci_receptor or 'S/CI'})."
         })
 
-    # Sincronizar en NotaVenta para visualización inmediata en la Web
-    nombre_chofer_txt = f"{usuario.get('PrimerNombre', '')} {usuario.get('ApellidoPaterno', '')}".strip() or "Chofer"
-    db.execute(text("""
-        UPDATE public."NotaVenta"
-        SET "FirmaDigitalUrl" = COALESCE(:firma_chofer, "FirmaDigitalUrl"),
-            "FirmaNombre" = COALESCE(:nombre_chofer, "FirmaNombre"),
-            "FirmaClienteUrl" = COALESCE(:firma_cliente, "FirmaClienteUrl"),
-            "FirmaClienteNombre" = COALESCE(:recibido_por, "FirmaClienteNombre"),
-            "FirmaClienteCi" = COALESCE(:ci_receptor, "FirmaClienteCi"),
-            "FirmaFecha" = NOW()
-        WHERE "IdChofer" = :uid AND (
-            "IdNotaVenta" = (SELECT "IdNotaVenta" FROM public."CuentaCobrar" WHERE "IdPedido" = :id_ped LIMIT 1)
-            OR "NumeroNotaEntrega" = (SELECT "NumeroPedido" FROM public."Pedido" WHERE "IdPedido" = :id_ped LIMIT 1)
-            OR "IdCliente" = (SELECT "IdCliente" FROM public."Pedido" WHERE "IdPedido" = :id_ped LIMIT 1)
-        );
-    """), {
-        "firma_chofer": url_firma_chofer,
-        "nombre_chofer": nombre_chofer_txt,
-        "firma_cliente": url_firma_cliente,
-        "recibido_por": dto.recibido_por,
-        "ci_receptor": dto.ci_receptor,
-        "uid": uid,
-        "id_ped": dto.id_pedido
-    })
-
     # 6. Actualizar pedido delegando en RutaService
+    nombre_chofer_txt = f"{usuario.get('PrimerNombre', '')} {usuario.get('ApellidoPaterno', '')}".strip() or "Chofer"
     ruta_service = RutaService(db)
     obs_final = f"Recibido por: {dto.recibido_por}. {dto.observacion or ''} [Tipo: {dto.tipo_entrega}]".strip()
     ruta_service.RegistrarEntregaParada({
@@ -861,7 +1020,22 @@ async def registrar_entrega_movil(
             "cuenta_cobrar": cxc_resumen
         }
 
-    # 8. Verificar si hubo revalorización de precios reciente (Kevin)
+    # 8. Sincronizar o crear NotaVenta para visualización inmediata en Panel Web y Contabilidad
+    _sincronizar_o_crear_nota_venta_entrega(
+        db=db,
+        id_pedido=dto.id_pedido,
+        uid=uid,
+        nombre_chofer=nombre_chofer_txt,
+        url_firma_chofer=url_firma_chofer,
+        url_firma_cliente=url_firma_cliente,
+        recibido_por=dto.recibido_por,
+        ci_receptor=dto.ci_receptor,
+        sucursal_id=sucursal_id,
+        datos_cobro=datos_cobro_resumen,
+        observacion=dto.observacion
+    )
+
+    # 9. Verificar si hubo revalorización de precios reciente (Kevin)
     alerta_revalorizacion = None
     for pres_id in cantidades_a_entregar.keys():
         sql_rev = text("""
