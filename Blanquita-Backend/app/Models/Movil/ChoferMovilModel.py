@@ -10,33 +10,41 @@ from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 
 class ItemEntregaDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    presentacion_id: int = Field(..., gt=0)
-    cantidad: float = Field(..., gt=0)
-    es_cortesia_bandeo: bool = False
+    presentacion_id: int = Field(
+        ...,
+        gt=0,
+        validation_alias=AliasChoices("presentacion_id", "id_presentacion", "id_producto", "IdPresentacion", "IdProducto")
+    )
+    cantidad: float = Field(..., gt=0, validation_alias=AliasChoices("cantidad", "Cantidad"))
+    es_cortesia_bandeo: bool = Field(False, validation_alias=AliasChoices("es_cortesia_bandeo", "EsCortesiaBandeo"))
 
 
 class TramoPagoDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    metodo: str = Field(..., description="'EFECTIVO' | 'QR' | 'TRANSFERENCIA' | 'CREDITO'")
-    monto: float = Field(..., gt=0)
-    numero_referencia: Optional[str] = None
-    id_comprobante_archivo: Optional[int] = None
-    url_comprobante: Optional[str] = None
+    metodo: str = Field(
+        ...,
+        description="'EFECTIVO' | 'QR' | 'TRANSFERENCIA' | 'CREDITO'",
+        validation_alias=AliasChoices("metodo", "Metodo", "metodo_pago", "MetodoPago")
+    )
+    monto: float = Field(..., gt=0, validation_alias=AliasChoices("monto", "Monto"))
+    numero_referencia: Optional[str] = Field(None, validation_alias=AliasChoices("numero_referencia", "NumeroReferencia", "numeroReferencia"))
+    id_comprobante_archivo: Optional[int] = Field(None, validation_alias=AliasChoices("id_comprobante_archivo", "IdComprobanteArchivo", "idComprobanteArchivo"))
+    url_comprobante: Optional[str] = Field(None, validation_alias=AliasChoices("url_comprobante", "UrlComprobante", "urlComprobante"))
 
 
 class BloqueCreditoDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    saldo: float = Field(..., ge=0)
-    plazo_dias: Optional[int] = Field(15, ge=1)
-    cuotas: Optional[int] = Field(1, ge=1)
-    fecha_vencimiento: Optional[str] = None
+    saldo: float = Field(0.0, ge=0, validation_alias=AliasChoices("saldo", "Saldo"))
+    plazo_dias: Optional[int] = Field(15, ge=1, validation_alias=AliasChoices("plazo_dias", "PlazoDias", "plazoDias"))
+    cuotas: Optional[int] = Field(1, ge=1, validation_alias=AliasChoices("cuotas", "Cuotas"))
+    fecha_vencimiento: Optional[str] = Field(None, validation_alias=AliasChoices("fecha_vencimiento", "FechaVencimiento", "fechaVencimiento"))
 
 
 class BloqueCobroEntregaDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    monto_total: float = Field(..., gt=0)
-    pagos: List[TramoPagoDTO] = Field(default_factory=list)
-    credito: Optional[BloqueCreditoDTO] = None
+    monto_total: Optional[float] = Field(None, ge=0, validation_alias=AliasChoices("monto_total", "MontoTotal", "montoTotal"))
+    pagos: List[TramoPagoDTO] = Field(default_factory=list, validation_alias=AliasChoices("pagos", "Pagos"))
+    credito: Optional[BloqueCreditoDTO] = Field(None, validation_alias=AliasChoices("credito", "Credito"))
 
 
 class EntregaMovilRequest(BaseModel):
@@ -44,15 +52,15 @@ class EntregaMovilRequest(BaseModel):
     id_pedido: int = Field(..., gt=0, validation_alias=AliasChoices("id_pedido", "IdPedido"))
     latitud: float = Field(..., validation_alias=AliasChoices("latitud", "LatitudEntrega"))
     longitud: float = Field(..., validation_alias=AliasChoices("longitud", "LongitudEntrega"))
-    tipo_entrega: str = Field("TOTAL", description="'TOTAL' o 'PARCIAL'")
-    items_entregados: Optional[List[ItemEntregaDTO]] = None
-    recibido_por: Optional[str] = Field("Cliente", validation_alias=AliasChoices("recibido_por", "RecibidoPor"))
-    ci_receptor: Optional[str] = Field(None, validation_alias=AliasChoices("ci_receptor", "CiReceptor"))
-    observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "Observacion"))
-    firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base4 o URL)")
-    firma_cliente: Optional[str] = Field(None, description="Firma digital del cliente o receptor")
-    fecha_dispositivo: Optional[str] = None
-    cobro: Optional[BloqueCobroEntregaDTO] = None
+    tipo_entrega: str = Field("TOTAL", description="'TOTAL' o 'PARCIAL'", validation_alias=AliasChoices("tipo_entrega", "TipoEntrega", "tipoEntrega"))
+    items_entregados: Optional[List[ItemEntregaDTO]] = Field(None, validation_alias=AliasChoices("items_entregados", "ItemsEntregados", "itemsEntregados"))
+    recibido_por: Optional[str] = Field("Cliente", validation_alias=AliasChoices("recibido_por", "RecibidoPor", "recibidoPor"))
+    ci_receptor: Optional[str] = Field(None, validation_alias=AliasChoices("ci_receptor", "CiReceptor", "ciReceptor"))
+    observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "Observacion", "observaciones", "Observaciones"))
+    firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base4 o URL)", validation_alias=AliasChoices("firma_chofer", "FirmaChofer", "firmaChofer"))
+    firma_cliente: Optional[str] = Field(None, description="Firma digital del cliente o receptor", validation_alias=AliasChoices("firma_cliente", "FirmaCliente", "firmaCliente"))
+    fecha_dispositivo: Optional[str] = Field(None, validation_alias=AliasChoices("fecha_dispositivo", "FechaDispositivo", "fechaDispositivo"))
+    cobro: Optional[BloqueCobroEntregaDTO] = Field(None, validation_alias=AliasChoices("cobro", "Cobro"))
 
 
 class CobroMovilRequest(BaseModel):

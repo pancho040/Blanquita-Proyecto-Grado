@@ -8,9 +8,9 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 from app.Config.supabase import get_db, SessionLocal
-from app.Auth.Dependencies import require_role
+from app.Auth.Dependencies import require_role, get_current_user
 from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
-from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO
+from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR
 from app.Services.Logistica.RutaService import RutaService
 from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
 from app.Models.Logistica.RutaModel import (
@@ -125,9 +125,26 @@ def listar_asignaciones(
     fecha: Optional[date] = Query(None, description="Filtrar por fecha de asignación"),
     id_repartidor: Optional[int] = Query(None, description="Filtrar por repartidor"),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    usuario: dict = Depends(get_current_user),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    rol_actual = usuario.get("IdRol")
+    uid_actual = usuario.get("IdUsuario")
+
+    # Si es personal de reparto (chofer, agente de reparto, distribuidor), permitir ver sus propias asignaciones
+    if rol_actual in (ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR, 6, 7):
+        if id_repartidor is not None and int(id_repartidor) != int(uid_actual):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos para ver asignaciones de otros repartidores"
+            )
+        id_repartidor = int(uid_actual)
+    elif rol_actual not in PERMISOS_LOGISTICA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para realizar esta acción"
+        )
+
     return RutaService(db).ListarAsignaciones(fecha, id_repartidor, alcance.sucursal_efectiva)
 
 @RutaRouter.post("/asignaciones", response_model=dict)

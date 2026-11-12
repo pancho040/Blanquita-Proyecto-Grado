@@ -19,6 +19,7 @@ from typing import Optional, Dict, Any, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.Auth.Jwt import crear_access_token_movil
 
 
 class RefreshTokenService:
@@ -72,6 +73,31 @@ class RefreshTokenService:
         return token_crudo, expira_en, familia
 
     @classmethod
+    def _generar_access_token_para_usuario(cls, session: Session, usuario_id: int) -> str:
+        """Genera un Access Token JWT con todos los claims de Supabase y RBAC para el usuario."""
+        sql_u = text("""
+            SELECT "IdUsuario", "IdRol", "AuthUserId", "Ci", "IsAdmin"
+            FROM public."Usuario"
+            WHERE "IdUsuario" = :uid
+            LIMIT 1;
+        """)
+        u = session.execute(sql_u, {"uid": usuario_id}).mappings().fetchone()
+        if not u:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"codigo": "USUARIO_NO_ENCONTRADO", "mensaje": "Usuario no encontrado", "detail": "Usuario no encontrado"}
+            )
+        ci_str = str(u.get("Ci") or usuario_id)
+        return crear_access_token_movil(
+            usuario_id=u["IdUsuario"],
+            rol_id=u["IdRol"],
+            auth_user_id=str(u["AuthUserId"]) if u["AuthUserId"] else None,
+            correo=f"{ci_str}@papelerablanquita.com",
+            is_admin=bool(u.get("IsAdmin", False)),
+            expira_segundos=3600
+        )
+
+    @classmethod
     def rotar_refresh_token(
         cls,
         session: Session,
@@ -93,7 +119,7 @@ class RefreshTokenService:
 
         sql_buscar = text("""
             SELECT "id", "usuario_id", "token_hash", "familia_id", "dispositivo_id",
-                   "supabase_refresh_token", "expira_en", "revocado", "motivo_revocacion"
+                   "supabase_refresh_token", "expira_en", "revocado", "motivo_revocacion", "fecha_revocacion"
             FROM public."RefreshTokenMovil"
             WHERE "token_hash" = :thash
             LIMIT 1;
@@ -182,23 +208,13 @@ class RefreshTokenService:
                 nuevo_access_token = res_sb.get("AccessToken")
                 if res_sb.get("RefreshTokenCrudo"):
                     nuevo_supabase_refresh = res_sb["RefreshTokenCrudo"]
-            except HTTPException as e:
-                # Si Supabase falla con 401/403, propagar TOKEN_INVALIDO
-                if e.status_code in (401, 403):
-                    session.execute(text("""
-                        UPDATE public."RefreshTokenMovil"
-                        SET "revocado" = true,
-                            "motivo_revocacion" = 'SUPABASE_RECHAZO',
-                            "fecha_revocacion" = NOW()
-                        WHERE "id" = :rid;
-                    """), {"rid": id_registro})
-                    session.commit()
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail={"codigo": "TOKEN_INVALIDO", "mensaje": "Token de autenticación rechazado por el proveedor", "detail": "Token de autenticación rechazado por el proveedor"}
-                    )
             except Exception:
-                pass
+                # Si Supabase no responde o rechaza el token de proveedor, no bloqueamos al chofer
+                nuevo_access_token = None
+
+        # Si Supabase no emitió nuevo token o no está configurado, generar token directo de alta compatibilidad
+        if not nuevo_access_token:
+            nuevo_access_token = cls._generar_access_token_para_usuario(session, usuario_id)
 
         # 5. Marcar token actual como ROTADO
         session.execute(text("""

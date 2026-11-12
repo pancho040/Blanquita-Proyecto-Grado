@@ -244,7 +244,7 @@ def refresh_movil(
         }
 
     resp_data = RefreshMovilResponse(
-        access_token=resultado["access_token"] or "token_simulado",
+        access_token=resultado["access_token"],
         refresh_token=resultado["refresh_token"],
         token_type="bearer",
         expires_in=resultado.get("expires_in", 3600)
