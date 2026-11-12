@@ -93,28 +93,18 @@ export function RutaProvider({ children }) {
     // 2. Sincronización en segundo plano con la nube sin bloquear la pantalla al chofer
     if (isOnline && usuario) {
       try {
-        // Consultar primero el endpoint especializado de chofer
+        // Consultar exclusivamente el endpoint especializado de chofer (Subagente A: evita 403 de asignaciones web)
         const rutaChofer = await LogisticaApi.obtenerRutaActivaChofer(usuario.IdUsuario);
         if (rutaChofer && rutaChofer.paradas && rutaChofer.paradas.length > 0) {
           setAsignacionActiva(rutaChofer);
           await LocalDB.guardarRutaActiva(rutaChofer);
           recalcularRecaudacion(rutaChofer);
           setUltimaSincronizacion(new Date());
-        } else {
-          // Fallback a asignaciones estándar
-          const hoyStr = new Date().toISOString().split("T")[0];
-          const asignaciones = await LogisticaApi.obtenerAsignaciones(hoyStr, usuario.IdUsuario);
-
-          if (asignaciones && asignaciones.length > 0) {
-            const idAsig = asignaciones[0].IdAsignacion;
-            const dataRuta = await LogisticaApi.obtenerTrackingAsignacion(idAsig);
-            if (dataRuta && dataRuta.paradas && dataRuta.paradas.length > 0) {
-              setAsignacionActiva(dataRuta);
-              await LocalDB.guardarRutaActiva(dataRuta);
-              recalcularRecaudacion(dataRuta);
-              setUltimaSincronizacion(new Date());
-            }
-          }
+        } else if (rutaChofer) {
+          setAsignacionActiva(rutaChofer);
+          await LocalDB.guardarRutaActiva(rutaChofer);
+          recalcularRecaudacion(rutaChofer);
+          setUltimaSincronizacion(new Date());
         }
       } catch (err) {
         console.log("[RutaContext] Aviso actualizando ruta online:", err.message);

@@ -3,7 +3,7 @@ import { AuthApi } from "../api/authApi";
 import { SecureStorage } from "../services/secureStorage";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
-import { setSesionExpiradaListener } from "../api/client";
+import { setSesionExpiradaListener, setTokenRenovadoListener, setTokenEnMemoria } from "../api/client";
 import { useNetwork } from "./NetworkContext";
 
 const AuthContext = createContext(null);
@@ -16,12 +16,24 @@ export function AuthProvider({ children }) {
   const [sesionExpirada, setSesionExpirada] = useState(false);
   const { isOnline } = useNetwork();
 
-  // Escuchar evento de sesión expirada emitido por client.js ante 401 definitivo
+  // Escuchar eventos de sesión expirada y token renovado emitidos por client.js
   useEffect(() => {
     setSesionExpiradaListener(() => {
       console.log("[AuthContext] Sesión expirada detectada. Manteniendo datos locales y pausando sync.");
       setSesionExpirada(true);
     });
+    setTokenRenovadoListener((nuevoAccessToken, nuevoRefreshToken) => {
+      console.log("[AuthContext] Token renovado en background. Actualizando estado.");
+      setTokens({
+        AccessToken: nuevoAccessToken,
+        RefreshToken: nuevoRefreshToken,
+      });
+      setSesionExpirada(false);
+    });
+    return () => {
+      setSesionExpiradaListener(null);
+      setTokenRenovadoListener(null);
+    };
   }, []);
 
   // Cargar sesión persistida al iniciar la app
@@ -33,11 +45,15 @@ export function AuthProvider({ children }) {
         const refreshSeguro = await SecureStorage.obtenerRefreshToken();
 
         if (sesionGuardada && sesionGuardada.usuario) {
+          const actToken = tokenSeguro || sesionGuardada.tokens?.AccessToken;
           setUsuario(sesionGuardada.usuario);
           setTokens({
-            AccessToken: tokenSeguro || sesionGuardada.tokens?.AccessToken,
+            AccessToken: actToken,
             RefreshToken: refreshSeguro || sesionGuardada.tokens?.RefreshToken,
           });
+          if (actToken) {
+            setTokenEnMemoria(actToken);
+          }
         }
       } catch (e) {
         console.error("[AuthContext] Error restaurando sesión:", e);
@@ -81,6 +97,7 @@ export function AuthProvider({ children }) {
         };
 
         // Guardar tokens de forma segura y encriptada
+        setTokenEnMemoria(respLogin.access_token);
         await SecureStorage.guardarToken(respLogin.access_token);
         await SecureStorage.guardarRefreshToken(respLogin.refresh_token);
 
@@ -137,6 +154,7 @@ export function AuthProvider({ children }) {
       }
 
       // Los errores 4xx no reintentables NO bloquean el logout
+      setTokenEnMemoria(null);
       await AuthApi.logout().catch(() => {});
       await SecureStorage.limpiarTokens();
       await LocalDB.eliminarSesion();

@@ -9,10 +9,11 @@ export function setServerWakingUpListener(listener) {
   onServerWakingUpListener = listener;
 }
 
-// Escuchadores globales de versión
+// Escuchadores globales de versión y sesión
 let onHardBlockListener = null;
 let onSoftUpdateListener = null;
 let onSesionExpiradaListener = null;
+let onTokenRenovadoListener = null;
 
 export function setHardBlockListener(listener) {
   onHardBlockListener = listener;
@@ -24,6 +25,26 @@ export function setSoftUpdateListener(listener) {
 
 export function setSesionExpiradaListener(listener) {
   onSesionExpiradaListener = listener;
+}
+
+export function setTokenRenovadoListener(listener) {
+  onTokenRenovadoListener = listener;
+}
+
+// Variable en memoria para acceso síncrono e inmediato al token (Subagente A)
+let tokenEnMemoria = null;
+
+export function setTokenEnMemoria(token) {
+  tokenEnMemoria = token || null;
+  if (token) {
+    apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete apiClient.defaults.headers.common["Authorization"];
+  }
+}
+
+export function getTokenEnMemoria() {
+  return tokenEnMemoria;
 }
 
 // Single-flight refresh token
@@ -59,14 +80,28 @@ export async function renovarTokenSingleFlight() {
         }
       );
 
+      // Soportar tanto res.data?.datos?.access_token como res.data?.access_token
       const data = respuesta.data?.datos || respuesta.data || {};
-      const nuevoAccessToken = data.access_token || data.AccessToken;
-      const nuevoRefreshToken = data.refresh_token || data.RefreshToken || refreshToken;
+      const nuevoAccessToken =
+        data.access_token ||
+        data.AccessToken ||
+        respuesta.data?.access_token ||
+        respuesta.data?.AccessToken;
+      const nuevoRefreshToken =
+        data.refresh_token ||
+        data.RefreshToken ||
+        respuesta.data?.refresh_token ||
+        respuesta.data?.RefreshToken ||
+        refreshToken;
 
       if (!nuevoAccessToken) {
         throw new Error("El servidor no retornó un access_token válido.");
       }
 
+      // 1. Actualizar memoria y cabeceras por defecto de Axios ANTES de resolver peticiones
+      setTokenEnMemoria(nuevoAccessToken);
+
+      // 2. Persistir en almacenamiento seguro y en LocalDB
       await SecureStorage.guardarToken(nuevoAccessToken);
       if (nuevoRefreshToken) {
         await SecureStorage.guardarRefreshToken(nuevoRefreshToken);
@@ -80,6 +115,13 @@ export async function renovarTokenSingleFlight() {
           RefreshToken: nuevoRefreshToken,
         };
         await LocalDB.guardarSesion(sesionActual.usuario, sesionActual.tokens);
+      }
+
+      // 3. Notificar a listeners (ej. AuthContext)
+      if (onTokenRenovadoListener) {
+        try {
+          onTokenRenovadoListener(nuevoAccessToken, nuevoRefreshToken);
+        } catch (_listenerErr) {}
       }
 
       return nuevoAccessToken;
@@ -114,18 +156,25 @@ const apiClient = axios.create({
   },
 });
 
-// Interceptor para inyectar token Bearer desde SecureStorage o LocalDB
+// Interceptor para inyectar token Bearer desde memoria, SecureStorage o LocalDB
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      let token = await SecureStorage.obtenerToken();
+      let token = tokenEnMemoria;
       if (!token) {
-        const sesion = await LocalDB.obtenerSesion();
-        if (sesion?.tokens?.AccessToken) {
-          token = sesion.tokens.AccessToken;
+        token = await SecureStorage.obtenerToken();
+        if (!token) {
+          const sesion = await LocalDB.obtenerSesion();
+          if (sesion?.tokens?.AccessToken) {
+            token = sesion.tokens.AccessToken;
+          }
+        }
+        if (token) {
+          setTokenEnMemoria(token);
         }
       }
       if (token) {
+        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (_e) {
@@ -136,13 +185,36 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Función auxiliar para extraer el mensaje real del backend (Subagente B)
+export function parsearDetalleErrorServidor(data) {
+  if (!data) return null;
+  if (typeof data.mensaje === "string" && data.mensaje) return data.mensaje;
+  if (typeof data.detail === "string" && data.detail) return data.detail;
+  if (typeof data.error === "string" && data.error) return data.error;
+
+  // Si detail es una lista de errores de validación de Pydantic
+  if (Array.isArray(data.detail)) {
+    const mensajes = data.detail.map((d) => {
+      if (typeof d === "string") return d;
+      const campo = Array.isArray(d.loc)
+        ? d.loc.filter((part) => part !== "body").join(".")
+        : d.loc || "";
+      const msg = d.msg || JSON.stringify(d);
+      return campo ? `${campo}: ${msg}` : msg;
+    });
+    return mensajes.join(" | ");
+  }
+
+  if (typeof data === "string") return data;
+  return null;
+}
+
 // Interceptor para manejo de reintentos, versión mínima y formato de errores
 apiClient.interceptors.response.use(
   (response) => {
     if (onServerWakingUpListener) {
       onServerWakingUpListener(false);
     }
-    // Requisito C6 / Punto 5: Comprobación de versión
     const minVersion =
       response.headers?.["x-minimum-client-version"] ||
       response.headers?.["x-min-client-version"];
@@ -151,7 +223,6 @@ apiClient.interceptors.response.use(
       response.headers?.["x-available-client-version"];
     const upgradeRequired = response.headers?.["x-upgrade-required"] === "true";
 
-    // 1. Bloqueo duro: solo si el backend envía explícitamente x-upgrade-required: true
     if (upgradeRequired) {
       if (onHardBlockListener) {
         onHardBlockListener(true, minVersion || latestVersion || "1.0.1");
@@ -160,7 +231,6 @@ apiClient.interceptors.response.use(
       (latestVersion && latestVersion > CONFIG.CLIENT_VERSION) ||
       (minVersion && minVersion > CONFIG.CLIENT_VERSION)
     ) {
-      // 2. Si solo hay versión nueva disponible: banner no bloqueante (chofer puede seguir operando)
       if (onSoftUpdateListener) {
         onSoftUpdateListener(latestVersion || minVersion);
       }
@@ -173,7 +243,6 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Comprobación de versión si el backend rechaza con 426 Upgrade Required (Bloqueo duro)
     if (error.response?.status === 426) {
       const minVersion = error.response.headers?.["x-min-client-version"] || "1.0.1";
       if (onHardBlockListener) {
@@ -181,7 +250,6 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Detección de arranque en frío de Render (timeout en la primera petición)
     if (
       (error.code === "ECONNABORTED" || error.message?.includes("timeout") || !error.response) &&
       !config._retry
@@ -196,15 +264,6 @@ apiClient.interceptors.response.use(
     if (onServerWakingUpListener) {
       onServerWakingUpListener(false);
     }
-
-    // Normalizar error amigable
-    const errorNormalizado = {
-      status: error.response?.status || 500,
-      code: error.response?.data?.codigo || error.code || "ERROR_RED",
-      message: error.response?.data?.mensaje || error.response?.data?.detail || error.message,
-      friendlyMessage: "Ocurrió un error al comunicarse con el servidor.",
-      originalError: error,
-    };
 
     // 401: Renovación automática con refresh token en cola single-flight
     if (error.response?.status === 401 && !config._retryAuth) {
@@ -231,12 +290,24 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401) {
-      errorNormalizado.friendlyMessage = "Credenciales inválidas o sesión expirada.";
-    } else if (error.response?.status === 409) {
-      errorNormalizado.friendlyMessage = "Conflicto: la operación ya fue registrada.";
-    } else if (error.response?.status === 429) {
-      errorNormalizado.friendlyMessage = "Demasiados intentos. Por favor espere un momento.";
+    // Extracción limpia del error real del servidor (Subagente B)
+    const mensajeServidor = parsearDetalleErrorServidor(error.response?.data);
+    const mensajeReal = mensajeServidor || error.message || "Error desconocido";
+
+    const errorNormalizado = {
+      status: error.response?.status || (error.response ? 500 : 0),
+      code: error.response?.data?.codigo || error.code || (error.response ? "ERROR_SERVIDOR" : "ERROR_RED"),
+      message: mensajeReal,
+      friendlyMessage: mensajeReal, // NO reemplazar por mensaje genérico en 4xx (Subagente B)
+      serverDetail: error.response?.data,
+      response: error.response,
+      originalError: error,
+    };
+
+    if (!error.response) {
+      errorNormalizado.friendlyMessage = "Sin conexión con el servidor central.";
+    } else if (error.response.status === 401) {
+      errorNormalizado.friendlyMessage = mensajeServidor || "Credenciales inválidas o sesión expirada.";
     }
 
     return Promise.reject(errorNormalizado);

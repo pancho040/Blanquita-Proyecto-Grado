@@ -36,24 +36,38 @@ export function NotificacionesProvider({ children, navigationRef }) {
     }, backoffIntervalMs.current);
   }, [sesionActiva]);
 
+  const peticionEnVueloRef = useRef(null);
+  const wasConnectedRef = useRef(null);
+
   const sincronizarNotificaciones = useCallback(async () => {
     if (!sesionActiva) return;
 
-    setCargando(true);
-    try {
-      const items = await NotificacionesApi.obtenerNotificaciones({ soloNoLeidas: false });
-      setNotificaciones(items);
-      const noLeidas = items.filter((n) => !n.leido).length;
-      setConteoNoLeidas(noLeidas);
-      // Éxito: restablecer intervalo base
-      backoffIntervalMs.current = INTERVALO_BASE_MS;
-    } catch (_err) {
-      // Fallo de red / servidor: backoff exponencial (60s -> 120s -> 240s -> 300s)
-      backoffIntervalMs.current = Math.min(backoffIntervalMs.current * 2, MAX_BACKOFF_MS);
-    } finally {
-      setCargando(false);
-      reiniciarTimer();
+    // Deduplicación en vuelo (single-flight) para evitar peticiones simultáneas idénticas (Subagente A)
+    if (peticionEnVueloRef.current) {
+      return peticionEnVueloRef.current;
     }
+
+    setCargando(true);
+    peticionEnVueloRef.current = (async () => {
+      try {
+        const items = await NotificacionesApi.obtenerNotificaciones({ soloNoLeidas: false });
+        setNotificaciones(items);
+        const noLeidas = items.filter((n) => !n.leido).length;
+        setConteoNoLeidas(noLeidas);
+        // Éxito: restablecer intervalo base
+        backoffIntervalMs.current = INTERVALO_BASE_MS;
+        return items;
+      } catch (_err) {
+        // Fallo de red / servidor: backoff exponencial (60s -> 120s -> 240s -> 300s)
+        backoffIntervalMs.current = Math.min(backoffIntervalMs.current * 2, MAX_BACKOFF_MS);
+      } finally {
+        setCargando(false);
+        reiniciarTimer();
+        peticionEnVueloRef.current = null;
+      }
+    })();
+
+    return peticionEnVueloRef.current;
   }, [sesionActiva, reiniciarTimer]);
 
   useEffect(() => {
@@ -92,12 +106,14 @@ export function NotificacionesProvider({ children, navigationRef }) {
     };
   }, [sesionActiva, sincronizarNotificaciones]);
 
-  // 3. Polling al recuperar conexión (NetInfo)
+  // 3. Polling solo en la transición sin conexión -> con conexión (NetInfo)
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected && sesionActiva) {
+      const isNowConnected = Boolean(state.isConnected && state.isInternetReachable !== false);
+      if (isNowConnected && wasConnectedRef.current === false && sesionActiva) {
         sincronizarNotificaciones();
       }
+      wasConnectedRef.current = isNowConnected;
     });
 
     return () => {

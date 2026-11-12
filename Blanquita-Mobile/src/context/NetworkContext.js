@@ -16,6 +16,7 @@ export function NetworkProvider({ children }) {
   const wasConnectedRef = useRef(null);
   const debounceTimerRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const tiempoMontajeRef = useRef(Date.now());
 
   // Actualizar conteo de pendientes de la cola offline
   const refrescarPendientes = useCallback(async () => {
@@ -59,12 +60,18 @@ export function NetworkProvider({ children }) {
       else refrescarPendientes();
     });
 
-    // 3. Disparador: Volver a primer plano (AppState inactive/background -> active)
+    // 3. Disparador: Volver a primer plano (AppState inactive/background -> active con cooldown de 3s al montar)
     const subscriptionAppState = AppState.addEventListener("change", (nextAppState) => {
+      const tiempoDesdeMontaje = Date.now() - tiempoMontajeRef.current;
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === "active"
       ) {
+        if (tiempoDesdeMontaje < 3000) {
+          console.log("[NetworkContext] AppState active ignorado por cooldown inicial (3s).");
+          appStateRef.current = nextAppState;
+          return;
+        }
         console.log("[NetworkContext] App en primer plano. Verificando pendientes para sincronizar...");
         refrescarPendientes().then((cant) => {
           if (cant > 0) {
