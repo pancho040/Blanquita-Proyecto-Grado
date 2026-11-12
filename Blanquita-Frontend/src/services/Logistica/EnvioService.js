@@ -22,10 +22,11 @@ export async function ObtenerEnvio(id) {
 }
 
 export async function CrearEnvio(dto) {
-  const response = await fetch("/api/logistica/envios", {
+  const sid = Number(dto?.origen_id || dto?.IdSucursal || dto?.id_sucursal) || 1;
+  const response = await fetch(`/api/logistica/envios?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dto),
+    body: JSON.stringify({ ...dto, origen_id: sid, IdSucursal: sid }),
   });
   if (!response.ok) {
     await manejarErrorBackend(response);
@@ -44,10 +45,11 @@ export async function DespacharEnvio(id) {
 }
 
 export async function RecepcionarEnvio(id, dto) {
-  const response = await fetch(`/api/logistica/envios/${id}/recepcionar`, {
+  const sid = Number(dto?.destino_id || dto?.IdSucursal || dto?.id_sucursal) || 1;
+  const response = await fetch(`/api/logistica/envios/${id}/recepcionar?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dto),
+    body: JSON.stringify({ ...dto, destino_id: sid, IdSucursal: sid }),
   });
   if (!response.ok) {
     await manejarErrorBackend(response);

@@ -83,6 +83,7 @@ export default function GestionCuentasCobrar({ usuario }) {
   const [guardandoCrear, setGuardandoCrear] = useState(false);
   const [formCrear, setFormCrear] = useState({
     id_cliente: "",
+    IdSucursal: sucursal !== "todas" && sucursal ? Number(sucursal) : 1,
     destino: "Sucre",
     celular: "",
     numero_nota: "",
@@ -229,6 +230,7 @@ export default function GestionCuentasCobrar({ usuario }) {
       setModalCrearOpen(false);
       setFormCrear({
         id_cliente: "",
+        IdSucursal: sucursal !== "todas" && sucursal ? Number(sucursal) : 1,
         destino: "Sucre",
         celular: "",
         numero_nota: "",
@@ -665,6 +667,37 @@ export default function GestionCuentasCobrar({ usuario }) {
             </DialogHeader>
 
             <form onSubmit={handleCrearCuenta} className="space-y-3.5">
+              {/* Sucursal de Registro */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Sucursal de Imputación *
+                </label>
+                {esMultisede ? (
+                  <select
+                    required
+                    value={formCrear.IdSucursal || 1}
+                    onChange={(e) => setFormCrear({ ...formCrear, IdSucursal: Number(e.target.value) })}
+                    className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
+                  >
+                    {(sucursales || sucursalesPermitidas || []).filter((s) => s.id !== "todas").map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre || `Sucursal ${s.id}`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-1.5 h-8 px-2.5 rounded border border-slate-200 bg-white text-slate-700 text-xs font-semibold">
+                    <Building size={13} className="text-[#1C96C5]" />
+                    <span>{nombreSucursalActual || "Sucursal Asignada"}</span>
+                  </div>
+                )}
+                {sucursal === "todas" && (
+                  <span className="text-[10px] text-[#B45309] font-medium block mt-1">
+                    Nota: El filtro general está en consolidado. Indique expresamente a qué sede pertenece este registro.
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Cliente */}
                 <div>

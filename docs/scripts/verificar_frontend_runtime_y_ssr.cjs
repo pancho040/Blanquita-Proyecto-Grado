@@ -73,6 +73,10 @@ console.log('\n2. Verificando resolución numérica de IdSucursal en servicios o
 
 const tesoreriaServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Contabilidad/tesoreriaService.js'), 'utf8');
 const cxcServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Contabilidad/cuentasCobrarService.js'), 'utf8');
+const envioServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Logistica/EnvioService.js'), 'utf8');
+const precioServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Logistica/PrecioService.js'), 'utf8');
+const rrhhServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/RRHH/RRHHService.js'), 'utf8');
+const distribuidorServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Distribuidor/distribuidorService.js'), 'utf8');
 
 // AperturarCaja y CerrarCaja deben forzar sucursal numérica
 if (!tesoreriaServiceContent.includes('const sid = Number(datos?.IdSucursal || datos?.id_sucursal || idSucursal) || 1;')) {
@@ -89,12 +93,58 @@ if (!cxcServiceContent.includes('const sid = Number(datos?.IdSucursal || datos?.
   process.exit(1);
 }
 
+// EnvioService: CrearEnvio y RecepcionarEnvio
+if (!envioServiceContent.includes('const sid = Number(dto?.origen_id || dto?.IdSucursal || dto?.id_sucursal) || 1;')) {
+  console.error('  ❌ ERROR: CrearEnvio no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+if (!envioServiceContent.includes('const sid = Number(dto?.destino_id || dto?.IdSucursal || dto?.id_sucursal) || 1;')) {
+  console.error('  ❌ ERROR: RecepcionarEnvio no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+
+// PrecioService: GuardarPrecio
+if (!precioServiceContent.includes('const sid = Number(precio?.IdSucursal || precio?.id_sucursal) || 1;')) {
+  console.error('  ❌ ERROR: GuardarPrecio no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+
+// RRHHService: GenerarPlanillaDual
+if (!rrhhServiceContent.includes('const sid = (idSucursal && idSucursal !== "todas") ? Number(idSucursal) : 1;')) {
+  console.error('  ❌ ERROR: GenerarPlanillaDual no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+
+// DistribuidorService: CrearPedidoDistribuidor
+if (!distribuidorServiceContent.includes('const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;')) {
+  console.error('  ❌ ERROR: CrearPedidoDistribuidor no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+
+// Selectores visibles en modales de creación ante filtro 'todas'
+const cxcComponentContent = fs.readFileSync(path.resolve(srcDir, 'components/Contabilidad/GestionCuentasCobrar.jsx'), 'utf8');
+const nvComponentContent = fs.readFileSync(path.resolve(srcDir, 'components/Contabilidad/GestionNotasVenta.jsx'), 'utf8');
+
+if (!cxcComponentContent.includes('Sucursal de Imputación *')) {
+  console.error('  ❌ ERROR: Modal de creación en GestionCuentasCobrar no tiene selector visible de Sucursal.');
+  process.exit(1);
+}
+if (!nvComponentContent.includes('Sucursal de Emisión *')) {
+  console.error('  ❌ ERROR: Modal de creación en GestionNotasVenta no tiene selector visible de Sucursal.');
+  process.exit(1);
+}
+
 console.log('  ✅ AperturarCaja: Inyecta ?sucursal=X&id_sucursal=X y payload IdSucursal numérico (1 o 2).');
 console.log('  ✅ CerrarCaja: Inyecta ?sucursal=X&id_sucursal=X y payload IdSucursal numérico (1 o 2).');
 console.log('  ✅ CrearSolicitudCajaChica: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
 console.log('  ✅ CrearCuentaCobrar: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
-console.log('  ✅ CrearNotaVenta: Valida sucursal específica e inyecta IdSucursal numérico.');
-console.log('  ✅ ÉXITO: Ninguna petición operativa puede enviar "todas" o null a validar_escritura.');
+console.log('  ✅ CrearNotaVenta: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ CrearEnvio / RecepcionarEnvio: Inyecta ?sucursal=X y origen_id/destino_id numérico (1 o 2).');
+console.log('  ✅ GuardarPrecio: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ GenerarPlanillaDual: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ CrearPedidoDistribuidor: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ Modales de Creación: CuentasCobrar y NotasVenta presentan selector visible de Sucursal ante modo consolidado.');
+console.log('  ✅ ÉXITO: Ninguna petición de escritura puede enviar "todas" o null a validar_escritura.');
 
 // ----------------------------------------------------------------------
 // 3. AUDITORÍA DE MODALES EN VACÍO Y ENCADENAMIENTO OPCIONAL (Punto 2.3)

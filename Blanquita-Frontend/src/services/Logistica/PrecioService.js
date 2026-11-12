@@ -11,10 +11,11 @@ export async function ObtenerPrecios(idSucursal = 1) {
 }
 
 export async function GuardarPrecio(precio) {
-  const response = await fetch("/api/logistica/precios", {
+  const sid = Number(precio?.IdSucursal || precio?.id_sucursal) || 1;
+  const response = await fetch(`/api/logistica/precios?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(precio),
+    body: JSON.stringify({ ...precio, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!response.ok) {
     await manejarErrorBackend(response);

@@ -30,10 +30,11 @@ export async function ObtenerPedidoDetalle(pedidoId) {
 }
 
 export async function CrearPedidoDistribuidor(datos) {
-  const res = await fetch("/api/distribuidores/pedidos", {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;
+  const res = await fetch(`/api/distribuidores/pedidos?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   return await res.json();

@@ -285,13 +285,15 @@ export async function ObtenerBoletaPagoDoble(idDetalle) {
 }
 
 export async function GenerarPlanillaDual({ idPeriodo, tipoPlanilla = "INTERNA", idSucursal = null }) {
-  const response = await fetch("/api/rrhh/planillas/generar", {
+  const sid = (idSucursal && idSucursal !== "todas") ? Number(idSucursal) : 1;
+  const response = await fetch(`/api/rrhh/planillas/generar?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       IdPeriodoNomina: idPeriodo,
       TipoPlanilla: tipoPlanilla,
-      IdSucursal: idSucursal,
+      IdSucursal: sid,
+      id_sucursal: sid,
     }),
   });
   if (!response.ok) await manejarErrorBackend(response);

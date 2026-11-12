@@ -26,6 +26,8 @@ Blanquita-Frontend/.vercel/
 .expo/
 Blanquita-Mobile/.expo/
 Blanquita-Mobile/node_modules/
+Blanquita-Mobile/android/
+Blanquita-Mobile/ios/
 
 # Carpetas y herramientas de agentes / IA / Skills locales
 .agent/

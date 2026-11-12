@@ -78,6 +78,7 @@ export default function GestionNotasVenta({ usuario }) {
     numero_entrega: "",
     destino: "Sucre",
     id_cliente: "",
+    id_sucursal: sucursal !== "todas" && sucursal ? Number(sucursal) : 1,
     numero_camion: "1",
     chofer: "",
     placa: "",
@@ -213,7 +214,8 @@ export default function GestionNotasVenta({ usuario }) {
     if (formNota.observaciones.trim()) obsArray.push(formNota.observaciones.trim());
     const obsCompleta = obsArray.join(" | ");
 
-    if (sucursal === "todas") {
+    const sidEmision = Number(formNota.id_sucursal) || (sucursal !== "todas" ? Number(sucursal) : null);
+    if (!sidEmision) {
       toast.error("Seleccione una sucursal específica para emitir notas de venta");
       return;
     }
@@ -222,7 +224,7 @@ export default function GestionNotasVenta({ usuario }) {
       setGuardandoNota(true);
       await CrearNotaVenta({
         id_cliente: idCli,
-        id_sucursal: Number(sucursal),
+        id_sucursal: sidEmision,
         numero_nota: formNota.numero_nota.trim(),
         numero_camion: formNota.numero_camion.trim() || null,
         chofer: formNota.chofer.trim() || null,
@@ -242,6 +244,7 @@ export default function GestionNotasVenta({ usuario }) {
       setModalNuevaOpen(false);
       setFormNota({
         numero_nota: "",
+        id_sucursal: sucursal !== "todas" && sucursal ? Number(sucursal) : 1,
         numero_entrega: "",
         destino: "Sucre",
         id_cliente: "",
@@ -530,6 +533,37 @@ export default function GestionNotasVenta({ usuario }) {
           </DialogHeader>
 
           <form onSubmit={handleCrearNota} className="space-y-3.5 pt-1">
+            {/* Selector de Sucursal para Multisede */}
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Sucursal de Emisión *
+              </label>
+              {esMultisede ? (
+                <select
+                  required
+                  value={formNota.id_sucursal || 1}
+                  onChange={(e) => setFormNota({ ...formNota, id_sucursal: Number(e.target.value) })}
+                  className="w-full text-xs h-8 rounded border border-slate-300 bg-white px-2.5 font-medium text-slate-700 focus:outline-none focus:border-[#1C96C5]"
+                >
+                  {(sucursales || sucursalesPermitidas || []).filter((s) => s.id !== "todas").map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre || `Sucursal ${s.id}`}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center gap-1.5 h-8 px-2.5 rounded border border-slate-200 bg-white text-slate-700 text-xs font-semibold">
+                  <Building size={13} className="text-[#1C96C5]" />
+                  <span>{nombreSucursalActual || "Sucursal Asignada"}</span>
+                </div>
+              )}
+              {sucursal === "todas" && (
+                <span className="text-[10px] text-[#B45309] font-medium block mt-1">
+                  Nota: El filtro general está en consolidado. Indique expresamente a qué sede pertenece este despacho.
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-700 block mb-1">
