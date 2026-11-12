@@ -26,6 +26,7 @@ const reactNativeMock = {
   SafeAreaView: mockComponent("SafeAreaView"),
   RefreshControl: mockComponent("RefreshControl"),
   Image: mockComponent("Image"),
+  KeyboardAvoidingView: mockComponent("KeyboardAvoidingView"),
   Dimensions: {
     get: (_dim) => ({ width: 375, height: 812, scale: 2, fontScale: 1 }),
     addEventListener: () => ({ remove: () => {} }),

@@ -266,3 +266,22 @@ Para garantizar consistencia transaccional absoluta en escenarios de conectivida
 
 4. **Flujo de Comprobante para QR o Transferencia:**
    - Antes de enviar el bloque `cobro`, la app debe capturar la foto del comprobante QR/transferencia, subirla a `POST /api/movil/v1/chofer/subir-archivo`, y enviar el `id_comprobante_archivo` retornado dentro del tramo de pago correspondiente.
+
+---
+
+## 4. PEDIDOS DEL MÓVIL AL BACKEND (`Blanquita-Backend` - Chat 2)
+
+1. **Compatibilidad de campos de texto en Entrega (`observaciones` / `observacion`):**
+   - El cliente móvil envía preferentemente `observaciones` y mapea `observacion` como fallback. Solicitar que el schema Pydantic acepte ambos nombres o tenga un alias para evitar fallos de validación 422.
+
+2. **Respuesta completa en Entrega Compuesta con Cobro:**
+   - Al procesar con éxito `POST /api/movil/v1/chofer/entregar` con bloque `"cobro"`, confirmar que el payload de respuesta incluya el objeto `datos.cobro` con los `tramos` generados (`id_pago_pedido`, `estado`, `numero_referencia`) y el detalle de `cuenta_cobrar` si se creó saldo a crédito, tal como se especifica en la sección 2.3. Esto permite actualizar de inmediato los saldos y notas en la base local del móvil.
+
+3. **Idempotencia Estricta ante Reintentos con `X-Idempotency-Key`:**
+   - Garantizar que si el chofer pierde señal en carretera justo tras enviar la petición (o sufre timeout de cliente) y la cola offline reenvía la petición con la misma `X-Idempotency-Key`, el backend responda con HTTP 200 y el cuerpo original previamente persistido, sin lanzar error 400/409 ("Pedido ya entregado") ni duplicar los pagos en `pago_pedido`.
+
+4. **Tratamiento de Comprobantes de Archivo (`id_comprobante_archivo`):**
+   - Confirmar que `POST /api/movil/v1/chofer/subir-archivo` acepte archivos de imagen (`image/jpeg`, `image/png`) bajo multipart/form-data y retorne `{ "codigo": "EXITO", "datos": { "id_comprobante": <int>, "url_archivo": <str> } }` con timeout holgado, permitiendo vincularlo sin ambigüedad en el tramo de pago QR/transferencia.
+
+5. **Estado de Sesión Expirada Diferenciado (401 `TOKEN_EXPIRADO` vs `TOKEN_INVALIDO`):**
+   - Mantener la diferenciación estricta en el cuerpo JSON (`codigo: "TOKEN_EXPIRADO"` para access token vencido renovable vía refresh token, vs `codigo: "TOKEN_INVALIDO"` cuando el refresh token expiró o fue revocado). Esto asegura que la app móvil no cierre intempestivamente la jornada del chofer y le permita seguir operando de forma autónoma offline.

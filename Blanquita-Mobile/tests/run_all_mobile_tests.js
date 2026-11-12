@@ -19,6 +19,7 @@ const testFiles = [
   "test_pantallas_react_test_renderer.test.js",
   "test_smoke_pantallas_completas.test.js",
   "test_fase3_pantallas_y_cliente.test.js",
+  "test_subagente_c_d_sync_entrega_compuesta.test.js",
 ];
 
 console.log("==================================================================");
