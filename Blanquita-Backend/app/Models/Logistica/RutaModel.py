@@ -127,18 +127,18 @@ class ChoferTrackingResponse(BaseModel):
     NombreRuta: Optional[str] = None
     NombreZona: Optional[str] = None
     EstadoAsignacion: Optional[str] = None
-    Latitud: float
-    Longitud: float
-    Velocidad: float
-    Bateria: int
-    EstadoMovimiento: str
+    Latitud: Optional[float] = None
+    Longitud: Optional[float] = None
+    Velocidad: Optional[float] = 0.0
+    Bateria: Optional[int] = None
+    EstadoMovimiento: Optional[str] = "Sin Señal"
     DireccionAproximada: Optional[str] = None
-    ParadaActual: int
-    TotalParadas: int
-    ParadasCompletadas: int
-    MontoCobradoTotal: float
+    ParadaActual: int = 1
+    TotalParadas: int = 0
+    ParadasCompletadas: int = 0
+    MontoCobradoTotal: float = 0.0
     UltimaActualizacion: Optional[datetime] = None
-    SegundosDesdeUltimoReporte: Optional[int] = 0
+    SegundosDesdeUltimoReporte: Optional[int] = None
 
     class Config:
         from_attributes = True

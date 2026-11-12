@@ -13,6 +13,21 @@ export function LocationProvider({ children }) {
   const [ultimaUbicacion, setUltimaUbicacion] = useState(null);
   const [cargandoGps, setCargandoGps] = useState(false);
   const telemetriaIntervalRef = useRef(null);
+  const ultimaUbicacionEmitidaRef = useRef(null);
+
+  // Cálculo de distancia geodésica para filtro de movimiento eficiente (> 25m)
+  const calcularDistanciaMetros = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3;
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+    const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+      Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
   // Solicitar permisos de geolocalización al iniciar
   const solicitarPermisos = async () => {
@@ -95,6 +110,7 @@ export function LocationProvider({ children }) {
   /**
    * Iniciar telemetría periódica de la flota para visualización en vivo en la Web
    * Alimenta directamente el módulo de Rastreo Choferes en Tiempo Real
+   * Aplica filtro de desplazamiento > 25 metros para ahorro de batería y cuota
    */
   const iniciarTelemetria = (idRepartidor, idAsignacion) => {
     detenerTelemetria();
@@ -102,6 +118,24 @@ export function LocationProvider({ children }) {
     telemetriaIntervalRef.current = setInterval(async () => {
       try {
         const gps = await obtenerUbicacionActual();
+        if (!gps || !gps.latitud || !gps.longitud) return;
+
+        // Filtro de movimiento: no emitir si no hubo desplazamiento >= 25 metros
+        const ultima = ultimaUbicacionEmitidaRef.current;
+        if (ultima) {
+          const distancia = calcularDistanciaMetros(
+            ultima.latitud,
+            ultima.longitud,
+            gps.latitud,
+            gps.longitud
+          );
+          if (distancia < 25 && (gps.velocidad || 0) < 5) {
+            return;
+          }
+        }
+
+        ultimaUbicacionEmitidaRef.current = gps;
+
         const payload = {
           IdUsuarioRepartidor: idRepartidor,
           IdAsignacion: idAsignacion,
@@ -127,6 +161,13 @@ export function LocationProvider({ children }) {
       telemetriaIntervalRef.current = null;
     }
   };
+
+  // Limpieza al desmontar el contexto
+  useEffect(() => {
+    return () => {
+      detenerTelemetria();
+    };
+  }, []);
 
   const locationNormalized = ultimaUbicacion
     ? {

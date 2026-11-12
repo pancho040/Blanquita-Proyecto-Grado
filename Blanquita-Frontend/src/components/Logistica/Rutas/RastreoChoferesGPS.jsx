@@ -402,15 +402,17 @@ export default function RastreoChoferesGPS({ usuario = null }) {
           <span>Actualizar</span>
         </Button>
 
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => setModalSimuladorAbierto(true)}
-          className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded gap-1.5 shadow-none"
-        >
-          <Radio className="h-3.5 w-3.5" />
-          <span>Simulador GPS</span>
-        </Button>
+        {import.meta.env?.DEV && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setModalSimuladorAbierto(true)}
+            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded gap-1.5 shadow-none"
+          >
+            <Radio className="h-3.5 w-3.5" />
+            <span>Simulador GPS (Dev)</span>
+          </Button>
+        )}
       </PageHeader>
 
       {/* CONTENIDO PRINCIPAL: MAPA Y PANEL LATERAL */}

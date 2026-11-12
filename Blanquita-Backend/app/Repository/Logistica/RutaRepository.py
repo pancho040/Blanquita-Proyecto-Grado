@@ -406,12 +406,12 @@ class RutaRepository:
                 COALESCE(r."NombreRuta", 'Sin Ruta Asignada') as "NombreRuta",
                 COALESCE(z."NombreZona", 'Sucre') as "NombreZona",
                 COALESCE(ar."Estado", 'Sin Asignación') as "EstadoAsignacion",
-                COALESCE(t."Latitud", -19.0435) as "Latitud",
-                COALESCE(t."Longitud", -65.2580) as "Longitud",
+                t."Latitud" as "Latitud",
+                t."Longitud" as "Longitud",
                 COALESCE(t."Velocidad", 0.0) as "Velocidad",
-                COALESCE(t."Bateria", 100) as "Bateria",
-                COALESCE(t."EstadoMovimiento", 'En Base') as "EstadoMovimiento",
-                COALESCE(t."DireccionAproximada", 'Planta Central Sucre') as "DireccionAproximada",
+                t."Bateria" as "Bateria",
+                COALESCE(t."EstadoMovimiento", 'Sin Señal') as "EstadoMovimiento",
+                COALESCE(t."DireccionAproximada", 'Sin reporte de ubicación') as "DireccionAproximada",
                 COALESCE(t."ParadaActual", 1) as "ParadaActual",
                 COALESCE(t."TotalParadas", (
                     SELECT COUNT(*) FROM "RutaPuntoVenta" rpv 
@@ -419,8 +419,11 @@ class RutaRepository:
                 ), 0) as "TotalParadas",
                 COALESCE(t."ParadasCompletadas", 0) as "ParadasCompletadas",
                 COALESCE(t."MontoCobradoTotal", 0.0) as "MontoCobradoTotal",
-                COALESCE(t."UltimaActualizacion", NOW()) as "UltimaActualizacion",
-                COALESCE(ROUND(EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")))::INTEGER, 0) as "SegundosDesdeUltimoReporte"
+                t."UltimaActualizacion" as "UltimaActualizacion",
+                CASE 
+                    WHEN t."UltimaActualizacion" IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")))::INTEGER 
+                    ELSE NULL 
+                END as "SegundosDesdeUltimoReporte"
             FROM "Usuario" u
             LEFT JOIN "TrackingChofer" t ON t."IdUsuarioRepartidor" = u."IdUsuario"
             LEFT JOIN "AsignacionRuta" ar ON (ar."IdUsuarioRepartidor" = u."IdUsuario" AND ar."FechaAsignacion" = CURRENT_DATE)
