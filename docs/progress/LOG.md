@@ -259,3 +259,41 @@
   - `npm run build` en `Blanquita-Frontend`: Código de salida 0.
   - `pytest` en `Blanquita-Backend`: 210/210 pruebas pasadas.
   - `verificar_zona_protegida.py`: Zona de planta íntegra.
+
+---
+
+## [2026-11-12 02:20] - Orquestación de Agentes: Culminación Integral de la App Móvil y Repartidores
+- **Subagentes:** Orquestador, Agente A (Firma/Storage), Agente B (Mi Inventario/Revalorización), Agente C (Cobro/Ruta/Clientes), Agente D (Cierre en Vivo), Agente E (Telemetría/GPS)
+- **Rama:** `feat/repartidores`
+- **Acciones Realizadas:**
+  1. **Paso 0 - Contrato y Migración:**
+     - Documentado `docs/contrato-api.md`.
+     - Migración Alembic `c1d2e3f4a5b6` aplicada en Supabase Postgres (`NombrePropietario` en `Cliente`, soporte de firmas cliente, retención y canalización GPS).
+  2. **Agente A - Doble Firma y Supabase Storage con Fallback:**
+     - `SignaturePad.js`: Lienzo táctil vectorial interactivo con `PanResponder` y SVG (`react-native-svg`), soporte de trazado suave, limpiar, confirmar y exportar.
+     - `RegistrarEntregaScreen.js`: Exigencia de doble firma (chofer y cliente que recibe).
+     - `FileStorageService.py`: Carga en bucket privado Supabase Storage (`comprobantes-privados`) con fallback transparente a disco local (`/uploads/comprobantes`) ante timeout/errores 503.
+     - `HistorialRepartoTab.jsx`: Visualización de doble firma y comprobantes con visor emergente en la web.
+  3. **Agente B - Mi Inventario y Revalorización de Stock Sobrante:**
+     - `MiInventarioScreen.js`: Pantalla móvil con KPIs de stock cargado, entregado y remanente; tarjeta interactiva de revalorización por sucursal (Sucre=1, Potosí=2) mostrando el valor del sobrante a precio vigente del día y la ganancia/diferencia de revalorización; desglose de bultos y paquetes sueltos; bandeo a costo Bs. 0.
+     - `TabNavigator.js` y `AppNavigator.js`: Reemplazo de pestaña "Nuevo Cliente" por "Mi Inventario" (con acceso rápido `+ Cliente` desde Hoja de Ruta).
+     - `InventarioCamionTab.jsx`: Vista web con columnas de precio salida, precio vigente de sucursal y subtotal revalorizado.
+     - Backend: `ItemInventarioCamionDTO` y `ResumenInventarioChoferDTO` ampliados; cálculo con JOIN/subconsulta en `InventarioComercialRepository.py`.
+  4. **Agente C - Cobros Eficientes, Bloqueo QR sin Foto y Clientes:**
+     - `RegistrarCobroScreen.js`: Deshabilitación condicional del botón registrar cuando el tramo es QR/Transferencia y no se ha capturado el comprobante.
+     - `HojaRutaScreen.js`: Widget superior de saldo pendiente por cobrar en ruta y botón de acceso rápido para crear clientes en ruta.
+     - `NuevoClienteScreen.js`: Campo "Nombre del Propietario / Encargado" añadido y sincronizado con backend.
+  5. **Agente E - Telemetría GPS Eficiente y ADR-006:**
+     - `LocationContext.js`: Filtro geodésico Haversine (descarte de pings si desplazamiento < 25m y velocidad < 5 km/h) y limpieza de intervalos.
+     - `RutaRepository.py` y `RutaModel.py`: Eliminación de coordenadas inventadas por defecto (`-19.0435`, `-65.2580`); reporte de estado "Sin Señal" y coordenadas nulas cuando no hay telemetría activa.
+     - `RastreoChoferesGPS.jsx`: Simulador GPS condicionado a entornos DEV (`import.meta.env?.DEV`).
+     - `docs/context/DECISIONES.md`: Formalizado ADR-006 (Polling adaptativo vs Supabase Realtime).
+  6. **Agente D - Cierre de Turno en Vivo y Permanencia de Sobrante:**
+     - `CierreRutaScreen.js`: Arqueo en tiempo real (`totalIngresado` vs `totalEsperado`) con cálculo automático de descuadre y badges dinámicos ("Cuadrado", "Faltan Bs.", "Sobran Bs.").
+     - Soporte para que el sobrante se quede en el camión (`SobrantePermaneceEnCamion: true`), omitiendo descarga obligatoria a almacén.
+  7. **Verificación y Control de Calidad:**
+     - Backend Unitario: 87/87 tests aprobados (`tests/unit/`).
+     - Backend P2P Chofer Móvil: 11/11 tests aprobados (`tests/integration_p2p/test_fase2_chofer_movil.py`).
+     - Mobile: 10/10 suites aprobadas (`run_all_mobile_tests.js`).
+     - Frontend Web: `astro build` completado sin errores (0 hydration issues).
+     - Guardia de Seguridad: Verificación de Zona Protegida 100% íntegra (0 violaciones DDL/DML sobre planta).
