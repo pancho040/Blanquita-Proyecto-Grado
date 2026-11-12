@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI, Request
+from typing import Optional
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.Routes.Usuario.UsuarioRouter import UsuarioRouter
@@ -141,6 +142,13 @@ def Servidor():
 def health_check():
     """Endpoint liviano sin consulta a BD para monitor de keep-alive (UptimeRobot / cron-job.org)."""
     return {"status": "ok", "app": "Papelera Blanquita ERP"}
+
+
+@app.websocket("/ws/flota")
+async def ws_flota_root(websocket: WebSocket, ticket: Optional[str] = None):
+    """Acceso WebSocket directo para telemetría de flota en tiempo real con ticket efímero."""
+    from app.Routes.Logistica.RutaRouter import websocket_flota_endpoint
+    await websocket_flota_endpoint(websocket, ticket)
 
 
 # ROUTER MOVIL V1

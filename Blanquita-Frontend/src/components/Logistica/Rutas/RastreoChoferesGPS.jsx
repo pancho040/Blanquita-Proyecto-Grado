@@ -7,7 +7,8 @@ import { getLeaflet } from "@/lib/leafletLoader";
 import { toast } from "sonner";
 import {
   ObtenerChoferesEnVivo,
-  ObtenerTrackingAsignacion
+  ObtenerTrackingAsignacion,
+  ObtenerWsTicketFlota
 } from "@/services/Logistica/RutaService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,12 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const routePolylineRef = useRef(null);
   const LRef = useRef(null);
 
+  // Referencias para conexión WebSocket
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const heartbeatIntervalRef = useRef(null);
+
   // Estados de telemetría y datos
   const [choferes, setChoferes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -49,6 +56,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const [detalleAsignacion, setDetalleAsignacion] = useState(null);
   const [autoRefresh] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const [tiempoRelativo, setTiempoRelativo] = useState("hace unos segundos");
+  const [wsConectado, setWsConectado] = useState(false);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
   // Modales
@@ -149,14 +158,161 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
   }, [sucursal, cargandoAlcance, cargarTelemetria]);
 
-  // Intervalo de polling en vivo (cada 8 segundos)
+  // Cálculo reactivo de tiempo relativo desde la última actualización
   useEffect(() => {
-    if (!autoRefresh || cargandoAlcance) return;
+    const calcRelativo = () => {
+      const ahora = new Date();
+      const diffSeg = Math.floor((ahora - ultimaActualizacion) / 1000);
+      if (diffSeg < 10) return "hace unos segundos";
+      if (diffSeg < 60) return `hace ${diffSeg} s`;
+      const diffMin = Math.floor(diffSeg / 60);
+      if (diffMin === 1) return "hace 1 min";
+      return `hace ${diffMin} min`;
+    };
+    setTiempoRelativo(calcRelativo());
+    const timer = setInterval(() => {
+      setTiempoRelativo(calcRelativo());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [ultimaActualizacion]);
+
+  // 2. Conexión WebSocket en tiempo real con ticket efímero de un solo uso y Heartbeat (Render)
+  const conectarWebSocket = useCallback(async () => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const dataTicket = await ObtenerWsTicketFlota();
+      const ticket = dataTicket?.ticket;
+      if (!ticket) {
+        setWsConectado(false);
+        return;
+      }
+
+      const host = window.location.host;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${host}/ws/flota?ticket=${encodeURIComponent(ticket)}`;
+
+      const socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        setWsConectado(true);
+        reconnectAttemptsRef.current = 0;
+
+        // Heartbeat ping cada 25 segundos para evitar cierre por proxies perimetrales de Render
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ tipo: "ping" }));
+          }
+        }, 25000);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.tipo === "SNAPSHOT_INICIAL") {
+            if (Array.isArray(msg.choferes)) {
+              setChoferes(msg.choferes);
+              setUltimaActualizacion(new Date());
+            }
+          } else if (msg.tipo === "POSICION_CHOFER") {
+            setChoferes((prev) => {
+              const index = prev.findIndex(
+                (c) => Number(c.IdUsuarioRepartidor) === Number(msg.id_chofer)
+              );
+              if (index === -1) return prev;
+              const anterior = prev[index];
+
+              // Filtro de 25 metros de desplazamiento mínimo
+              let nuevaLat = Number(msg.lat);
+              let nuevaLng = Number(msg.lng);
+              if (anterior.Latitud && anterior.Longitud && nuevaLat && nuevaLng) {
+                const dLat = (nuevaLat - anterior.Latitud) * 111000;
+                const dLng = (nuevaLng - anterior.Longitud) * 111000 * Math.cos((anterior.Latitud * Math.PI) / 180);
+                const distMetros = Math.sqrt(dLat * dLat + dLng * dLng);
+                if (distMetros < 25) {
+                  nuevaLat = anterior.Latitud;
+                  nuevaLng = anterior.Longitud;
+                }
+              }
+
+              const choferActualizado = {
+                ...anterior,
+                Latitud: nuevaLat,
+                Longitud: nuevaLng,
+                VelocidadKmH: msg.velocidad,
+                NivelBateria: msg.bateria,
+                FechaHoraPing: msg.timestamp,
+                EnLinea: true,
+                conectado: true,
+              };
+
+              const nuevoArr = [...prev];
+              nuevoArr[index] = choferActualizado;
+              return nuevoArr;
+            });
+            setUltimaActualizacion(new Date());
+          }
+        } catch (err) {
+          // Ignorar mensajes no JSON
+        }
+      };
+
+      socket.onclose = () => {
+        setWsConectado(false);
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+
+        // Backoff exponencial para reconexión: min(1000 * 2^attempts, 30000)
+        const attempts = reconnectAttemptsRef.current;
+        const delay = Math.min(1000 * Math.pow(2, attempts), 30000);
+        reconnectAttemptsRef.current = attempts + 1;
+
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          conectarWebSocket();
+        }, delay);
+      };
+
+      socket.onerror = () => {
+        try {
+          socket.close();
+        } catch {}
+      };
+    } catch (err) {
+      setWsConectado(false);
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+      reconnectAttemptsRef.current += 1;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        conectarWebSocket();
+      }, delay);
+    }
+  }, []);
+
+  // Ciclo de vida del WebSocket: conexión única por pantalla y cierre limpio al desmontar
+  useEffect(() => {
+    conectarWebSocket();
+    return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch {}
+        wsRef.current = null;
+      }
+    };
+  }, [conectarWebSocket]);
+
+  // Fallback a Polling lento (45s) sólo si el WebSocket está desconectado
+  useEffect(() => {
+    if (wsConectado || cargandoAlcance) return;
     const interval = setInterval(() => {
       cargarTelemetria(true);
-    }, 8000);
+    }, 45000);
     return () => clearInterval(interval);
-  }, [autoRefresh, cargandoAlcance, cargarTelemetria]);
+  }, [wsConectado, cargandoAlcance, cargarTelemetria]);
 
   // 3. Cargar detalle de la ruta si se selecciona un chofer
   useEffect(() => {
@@ -390,17 +546,25 @@ export default function RastreoChoferesGPS({ usuario = null }) {
           />
         }
       >
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => cargarTelemetria()}
-          disabled={cargando}
-          className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
-          <span>Actualizar</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
+            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+            <span>{wsConectado ? "WebSocket En Vivo" : "Polling Fallback"}</span>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => cargarTelemetria()}
+            disabled={cargando}
+            className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200"
+            title="Forzar actualización REST inmediata"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
+            <span>Actualizar</span>
+          </Button>
+        </div>
 
         {import.meta.env?.DEV && (
           <Button
@@ -433,8 +597,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
 
             <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-0.5">
               <span>{choferesFiltrados.length} repartidores activos</span>
-              <span className="font-mono tabular-nums">
-                {ultimaActualizacion.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              <span className="font-mono tabular-nums text-[11px] text-slate-500" title={`Hora: ${ultimaActualizacion.toLocaleTimeString()}`}>
+                actualizado {tiempoRelativo} ({ultimaActualizacion.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})
               </span>
             </div>
           </div>

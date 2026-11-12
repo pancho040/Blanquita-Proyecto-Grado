@@ -1,14 +1,18 @@
-from datetime import date
+from datetime import date, datetime, timezone
+import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.Config.supabase import get_db
+logger = logging.getLogger(__name__)
+
+from app.Config.supabase import get_db, SessionLocal
 from app.Auth.Dependencies import require_role
 from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO
 from app.Services.Logistica.RutaService import RutaService
+from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
 from app.Models.Logistica.RutaModel import (
     ZonaCrear, ZonaResponse, RutaCrear, RutaActualizar, RutaResponse,
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
@@ -191,6 +195,60 @@ def cambiar_estado_repartidor(
 # -------------------------------------------------------------
 # Telemetría y rastreo en vivo
 # -------------------------------------------------------------
+@RutaRouter.post("/flota/ws-ticket")
+def generar_ticket_websocket_flota(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
+):
+    """
+    Emite un ticket efímero de un solo uso y corta duración (60s) para autenticar
+    la conexión WebSocket del mapa satelital sin exponer el JWT en URLs o logs del proxy.
+    """
+    sucursales_permitidas = [alcance.sucursal_efectiva] if alcance.sucursal_efectiva else None
+    ticket = flota_ws_manager.crear_ticket(
+        usuario_id=usuario["IdUsuario"],
+        sucursales_permitidas=sucursales_permitidas,
+        duracion_segundos=60
+    )
+    return {"ticket": ticket, "expira_en_segundos": 60}
+
+
+async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] = None):
+    """Lógica central de conexión WebSocket para telemetría de flota."""
+    ticket_data = flota_ws_manager.validar_y_consumir_ticket(ticket)
+    if not ticket_data:
+        # Código 4401: Ticket inválido o expirado
+        await websocket.close(code=4401, reason="Ticket invalido o expirado")
+        return
+
+    # Cargar snapshot inicial de choferes en vivo
+    snapshot = []
+    try:
+        with SessionLocal() as db_session:
+            suc_filtro = ticket_data["sucursales_permitidas"][0] if ticket_data["sucursales_permitidas"] else None
+            snapshot = RutaService(db_session).ObtenerChoferesEnVivo(suc_filtro)
+    except Exception as e:
+        logger.warning(f"[WS-Flota] Error al cargar snapshot inicial: {e}")
+
+    await flota_ws_manager.conectar(websocket, ticket_data, snapshot)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping" or '"ping"' in data.lower():
+                await flota_ws_manager.responder_pong(websocket)
+    except WebSocketDisconnect:
+        flota_ws_manager.desconectar(websocket)
+    except Exception as ex:
+        logger.debug(f"[WS-Flota] Cierre de socket: {ex}")
+        flota_ws_manager.desconectar(websocket)
+
+
+@RutaRouter.websocket("/flota/ws")
+async def websocket_flota(websocket: WebSocket, ticket: Optional[str] = None):
+    await websocket_flota_endpoint(websocket, ticket)
+
+
 @RutaRouter.post("/telemetria/ping", response_model=dict)
 def registrar_telemetria(
     dto: TelemetriaPing,
@@ -199,11 +257,34 @@ def registrar_telemetria(
 ):
     """
     Recibe las coordenadas GPS en tiempo real enviadas por la app móvil del chofer o simulador web.
+    Difunde la nueva ubicación inmediatamente a los operadores web conectados por WebSocket.
     """
     # Si el usuario es repartidor, asegurar que no envíe ping de otro repartidor
     if usuario.get("IdRol") == ROL_AGENTE_REPARTO:
         dto.IdUsuarioRepartidor = usuario["IdUsuario"]
-    return RutaService(db).RegistrarTelemetriaPing(dto)
+    resultado = RutaService(db).RegistrarTelemetriaPing(dto)
+
+    # Difundir en tiempo real al WebSocket Hub (Render Web Service)
+    try:
+        import asyncio
+        datos_ping = {
+            "id_chofer": dto.IdUsuarioRepartidor,
+            "sucursal_id": dto.IdSucursal or usuario.get("IdSucursal", 1),
+            "lat": dto.Latitud,
+            "lng": dto.Longitud,
+            "velocidad": dto.VelocidadKmH or 0.0,
+            "bateria": dto.NivelBateria or 100,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(flota_ws_manager.broadcast_ubicacion(datos_ping))
+        except RuntimeError:
+            asyncio.run(flota_ws_manager.broadcast_ubicacion(datos_ping))
+    except Exception as ws_err:
+        logger.debug(f"Aviso: Broadcast WebSocket omitido: {ws_err}")
+
+    return resultado
 
 @RutaRouter.get("/telemetria/en-vivo", response_model=list[dict])
 def obtener_choferes_en_vivo(

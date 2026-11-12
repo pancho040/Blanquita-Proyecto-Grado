@@ -167,6 +167,16 @@ export async function CambiarEstadoRepartidor(idUsuario, idEstado) {
 // -------------------------------------------------------------
 // Telemetría y rastreo GPS en vivo
 // -------------------------------------------------------------
+export async function ObtenerWsTicketFlota() {
+  const response = await fetchConCache("/api/logistica/flota/ws-ticket", {
+    method: "POST"
+  }, 0);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}
+
 export async function ObtenerChoferesEnVivo(idSucursal = null) {
   let url = "/api/logistica/telemetria/en-vivo";
   if (idSucursal && idSucursal !== "todas") {
