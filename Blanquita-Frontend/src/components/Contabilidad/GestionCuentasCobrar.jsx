@@ -213,8 +213,11 @@ export default function GestionCuentasCobrar({ usuario }) {
     }
     try {
       setGuardandoCrear(true);
+      const sidNum = Number(sucursal !== "todas" ? sucursal : (usuario?.IdSucursal || 1));
       await CrearCuentaCobrar({
         id_cliente: Number(formCrear.id_cliente),
+        id_sucursal: sidNum,
+        IdSucursal: sidNum,
         monto_total: Number(formCrear.monto_total),
         numero_nota: formCrear.numero_nota || undefined,
         numero_entrega: formCrear.numero_entrega || undefined,

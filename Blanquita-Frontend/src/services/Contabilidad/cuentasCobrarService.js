@@ -38,10 +38,11 @@ export async function ObtenerNotaVentaDetalle(idNotaVenta) {
 }
 
 export async function CrearNotaVenta(datos) {
-  const res = await fetch("/api/cxc/notas-venta", {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;
+  const res = await fetch(`/api/cxc/notas-venta?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   invalidarCache("/api/cxc");
@@ -83,10 +84,11 @@ export async function ObtenerCuentaCobrarDetalle(idCuentaCobrar) {
 }
 
 export async function CrearCuentaCobrar(datos) {
-  const res = await fetch("/api/cxc/cuentas", {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;
+  const res = await fetch(`/api/cxc/cuentas?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   invalidarCache("/api/cxc");

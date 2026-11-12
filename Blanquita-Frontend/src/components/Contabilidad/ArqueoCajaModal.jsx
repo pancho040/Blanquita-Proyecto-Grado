@@ -18,7 +18,7 @@ const CORTES_BILLETES = [200, 100, 50, 20, 10];
 const CORTES_MONEDAS = [5, 2, 1, 0.5, 0.2, 0.1];
 
 export default function ArqueoCajaModal({ isOpen, onClose, cajaActual, onCajaCerrada }) {
-  if (!isOpen) return null;
+  if (!isOpen || !cajaActual) return null;
   const [cantidades, setCantidades] = useState({});
   const [observaciones, setObservaciones] = useState("");
   const [guardando, setGuardando] = useState(false);

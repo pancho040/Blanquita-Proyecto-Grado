@@ -170,7 +170,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
       return;
     }
     try {
-      const idSol = solicitudSeleccionada.IdSolicitudCajaChica || solicitudSeleccionada.id;
+      const idSol = solicitudSeleccionada?.IdSolicitudCajaChica || solicitudSeleccionada?.id;
       await EntregarFondosCajaChica(idSol, {
         monto_entregado: monto,
         entregado_por: formEntrega.entregado_por
@@ -211,7 +211,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
     }
 
     try {
-      const idSol = solicitudSeleccionada.IdSolicitudCajaChica || solicitudSeleccionada.id;
+      const idSol = solicitudSeleccionada?.IdSolicitudCajaChica || solicitudSeleccionada?.id;
       const payload = {
         Items: itemsRendicion.map((it) => ({
           Concepto: it.Concepto || "Gasto operativo menor",
@@ -236,7 +236,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
     if (!solicitudSeleccionada) return;
     try {
       setResolviendoGerencia(true);
-      const idSol = solicitudSeleccionada.IdSolicitudCajaChica || solicitudSeleccionada.id;
+      const idSol = solicitudSeleccionada?.IdSolicitudCajaChica || solicitudSeleccionada?.id;
       await ResolverAprobacionGerencial(idSol, {
         Aprobado: aprobado,
         Observaciones: observacionGerencia || (aprobado ? "Aprobado por Gerencia" : "Rechazado")

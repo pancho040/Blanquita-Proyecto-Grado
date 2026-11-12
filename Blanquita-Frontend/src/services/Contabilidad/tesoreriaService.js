@@ -78,22 +78,24 @@ export async function ObtenerCajaActual(idSucursal = null) {
   return await res.json();
 }
 
-export async function AperturarCaja(datos) {
-  const res = await fetch("/api/tesoreria/cajas/apertura", {
+export async function AperturarCaja(datos, idSucursal = null) {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal || idSucursal) || 1;
+  const res = await fetch(`/api/tesoreria/cajas/apertura?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   invalidarCache("/api/tesoreria");
   return await res.json();
 }
 
-export async function CerrarCaja(datos) {
-  const res = await fetch("/api/tesoreria/cajas/cierre", {
+export async function CerrarCaja(datos, idSucursal = null) {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal || idSucursal) || 1;
+  const res = await fetch(`/api/tesoreria/cajas/cierre?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   invalidarCache("/api/tesoreria");
@@ -193,10 +195,11 @@ export async function ObtenerSolicitudesCajaChica({
 }
 
 export async function CrearSolicitudCajaChica(datos) {
-  const res = await fetch("/api/tesoreria/solicitudes-caja-chica", {
+  const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;
+  const res = await fetch(`/api/tesoreria/solicitudes-caja-chica?sucursal=${sid}&id_sucursal=${sid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, IdSucursal: sid, id_sucursal: sid }),
   });
   if (!res.ok) await manejarErrorBackend(res);
   invalidarCache("/api/tesoreria");

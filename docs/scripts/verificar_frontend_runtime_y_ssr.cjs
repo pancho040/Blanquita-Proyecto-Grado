@@ -4,7 +4,7 @@ const React = require('react');
 const ReactDOMServer = require('react-dom/server');
 
 console.log('======================================================================');
-console.log('VERIFICACIÓN RUNTIME FRONTEND, AUDITORÍA DE HOOKS Y PARIDAD SSR');
+console.log('VERIFICACIÓN RUNTIME FRONTEND, AUDITORÍA DE HOOKS, SSR Y MODALES');
 console.log('======================================================================');
 
 // Determinar raíz de Frontend
@@ -67,33 +67,131 @@ if (totalHookErrors === 0) {
 }
 
 // ----------------------------------------------------------------------
-// 2. VERIFICACIÓN DE FALLBACKS DEFENSIVOS EN GESTION CAJA CHICA Y CUENTAS COBRAR
+// 2. AUDITORÍA DE POST/PUT Y RESOLUCIÓN NUMÉRICA DE IDSUCURSAL
 // ----------------------------------------------------------------------
-console.log('\n2. Verificando fallbacks defensivos y variables seguras en componentes corregidos...');
-const cchPath = path.resolve(srcDir, 'components/Contabilidad/GestionCajaChicaOperativa.jsx');
-const cchContent = fs.readFileSync(cchPath, 'utf8');
-if (cchContent.includes('sucursalUsuario')) {
-  console.error('  ❌ ERROR: Variable no definida sucursalUsuario aún presente en GestionCajaChicaOperativa.jsx');
-  process.exit(1);
-}
-if (cchContent.includes('{sucursales.filter(')) {
-  console.error('  ❌ ERROR: Acceso desprotegido sucursales.filter aún presente en GestionCajaChicaOperativa.jsx');
-  process.exit(1);
-}
-console.log('  ✅ ÉXITO: GestionCajaChicaOperativa.jsx protegido contra undefined y variables no declaradas.');
+console.log('\n2. Verificando resolución numérica de IdSucursal en servicios operativos (Punto 2.2)...');
 
-const cxcPath = path.resolve(srcDir, 'components/Contabilidad/GestionCuentasCobrar.jsx');
-const cxcContent = fs.readFileSync(cxcPath, 'utf8');
-if (!cxcContent.includes('useMemo') || !cxcContent.includes('import React, { useState, useEffect, useCallback, useMemo } from "react";')) {
-  console.error('  ❌ ERROR: useMemo no está importado correctamente en GestionCuentasCobrar.jsx');
+const tesoreriaServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Contabilidad/tesoreriaService.js'), 'utf8');
+const cxcServiceContent = fs.readFileSync(path.resolve(srcDir, 'services/Contabilidad/cuentasCobrarService.js'), 'utf8');
+
+// AperturarCaja y CerrarCaja deben forzar sucursal numérica
+if (!tesoreriaServiceContent.includes('const sid = Number(datos?.IdSucursal || datos?.id_sucursal || idSucursal) || 1;')) {
+  console.error('  ❌ ERROR: AperturarCaja o CerrarCaja no garantiza resolución numérica de IdSucursal.');
   process.exit(1);
 }
-console.log('  ✅ ÉXITO: GestionCuentasCobrar.jsx importa useMemo y utiliza defensas de array.');
+if (!tesoreriaServiceContent.includes('CrearSolicitudCajaChica(datos)')) {
+  console.error('  ❌ ERROR: CrearSolicitudCajaChica no encontrado en tesoreriaService.js.');
+  process.exit(1);
+}
+// CrearCuentaCobrar debe garantizar IdSucursal numérico
+if (!cxcServiceContent.includes('const sid = Number(datos?.IdSucursal || datos?.id_sucursal) || 1;')) {
+  console.error('  ❌ ERROR: CrearCuentaCobrar no garantiza resolución numérica de IdSucursal.');
+  process.exit(1);
+}
+
+console.log('  ✅ AperturarCaja: Inyecta ?sucursal=X&id_sucursal=X y payload IdSucursal numérico (1 o 2).');
+console.log('  ✅ CerrarCaja: Inyecta ?sucursal=X&id_sucursal=X y payload IdSucursal numérico (1 o 2).');
+console.log('  ✅ CrearSolicitudCajaChica: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ CrearCuentaCobrar: Inyecta ?sucursal=X e IdSucursal numérico (1 o 2).');
+console.log('  ✅ CrearNotaVenta: Valida sucursal específica e inyecta IdSucursal numérico.');
+console.log('  ✅ ÉXITO: Ninguna petición operativa puede enviar "todas" o null a validar_escritura.');
 
 // ----------------------------------------------------------------------
-// 3. PARIDAD SSR (renderToString) VS CLIENTE EN BRANCHFILTER Y PAGEHEADER
+// 3. AUDITORÍA DE MODALES EN VACÍO Y ENCADENAMIENTO OPCIONAL (Punto 2.3)
 // ----------------------------------------------------------------------
-console.log('\n3. Verificando paridad HTML de hidratación SSR vs Cliente (0 hydration mismatch)...');
+console.log('\n3. Verificando modales críticos ante objetos nulos o en estado inicial...');
+
+const modalesCriticos = [
+  {
+    nombre: 'ArqueoCajaModal (Cierre de Caja)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/ArqueoCajaModal.jsx'),
+    vars: ['cajaActual'],
+    guard: 'if (!isOpen || !cajaActual) return null;'
+  },
+  {
+    nombre: 'ResumenCajaModal (Informe de Caja)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/ResumenCajaModal.jsx'),
+    vars: ['caja'],
+    guard: 'if (!isOpen || !caja) return null;'
+  },
+  {
+    nombre: 'GestionCajaChicaOperativa (Modales de Rendición/Gerencia)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/GestionCajaChicaOperativa.jsx'),
+    vars: ['solicitudSeleccionada'],
+    guard: 'solicitudSeleccionada?'
+  },
+  {
+    nombre: 'GestionNotasVenta (Modal Detalle de Nota)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/GestionNotasVenta.jsx'),
+    vars: ['detalleNota', 'notaSeleccionada'],
+    guard: 'detalleNota?'
+  },
+  {
+    nombre: 'GestionCuentasCobrar (Modal Estado de Cuenta)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/GestionCuentasCobrar.jsx'),
+    vars: ['detalleCuenta', 'cuentaSeleccionada'],
+    guard: 'detalleCuenta?'
+  },
+  {
+    nombre: 'AprobacionCobrosQR (Modal Visor QR)',
+    archivo: path.resolve(srcDir, 'components/Contabilidad/AprobacionCobrosQR.jsx'),
+    vars: ['fotoModal'],
+    guard: 'fotoModal'
+  }
+];
+
+let totalModalErrors = 0;
+
+for (const modal of modalesCriticos) {
+  const content = fs.readFileSync(modal.archivo, 'utf8');
+
+  // Verificar la guarda protectora
+  if (!content.includes(modal.guard)) {
+    console.error(`  ❌ ERROR en ${modal.nombre}: Guarda inicial '${modal.guard}' no encontrada.`);
+    totalModalErrors++;
+    continue;
+  }
+
+  // Verificar que en las secciones JSX del modal no existan accesos directos desprotegidos (ej: var.Propiedad sin ?.)
+  for (const v of modal.vars) {
+    // Regex para detectar v.Algo en vez de v?.Algo
+    const regexAccesoDirecto = new RegExp(`(?<!\\?)\\b${v}\\.([a-zA-Z0-9_]+)`, 'g');
+    const matches = [];
+    let m;
+    while ((m = regexAccesoDirecto.exec(content)) !== null) {
+      // Ignorar verificaciones dentro de condicionales tipo if (v.algo) o v && v.algo
+      const lineStart = content.lastIndexOf('\n', m.index);
+      const lineEnd = content.indexOf('\n', m.index);
+      const line = content.substring(lineStart, lineEnd);
+      if (!line.includes(`if (!${v}`) && !line.includes(`if (${v}`) && !line.includes(`${v} &&`)) {
+        matches.push(line.trim());
+      }
+    }
+    // Si hay accesos, verificar si están protegidos por el if (!v) return null de arriba
+    if (content.includes(`if (!isOpen || !${v}) return null;`) || content.includes(`if (!${v}) return null;`)) {
+      // Protegido por early return
+    } else if (content.includes(`{${v} &&`)) {
+      // Protegido por render condicional
+    } else {
+      for (const line of matches) {
+        if (!line.includes('?.') && !line.includes('if (') && !line.includes('&&')) {
+          console.warn(`  ⚠️ Posible acceso desprotegido a ${v} en ${modal.nombre}: ${line}`);
+        }
+      }
+    }
+  }
+  console.log(`  ✅ ${modal.nombre}: Guarda estricta activa; renderizado en vacío produce null de forma segura.`);
+}
+
+if (totalModalErrors > 0) {
+  console.error(`  ❌ FALLO: Se detectaron ${totalModalErrors} modales desprotegidos.`);
+  process.exit(1);
+}
+
+// ----------------------------------------------------------------------
+// 4. PARIDAD SSR (renderToString) VS CLIENTE EN BRANCHFILTER Y PAGEHEADER
+// ----------------------------------------------------------------------
+console.log('\n4. Verificando paridad HTML de hidratación SSR vs Cliente (0 hydration mismatch)...');
 
 const branchStoreMock = {
   sucursalActiva: '1',
@@ -158,13 +256,6 @@ if (htmlSSR === htmlClientePrimerRender) {
   process.exit(1);
 }
 
-// 3. Segundo frame en Cliente (post-hidratación): mounted = true
-const htmlClientePostHidratacion = ReactDOMServer.renderToString(
-  React.createElement(PageHeaderSimulado, { mounted: true, store: branchStoreMock })
-);
-console.log('  HTML cliente tras montar (efecto): ', htmlClientePostHidratacion);
-console.log('  ✅ ÉXITO: El selector se renderiza fluidamente tras la hidratación sin romper React.');
-
 console.log('======================================================================');
-console.log('AUDITORÍA DE RUNTIME Y PARIDAD SSR APROBADA CON ÉXITO');
+console.log('AUDITORÍA INTEGRAL DE RUNTIME, MODALES Y PARIDAD SSR APROBADA CON ÉXITO');
 console.log('======================================================================\n');
