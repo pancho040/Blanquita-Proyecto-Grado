@@ -47,7 +47,9 @@ export default function EntregaChoferMovil({
   // Formulario de Entrega
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
   const [placaCamion, setPlacaCamion] = useState(
-    asignacionPreseleccionada?.Observacion?.match(/\(([^)]+)\)/)?.[1] || "5738UPK"
+    asignacionPreseleccionada?.Observacion?.match(/\(([^)]+)\)/)?.[1] ||
+    asignacionPreseleccionada?.PlacaCamion ||
+    ""
   );
   const [metodoPago, setMetodoPago] = useState("Efectivo"); // Efectivo, QR, Credito, Mixto
   const [montoEfectivo, setMontoEfectivo] = useState("");
@@ -278,7 +280,7 @@ export default function EntregaChoferMovil({
         id_cliente: Number(clienteSeleccionado),
         chofer: choferActualNombre,
         id_chofer: Number(choferId),
-        placa: placaCamion || "5738UPK",
+        placa: (placaCamion || asignacionPreseleccionada?.PlacaCamion || "").trim() || "S/P",
         total_neto: totalBruto,
         id_sucursal: 1,
         metodo_pago: metodoPago,

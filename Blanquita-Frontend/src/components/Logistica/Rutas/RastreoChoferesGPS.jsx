@@ -627,15 +627,17 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         }}
       />
 
-      <ModalSimuladorGPS
-        repartidores={choferes}
-        repartidorSeleccionado={choferSeleccionado}
-        abierto={modalSimuladorAbierto}
-        onCerrar={() => setModalSimuladorAbierto(false)}
-        onPingEmitido={() => {
-          cargarTelemetria();
-        }}
-      />
+      {import.meta.env?.DEV && (
+        <ModalSimuladorGPS
+          repartidores={choferes}
+          repartidorSeleccionado={choferSeleccionado}
+          abierto={modalSimuladorAbierto}
+          onCerrar={() => setModalSimuladorAbierto(false)}
+          onPingEmitido={() => {
+            cargarTelemetria();
+          }}
+        />
+      )}
     </div>
   );
 }

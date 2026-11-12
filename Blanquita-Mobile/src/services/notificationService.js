@@ -46,17 +46,33 @@ export const NotificationService = {
         return null;
       }
 
-      const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
-      const pushToken = tokenData?.data || "ExponentPushToken[mock-local-token]";
+      let tokenData = null;
+      try {
+        tokenData = await Notifications.getExpoPushTokenAsync();
+      } catch (tokenErr) {
+        // En desarrollo local o emulador sin projectId de EAS configurado en app.json,
+        // no se puede obtener el ExponentPushToken remoto.
+        console.warn(
+          "[Push] No se pudo obtener Expo Push Token remoto (requiere projectId de EAS en app.json). " +
+          "La bandeja interna de notificaciones locales continuará funcionando normalmente.",
+          tokenErr.message
+        );
+      }
 
-      // Registrar token en FastAPI
+      const pushToken = tokenData?.data || null;
+      if (!pushToken) {
+        console.info("[Push] Sin token remoto para registrar; se opera exclusivamente con bandeja interna.");
+        return null;
+      }
+
+      // Registrar token real en FastAPI asociado al chofer autenticado
       await apiClient.post("/api/movil/v1/dispositivos/registro", {
         token_push: pushToken,
         plataforma: Platform.OS,
         version_app: "1.0.0",
       });
 
-      console.log("[Push] Dispositivo registrado exitosamente en FastAPI.");
+      console.log("[Push] Dispositivo registrado exitosamente en FastAPI con token real.");
       return pushToken;
     } catch (e) {
       console.warn("[Push] Error al registrar dispositivo:", e.message);
