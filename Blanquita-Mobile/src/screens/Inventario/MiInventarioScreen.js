@@ -77,6 +77,17 @@ export const MiInventarioScreen = ({ navigation }) => {
   const valorReval = Number(inventario?.valor_total_revalorizado_bs || 0);
   const valorBase = Number(inventario?.valor_total_camion_bs || 0);
 
+  // Total Único a Rendir: Ventas en ruta (a precio de salida) + Sobrante en camión (a precio vigente de sucursal)
+  const totalVentasSalida = useMemo(() => {
+    return items.reduce((sum, it) => {
+      const vendida = Number(it.cantidad_vendida || 0);
+      const precioSalida = Number(it.precio_vigente_carga || 0);
+      return sum + vendida * precioSalida;
+    }, 0);
+  }, [items]);
+
+  const totalUnicoRendir = totalVentasSalida + valorReval;
+
   const renderItem = ({ item }) => {
     const cargado = Number(item.cantidad_cargada || 0);
     const entregado = Number(item.cantidad_vendida || 0);
@@ -205,7 +216,28 @@ export const MiInventarioScreen = ({ navigation }) => {
           ListHeaderComponent={
             inventario ? (
               <View style={styles.headerKpis}>
-                {/* Panel Superior de Totales */}
+                {/* TARJETA TOTAL ÚNICO A RENDIR CON DESGLOSE */}
+                <View style={styles.kpiTotalRendirCard}>
+                  <View style={styles.kpiTotalRendirHeader}>
+                    <DollarSign size={18} color="#38BDF8" />
+                    <Text style={styles.kpiTotalRendirTitulo}>TOTAL ÚNICO A RENDIR</Text>
+                  </View>
+                  <Text style={styles.kpiTotalRendirMonto}>
+                    Bs. {totalUnicoRendir.toFixed(2)}
+                  </Text>
+                  <View style={styles.desgloseRendirBox}>
+                    <View style={styles.desgloseRendirRow}>
+                      <Text style={styles.desgloseRendirLabel}>• Ventas en ruta (a precio de salida):</Text>
+                      <Text style={styles.desgloseRendirValor}>Bs. {totalVentasSalida.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.desgloseRendirRow}>
+                      <Text style={styles.desgloseRendirLabel}>• Sobrante en camión (a precio vigente):</Text>
+                      <Text style={styles.desgloseRendirValor}>Bs. {valorReval.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Panel Superior de Cantidades */}
                 <View style={styles.kpiCard}>
                   <View style={styles.kpiRow}>
                     <View style={styles.kpiCol}>
@@ -301,6 +333,61 @@ const styles = StyleSheet.create({
   },
   headerKpis: {
     marginBottom: 14,
+    gap: 10,
+  },
+  kpiTotalRendirCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#38BDF8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  kpiTotalRendirHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  kpiTotalRendirTitulo: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  kpiTotalRendirMonto: {
+    color: '#F8FAFC',
+    fontSize: 26,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    marginVertical: 4,
+  },
+  desgloseRendirBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    gap: 4,
+  },
+  desgloseRendirRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  desgloseRendirLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  desgloseRendirValor: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   kpiCard: {
     backgroundColor: '#1E293B',

@@ -127,6 +127,7 @@ export default function InventarioCamionTab({
     let valorTotalRemanente = 0;
     let valorTotalRevalorizado = 0;
     let ajusteRevalorizacionTotal = 0;
+    let valorTotalVendidoSalida = 0;
     let itemsAgotados = 0;
 
     for (const item of inventario) {
@@ -145,11 +146,14 @@ export default function InventarioCamionTab({
       valorTotalRemanente += valor;
       valorTotalRevalorizado += valorReval;
       ajusteRevalorizacionTotal += ajuste;
+      valorTotalVendidoSalida += (vendido * precio);
 
       if (remanente <= 0) {
         itemsAgotados += 1;
       }
     }
+
+    const totalUnicoRendir = valorTotalVendidoSalida + valorTotalRevalorizado;
 
     return {
       totalCargado,
@@ -158,6 +162,8 @@ export default function InventarioCamionTab({
       valorTotalRemanente,
       valorTotalRevalorizado,
       ajusteRevalorizacionTotal,
+      valorTotalVendidoSalida,
+      totalUnicoRendir,
       itemsAgotados,
       totalItems: inventario.length
     };
@@ -315,7 +321,34 @@ export default function InventarioCamionTab({
       </div>
 
       {/* ============================================================== */}
-      {/* 2. RESUMEN KPI COMPACTO DE ALTA DENSIDAD */}
+      {/* 2. TARJETA DESTACADA: TOTAL ÚNICO A RENDIR CON DESGLOSE */}
+      {/* ============================================================== */}
+      <div className="print:hidden bg-slate-900 border border-slate-800 text-white rounded p-3.5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider">
+              <DollarSign className="h-4 w-4" />
+              <span>Total Único a Rendir (Liquidación de Turno)</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums text-white mt-1">
+              Bs. {formatearBs(metricas.totalUnicoRendir)}
+            </div>
+          </div>
+          <div className="flex flex-col sm:items-end gap-1 text-xs border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0 sm:pl-4">
+            <div className="flex items-center justify-between sm:justify-end gap-2 text-slate-300">
+              <span>Ventas en ruta (a precio salida):</span>
+              <span className="font-mono font-bold text-white">Bs. {formatearBs(metricas.valorTotalVendidoSalida)}</span>
+            </div>
+            <div className="flex items-center justify-between sm:justify-end gap-2 text-slate-300">
+              <span>Sobrante en camión (a precio vigente):</span>
+              <span className="font-mono font-bold text-sky-300">Bs. {formatearBs(metricas.valorTotalRevalorizado)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 3. RESUMEN KPI COMPACTO DE ALTA DENSIDAD */}
       {/* ============================================================== */}
       <div className="print:hidden grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {/* KPI 1: Remanente Físico Actual */}
