@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   FileText,
   Search,
@@ -73,6 +73,28 @@ export default function HistorialRepartoTab({
   const [fotoModal, setFotoModal] = useState(null);
   const [notaImprimir, setNotaImprimir] = useState(null);
 
+  // Control de refresco y anti-solapamiento
+  const cargandoNotasRef = useRef(false);
+  const cargandoTurnosRef = useRef(false);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const [textoRelativo, setTextoRelativo] = useState("hace un instante");
+
+  // Actualización de texto relativo cada 10 s
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const seg = Math.max(0, Math.floor((new Date() - ultimaActualizacion) / 1000));
+      if (seg < 15) {
+        setTextoRelativo("hace un instante");
+      } else if (seg < 60) {
+        setTextoRelativo(`hace ${seg} seg`);
+      } else {
+        const min = Math.floor(seg / 60);
+        setTextoRelativo(`hace ${min} min`);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [ultimaActualizacion]);
+
   const esChofer = Number(usuario?.IdRol) === 6;
 
   // Formateadores numéricos de precisión boliviana
@@ -138,8 +160,10 @@ export default function HistorialRepartoTab({
   }, [choferPreseleccionado, esChofer, usuario?.IdUsuario]);
 
   // 2. Consulta de Notas de Venta en ruta
-  const consultarNotas = useCallback(async () => {
+  const consultarNotas = useCallback(async (manual = false) => {
+    if (cargandoNotasRef.current) return;
     try {
+      cargandoNotasRef.current = true;
       setCargandoNotas(true);
       setErrorNotas(null);
 
@@ -153,25 +177,31 @@ export default function HistorialRepartoTab({
       const res = await ObtenerNotasVenta(params);
       const lista = Array.isArray(res) ? res : res?.items || [];
       setNotas(lista);
+      setUltimaActualizacion(new Date());
     } catch (err) {
       const msg = err.message || "Error al consultar historial de entregas.";
       setErrorNotas(msg);
-      toast.error(msg);
+      if (manual) toast.error(msg);
     } finally {
+      cargandoNotasRef.current = false;
       setCargandoNotas(false);
     }
   }, [fechaDesde, fechaHasta, busqueda]);
 
   // 3. Consulta de Cierres / Asignaciones
   const consultarTurnos = useCallback(async () => {
+    if (cargandoTurnosRef.current) return;
     try {
+      cargandoTurnosRef.current = true;
       setCargandoTurnos(true);
       const idRep = filtroChoferId !== "TODOS" ? Number(filtroChoferId) : null;
       const data = await ObtenerAsignaciones(fechaDesde, idRep).catch(() => []);
       setAsignacionesTurno(Array.isArray(data) ? data : []);
+      setUltimaActualizacion(new Date());
     } catch {
       setAsignacionesTurno([]);
     } finally {
+      cargandoTurnosRef.current = false;
       setCargandoTurnos(false);
     }
   }, [fechaDesde, filtroChoferId]);
@@ -181,6 +211,33 @@ export default function HistorialRepartoTab({
     if (seccionActiva === "cierres") {
       consultarTurnos();
     }
+  }, [consultarNotas, consultarTurnos, seccionActiva]);
+
+  // Polling automático cada 60 s pausado cuando document.visibilityState === "hidden"
+  useEffect(() => {
+    const INTERVALO_MS = 60000;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      consultarNotas(false);
+      if (seccionActiva === "cierres") {
+        consultarTurnos();
+      }
+    }, INTERVALO_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        consultarNotas(false);
+        if (seccionActiva === "cierres") {
+          consultarTurnos();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 
   // 4. Filtrado en memoria de notas de venta
@@ -382,21 +439,27 @@ export default function HistorialRepartoTab({
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                consultarNotas();
-                if (seccionActiva === "cierres") consultarTurnos();
-              }}
-              disabled={cargandoNotas || cargandoTurnos}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 border border-transparent rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${cargandoNotas ? "animate-spin" : ""}`}
-                strokeWidth={1.75}
-              />
-              <span>Actualizar</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  consultarNotas(true);
+                  if (seccionActiva === "cierres") consultarTurnos();
+                }}
+                disabled={cargandoNotas || cargandoTurnos}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 border border-transparent rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                title="Recargar entregas y cobros inmediatamente"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${cargandoNotas ? "animate-spin" : ""}`}
+                  strokeWidth={1.75}
+                />
+                <span>Actualizar</span>
+              </button>
+              <span className="text-[11px] text-slate-500 font-mono hidden sm:inline" title="Última sincronización con el servidor">
+                ({textoRelativo})
+              </span>
+            </div>
           </div>
         </div>
 

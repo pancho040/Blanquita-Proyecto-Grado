@@ -22,8 +22,6 @@ export default function ModalSimuladorGPS({
   onCerrar,
   onPingEmitido
 }) {
-  if (!abierto) return null;
-
   const [idRepartidor, setIdRepartidor] = useState(
     repartidorSeleccionado?.IdUsuarioRepartidor || (repartidores[0]?.IdUsuarioRepartidor || "")
   );
@@ -79,7 +77,7 @@ export default function ModalSimuladorGPS({
   };
 
   return (
-    <Dialog open={abierto} onOpenChange={onCerrar}>
+    <Dialog open={Boolean(abierto)} onOpenChange={onCerrar}>
       <DialogContent className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
         <DialogHeader className="border-b border-slate-200 pb-2.5">
           <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">

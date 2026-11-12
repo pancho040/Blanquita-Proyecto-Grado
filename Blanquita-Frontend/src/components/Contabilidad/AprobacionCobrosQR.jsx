@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { QrCode, CheckCircle2, XCircle, Eye, Clock, Image as ImageIcon, ZoomIn } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { QrCode, CheckCircle2, XCircle, Eye, Clock, Image as ImageIcon, ZoomIn, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/common/StatusBadge";
 import PageHeader from "@/components/common/PageHeader";
@@ -26,21 +26,67 @@ export default function AprobacionCobrosQR({ usuario }) {
   const [fotoModal, setFotoModal] = useState(null);
   const [procesandoId, setProcesandoId] = useState(null);
 
-  useEffect(() => {
-    cargarAbonos();
-  }, [sucursal]);
+  // Auto-refresco y anti-solapamiento
+  const cargandoRef = useRef(false);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const [textoRelativo, setTextoRelativo] = useState("hace un instante");
 
-  const cargarAbonos = async () => {
+  // Actualizar etiqueta de tiempo relativo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const seg = Math.max(0, Math.floor((new Date() - ultimaActualizacion) / 1000));
+      if (seg < 15) {
+        setTextoRelativo("hace un instante");
+      } else if (seg < 60) {
+        setTextoRelativo(`hace ${seg} seg`);
+      } else {
+        const min = Math.floor(seg / 60);
+        setTextoRelativo(`hace ${min} min`);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [ultimaActualizacion]);
+
+  const cargarAbonos = useCallback(async (manual = false) => {
+    if (cargandoRef.current) return;
     try {
-      setCargando(true);
+      cargandoRef.current = true;
+      if (manual) setCargando(true);
       const res = await ObtenerAbonosPendientes(sucursal);
       setAbonos(res || []);
+      setUltimaActualizacion(new Date());
     } catch (err) {
-      toast.error("Error al cargar abonos pendientes");
+      if (manual) toast.error("Error al cargar abonos pendientes");
     } finally {
+      cargandoRef.current = false;
       setCargando(false);
     }
-  };
+  }, [sucursal]);
+
+  useEffect(() => {
+    cargarAbonos(true);
+  }, [cargarAbonos]);
+
+  // Polling automático cada 60 s pausado cuando pestaña está oculta
+  useEffect(() => {
+    const INTERVALO_MS = 60000;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      cargarAbonos(false);
+    }, INTERVALO_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        cargarAbonos(false);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [cargarAbonos]);
 
   const handleResolver = async (idAbono, aprobado) => {
     try {
@@ -80,6 +126,22 @@ export default function AprobacionCobrosQR({ usuario }) {
               estado={abonos.length > 0 ? "PENDIENTE" : "COMPLETADO"}
               label={`${abonos.length} Pendiente${abonos.length === 1 ? "" : "s"}`}
             />
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => cargarAbonos(true)}
+                disabled={cargando}
+                className="h-8 gap-1.5 text-xs text-slate-700 border-slate-300 rounded hover:bg-slate-50"
+                title="Actualizar listado de cobros pendientes"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${cargando ? "animate-spin" : ""}`} />
+                Actualizar
+              </Button>
+              <span className="text-[11px] text-slate-400 font-mono hidden md:inline" title="Última verificación">
+                ({textoRelativo})
+              </span>
+            </div>
           </div>
         }
       />

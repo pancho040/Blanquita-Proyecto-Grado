@@ -17,9 +17,7 @@ import {
 } from "lucide-react";
 
 export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, onLiquidacionExitosa }) {
-  if (!abierto || !idAsignacion) return null;
-
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [data, setData] = useState(null);
 
@@ -31,6 +29,10 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
   const [observacion, setObservacion] = useState("");
 
   useEffect(() => {
+    if (!abierto || !idAsignacion) {
+      setData(null);
+      return;
+    }
     async function cargar() {
       try {
         setCargando(true);
@@ -50,10 +52,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
         setCargando(false);
       }
     }
-
-    if (abierto && idAsignacion) {
-      cargar();
-    }
+    cargar();
   }, [abierto, idAsignacion]);
 
   // Cálculos de arqueo en tiempo real
@@ -96,7 +95,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
     new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
 
   return (
-    <Dialog open={abierto} onOpenChange={onCerrar}>
+    <Dialog open={Boolean(abierto && idAsignacion)} onOpenChange={onCerrar}>
       <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
         <DialogHeader className="border-b border-slate-200 pb-2.5">
           <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">

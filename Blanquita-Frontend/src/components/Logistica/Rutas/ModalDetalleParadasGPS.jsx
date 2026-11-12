@@ -26,9 +26,7 @@ export default function ModalDetalleParadasGPS({
   onCerrar,
   onActualizacion
 }) {
-  if (!abierto || !idAsignacion) return null;
-
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(false);
   const [data, setData] = useState(null);
   const [paradaParaCobro, setParadaParaCobro] = useState(null);
   const [montoCobro, setMontoCobro] = useState("");
@@ -36,6 +34,7 @@ export default function ModalDetalleParadasGPS({
   const [procesandoAccion, setProcesandoAccion] = useState(false);
 
   const cargarDatos = async () => {
+    if (!idAsignacion) return;
     try {
       setCargando(true);
       const res = await ObtenerTrackingAsignacion(idAsignacion);
@@ -51,6 +50,9 @@ export default function ModalDetalleParadasGPS({
   useEffect(() => {
     if (abierto && idAsignacion) {
       cargarDatos();
+    } else {
+      setData(null);
+      setParadaParaCobro(null);
     }
   }, [abierto, idAsignacion]);
 
@@ -118,7 +120,7 @@ export default function ModalDetalleParadasGPS({
     new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
 
   return (
-    <Dialog open={abierto} onOpenChange={onCerrar}>
+    <Dialog open={Boolean(abierto && idAsignacion)} onOpenChange={onCerrar}>
       <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 rounded border border-slate-200">
         <DialogHeader className="border-b border-slate-200 pb-2.5 flex flex-row items-center justify-between">
           <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">

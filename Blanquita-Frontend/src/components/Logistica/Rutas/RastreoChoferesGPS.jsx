@@ -137,9 +137,13 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     };
   }, []);
 
-  // 2. Cargar choferes en vivo
+  // 2. Cargar choferes en vivo con bloqueo anti-solapamiento
+  const telemetriaEnVueloRef = useRef(false);
+
   const cargarTelemetria = useCallback(async (silencioso = false) => {
+    if (telemetriaEnVueloRef.current) return;
     try {
+      telemetriaEnVueloRef.current = true;
       if (!silencioso) setCargando(true);
       const sid = sucursal === "todas" ? null : sucursal;
       const data = await ObtenerChoferesEnVivo(sid);
@@ -148,6 +152,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     } catch (err) {
       if (!silencioso) toast.error("Error al obtener telemetría satelital");
     } finally {
+      telemetriaEnVueloRef.current = false;
       if (!silencioso) setCargando(false);
     }
   }, [sucursal]);
@@ -157,6 +162,28 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       cargarTelemetria();
     }
   }, [sucursal, cargandoAlcance, cargarTelemetria]);
+
+  // Polling automático cada 60s: pausa si pestaña oculta, no solapa y limpia al desmontar
+  useEffect(() => {
+    const INTERVALO_MS = 60000;
+    const interval = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      if (telemetriaEnVueloRef.current) return;
+      cargarTelemetria(true);
+    }, INTERVALO_MS);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && !telemetriaEnVueloRef.current) {
+        cargarTelemetria(true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [cargarTelemetria]);
 
   // Cálculo reactivo de tiempo relativo desde la última actualización
   useEffect(() => {
