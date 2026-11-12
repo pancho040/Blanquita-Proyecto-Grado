@@ -86,6 +86,8 @@ class CierreTurnoMovilRequest(BaseModel):
     mermas_declaradas: Optional[List[MermaDeclaradaDTO]] = Field(default_factory=list)
     firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria de conformidad")
     observaciones: Optional[str] = None
+    sobrante_permanece_en_camion: bool = True
+    valor_sobrante_revalorizado: Optional[float] = 0.0
 
 
 class ItemInventarioCamionDTO(BaseModel):

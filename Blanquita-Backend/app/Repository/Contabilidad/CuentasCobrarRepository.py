@@ -445,13 +445,15 @@ class CuentasCobrarRepository:
                 "MontoTotalCobradoRuta", "MontoEfectivoEntregado",
                 "MontoTransferenciaReportada", "MontoQrReportado",
                 "MontoFaltante", "CantidadMerma", "ObservacionesCierre",
-                "EstadoConciliacion", "IdSucursal", "FechaRendicion"
+                "EstadoConciliacion", "IdSucursal", "FechaRendicion",
+                "SobrantePermaneceEnCamion", "ValorSobranteRevalorizado"
             ) VALUES (
                 :IdUsuarioRepartidor, :IdAperturaCierreCaja, :IdAsignacionRuta,
                 :MontoTotalCobradoRuta, :MontoEfectivoEntregado,
                 :MontoTransferenciaReportada, :MontoQrReportado,
                 :MontoFaltante, :CantidadMerma, :ObservacionesCierre,
-                :EstadoConciliacion, :IdSucursal, now()
+                :EstadoConciliacion, :IdSucursal, now(),
+                :SobrantePermaneceEnCamion, :ValorSobranteRevalorizado
             )
             RETURNING *;
         """
@@ -466,6 +468,8 @@ class CuentasCobrarRepository:
         payload.setdefault("ObservacionesCierre", None)
         payload.setdefault("EstadoConciliacion", "PENDIENTE")
         payload.setdefault("IdSucursal", 1)
+        payload.setdefault("SobrantePermaneceEnCamion", True)
+        payload.setdefault("ValorSobranteRevalorizado", 0.0)
         return self.caller.LlamarUnRegistro(sql, payload)
 
     def ObtenerConfigBandeoProducto(self, id_presentacion: int) -> dict | None:

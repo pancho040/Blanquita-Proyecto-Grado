@@ -974,7 +974,9 @@ async def registrar_cierre_turno_movil(
         MontoTransferenciaReportada=dto.monto_transferencia_reportada,
         MontoQrReportado=dto.monto_qr_reportado,
         StockDevueltoFisico=stock_devuelto_dict,
-        Observaciones=dto.observaciones
+        Observaciones=dto.observaciones,
+        SobrantePermaneceEnCamion=dto.sobrante_permanece_en_camion,
+        ValorSobranteRevalorizado=dto.valor_sobrante_revalorizado or 0.0
     )
 
     cxc_service = CuentasCobrarService(db)

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useRuta } from '../../context/RutaContext';
@@ -23,6 +24,7 @@ import {
   AlertTriangle,
   FileCheck2,
   Package,
+  Truck,
 } from 'lucide-react-native';
 
 export const CierreRutaScreen = ({ navigation }) => {
@@ -41,6 +43,25 @@ export const CierreRutaScreen = ({ navigation }) => {
   );
   const [transfReportada, setTransfReportada] = useState('0.00');
   const [creditoReportado, setCreditoReportado] = useState('0.00');
+
+  // Sobrante en camión y revalorización
+  const [sobranteEnCamion, setSobranteEnCamion] = useState(true);
+  const [valorSobranteReval, setValorSobranteReval] = useState(0);
+
+  // Cuadre financiero interactivo en vivo
+  const totalIngresado = useMemo(() => {
+    const ef = parseFloat(efectivoEntregado) || 0;
+    const qr = parseFloat(qrReportado) || 0;
+    const tr = parseFloat(transfReportada) || 0;
+    const cr = parseFloat(creditoReportado) || 0;
+    return ef + qr + tr + cr;
+  }, [efectivoEntregado, qrReportado, transfReportada, creditoReportado]);
+
+  const totalEsperado = useMemo(() => {
+    return Number(metricas?.total_recaudado || 0) + (parseFloat(creditoReportado) || 0);
+  }, [metricas, creditoReportado]);
+
+  const descuadre = totalIngresado - totalEsperado;
 
   // Cuadre físico de inventario
   const [inventarioCamion, setInventarioCamion] = useState([]);
@@ -62,11 +83,13 @@ export const CierreRutaScreen = ({ navigation }) => {
       const inv = await LogisticaApi.obtenerMiInventarioCamion();
       if (activo && inv?.items) {
         setInventarioCamion(inv.items);
+        setValorSobranteReval(Number(inv?.valor_total_revalorizado_bs || inv?.valor_total_camion_bs || 0));
         const devMap = {};
         const merMap = {};
         const motMap = {};
         inv.items.forEach((it) => {
-          devMap[it.presentacion_id] = String(it.cantidad_remanente || 0);
+          // Si el sobrante permanece en camión, devolución a almacén es 0 por defecto
+          devMap[it.presentacion_id] = '0';
           merMap[it.presentacion_id] = '0';
           motMap[it.presentacion_id] = 'Empaque roto en traslado';
         });
@@ -146,6 +169,8 @@ export const CierreRutaScreen = ({ navigation }) => {
       mermas_declaradas: mermasDeclaradas,
       firma_chofer: firmaChofer,
       observaciones: observaciones.trim() || 'Cierre de turno móvil conciliado',
+      sobrante_permanece_en_camion: sobranteEnCamion,
+      valor_sobrante_revalorizado: valorSobranteReval,
     };
 
     const res = await LogisticaApi.registrarCierreTurno(payload);
@@ -213,12 +238,69 @@ export const CierreRutaScreen = ({ navigation }) => {
             onChangeText={setCreditoReportado}
             keyboardType="numeric"
           />
+
+          {/* Badge Interactivo de Cuadre en Vivo */}
+          <View style={styles.arqueoResumenBox}>
+            <View style={styles.arqueoTotalesRow}>
+              <Text style={styles.arqueoTotalesLabel}>Total Declarado:</Text>
+              <Text style={styles.arqueoTotalesValor}>Bs. {totalIngresado.toFixed(2)}</Text>
+            </View>
+
+            {Math.abs(descuadre) < 0.05 ? (
+              <View style={styles.badgeCuadreOk}>
+                <CheckCircle2 size={16} color="#16A34A" />
+                <Text style={styles.badgeCuadreOkText}>
+                  Arqueo Cuadrado con Ventas (Bs. {totalEsperado.toFixed(2)})
+                </Text>
+              </View>
+            ) : descuadre < -0.05 ? (
+              <View style={styles.badgeCuadreFalta}>
+                <AlertTriangle size={16} color="#DC2626" />
+                <Text style={styles.badgeCuadreFaltaText}>
+                  Faltan Bs. {Math.abs(descuadre).toFixed(2)} (Esperado: Bs. {totalEsperado.toFixed(2)})
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.badgeCuadreSobra}>
+                <CheckCircle2 size={16} color="#0284C7" />
+                <Text style={styles.badgeCuadreSobraText}>
+                  Sobran Bs. {descuadre.toFixed(2)} (Esperado: Bs. {totalEsperado.toFixed(2)})
+                </Text>
+              </View>
+            )}
+          </View>
         </Card>
 
         {/* 2. Cuadre Físico de Inventario */}
         <Card title="2. Cuadre Físico de Camión" icon={Package} style={styles.cardSection}>
-          <Text style={styles.desc}>
-            Declare los bultos devueltos al almacén y las mermas o roturas justificadas:
+          {/* Toggle Interactivo: Sobrante queda en camión */}
+          <TouchableOpacity
+            style={[styles.toggleSobranteBox, sobranteEnCamion && styles.toggleSobranteBoxActivo]}
+            onPress={() => setSobranteEnCamion(!sobranteEnCamion)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.toggleRow}>
+              <Truck size={20} color={sobranteEnCamion ? '#0284C7' : '#64748B'} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleTitulo}>
+                  Sobrante permanece en el camión para mañana
+                </Text>
+                <Text style={styles.toggleSub}>
+                  {sobranteEnCamion
+                    ? `Activo (Recomendado): El remanente pasa a la jornada siguiente valorizado a precio vigente (Bs. ${valorSobranteReval.toFixed(2)}) sin descarga forzosa al almacén.`
+                    : 'Desactivado: Deberás devolver físicamente la mercadería al almacén central.'}
+                </Text>
+              </View>
+              <View style={[styles.switchTrack, sobranteEnCamion && styles.switchTrackOn]}>
+                <View style={[styles.switchThumb, sobranteEnCamion && styles.switchThumbOn]} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <Text style={[styles.desc, { marginTop: 10 }]}>
+            {sobranteEnCamion
+              ? 'El sobrante queda en el camión. Si hubo roturas o mermas en el camino, declárelas a continuación:'
+              : 'Declare los bultos devueltos al almacén y las mermas o roturas justificadas:'}
           </Text>
 
           {inventarioCamion.map((it) => (
@@ -381,6 +463,121 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.success,
     marginTop: 6,
+  },
+  arqueoResumenBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    gap: 8,
+  },
+  arqueoTotalesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  arqueoTotalesLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  arqueoTotalesValor: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  badgeCuadreOk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(22, 163, 74, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  badgeCuadreOkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+    flex: 1,
+  },
+  badgeCuadreFalta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  badgeCuadreFaltaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+    flex: 1,
+  },
+  badgeCuadreSobra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  badgeCuadreSobraText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+    flex: 1,
+  },
+  toggleSobranteBox: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+  },
+  toggleSobranteBoxActivo: {
+    borderColor: '#0284C7',
+    backgroundColor: 'rgba(2, 132, 199, 0.05)',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  toggleTitulo: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  toggleSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  switchTrack: {
+    width: 38,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#CBD5E1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  switchTrackOn: {
+    backgroundColor: '#0284C7',
+  },
+  switchThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FFFFFF',
+  },
+  switchThumbOn: {
+    alignSelf: 'flex-end',
   },
   submitContainer: {
     marginTop: 8,

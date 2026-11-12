@@ -256,10 +256,16 @@ class CuentasCobrarService:
                 es_faltante=es_faltante
             ))
 
-            # Descargar camión y retornar stock físico al inventario de sucursal
-            if devuelto_fisico > 0:
-                self.inventario_repo.IncrementarStockSucursal(dto.IdSucursal, pres_id, devuelto_fisico)
-                self.inventario_repo.DescontarStockChofer(dto.IdSucursal, dto.IdUsuarioRepartidor, pres_id, devuelto_fisico)
+            # Descargar camión y retornar stock físico al inventario de sucursal solo si no permanece en camión
+            if not dto.SobrantePermaneceEnCamion:
+                if devuelto_fisico > 0:
+                    self.inventario_repo.IncrementarStockSucursal(dto.IdSucursal, pres_id, devuelto_fisico)
+                    self.inventario_repo.DescontarStockChofer(dto.IdSucursal, dto.IdUsuarioRepartidor, pres_id, devuelto_fisico)
+            else:
+                # El sobrante se queda en el camión para mañana; solo descargar si el chofer hizo devolución parcial explícita menor al saldo
+                if devuelto_fisico > 0 and devuelto_fisico < devuelto_esperado:
+                    self.inventario_repo.IncrementarStockSucursal(dto.IdSucursal, pres_id, devuelto_fisico)
+                    self.inventario_repo.DescontarStockChofer(dto.IdSucursal, dto.IdUsuarioRepartidor, pres_id, devuelto_fisico)
 
         # 4. Total de ventas en Bs del chofer en la jornada
         sql_total_ventas = """
@@ -283,7 +289,9 @@ class CuentasCobrarService:
             "MontoFaltante": total_faltante_bs,
             "CantidadMerma": total_merma_cant,
             "ObservacionesCierre": dto.Observaciones,
-            "EstadoConciliacion": estado_conciliacion
+            "EstadoConciliacion": estado_conciliacion,
+            "SobrantePermaneceEnCamion": dto.SobrantePermaneceEnCamion,
+            "ValorSobranteRevalorizado": dto.ValorSobranteRevalorizado or 0.0
         })
 
         self.db.commit()

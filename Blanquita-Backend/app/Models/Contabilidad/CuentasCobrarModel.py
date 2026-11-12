@@ -100,6 +100,8 @@ class CierreTurnoChoferRequest(BaseModel):
     MontoTransferenciaReportada: float = Field(0.0, ge=0)
     MontoQrReportado: float = Field(0.0, ge=0)
     Observaciones: Optional[str] = None
+    SobrantePermaneceEnCamion: bool = True
+    ValorSobranteRevalorizado: Optional[float] = 0.0
 
 class CierreTurnoItemComparativa(BaseModel):
     presentacion_id: int
