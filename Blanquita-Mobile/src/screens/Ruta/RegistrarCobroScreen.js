@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -72,6 +72,20 @@ export const RegistrarCobroScreen = ({ route, navigation }) => {
     const cr = parseFloat(montoCredito) || 0;
     return ef + qr + tr + cr;
   };
+
+  const fotoRequeridaFalta = useMemo(() => {
+    if (!esMixto) {
+      if ((metodoSimple === 'QR' || metodoSimple === 'TRANSFERENCIA') && !fotoSimpleUri) {
+        return true;
+      }
+    } else {
+      const qr = parseFloat(montoQr) || 0;
+      const tr = parseFloat(montoTransferencia) || 0;
+      if (qr > 0 && !fotoQrUri) return true;
+      if (tr > 0 && !fotoTransfUri) return true;
+    }
+    return false;
+  }, [esMixto, metodoSimple, fotoSimpleUri, montoQr, fotoQrUri, montoTransferencia, fotoTransfUri]);
 
   const handleConfirmarCobro = async () => {
     let payload = {};
@@ -417,8 +431,14 @@ export const RegistrarCobroScreen = ({ route, navigation }) => {
             variant="primary"
             size="large"
             loading={loading}
+            disabled={loading || fotoRequeridaFalta}
             onPress={handleConfirmarCobro}
           />
+          {fotoRequeridaFalta && (
+            <Text style={styles.avisoFotoFaltante}>
+              ⚠️ Debe capturar o adjuntar el comprobante fotográfico del pago QR/Transferencia para habilitar la confirmación.
+            </Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -550,6 +570,14 @@ const styles = StyleSheet.create({
   submitContainer: {
     marginTop: 8,
     marginBottom: 32,
+  },
+  avisoFotoFaltante: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 15,
   },
 });
 

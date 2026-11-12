@@ -40,6 +40,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
   const [razonSocial, setRazonSocial] = useState("");
   const [nombreComercial, setNombreComercial] = useState("");
+  const [nombrePropietario, setNombrePropietario] = useState("");
   const [nitCi, setNitCi] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
@@ -99,6 +100,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
     const payload = {
       razon_social: razonSocial.trim(),
       nombre_comercial: nombreComercial.trim() || razonSocial.trim(),
+      nombre_propietario: nombrePropietario.trim() || null,
       nit_ci: nitCi.trim() || null,
       telefono: telefono.trim() || null,
       direccion: direccion.trim(),
@@ -196,8 +198,8 @@ export const NuevoClienteScreen = ({ navigation }) => {
         {/* Datos Comerciales */}
         <Card title="Datos Comerciales" icon={Store} style={styles.cardSection}>
           <Input
-            label="Razón Social / Nombre del Propietario *"
-            placeholder="Ej: Doña Rosa Flores"
+            label="Razón Social *"
+            placeholder="Ej: Comercial Los Andes S.R.L. o Flores Rosa"
             value={razonSocial}
             onChangeText={setRazonSocial}
           />
@@ -207,6 +209,13 @@ export const NuevoClienteScreen = ({ navigation }) => {
             placeholder="Ej: Abarrotes La Esquina"
             value={nombreComercial}
             onChangeText={setNombreComercial}
+          />
+
+          <Input
+            label="Nombre del Propietario / Encargado"
+            placeholder="Ej: Doña Rosa Flores"
+            value={nombrePropietario}
+            onChangeText={setNombrePropietario}
           />
 
           <View style={styles.formRow}>

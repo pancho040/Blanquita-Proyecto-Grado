@@ -24,6 +24,8 @@ import {
   Map as MapIcon,
   CheckCircle2,
   Wallet,
+  UserPlus,
+  Clock,
 } from 'lucide-react-native';
 
 export const HojaRutaScreen = ({ navigation }) => {
@@ -42,6 +44,13 @@ export const HojaRutaScreen = ({ navigation }) => {
   const paradasList = useMemo(() => {
     return hojaRuta?.paradas || [];
   }, [hojaRuta]);
+
+  const totalFacturadoRuta = useMemo(() => {
+    return paradasList.reduce((sum, p) => sum + Number(p.pedido?.monto_total || 0), 0);
+  }, [paradasList]);
+
+  const totalRecaudado = Number(metricas?.total_recaudado || 0);
+  const saldoPorCobrarRuta = Math.max(0, totalFacturadoRuta - totalRecaudado);
 
   const irADetalle = (parada) => {
     navigation.navigate('DetalleParada', {
@@ -92,48 +101,69 @@ export const HojaRutaScreen = ({ navigation }) => {
 
           <Wallet size={15} color={Colors.success} />
           <Text style={[styles.statNumero, { color: Colors.success }]}>
-            Bs. {Number(metricas?.total_recaudado || 0).toFixed(2)}
+            Bs. {totalRecaudado.toFixed(2)}
+          </Text>
+
+          <View style={styles.dividerDot} />
+
+          <Clock size={14} color="#B45309" />
+          <Text style={styles.statLabel}>Resta:</Text>
+          <Text style={[styles.statNumero, { color: '#B45309' }]}>
+            Bs. {saldoPorCobrarRuta.toFixed(2)}
           </Text>
         </View>
 
-        {/* Selector de Pestaña Mapa / Lista */}
-        <View style={styles.tabToggle}>
-          <TouchableOpacity
-            style={[styles.tabBtn, vista === 'mapa' && styles.tabBtnActive]}
-            onPress={() => setVista('mapa')}
-            activeOpacity={0.8}
-          >
-            <MapIcon
-              size={15}
-              color={vista === 'mapa' ? '#FFFFFF' : '#64748B'}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                vista === 'mapa' && styles.tabTextActive,
-              ]}
+        {/* Fila de Acciones: Selector Mapa/Lista y Botón Nuevo Cliente */}
+        <View style={styles.accionesRow}>
+          {/* Selector de Pestaña Mapa / Lista */}
+          <View style={styles.tabToggle}>
+            <TouchableOpacity
+              style={[styles.tabBtn, vista === 'mapa' && styles.tabBtnActive]}
+              onPress={() => setVista('mapa')}
+              activeOpacity={0.8}
             >
-              Mapa
-            </Text>
-          </TouchableOpacity>
+              <MapIcon
+                size={14}
+                color={vista === 'mapa' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  vista === 'mapa' && styles.tabTextActive,
+                ]}
+              >
+                Mapa
+              </Text>
+            </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.tabBtn, vista === 'lista' && styles.tabBtnActive]}
+              onPress={() => setVista('lista')}
+              activeOpacity={0.8}
+            >
+              <List
+                size={14}
+                color={vista === 'lista' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  vista === 'lista' && styles.tabTextActive,
+                ]}
+              >
+                Lista ({paradasList.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Botón Acceso Rápido: Nuevo Cliente */}
           <TouchableOpacity
-            style={[styles.tabBtn, vista === 'lista' && styles.tabBtnActive]}
-            onPress={() => setVista('lista')}
+            style={styles.btnNuevoCliente}
+            onPress={() => navigation.navigate('NuevoCliente')}
             activeOpacity={0.8}
           >
-            <List
-              size={15}
-              color={vista === 'lista' ? '#FFFFFF' : '#64748B'}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                vista === 'lista' && styles.tabTextActive,
-              ]}
-            >
-              Lista ({paradasList.length})
-            </Text>
+            <UserPlus size={14} color="#FFFFFF" />
+            <Text style={styles.btnNuevoClienteText}>+ Cliente</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -213,12 +243,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E1',
     marginHorizontal: 4,
   },
+  accionesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   tabToggle: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
     borderRadius: 8,
     padding: 3,
     gap: 4,
+  },
+  btnNuevoCliente: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 5,
+  },
+  btnNuevoClienteText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   tabBtn: {
     flex: 1,

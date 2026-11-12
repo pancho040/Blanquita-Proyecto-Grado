@@ -225,6 +225,7 @@ def _crear_cliente_y_punto_venta_en_ruta(
             detail="La razón social es obligatoria."
         )
     nombre_com = (payload.get("nombre_comercial") or razon).strip()
+    nombre_prop = (payload.get("nombre_propietario") or "").strip() or None
     nit = payload.get("nit_ci") or None
     tel = payload.get("telefono") or None
     dir_txt = (payload.get("direccion") or "Sin dirección especificada").strip()
@@ -233,16 +234,16 @@ def _crear_cliente_y_punto_venta_en_ruta(
     # 1. Insertar Cliente asignado forzosamente a la sucursal del chofer
     cli_row = db.execute(text("""
         INSERT INTO public."Cliente" (
-            "IdEstadoCliente", "RazonSocial", "NombreComercial", "NitCi",
+            "IdEstadoCliente", "RazonSocial", "NombreComercial", "NombrePropietario", "NitCi",
             "Telefono", "Direccion", "Latitud", "Longitud",
             "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion", "IdSucursal"
         ) VALUES (
-            1, :razon, :nom_com, :nit,
+            1, :razon, :nom_com, :nom_prop, :nit,
             :tel, :dir, :lat, :lng,
             0, 0, :uid, :obs, :sid
         ) RETURNING "IdCliente";
     """), {
-        "razon": razon, "nom_com": nombre_com, "nit": nit, "tel": tel,
+        "razon": razon, "nom_com": nombre_com, "nom_prop": nombre_prop, "nit": nit, "tel": tel,
         "dir": dir_txt, "lat": lat, "lng": lng, "uid": uid, "obs": obs, "sid": sid
     }).fetchone()
     id_cliente = cli_row[0]
@@ -289,6 +290,7 @@ def _crear_cliente_y_punto_venta_en_ruta(
         "id_punto_venta": id_pv,
         "razon_social": razon,
         "nombre_comercial": nombre_com,
+        "nombre_propietario": nombre_prop,
         "sucursal_id": sid,
         "latitud": lat,
         "longitud": lng
