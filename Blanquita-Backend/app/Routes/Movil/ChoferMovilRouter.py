@@ -591,6 +591,29 @@ async def registrar_entrega_movil(
     # 1. Validar pertenencia del pedido a la ruta del chofer y sucursal
     _validar_pertenencia_pedido_chofer(db, dto.id_pedido, usuario, alcance)
 
+    # Validaciones previas del bloque de cobro compuesto (si viene provisto)
+    if dto.cobro:
+        suma_pagos = sum(p.monto for p in dto.cobro.pagos)
+        saldo_cred = dto.cobro.credito.saldo if dto.cobro.credito else 0.0
+        if abs((suma_pagos + saldo_cred) - dto.cobro.monto_total) > 0.01:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La suma de pagos ({suma_pagos:.2f}) + saldo a crédito ({saldo_cred:.2f}) no coincide con el total declarado ({dto.cobro.monto_total:.2f})."
+            )
+        if suma_pagos > dto.cobro.monto_total:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La suma de pagos no puede superar el monto total del cobro."
+            )
+        for p in dto.cobro.pagos:
+            metodo_up = p.metodo.upper()
+            if metodo_up in ("QR", "TRANSFERENCIA"):
+                if not p.id_comprobante_archivo and not p.url_comprobante:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Todo cobro con {metodo_up} exige obligatoriamente fotografía o ID de ComprobanteArchivo."
+                    )
+
     # 2. Consultar detalles del pedido para verificar cantidades
     sql_det = text("""
         SELECT dp."IdPresentacion", dp."Cantidad", dp."PrecioUnitarioAplicado"
@@ -723,7 +746,122 @@ async def registrar_entrega_movil(
         "Observacion": obs_final
     })
 
-    # 7. Verificar si hubo revalorización de precios reciente (Kevin)
+    # 7. Procesar bloque de cobro unificado (si fue enviado) en la misma transacción ACID
+    datos_cobro_resumen = None
+    if dto.cobro:
+        tramos_procesados = []
+        for p in dto.cobro.pagos:
+            metodo_p = p.metodo.upper()
+            ref_p = p.numero_referencia or f"MOVIL-{int(datetime.now().timestamp())}-{uuid.uuid4().hex[:4].upper()}"
+            id_metodo_pago = _resolver_id_metodo_pago(db, metodo_p)
+            obs_pago = f"[{metodo_p}] {dto.observacion or ''}".strip()
+            if metodo_p in ("QR", "TRANSFERENCIA"):
+                obs_pago += f" [PENDIENTE_APROBACION - Comprobante: {p.id_comprobante_archivo or p.url_comprobante}]"
+
+            pago_db = ruta_service.RegistrarCobroParada({
+                "IdPedido": dto.id_pedido,
+                "IdMetodoPago": id_metodo_pago,
+                "Monto": p.monto,
+                "NumeroReferencia": ref_p,
+                "LatitudCobro": dto.latitud,
+                "LongitudCobro": dto.longitud,
+                "Observacion": obs_pago
+            })
+
+            id_abono_creado = None
+            id_cxc = None
+            if metodo_p in ("QR", "TRANSFERENCIA"):
+                id_cxc, id_abono_creado = _asegurar_cxc_y_abono_bancario_chofer(
+                    db=db,
+                    uid=uid,
+                    id_pedido=dto.id_pedido,
+                    metodo=metodo_p,
+                    monto=p.monto,
+                    numero_referencia=ref_p,
+                    id_comprobante_archivo=p.id_comprobante_archivo,
+                    url_comprobante=p.url_comprobante,
+                    alcance=alcance,
+                    observacion=dto.observacion
+                )
+
+            tramos_procesados.append({
+                "metodo": metodo_p,
+                "monto": p.monto,
+                "numero_referencia": ref_p,
+                "estado": "PENDIENTE_APROBACION" if metodo_p in ("QR", "TRANSFERENCIA") else "CONFIRMADO",
+                "id_pago_pedido": pago_db.get("IdPagoPedido") if isinstance(pago_db, dict) else None,
+                "id_abono_cuenta_cobrar": id_abono_creado,
+                "id_cuenta_cobrar": id_cxc
+            })
+
+        cxc_resumen = None
+        if dto.cobro.credito and dto.cobro.credito.saldo > 0:
+            cxc_service = CuentasCobrarService(db)
+            ped_info = db.execute(text("""
+                SELECT p."IdCliente", c."IdSucursal", p."NumeroPedido"
+                FROM public."Pedido" p
+                JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+                WHERE p."IdPedido" = :id_ped;
+            """), {"id_ped": dto.id_pedido}).fetchone()
+
+            if ped_info:
+                id_cli = ped_info[0]
+                suc_ped = ped_info[1] or sucursal_id
+                plazo = dto.cobro.credito.plazo_dias or 15
+                vencimiento = date.today() + timedelta(days=plazo)
+
+                cxc_existente = db.execute(text("""
+                    SELECT "IdCuentaCobrar" FROM public."CuentaCobrar" WHERE "IdPedido" = :id_ped LIMIT 1;
+                """), {"id_ped": dto.id_pedido}).fetchone()
+
+                if cxc_existente:
+                    id_cxc_cred = cxc_existente[0]
+                    db.execute(text("""
+                        UPDATE public."CuentaCobrar"
+                        SET "SaldoPendiente" = :saldo,
+                            "FechaVencimiento" = :venc
+                        WHERE "IdCuentaCobrar" = :id;
+                    """), {"saldo": dto.cobro.credito.saldo, "venc": vencimiento, "id": id_cxc_cred})
+                else:
+                    nueva_cxc = cxc_service.repo.CrearCuentaCobrar({
+                        "IdCliente": id_cli,
+                        "IdPedido": dto.id_pedido,
+                        "IdNotaVenta": None,
+                        "NumeroNotaVenta": str(ped_info[2] or f"PED-{dto.id_pedido}"),
+                        "NumeroNotaEntrega": f"NE-{dto.id_pedido}",
+                        "FechaDespacho": date.today(),
+                        "DiasMora": 0,
+                        "IdEstadoCuentaCobrar": 1,
+                        "MontoTotal": dto.cobro.monto_total,
+                        "SaldoPendiente": dto.cobro.credito.saldo,
+                        "FechaEmision": date.today(),
+                        "FechaVencimiento": vencimiento,
+                        "IdUsuarioRegistro": uid,
+                        "Observacion": f"Crédito otorgado en entrega móvil (plazo: {plazo} días)"
+                    })
+                    id_cxc_cred = nueva_cxc["IdCuentaCobrar"]
+                    db.execute(text('UPDATE public."CuentaCobrar" SET "IdSucursal" = :sid WHERE "IdCuentaCobrar" = :id;'), {
+                        "sid": suc_ped,
+                        "id": id_cxc_cred
+                    })
+
+                cxc_resumen = {
+                    "id_cuenta_cobrar": id_cxc_cred,
+                    "saldo_pendiente": dto.cobro.credito.saldo,
+                    "plazo_dias": plazo,
+                    "fecha_vencimiento": str(vencimiento),
+                    "estado": "PENDIENTE"
+                }
+
+        datos_cobro_resumen = {
+            "monto_total": dto.cobro.monto_total,
+            "monto_pagado": sum(p.monto for p in dto.cobro.pagos),
+            "saldo_credito": dto.cobro.credito.saldo if dto.cobro.credito else 0.0,
+            "tramos": tramos_procesados,
+            "cuenta_cobrar": cxc_resumen
+        }
+
+    # 8. Verificar si hubo revalorización de precios reciente (Kevin)
     alerta_revalorizacion = None
     for pres_id in cantidades_a_entregar.keys():
         sql_rev = text("""
@@ -743,7 +881,7 @@ async def registrar_entrega_movil(
 
     respuesta_datos = {
         "codigo": "EXITO",
-        "mensaje": "Entrega registrada exitosamente",
+        "mensaje": "Entrega y cobro registrados exitosamente en una sola transacción" if dto.cobro else "Entrega registrada exitosamente",
         "request_id": req_id,
         "datos": {
             "id_pedido": dto.id_pedido,
@@ -753,7 +891,8 @@ async def registrar_entrega_movil(
                 for pid, cant in cantidades_a_entregar.items()
             ],
             "recibido_por": dto.recibido_por,
-            "alerta_revalorizacion": alerta_revalorizacion
+            "alerta_revalorizacion": alerta_revalorizacion,
+            "cobro": datos_cobro_resumen
         }
     }
 

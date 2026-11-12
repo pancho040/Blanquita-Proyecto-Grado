@@ -15,6 +15,30 @@ class ItemEntregaDTO(BaseModel):
     es_cortesia_bandeo: bool = False
 
 
+class TramoPagoDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    metodo: str = Field(..., description="'EFECTIVO' | 'QR' | 'TRANSFERENCIA' | 'CREDITO'")
+    monto: float = Field(..., gt=0)
+    numero_referencia: Optional[str] = None
+    id_comprobante_archivo: Optional[int] = None
+    url_comprobante: Optional[str] = None
+
+
+class BloqueCreditoDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    saldo: float = Field(..., ge=0)
+    plazo_dias: Optional[int] = Field(15, ge=1)
+    cuotas: Optional[int] = Field(1, ge=1)
+    fecha_vencimiento: Optional[str] = None
+
+
+class BloqueCobroEntregaDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    monto_total: float = Field(..., gt=0)
+    pagos: List[TramoPagoDTO] = Field(default_factory=list)
+    credito: Optional[BloqueCreditoDTO] = None
+
+
 class EntregaMovilRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     id_pedido: int = Field(..., gt=0, validation_alias=AliasChoices("id_pedido", "IdPedido"))
@@ -25,18 +49,10 @@ class EntregaMovilRequest(BaseModel):
     recibido_por: Optional[str] = Field("Cliente", validation_alias=AliasChoices("recibido_por", "RecibidoPor"))
     ci_receptor: Optional[str] = Field(None, validation_alias=AliasChoices("ci_receptor", "CiReceptor"))
     observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "Observacion"))
-    firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base64 o URL)")
+    firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base4 o URL)")
     firma_cliente: Optional[str] = Field(None, description="Firma digital del cliente o receptor")
     fecha_dispositivo: Optional[str] = None
-
-
-class TramoPagoDTO(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    metodo: str = Field(..., description="'EFECTIVO' | 'QR' | 'TRANSFERENCIA' | 'CREDITO'")
-    monto: float = Field(..., gt=0)
-    numero_referencia: Optional[str] = None
-    id_comprobante_archivo: Optional[int] = None
-    url_comprobante: Optional[str] = None
+    cobro: Optional[BloqueCobroEntregaDTO] = None
 
 
 class CobroMovilRequest(BaseModel):
