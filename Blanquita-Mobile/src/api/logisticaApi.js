@@ -1,5 +1,23 @@
 /* global FormData */
-import apiClient from "./client";
+import apiClient, { parsearDetalleErrorServidor } from "./client";
+
+function procesarErrorApi(err) {
+  const status = err.status || err.response?.status;
+  const serverData = err.serverDetail || err.response?.data;
+  const msgParsed = parsearDetalleErrorServidor(serverData);
+  const errorMsg =
+    msgParsed ||
+    err.friendlyMessage ||
+    err.message ||
+    "Ocurrió un error al comunicarse con el servidor.";
+
+  return {
+    success: false,
+    error: errorMsg,
+    status,
+    serverDetail: serverData,
+  };
+}
 
 /**
  * Servicios de Logística, Rutas, Entregas y Telemetría para el Chofer Móvil (Fase 2).
@@ -52,23 +70,15 @@ export const LogisticaApi = {
       };
     } catch (err) {
       // Fallback a endpoint telemetria si existiera
-      if (err.response?.status === 404) {
+      if (err.response?.status === 404 || err.status === 404) {
         try {
           const fallback = await apiClient.post("/logistica/telemetria/entrega", payload, { headers });
           return { success: true, data: fallback.data };
         } catch (fErr) {
-          return {
-            success: false,
-            error: fErr.friendlyMessage || fErr.message,
-            status: fErr.response?.status,
-          };
+          return procesarErrorApi(fErr);
         }
       }
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      return procesarErrorApi(err);
     }
   },
 
@@ -86,23 +96,15 @@ export const LogisticaApi = {
         codigo: response.data?.codigo || "EXITO",
       };
     } catch (err) {
-      if (err.response?.status === 404) {
+      if (err.response?.status === 404 || err.status === 404) {
         try {
           const fallback = await apiClient.post("/logistica/telemetria/cobro", payload, { headers });
           return { success: true, data: fallback.data };
         } catch (fErr) {
-          return {
-            success: false,
-            error: fErr.friendlyMessage || fErr.message,
-            status: fErr.response?.status,
-          };
+          return procesarErrorApi(fErr);
         }
       }
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      return procesarErrorApi(err);
     }
   },
 
@@ -119,11 +121,7 @@ export const LogisticaApi = {
         data: response.data?.datos || response.data,
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      return procesarErrorApi(err);
     }
   },
 
@@ -141,11 +139,7 @@ export const LogisticaApi = {
         codigo: response.data?.codigo || "EXITO",
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      return procesarErrorApi(err);
     }
   },
 
@@ -163,11 +157,7 @@ export const LogisticaApi = {
         codigo: response.data?.codigo || "EXITO",
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err.response?.data?.detail || err.friendlyMessage || err.message,
-        status: err.response?.status,
-      };
+      return procesarErrorApi(err);
     }
   },
 

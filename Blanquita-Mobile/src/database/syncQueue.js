@@ -179,10 +179,11 @@ export const SyncQueue = {
   async registrarFalloOperacion(idOperacion, error) {
     try {
       const cola = await this.obtenerCola();
-      const status = error?.response?.status || error?.status;
-      const esError401 = status === 401 || String(error?.message).toLowerCase().includes("token expirado");
-      const esError4xx = typeof status === "number" && status >= 400 && status < 500 && !esError401;
+      const status = error?.status || error?.response?.status;
       const mensaje = error?.friendlyMessage || error?.message || String(error);
+      const msgLower = String(mensaje).toLowerCase();
+      const esError401 = status === 401 || msgLower.includes("token expirado") || msgLower.includes("sesión expirada");
+      const esError4xx = typeof status === "number" && status >= 400 && status < 500 && !esError401;
 
       const actualizada = cola.map((item) => {
         if (item.id === idOperacion) {
@@ -213,6 +214,7 @@ export const SyncQueue = {
         if (item.id === idOperacion) {
           return {
             ...item,
+            intentos: 0,
             esErrorPermanente: false,
             estado: "pendiente de sincronizar",
             ultimoError: null,

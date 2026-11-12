@@ -3,6 +3,190 @@ import { LogisticaApi } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 
 /**
+ * Sanitizar objeto de payload para logging limpio sin cadenas base64 gigantes (Subagente B)
+ */
+export function sanitizarPayloadParaLog(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  try {
+    const copia = JSON.parse(JSON.stringify(obj));
+    if (copia.firma_chofer) {
+      copia.firma_chofer = `[Firma Chofer length: ${copia.firma_chofer.length}]`;
+    }
+    if (copia.firma_cliente) {
+      copia.firma_cliente = `[Firma Cliente length: ${copia.firma_cliente.length}]`;
+    }
+    if (copia.foto_uri && copia.foto_uri.length > 100) {
+      copia.foto_uri = `[Foto URI length: ${copia.foto_uri.length}]`;
+    }
+    if (copia.cobro && Array.isArray(copia.cobro.pagos)) {
+      copia.cobro.pagos = copia.cobro.pagos.map((p) => ({
+        ...p,
+        foto_uri: p.foto_uri ? `[Foto Tramo length: ${p.foto_uri.length}]` : null,
+      }));
+    }
+    return copia;
+  } catch (_e) {
+    return "[Payload no serializable]";
+  }
+}
+
+/**
+ * Normalizador/Migrador de payload para ENTREGA_CON_COBRO según contrato de handoff-sync.md (Subagente B)
+ */
+export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
+  const p = { ...payloadOriginal };
+
+  // 1. id_pedido como Number entero
+  const idPedido = parseInt(
+    p.id_pedido ?? p.idPedido ?? p.IdPedido ?? p.pedido_id ?? 0,
+    10
+  );
+
+  // 2. latitud y longitud como números
+  const latitud = typeof p.latitud === "number" ? p.latitud : parseFloat(p.latitud) || -19.0435;
+  const longitud = typeof p.longitud === "number" ? p.longitud : parseFloat(p.longitud) || -65.2580;
+
+  // 3. tipo_entrega: "TOTAL" o "PARCIAL"
+  const tipoEntrega = String(p.tipo_entrega || "TOTAL").toUpperCase() === "PARCIAL" ? "PARCIAL" : "TOTAL";
+
+  // 4. Strings limpios
+  const recibidoPor = String(p.recibido_por || p.recibidoPor || "Cliente").trim();
+  const ciReceptor = String(p.ci_receptor || p.ciReceptor || "").trim();
+  const observacion = String(p.observacion || p.observaciones || "").trim();
+
+  // 5. Items entregados normalizados según contrato
+  const rawItems = Array.isArray(p.items_entregados)
+    ? p.items_entregados
+    : Array.isArray(p.productos)
+    ? p.productos
+    : [];
+
+  const itemsNormalizados = rawItems
+    .map((it) => {
+      const presId = parseInt(
+        it.presentacion_id ?? it.id_presentacion ?? it.IdPresentacion ?? it.id_producto ?? it.id ?? 0,
+        10
+      );
+      const cant = typeof it.cantidad === "number" ? it.cantidad : parseFloat(it.cantidad || it.Cantidad || 0);
+      const bandeo = Boolean(it.es_cortesia_bandeo || it.es_bandeo);
+
+      return {
+        presentacion_id: presId,
+        cantidad: Number(cant.toFixed(2)),
+        es_cortesia_bandeo: bandeo,
+      };
+    })
+    .filter((it) => it.presentacion_id > 0 && it.cantidad > 0);
+
+  // 6. Bloque Cobro
+  let cobroNormalizado = null;
+  if (p.cobro && typeof p.cobro === "object") {
+    const rawCobro = p.cobro;
+    const montoTotal = Number((parseFloat(rawCobro.monto_total ?? p.monto_total ?? 0) || 0).toFixed(2));
+
+    const rawPagos = Array.isArray(rawCobro.pagos) ? rawCobro.pagos : [];
+    let sumaPagos = 0;
+
+    const pagosNormalizados = rawPagos.map((pago) => {
+      const monto = Number((parseFloat(pago.monto || 0) || 0).toFixed(2));
+      sumaPagos = Number((sumaPagos + monto).toFixed(2));
+      const metodo = String(pago.metodo || "EFECTIVO").toUpperCase();
+      const numRef = pago.numero_referencia ? String(pago.numero_referencia).trim() : null;
+      const idComp = pago.id_comprobante_archivo ? parseInt(pago.id_comprobante_archivo, 10) : null;
+
+      const itemPago = {
+        metodo,
+        monto,
+        numero_referencia: numRef,
+        id_comprobante_archivo: idComp,
+      };
+      if (pago.url_comprobante) {
+        itemPago.url_comprobante = pago.url_comprobante;
+      }
+      if (pago.foto_uri) {
+        itemPago.foto_uri = pago.foto_uri;
+      }
+      return itemPago;
+    });
+
+    // Crédito
+    let creditoNormalizado = null;
+    const rawCredito = rawCobro.credito;
+    const saldoCredito = rawCredito
+      ? Number((parseFloat(rawCredito.saldo || 0) || 0).toFixed(2))
+      : 0;
+
+    if (saldoCredito > 0) {
+      const plazo = parseInt(rawCredito.plazo_dias || 15, 10);
+      const cuotas = parseInt(rawCredito.cuotas || 1, 10);
+      let fechaVenc = rawCredito.fecha_vencimiento;
+      if (!fechaVenc) {
+        const d = new Date();
+        d.setDate(d.getDate() + plazo);
+        fechaVenc = d.toISOString().split("T")[0];
+      }
+      creditoNormalizado = {
+        saldo: saldoCredito,
+        plazo_dias: plazo,
+        cuotas,
+        fecha_vencimiento: String(fechaVenc),
+      };
+    }
+
+    // Validar y ajustar balance exacto entre cobro.monto_total y (suma(pagos) + saldoCredito)
+    const saldoTotalCalculado = Number((sumaPagos + (creditoNormalizado?.saldo || 0)).toFixed(2));
+    const diferencia = Number((montoTotal - saldoTotalCalculado).toFixed(2));
+
+    if (Math.abs(diferencia) > 0 && Math.abs(diferencia) <= 0.05) {
+      if (creditoNormalizado) {
+        creditoNormalizado.saldo = Number((creditoNormalizado.saldo + diferencia).toFixed(2));
+      } else if (pagosNormalizados.length > 0) {
+        pagosNormalizados[pagosNormalizados.length - 1].monto = Number(
+          (pagosNormalizados[pagosNormalizados.length - 1].monto + diferencia).toFixed(2)
+        );
+      }
+    }
+
+    if (montoTotal > 0 || pagosNormalizados.length > 0 || creditoNormalizado) {
+      cobroNormalizado = {
+        monto_total: montoTotal,
+        pagos: pagosNormalizados,
+        credito: creditoNormalizado, // null si saldo <= 0
+      };
+    }
+  }
+
+  const payloadFinal = {
+    id_pedido: idPedido,
+    latitud,
+    longitud,
+    tipo_entrega: tipoEntrega,
+    recibido_por: recibidoPor,
+    ci_receptor: ciReceptor,
+    observacion,
+    firma_chofer: p.firma_chofer || p.firmaChofer || null,
+    firma_cliente: p.firma_cliente || p.firmaCliente || null,
+    items_entregados: itemsNormalizados,
+  };
+
+  if (cobroNormalizado) {
+    payloadFinal.cobro = cobroNormalizado;
+  }
+
+  if (p.foto_uri) {
+    payloadFinal.foto_uri = p.foto_uri;
+  }
+  if (p.id_comprobante_archivo) {
+    payloadFinal.id_comprobante_archivo = p.id_comprobante_archivo;
+  }
+  if (p.id_punto_venta || p.idPuntoVenta) {
+    payloadFinal.id_punto_venta = p.id_punto_venta || p.idPuntoVenta;
+  }
+
+  return payloadFinal;
+}
+
+/**
  * Motor de Sincronización Asíncrona Automática (Offline-First)
  * Cumple con HU-27, HU-28 y especificaciones de Subagentes B, C y D:
  * 1. Procesamiento FIFO secuencial con X-Idempotency-Key estable generada al encolar.
@@ -112,18 +296,18 @@ class SyncService {
           switch (item.tipo) {
             case "ENTREGA":
             case "ENTREGA_CON_COBRO": {
-              let payloadEntrega = {
+              let payloadEntrega = normalizarPayloadEntregaCompuesta({
                 ...item.payload,
                 latitud: item.gps?.latitud || item.payload?.latitud || -19.0483,
                 longitud: item.gps?.longitud || item.payload?.longitud || -65.2598,
-              };
+              });
 
               // Subir foto general de comprobante si la tiene
               if (item.payload?.foto_uri && !item.payload?.id_comprobante_archivo) {
                 const subida = await LogisticaApi.subirArchivoComprobante(
                   item.payload.foto_uri,
                   "COMPROBANTE_ENTREGA",
-                  item.payload.id_pedido || 0
+                  payloadEntrega.id_pedido || 0
                 );
                 if (subida.success) {
                   payloadEntrega.id_comprobante_archivo = subida.idComprobante;
@@ -164,10 +348,21 @@ class SyncService {
                 }
               }
 
-              const resEntrega = await LogisticaApi.registrarEntrega(payloadEntrega, idempotencyKey);
+              // Limpiar campos efímeros de subida antes de enviar al backend central
+              const payloadDespacho = { ...payloadEntrega };
+              delete payloadDespacho.foto_uri;
+              if (payloadDespacho.cobro && Array.isArray(payloadDespacho.cobro.pagos)) {
+                payloadDespacho.cobro.pagos = payloadDespacho.cobro.pagos.map((pago) => {
+                  const { foto_uri: _foto_uri, ...resto } = pago;
+                  return resto;
+                });
+              }
+
+              const resEntrega = await LogisticaApi.registrarEntrega(payloadDespacho, idempotencyKey);
               if (!resEntrega.success) {
                 const err = new Error(resEntrega.error);
                 err.status = resEntrega.status;
+                err.serverDetail = resEntrega.serverDetail;
                 throw err;
               }
 
@@ -309,13 +504,34 @@ class SyncService {
           exitosas++;
           await LocalDB.guardarUltimaSincronizacion();
         } catch (error) {
-          console.error(`[SyncService] Error en item ${item.id} (${item.tipo}):`, error.message);
+          const status = error?.status || error?.response?.status || 500;
+          const mensajeReal =
+            error?.friendlyMessage ||
+            error?.message ||
+            (typeof error?.serverDetail?.mensaje === "string" ? error.serverDetail.mensaje : null) ||
+            (typeof error?.serverDetail?.detail === "string" ? error.serverDetail.detail : null) ||
+            "Error en la comunicación con el servidor.";
+
+          const payloadSanitizado = sanitizarPayloadParaLog(item.payload);
+          console.error(
+            `[SyncService] Error en item ${item.id} (${item.tipo}) [HTTP ${status}]:`,
+            mensajeReal,
+            "Payload enviado:",
+            JSON.stringify(payloadSanitizado)
+          );
+
           fallidas++;
-          await SyncQueue.registrarFalloOperacion(item.id, error);
+          await SyncQueue.registrarFalloOperacion(item.id, {
+            status,
+            message: mensajeReal,
+            friendlyMessage: mensajeReal,
+            codigo: error?.codigo || error?.code,
+            response: error?.response,
+            serverDetail: error?.serverDetail,
+          });
 
           // Subagente B: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta
-          const status = error?.status || error?.response?.status;
-          const msg = String(error?.message || "").toLowerCase();
+          const msg = String(mensajeReal).toLowerCase();
           const es401 = status === 401 || msg.includes("token expirado") || msg.includes("sesión expirada");
           if (es401) {
             console.log("[SyncService] 401 detectado durante la sync. Pausando cola de sincronización.");
