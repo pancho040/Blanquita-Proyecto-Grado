@@ -46,7 +46,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Permite que la app capture la ubicación GPS al registrar entregas y cobros."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {
