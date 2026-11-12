@@ -26,7 +26,7 @@ class EntregaMovilRequest(BaseModel):
     ci_receptor: Optional[str] = Field(None, validation_alias=AliasChoices("ci_receptor", "CiReceptor"))
     observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "Observacion"))
     firma_chofer: str = Field(..., min_length=5, description="Firma digital obligatoria del chofer (SVG path, base64 o URL)")
-    firma_cliente: str = Field(..., min_length=5, description="Firma digital obligatoria del cliente o receptor")
+    firma_cliente: Optional[str] = Field(None, description="Firma digital del cliente o receptor")
     fecha_dispositivo: Optional[str] = None
 
 

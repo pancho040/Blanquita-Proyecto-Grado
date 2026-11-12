@@ -24,7 +24,7 @@ STORAGE_SUPABASE_ACTIVO = os.getenv("STORAGE_SUPABASE_ACTIVO", "true").lower() =
 SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "comprobantes-privados")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-RETENCION_DIAS = int(os.getenv("STORAGE_RETENCION_DIAS", "90"))
+RETENCION_DIAS = int(os.getenv("STORAGE_RETENCION_DIAS", "60"))
 
 
 class FileStorageService:

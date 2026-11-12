@@ -518,6 +518,7 @@ async def registrar_entrega_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -611,7 +612,7 @@ async def registrar_entrega_movil(
             "IdUsuario", "TipoDocumento", "IdRegistroDocumento", "CodigoReferencia",
             "UrlFotoFirmaSello", "Observaciones", "FechaFirma"
         ) VALUES (
-            :uid, 'FIRMA_CHOFER_ENTREGA', :id_ped, :cod_ref,
+            :uid, 'ENTREGA_PEDIDO', :id_ped, :cod_ref,
             :firma_chofer, :obs, NOW()
         );
     """), {
@@ -743,6 +744,7 @@ async def registrar_cobro_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -865,6 +867,7 @@ async def registrar_no_entrega_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -936,6 +939,7 @@ async def registrar_cierre_turno_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -1052,6 +1056,7 @@ async def sincronizar_batch_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -1283,6 +1288,7 @@ async def registrar_nuevo_cliente_movil(
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
