@@ -12,6 +12,7 @@ export function setServerWakingUpListener(listener) {
 // Escuchadores globales de versión
 let onHardBlockListener = null;
 let onSoftUpdateListener = null;
+let onSesionExpiradaListener = null;
 
 export function setHardBlockListener(listener) {
   onHardBlockListener = listener;
@@ -19,6 +20,81 @@ export function setHardBlockListener(listener) {
 
 export function setSoftUpdateListener(listener) {
   onSoftUpdateListener = listener;
+}
+
+export function setSesionExpiradaListener(listener) {
+  onSesionExpiradaListener = listener;
+}
+
+// Single-flight refresh token
+let refreshTokenPromise = null;
+
+export async function renovarTokenSingleFlight() {
+  if (refreshTokenPromise) {
+    return refreshTokenPromise;
+  }
+
+  refreshTokenPromise = (async () => {
+    try {
+      let refreshToken = await SecureStorage.obtenerRefreshToken();
+      if (!refreshToken) {
+        const sesion = await LocalDB.obtenerSesion();
+        refreshToken = sesion?.tokens?.RefreshToken;
+      }
+      if (!refreshToken) {
+        throw new Error("No hay refresh token almacenado");
+      }
+
+      // Llamada aislada sin interceptores para evitar bucle de 401
+      const respuesta = await axios.post(
+        `${CONFIG.API_BASE_URL}${CONFIG.AUTH?.REFRESH_ENDPOINT || "/api/movil/v1/auth/refresh"}`,
+        { refresh_token: refreshToken },
+        {
+          timeout: 20000,
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-Client-Version": CONFIG.CLIENT_VERSION,
+          },
+        }
+      );
+
+      const data = respuesta.data?.datos || respuesta.data || {};
+      const nuevoAccessToken = data.access_token || data.AccessToken;
+      const nuevoRefreshToken = data.refresh_token || data.RefreshToken || refreshToken;
+
+      if (!nuevoAccessToken) {
+        throw new Error("El servidor no retornó un access_token válido.");
+      }
+
+      await SecureStorage.guardarToken(nuevoAccessToken);
+      if (nuevoRefreshToken) {
+        await SecureStorage.guardarRefreshToken(nuevoRefreshToken);
+      }
+
+      const sesionActual = await LocalDB.obtenerSesion();
+      if (sesionActual) {
+        sesionActual.tokens = {
+          ...sesionActual.tokens,
+          AccessToken: nuevoAccessToken,
+          RefreshToken: nuevoRefreshToken,
+        };
+        await LocalDB.guardarSesion(sesionActual.usuario, sesionActual.tokens);
+      }
+
+      return nuevoAccessToken;
+    } catch (err) {
+      console.log("[ApiClient] Renovación de token falló:", err.message);
+      if (onSesionExpiradaListener) {
+        onSesionExpiradaListener();
+      }
+      throw err;
+    } finally {
+      refreshTokenPromise = null;
+    }
+  })();
+
+  return refreshTokenPromise;
 }
 
 // Compatibilidad hacia atrás con versión anterior
@@ -29,7 +105,7 @@ export function setUpdateRequiredListener(listener) {
 // Cliente HTTP configurado para interactuar con FastAPI de Blanquita-Backend
 const apiClient = axios.create({
   baseURL: CONFIG.API_BASE_URL,
-  timeout: CONFIG.API_TIMEOUT_MS, // 65s para tolerar arranque en frío de Render
+  timeout: 20000, // 20s para prevenir candados pegados (Subagente C)
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -129,6 +205,31 @@ apiClient.interceptors.response.use(
       friendlyMessage: "Ocurrió un error al comunicarse con el servidor.",
       originalError: error,
     };
+
+    // 401: Renovación automática con refresh token en cola single-flight
+    if (error.response?.status === 401 && !config._retryAuth) {
+      const urlStr = String(config.url || "");
+      const esLogin = urlStr.includes("/auth/login");
+      const esRefresh = urlStr.includes(CONFIG.AUTH?.REFRESH_ENDPOINT || "/auth/refresh");
+
+      if (!esLogin && !esRefresh && CONFIG.AUTH?.REFRESH_TOKEN_ENABLED) {
+        config._retryAuth = true;
+        try {
+          const nuevoToken = await renovarTokenSingleFlight();
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${nuevoToken}`;
+          return apiClient(config);
+        } catch (_refreshError) {
+          if (onSesionExpiradaListener) {
+            onSesionExpiradaListener();
+          }
+        }
+      } else if (!esLogin && !esRefresh) {
+        if (onSesionExpiradaListener) {
+          onSesionExpiradaListener();
+        }
+      }
+    }
 
     if (error.response?.status === 401) {
       errorNormalizado.friendlyMessage = "Credenciales inválidas o sesión expirada.";

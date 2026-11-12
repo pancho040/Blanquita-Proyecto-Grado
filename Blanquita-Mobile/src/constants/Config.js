@@ -20,6 +20,13 @@ export const CONFIG = {
     RADIO_MAX_LLEGADA_METROS: 150, // Radio de proximidad al punto de venta
   },
 
+  // Configuración de Autenticación y Refresh Token (Offline-First)
+  AUTH: {
+    REFRESH_TOKEN_ENABLED: true,
+    REFRESH_ENDPOINT: "/api/movil/v1/auth/refresh",
+    TIEMPO_GRACIA_SESION_MS: 300000,
+  },
+
   // Cola de Sincronización Offline (HU-27, HU-28)
   SYNC: {
     INTERVALO_REINTENTO_MS: 15000,

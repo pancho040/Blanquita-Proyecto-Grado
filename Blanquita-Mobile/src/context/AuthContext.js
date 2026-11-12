@@ -3,6 +3,7 @@ import { AuthApi } from "../api/authApi";
 import { SecureStorage } from "../services/secureStorage";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
+import { setSesionExpiradaListener } from "../api/client";
 import { useNetwork } from "./NetworkContext";
 
 const AuthContext = createContext(null);
@@ -12,7 +13,16 @@ export function AuthProvider({ children }) {
   const [tokens, setTokens] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [errorAuth, setErrorAuth] = useState(null);
+  const [sesionExpirada, setSesionExpirada] = useState(false);
   const { isOnline } = useNetwork();
+
+  // Escuchar evento de sesión expirada emitido por client.js ante 401 definitivo
+  useEffect(() => {
+    setSesionExpiradaListener(() => {
+      console.log("[AuthContext] Sesión expirada detectada. Manteniendo datos locales y pausando sync.");
+      setSesionExpirada(true);
+    });
+  }, []);
 
   // Cargar sesión persistida al iniciar la app
   useEffect(() => {
@@ -79,6 +89,7 @@ export function AuthProvider({ children }) {
 
         setUsuario(usuarioPerfil);
         setTokens(tokenPayload);
+        setSesionExpirada(false);
 
         return { exito: true, usuario: usuarioPerfil };
       } else {
@@ -87,6 +98,7 @@ export function AuthProvider({ children }) {
         if (sesionPrevia && sesionPrevia.usuario && sesionPrevia.usuario.Ci === ci.trim()) {
           setUsuario(sesionPrevia.usuario);
           setTokens(sesionPrevia.tokens);
+          setSesionExpirada(false);
           return { exito: true, usuario: sesionPrevia.usuario, offline: true };
         } else {
           throw new Error(
@@ -104,9 +116,12 @@ export function AuthProvider({ children }) {
   };
 
   // Cerrar Sesión Seguro (Punto 6 - Protección de Dinero con Desglose y Excepción de 4xx)
+  // Requisito Subagente B: La cola de operaciones está ligada al id del usuario y NO se borra al cerrar sesión.
   const cerrarSesion = async (forzar = false) => {
     try {
-      const resumen = await SyncQueue.obtenerResumenDineroPendiente();
+      const usuarioId = usuario?.IdUsuario;
+      const resumen = await SyncQueue.obtenerResumenDineroPendiente(usuarioId);
+      const pendientesTotales = await SyncQueue.contarPendientes(usuarioId);
 
       // Si hay cobros/dinero reintentables pendientes y no se ha confirmado forzar:
       if (resumen.bloqueoRequerido && !forzar) {
@@ -117,7 +132,7 @@ export function AuthProvider({ children }) {
           montoTotal: resumen.totalDineroBs,
           desgloseReintentables: resumen.reintentables,
           desgloseNoReintentables: resumen.noReintentables4xx,
-          mensaje: `Tienes ${resumen.cantidadReintentables} cobro(s) con dinero por un total de Bs. ${resumen.totalDineroBs.toFixed(2)} sin sincronizar. Si cierras sesión ahora, podrían perderse. Por favor sincroniza primero o confirma explícitamente el cierre forzado.`,
+          mensaje: `Tienes ${resumen.cantidadReintentables} cobro(s) con dinero por un total de Bs. ${resumen.totalDineroBs.toFixed(2)} sin sincronizar (${pendientesTotales} operaciones en total). Si cierras sesión, quedarán guardadas en el teléfono y se enviarán al volver a iniciar sesión con tu cuenta.`,
         };
       }
 
@@ -125,14 +140,18 @@ export function AuthProvider({ children }) {
       await AuthApi.logout().catch(() => {});
       await SecureStorage.limpiarTokens();
       await LocalDB.eliminarSesion();
-      await LocalDB.limpiarTodo();
-      await SyncQueue.limpiarCola();
+      // NO se borra la cola de sincronización (está ligada al usuario y protegida offline)
       setUsuario(null);
       setTokens(null);
+      setSesionExpirada(false);
       return {
         exito: true,
+        pendientesPreservados: pendientesTotales,
+        advertenciaPendientes: pendientesTotales > 0
+          ? `Quedan ${pendientesTotales} operaciones guardadas en el teléfono, pendientes de enviar.`
+          : null,
         advertencia4xx: resumen.cantidadNoReintentables4xx > 0
-          ? `Se descartaron ${resumen.cantidadNoReintentables4xx} operaciones con error de validación 4xx.`
+          ? `Hay ${resumen.cantidadNoReintentables4xx} operaciones con error de validación 4xx archivadas.`
           : null,
       };
     } catch (e) {
@@ -161,6 +180,7 @@ export function AuthProvider({ children }) {
         loading: cargando,
         errorAuth,
         error: errorAuth,
+        sesionExpirada,
         estaAutenticado: Boolean(usuario),
         isAuthenticated: Boolean(usuario),
         iniciarSesion,

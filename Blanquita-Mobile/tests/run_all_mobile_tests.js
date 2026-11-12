@@ -9,6 +9,7 @@ const path = require("path");
 const testFiles = [
   "test_fase_1_base_comun.test.js",
   "test_cierre_sesion_completo.test.js",
+  "test_subagente_b_auth_offline.test.js",
   "test_componentes_design_system.test.js",
   "calcular_contraste.js",
   "test_fase1_2_componentes_y_frescura.test.js",

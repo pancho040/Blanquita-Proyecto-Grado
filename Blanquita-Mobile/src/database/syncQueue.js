@@ -16,15 +16,26 @@ export const SyncQueue = {
     });
   },
 
-  // Obtener todas las operaciones encoladas pendientes
-  async obtenerCola() {
+  // Obtener todas las operaciones encoladas (opcionalmente filtradas por usuarioId)
+  async obtenerCola(usuarioId = null) {
     try {
       const raw = await AsyncStorage.getItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
-      return raw ? JSON.parse(raw) : [];
+      const items = raw ? JSON.parse(raw) : [];
+      if (usuarioId !== null && usuarioId !== undefined) {
+        return items.filter(
+          (item) => item.id_usuario === undefined || item.id_usuario === null || item.id_usuario === usuarioId
+        );
+      }
+      return items;
     } catch (e) {
       console.error("Error leyendo cola de sincronización:", e);
       return [];
     }
+  },
+
+  // Alias para la pantalla de sincronización
+  async obtenerPendientes(usuarioId = null) {
+    return await this.obtenerCola(usuarioId);
   },
 
   // Guardar la cola completa
@@ -38,15 +49,15 @@ export const SyncQueue = {
     }
   },
 
-  // Obtener la cantidad de operaciones pendientes
-  async contarPendientes() {
-    const cola = await this.obtenerCola();
+  // Obtener la cantidad de operaciones pendientes (filtradas por usuarioId si se indica)
+  async contarPendientes(usuarioId = null) {
+    const cola = await this.obtenerCola(usuarioId);
     return cola.filter((item) => item.estado === "pendiente de sincronizar").length;
   },
 
   // Obtener operaciones pendientes que involucran dinero (cobros, entregas con pago)
-  async obtenerPendientesConDinero() {
-    const cola = await this.obtenerCola();
+  async obtenerPendientesConDinero(usuarioId = null) {
+    const cola = await this.obtenerCola(usuarioId);
     return cola.filter((item) =>
       item.estado === "pendiente de sincronizar" &&
       (item.tipo === "COBRO" || (item.payload && (item.payload.monto || item.payload.montoCobrado || item.payload.monto_efectivo || item.payload.monto_qr)))
@@ -57,8 +68,8 @@ export const SyncQueue = {
    * Resumen detallado de dinero en cola para cierre de sesión (Punto 6).
    * Desglosa operaciones reintentables vs errores 4xx no reintentables.
    */
-  async obtenerResumenDineroPendiente() {
-    const cola = await this.obtenerCola();
+  async obtenerResumenDineroPendiente(usuarioId = null) {
+    const cola = await this.obtenerCola(usuarioId);
     const operacionesDinero = cola.filter((item) =>
       item.tipo === "COBRO" ||
       (item.payload && (
@@ -113,19 +124,21 @@ export const SyncQueue = {
 
   /**
    * Encolar una nueva operación realizada en campo
-   * @param {string} tipo - "ENTREGA" | "COBRO" | "NUEVO_CLIENTE" | "CIERRE_RUTA" | "PING_GPS"
+   * @param {string} tipo - "ENTREGA" | "COBRO" | "ENTREGA_CON_COBRO" | "NUEVO_CLIENTE" | "CIERRE_RUTA" | "PING_GPS"
    * @param {object} payload - Datos de la operación
    * @param {object} gps - { latitud, longitud, precision, fechaHora } (HU-33)
+   * @param {number|null} usuarioId - ID del chofer autenticado que realiza la acción
    */
-  async encolarOperacion(tipo, payload, gps = null) {
+  async encolarOperacion(tipo, payload, gps = null, usuarioId = null) {
     try {
-      const cola = await this.obtenerCola();
+      const cola = await this.obtenerCola(); // toda la lista para persistir
       const idempotencyKey = this.generarUuidV4();
       const nuevaOperacion = {
         id: idempotencyKey,
         idempotencyKey,
         tipo,
         payload,
+        id_usuario: usuarioId || payload?.id_usuario || payload?.chofer_id || null,
         estado: "pendiente de sincronizar", // Siempre se muestra pendiente hasta confirmación del servidor
         gps: gps || {
           latitud: 0,
@@ -162,22 +175,25 @@ export const SyncQueue = {
   },
 
   // Registrar fallo distinguiendo 4xx (no reintentable) de 5xx/red (reintentable)
+  // Requisito Subagente B: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta.
   async registrarFalloOperacion(idOperacion, error) {
     try {
       const cola = await this.obtenerCola();
       const status = error?.response?.status || error?.status;
-      const esError4xx = typeof status === "number" && status >= 400 && status < 500;
+      const esError401 = status === 401 || String(error?.message).toLowerCase().includes("token expirado");
+      const esError4xx = typeof status === "number" && status >= 400 && status < 500 && !esError401;
       const mensaje = error?.friendlyMessage || error?.message || String(error);
 
       const actualizada = cola.map((item) => {
         if (item.id === idOperacion) {
           return {
             ...item,
-            intentos: (item.intentos || 0) + 1,
+            // Si es 401 no penaliza intentos del item
+            intentos: esError401 ? (item.intentos || 0) : (item.intentos || 0) + 1,
             ultimoError: mensaje,
             ultimoIntento: new Date().toISOString(),
-            // Si es 4xx (reglas de negocio, conflicto o datos inválidos), no se sigue reintentando en loop
-            esErrorPermanente: esError4xx,
+            // Si es 4xx de validación de negocio, se marca permanente; 401 y 5xx/red NO son permanentes
+            esErrorPermanente: esError401 ? false : esError4xx,
             estado: esError4xx ? "error_validacion" : "pendiente de sincronizar",
           };
         }
@@ -189,10 +205,16 @@ export const SyncQueue = {
     }
   },
 
-  // Limpiar toda la cola
-  async limpiarCola() {
+  // Limpiar cola (opcionalmente solo de un usuario específico)
+  async limpiarCola(usuarioId = null) {
     try {
-      await AsyncStorage.removeItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
+      if (usuarioId !== null && usuarioId !== undefined) {
+        const cola = await this.obtenerCola();
+        const preservadas = cola.filter((item) => item.id_usuario && item.id_usuario !== usuarioId);
+        await this.guardarCola(preservadas);
+      } else {
+        await AsyncStorage.removeItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
+      }
       return true;
     } catch (e) {
       console.error("Error limpiando cola:", e);
