@@ -16,6 +16,7 @@ import { Badge } from "../../components/common/Badge";
 import { ClientesApi } from "../../api/clientesApi";
 import { SyncQueue } from "../../database/syncQueue";
 import { LocalDB } from "../../database/localDb";
+import { syncService } from "../../services/syncService";
 import { useNetwork } from "../../context/NetworkContext";
 import {
   PackageCheck,
@@ -111,35 +112,74 @@ export const HistorialRutaScreen = ({ navigation }) => {
         });
       });
 
-      // 2. Operaciones consultadas desde el Servidor Central (GET /resumen-sincronizacion)
+      // 2. Operaciones consultadas desde el Servidor Central (GET /api/movil/v1/chofer/resumen-sincronizacion)
       if (isOnline) {
         try {
-          const res = await ClientesApi.obtenerHistorialOperacionesHoy();
-          if (res.success && Array.isArray(res.historial)) {
-            res.historial.forEach((opServidor) => {
-              const idServidor = String(opServidor.id_operacion || opServidor.id || Math.random());
-              if (!clavesVistas.has(idServidor)) {
-                clavesVistas.add(idServidor);
-                listaUnificada.push({
-                  id: `server_${idServidor}`,
-                  id_operacion: opServidor.id_operacion || opServidor.id,
-                  tipo: String(opServidor.tipo || "ENTREGA").toUpperCase(),
-                  cliente: opServidor.cliente || opServidor.nombre_cliente || "Cliente",
-                  monto: Number(opServidor.monto || opServidor.monto_total || 0),
-                  estado_revision_web: String(
-                    opServidor.estado_revision_web || opServidor.estado_revision || "PENDIENTE"
-                  ).toUpperCase(),
-                  observacion_revision: opServidor.observacion_revision || opServidor.observacion || null,
-                  fecha: opServidor.fecha || opServidor.fecha_creacion || new Date().toISOString(),
-                  esOffline: false,
-                  metodoPago: opServidor.metodo_pago || "EFECTIVO",
-                  numeroNota: opServidor.numero_nota || opServidor.numero_recibo || null,
-                });
-              }
-            });
+          const res = await ClientesApi.obtenerResumenSincronizacion();
+          if (res.success && res.data) {
+            // Refrescar inventario del camión y paradas en local
+            try {
+              await syncService.procesarResumenSincronizacion(res.data);
+            } catch (_eSync) {}
+
+            const listaServidor =
+              res.data.historial_operaciones_hoy || res.data.historial || [];
+
+            if (Array.isArray(listaServidor)) {
+              listaServidor.forEach((opServidor) => {
+                const idServidor = String(
+                  opServidor.id || opServidor.id_operacion || Math.random()
+                );
+                if (!clavesVistas.has(idServidor)) {
+                  clavesVistas.add(idServidor);
+
+                  const estRaw = String(
+                    opServidor.estado_revision_web ||
+                      opServidor.estado_revision ||
+                      "PENDIENTE"
+                  ).toUpperCase();
+
+                  let estadoFinal = "PENDIENTE_REVISION_WEB";
+                  if (estRaw === "APROBADO") estadoFinal = "APROBADO";
+                  else if (estRaw === "OBSERVADO") estadoFinal = "OBSERVADO";
+                  else if (estRaw === "RECHAZADO") estadoFinal = "RECHAZADO";
+
+                  listaUnificada.push({
+                    id: `server_${idServidor}`,
+                    id_operacion: opServidor.id || opServidor.id_operacion,
+                    tipo: String(opServidor.tipo || "ENTREGA").toUpperCase(),
+                    cliente:
+                      opServidor.cliente ||
+                      opServidor.nombre_cliente ||
+                      "Cliente en Ruta",
+                    monto: Number(opServidor.monto || opServidor.monto_total || 0),
+                    estado_revision_web: estadoFinal,
+                    observacion_revision:
+                      opServidor.observacion_revision ||
+                      opServidor.observacion ||
+                      null,
+                    fecha:
+                      opServidor.fecha_hora ||
+                      opServidor.fecha ||
+                      opServidor.fecha_creacion ||
+                      new Date().toISOString(),
+                    esOffline: false,
+                    metodoPago: opServidor.metodo_pago || "EFECTIVO",
+                    numeroNota:
+                      opServidor.referencia ||
+                      opServidor.numero_nota ||
+                      opServidor.numero_recibo ||
+                      (opServidor.id ? `#${opServidor.id}` : null),
+                  });
+                }
+              });
+            }
           }
         } catch (_errServidor) {
-          console.log("[HistorialRutaScreen] Fallo consultando historial en backend:", _errServidor.message);
+          console.log(
+            "[HistorialRutaScreen] Fallo consultando historial en backend:",
+            _errServidor.message
+          );
         }
       }
 

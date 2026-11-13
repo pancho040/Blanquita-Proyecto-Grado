@@ -39,8 +39,15 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
   const [modalNoEntregaVisible, setModalNoEntregaVisible] = useState(false);
   const [guardandoNoEntrega, setGuardandoNoEntrega] = useState(false);
 
+  const totalParadas = hojaRuta?.paradas?.length || 0;
+
+  // Búsqueda robusta por id o IdPuntoVenta en la hoja de ruta reordenada
   const parada =
-    hojaRuta?.paradas?.find((p) => p.id === paradaId) || initialParada;
+    hojaRuta?.paradas?.find(
+      (p) =>
+        String(p.id ?? p.IdPuntoVenta ?? "") ===
+        String(paradaId ?? initialParada?.id ?? initialParada?.IdPuntoVenta ?? "")
+    ) || initialParada;
 
   if (!parada) {
     return (
@@ -54,12 +61,21 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
     );
   }
 
+  // Número de orden actualizado post-reordenamiento o inserción de clientes
+  const numeroOrden =
+    parada.secuencia ??
+    parada.orden ??
+    parada.OrdenVisita ??
+    1;
+
   const pedido = parada.pedido || {};
   const items =
     pedido.items ||
     parada.PedidosPendientes ||
     [];
-  const yaEntregado = (parada.Estado || parada.estado) === 'ENTREGADO';
+  const estadoParada = String(parada.Estado || parada.estado || "PENDIENTE").toUpperCase();
+  const yaEntregado = estadoParada === 'ENTREGADO';
+  const esNoEntregado = estadoParada === 'NO_ENTREGADO';
 
   const handleLlamar = () => {
     const tel = parada.cliente?.telefono || parada.Telefono;
@@ -120,7 +136,7 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title={`Parada #${parada.secuencia || parada.OrdenVisita || '1'}`}
+        title={`Parada #${numeroOrden}${totalParadas > 0 ? ` de ${totalParadas}` : ''}`}
         subtitle={
           parada.cliente?.nombre_comercial ||
           parada.NombrePuntoVenta ||
@@ -133,6 +149,39 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Tarjeta del Cliente y Botones Rápidos de Chofer */}
         <View style={styles.clienteCard}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.badgeOrdenVisual}>
+              <Text style={styles.badgeOrdenVisualText}>#{numeroOrden}</Text>
+            </View>
+
+            <View style={styles.badgesEstadoRow}>
+              {Boolean(parada.EsNuevoEnCampo) && (
+                <View style={styles.badgeNuevoCampo}>
+                  <Text style={styles.badgeNuevoCampoText}>NUEVO EN RUTA</Text>
+                </View>
+              )}
+              <View
+                style={[
+                  styles.badgeEstadoBase,
+                  yaEntregado && styles.badgeEstadoEntregado,
+                  esNoEntregado && styles.badgeEstadoNoEntregado,
+                  !yaEntregado && !esNoEntregado && styles.badgeEstadoPendiente,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.badgeEstadoTexto,
+                    yaEntregado && { color: '#15803D' },
+                    esNoEntregado && { color: '#B91C1C' },
+                    !yaEntregado && !esNoEntregado && { color: '#0369A1' },
+                  ]}
+                >
+                  {estadoParada}
+                </Text>
+              </View>
+            </View>
+          </View>
+
           <Text style={styles.clienteNombre}>
             {parada.cliente?.nombre_comercial ||
               parada.NombrePuntoVenta ||
@@ -215,18 +264,24 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Botones Grandes de Operación */}
+        {/* Botones Grandes de Operación (Sincronización Compuesta) */}
         <View style={styles.footerBotones}>
           {!yaEntregado ? (
             <Button
-              title="REGISTRAR ENTREGA"
+              title="REGISTRAR ENTREGA Y COBRO"
               icon={PackageCheck}
               variant="primary"
               size="large"
               onPress={() =>
                 navigation.navigate('RegistrarEntrega', {
-                  parada,
+                  parada: {
+                    ...parada,
+                    orden: numeroOrden,
+                    secuencia: numeroOrden,
+                    OrdenVisita: numeroOrden,
+                  },
                   pedido,
+                  esNuevoClienteEnRuta: Boolean(parada?.EsNuevoEnCampo),
                 })
               }
               style={{ marginBottom: 10 }}
@@ -235,19 +290,24 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
             <View style={styles.bannerEntregado}>
               <FileCheck size={22} color={Colors.success} />
               <Text style={styles.bannerEntregadoTexto}>
-                Mercadería entregada con firma y GPS.
+                Mercadería entregada con firma, GPS y comprobante.
               </Text>
             </View>
           )}
 
           <Button
-            title="REGISTRAR COBRO"
+            title={yaEntregado ? "REGISTRAR OTRO COBRO" : "REGISTRAR SOLO COBRO"}
             icon={CreditCard}
             variant="outline"
             size="large"
             onPress={() =>
               navigation.navigate('RegistrarCobro', {
-                parada,
+                parada: {
+                  ...parada,
+                  orden: numeroOrden,
+                  secuencia: numeroOrden,
+                  OrdenVisita: numeroOrden,
+                },
                 cliente: parada.cliente,
                 pedido,
               })
@@ -255,7 +315,7 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
             style={{ marginBottom: 10 }}
           />
 
-          {!yaEntregado && (
+          {!yaEntregado && !esNoEntregado && (
             <Button
               title="REPORTAR NO-ENTREGA"
               icon={XCircle}
@@ -334,6 +394,65 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1.5,
     borderColor: Colors.border,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  badgeOrdenVisual: {
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  badgeOrdenVisualText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  badgesEstadoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  badgeNuevoCampo: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  badgeNuevoCampoText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  badgeEstadoBase: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  badgeEstadoEntregado: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#BBF7D0',
+  },
+  badgeEstadoNoEntregado: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#F87171',
+  },
+  badgeEstadoPendiente: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+  },
+  badgeEstadoTexto: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   clienteNombre: {
     fontSize: 18,

@@ -87,8 +87,9 @@ export const NuevoClienteScreen = ({ navigation }) => {
   const [catalogoProductos, setCatalogoProductos] = useState(CATALOGO_DEFAULT);
   const [cantidadesProgramadas, setCantidadesProgramadas] = useState({});
 
-  // 4. Parada actual / última atendida para ENTREGA_INMEDIATA
+  // 4. Parada actual / última atendida para ENTREGA_INMEDIATA y stock de camión
   const [paradaActualOrden, setParadaActualOrden] = useState(0);
+  const [stockCamionTotal, setStockCamionTotal] = useState(0);
 
   // Estados de interfaz y GPS
   const [loading, setLoading] = useState(false);
@@ -98,28 +99,42 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
   const fallbackTimerRef = useRef(null);
 
-  // Cargar catálogo de productos y calcular última parada atendida
+  // Cargar catálogo de productos, inventario de camión y calcular última parada atendida
   useEffect(() => {
     let activo = true;
 
     async function cargarDatosIniciales() {
-      // 1. Catálogo de productos
+      // 1. Catálogo de productos e inventario de camión
       try {
+        const invCamion = await LocalDB.obtenerInventarioCamion();
+        if (activo && invCamion?.items?.length > 0) {
+          const totalDisp = invCamion.items.reduce(
+            (sum, it) =>
+              sum +
+              Number(
+                it.saldo_actual ??
+                  it.cantidad_disponible ??
+                  it.saldo_camion ??
+                  it.cantidad ??
+                  0
+              ),
+            0
+          );
+          setStockCamionTotal(totalDisp);
+        }
+
         const productosDb = await LocalDB.obtenerProductos();
         if (activo && Array.isArray(productosDb) && productosDb.length > 0) {
           setCatalogoProductos(productosDb);
-        } else {
-          const invCamion = await LocalDB.obtenerInventarioCamion();
-          if (activo && invCamion?.items?.length > 0) {
-            setCatalogoProductos(
-              invCamion.items.map((i) => ({
-                id: i.presentacion_id || i.id,
-                presentacion_id: i.presentacion_id || i.id,
-                nombre: i.nombre_producto || i.nombre || `Producto #${i.presentacion_id}`,
-                precio: Number(i.precio_unitario || i.precio || 25),
-              }))
-            );
-          }
+        } else if (activo && invCamion?.items?.length > 0) {
+          setCatalogoProductos(
+            invCamion.items.map((i) => ({
+              id: i.presentacion_id || i.id,
+              presentacion_id: i.presentacion_id || i.id,
+              nombre: i.nombre_producto || i.nombre || `Producto #${i.presentacion_id}`,
+              precio: Number(i.precio_unitario || i.precio || 25),
+            }))
+          );
         }
       } catch (_e) {}
 
@@ -130,7 +145,8 @@ export const NuevoClienteScreen = ({ navigation }) => {
           let maxOrdenAtendida = 0;
           ruta.paradas.forEach((p) => {
             const estado = String(p.estado || p.Estado || "").toUpperCase();
-            const atendida = estado === "ENTREGADO" || estado === "NO_ENTREGADO" || Boolean(p.cobro);
+            const atendida =
+              estado === "ENTREGADO" || estado === "NO_ENTREGADO" || Boolean(p.cobro);
             const ord = Number(p.orden ?? p.secuencia ?? p.OrdenVisita ?? 0);
             if (atendida && ord > maxOrdenAtendida) {
               maxOrdenAtendida = ord;
@@ -223,7 +239,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
     };
 
     // -------------------------------------------------------------
-    // MODALIDAD 1: SOLO REGISTRAR CLIENTE
+    // MODALIDAD 1: SOLO REGISTRAR CLIENTE (Sin venta ni entrega hoy)
     // -------------------------------------------------------------
     if (modalidad === "SOLO_REGISTRO") {
       setLoading(true);
@@ -238,15 +254,20 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
       try {
         const idempotencyKey = SyncQueue.generarUuidV4();
-        const res = await ClientesApi.registrarClienteEnRuta(payloadSoloRegistro, idempotencyKey);
+        let res = null;
+        try {
+          res = await ClientesApi.registrarClienteEnRuta(payloadSoloRegistro, idempotencyKey);
+        } catch (_netErr) {
+          res = { success: false, error: _netErr.message };
+        }
 
-        if (!res.success) {
-          // Si falla conexión, encolar en cola offline de cliente
+        if (!res || !res.success) {
+          // Encolar en cola offline con tipo CLIENTE_EN_RUTA
           await SyncQueue.encolarOperacion(
             "CLIENTE_EN_RUTA",
             payloadSoloRegistro,
             { latitud: lat, longitud: lng },
-            idempotencyKey
+            null
           );
         }
 
@@ -265,8 +286,10 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
         setLoading(false);
         Alert.alert(
-          "Cliente Registrado",
-          "El cliente ha sido incorporado al padrón de la empresa sin generar pedido ni entrega.",
+          res?.success ? "Cliente Registrado" : "Cliente Guardado (Modo Local)",
+          res?.success
+            ? "El cliente ha sido incorporado al padrón de la empresa sin generar pedido ni entrega."
+            : "El cliente ha sido guardado en la memoria del teléfono y se sincronizará automáticamente al conectar a internet.",
           [{ text: "Aceptar", onPress: () => navigation.goBack() }]
         );
       } catch (err) {
@@ -312,14 +335,19 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
       try {
         const idempotencyKey = SyncQueue.generarUuidV4();
-        const res = await ClientesApi.registrarClienteEnRuta(payloadProgramado, idempotencyKey);
+        let res = null;
+        try {
+          res = await ClientesApi.registrarClienteEnRuta(payloadProgramado, idempotencyKey);
+        } catch (_netErr) {
+          res = { success: false, error: _netErr.message };
+        }
 
-        if (!res.success) {
+        if (!res || !res.success) {
           await SyncQueue.encolarOperacion(
             "CLIENTE_EN_RUTA",
             payloadProgramado,
             { latitud: lat, longitud: lng },
-            idempotencyKey
+            null
           );
         }
 
@@ -338,8 +366,10 @@ export const NuevoClienteScreen = ({ navigation }) => {
 
         setLoading(false);
         Alert.alert(
-          "Entrega Programada",
-          `Cliente guardado y entrega programada para el día ${diaSemana}. El cálculo nocturno lo asignará a la ruta correspondiente.`,
+          res?.success ? "Entrega Programada" : "Entrega Programada (Modo Local)",
+          res?.success
+            ? `Cliente guardado y entrega programada para el día ${diaSemana}. El cálculo nocturno lo asignará a la ruta correspondiente.`
+            : `Programación guardada en el teléfono para el día ${diaSemana}. Se sincronizará en cuanto recupere conexión.`,
           [{ text: "Aceptar", onPress: () => navigation.goBack() }]
         );
       } catch (err) {
@@ -350,9 +380,17 @@ export const NuevoClienteScreen = ({ navigation }) => {
     }
 
     // -------------------------------------------------------------
-    // MODALIDAD 3: REGISTRAR + ENTREGA INMEDIATA AHORA MISMO
+    // MODALIDAD 3: REGISTRAR + ENTREGA INMEDIATA AHORA MISMO (Al paso)
     // -------------------------------------------------------------
     if (modalidad === "ENTREGA_INMEDIATA") {
+      if (stockCamionTotal <= 0) {
+        Alert.alert(
+          "Sin Stock en Camión",
+          "No dispone de mercadería disponible en el camión para realizar entregas inmediatas en este momento. Puede registrar al cliente en el padrón o dejarle programada una entrega futura."
+        );
+        return;
+      }
+
       setLoading(true);
 
       const nuevoOrdenCalculado = Number(paradaActualOrden || 0) + 1;
@@ -390,7 +428,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
         await insertarNuevoClienteEnSecuencia(nuevaParadaEnRuta, paradaActualOrden);
         setLoading(false);
 
-        // Disparar o abrir el flujo de Entrega con Cobro para este cliente de inmediato
+        // Abrir el registro de entrega con cobro integrado
         navigation.navigate("RegistrarEntrega", {
           parada: nuevaParadaEnRuta,
           pedido: nuevaParadaEnRuta.pedido,
@@ -451,7 +489,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
                   1. Solo Registrar Cliente
                 </Text>
                 <Text style={styles.modalidadDesc}>
-                  Padrón comercial en sistema sin generar pedido ni entrega hoy.
+                  Padrón comercial en sistema sin venta ni entrega hoy.
                 </Text>
               </View>
               {modalidad === "SOLO_REGISTRO" && <Check size={18} color={Colors.primary} />}
@@ -482,7 +520,7 @@ export const NuevoClienteScreen = ({ navigation }) => {
                   2. Programar Entrega Futura
                 </Text>
                 <Text style={styles.modalidadDesc}>
-                  Selecciona día y pedido para que el cálculo nocturno lo asigne.
+                  Selecciona día y pedido para que el cálculo nocturno lo asigne. Sin descargar stock hoy.
                 </Text>
               </View>
               {modalidad === "PROGRAMAR_ENTREGA" && <Check size={18} color="#D97706" />}
@@ -504,16 +542,27 @@ export const NuevoClienteScreen = ({ navigation }) => {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.modalidadTitulo,
-                    modalidad === "ENTREGA_INMEDIATA" && { color: Colors.success },
-                  ]}
-                >
-                  3. Entrega Inmediata al Paso
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text
+                    style={[
+                      styles.modalidadTitulo,
+                      modalidad === "ENTREGA_INMEDIATA" && { color: Colors.success },
+                    ]}
+                  >
+                    3. Entrega Inmediata al Paso
+                  </Text>
+                  {stockCamionTotal > 0 ? (
+                    <View style={styles.badgeStockCamion}>
+                      <Text style={styles.badgeStockCamionText}>{stockCamionTotal} bultos en camión</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.badgeSinStock}>
+                      <Text style={styles.badgeSinStockText}>Sin stock</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.modalidadDesc}>
-                  Compra en el acto: se inserta en ruta y se descarga stock del camión.
+                  Venta en el acto: se inserta en ruta y se descarga stock del camión con cobro.
                 </Text>
               </View>
               {modalidad === "ENTREGA_INMEDIATA" && <Check size={18} color={Colors.success} />}
@@ -1040,6 +1089,28 @@ const styles = StyleSheet.create({
   },
   submitContainer: {
     marginTop: 8,
+  },
+  badgeStockCamion: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeStockCamionText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  badgeSinStock: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeSinStockText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#B91C1C",
   },
 });
 

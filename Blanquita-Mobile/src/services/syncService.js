@@ -203,8 +203,9 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
 
 /**
  * Ordenar paradas ascendentemente y garantizar numeración compacta 1..N (Subagente C)
+ * Inmutable y determinista: maneja identificadores de forma estable sin comparaciones NaN.
  * @param {Array} paradas - Lista de paradas de la ruta
- * @returns {Array} Lista ordenada por orden ascendente con secuencia normalizada 1..N
+ * @returns {Array} Lista nueva ordenada por orden ascendente con secuencia normalizada 1..N
  */
 export function ordenarParadasAscendente(paradas = []) {
   if (!Array.isArray(paradas) || paradas.length === 0) return [];
@@ -213,9 +214,9 @@ export function ordenarParadasAscendente(paradas = []) {
     const ordA = Number(a.orden ?? a.secuencia ?? a.OrdenVisita ?? 999999);
     const ordB = Number(b.orden ?? b.secuencia ?? b.OrdenVisita ?? 999999);
     if (ordA !== ordB) return ordA - ordB;
-    const idA = Number(a.id ?? a.IdPuntoVenta ?? a.id_parada ?? 0);
-    const idB = Number(b.id ?? b.IdPuntoVenta ?? b.id_parada ?? 0);
-    return idA - idB;
+    const idA = String(a.id ?? a.IdPuntoVenta ?? a.id_parada ?? a.IdPedido ?? "");
+    const idB = String(b.id ?? b.IdPuntoVenta ?? b.id_parada ?? b.IdPedido ?? "");
+    return idA.localeCompare(idB);
   });
 
   return ordenadas.map((p, index) => {
@@ -232,27 +233,33 @@ export function ordenarParadasAscendente(paradas = []) {
 /**
  * Actualiza la hoja de ruta en el dispositivo aplicando el nuevo orden 1..N
  * y conservando intacto el estado de las paradas ya atendidas/entregadas (Subagente C)
+ * Inmutable y determinista: no muta entradas y conserva paradas locales creadas al paso.
  * @param {Array} paradasNuevasOReordenadas - Lista de paradas recibida desde el servidor o evento
  * @returns {Promise<Array>} Paradas actualizadas y persistidas
  */
 export async function aplicarReordenamientoRuta(paradasNuevasOReordenadas = []) {
   try {
     const rutaActual = await LocalDB.obtenerRutaActiva();
-    if (!rutaActual) return paradasNuevasOReordenadas;
+    if (!rutaActual) return ordenarParadasAscendente(paradasNuevasOReordenadas);
 
     const paradasLocales = rutaActual.paradas || [];
     const mapaLocales = new Map();
 
     paradasLocales.forEach((p) => {
-      const clave = String(p.id || p.IdPuntoVenta || p.id_parada || p.id_pedido || "");
+      const clave = String(p.id ?? p.IdPuntoVenta ?? p.id_parada ?? p.id_pedido ?? "");
       if (clave) mapaLocales.set(clave, p);
     });
 
-    // Combinar conservando estado de atendidas
-    const listaCombinada = (paradasNuevasOReordenadas || []).map((pServidor) => {
-      const clave = String(pServidor.id || pServidor.IdPuntoVenta || pServidor.id_parada || pServidor.id_pedido || "");
-      const paradaLocal = mapaLocales.get(clave);
+    const clavesProcesadas = new Set();
+    const listaCombinada = [];
 
+    // 1. Incorporar paradas reordenadas del servidor
+    (paradasNuevasOReordenadas || []).forEach((pServidor) => {
+      const clave = String(pServidor.id ?? pServidor.IdPuntoVenta ?? pServidor.id_parada ?? pServidor.id_pedido ?? "");
+      if (!clave) return;
+      clavesProcesadas.add(clave);
+
+      const paradaLocal = mapaLocales.get(clave);
       if (paradaLocal) {
         const estadoLocal = String(paradaLocal.estado || paradaLocal.Estado || "").toUpperCase();
         const yaAtendida =
@@ -262,29 +269,28 @@ export async function aplicarReordenamientoRuta(paradasNuevasOReordenadas = []) 
           Boolean(paradaLocal.datosOperacion);
 
         if (yaAtendida) {
-          return {
+          // Conservar estado local atendido intacto (inmutable)
+          listaCombinada.push({
             ...pServidor,
             ...paradaLocal,
-            orden: pServidor.orden ?? paradaLocal.orden,
-            secuencia: pServidor.secuencia ?? pServidor.orden ?? paradaLocal.secuencia,
-            OrdenVisita: pServidor.OrdenVisita ?? pServidor.orden ?? paradaLocal.OrdenVisita,
+            orden: paradaLocal.orden ?? pServidor.orden,
+            secuencia: paradaLocal.secuencia ?? pServidor.secuencia ?? paradaLocal.orden,
+            OrdenVisita: paradaLocal.OrdenVisita ?? pServidor.OrdenVisita ?? paradaLocal.orden,
             estado: paradaLocal.estado || paradaLocal.Estado,
             Estado: paradaLocal.Estado || paradaLocal.estado,
-          };
+          });
+          return;
         }
       }
-      return pServidor;
+      listaCombinada.push({ ...pServidor });
     });
 
-    // Asegurar paradas locales que no vengan en el array nuevo (ej: nuevos clientes locales al paso)
+    // 2. Conservar paradas locales que no vinieron en el nuevo array (ej. clientes agregados en ruta offline)
     paradasLocales.forEach((pLocal) => {
-      const clave = String(pLocal.id || pLocal.IdPuntoVenta || pLocal.id_parada || pLocal.id_pedido || "");
-      const yaEnLista = listaCombinada.some((p) => {
-        const c = String(p.id || p.IdPuntoVenta || p.id_parada || p.id_pedido || "");
-        return c === clave;
-      });
-      if (!yaEnLista) {
-        listaCombinada.push(pLocal);
+      const clave = String(pLocal.id ?? pLocal.IdPuntoVenta ?? pLocal.id_parada ?? pLocal.id_pedido ?? "");
+      if (clave && !clavesProcesadas.has(clave)) {
+        listaCombinada.push({ ...pLocal });
+        clavesProcesadas.add(clave);
       }
     });
 
@@ -299,13 +305,14 @@ export async function aplicarReordenamientoRuta(paradasNuevasOReordenadas = []) 
     return listaOrdenada;
   } catch (err) {
     console.error("[SyncService] Error aplicando reordenamiento de ruta:", err);
-    return paradasNuevasOReordenadas;
+    return ordenarParadasAscendente(paradasNuevasOReordenadas);
   }
 }
 
 /**
  * Inserta un nuevo cliente en ruta inmediatamente después de la parada atendida actual,
  * desplazando las paradas pendientes en +1 y compactando la secuencia 1..N (Subagente C)
+ * Inmutable y determinista.
  * @param {Object} nuevaParada - Datos de la parada del nuevo cliente
  * @param {number} paradaActualOrden - Orden de la parada actual o última atendida (ej: 2)
  * @returns {Promise<Array>} Paradas actualizadas de la ruta
@@ -313,16 +320,28 @@ export async function aplicarReordenamientoRuta(paradasNuevasOReordenadas = []) 
 export async function insertarNuevoClienteEnSecuencia(nuevaParada, paradaActualOrden = 0) {
   try {
     const ruta = await LocalDB.obtenerRutaActiva();
-    if (!ruta) return [nuevaParada];
+    if (!ruta) {
+      const p = {
+        ...nuevaParada,
+        orden: 1,
+        secuencia: 1,
+        OrdenVisita: 1,
+      };
+      return [p];
+    }
 
     const paradasActuales = ruta.paradas || [];
-    const posicionInsercion = Number(paradaActualOrden || 0) + 1;
+    const posicionInsercion = Math.max(1, Number(paradaActualOrden || 0) + 1);
 
-    // Desplazar pendientes
-    const paradasModificadas = paradasActuales.map((p) => {
+    // Desplazar pendientes de forma inmutable
+    const paradasDesplazadas = paradasActuales.map((p) => {
       const ord = Number(p.orden ?? p.secuencia ?? p.OrdenVisita ?? 0);
       const estado = String(p.estado || p.Estado || "").toUpperCase();
-      const yaAtendida = estado === "ENTREGADO" || estado === "NO_ENTREGADO";
+      const yaAtendida =
+        estado === "ENTREGADO" ||
+        estado === "NO_ENTREGADO" ||
+        Boolean(p.cobro) ||
+        Boolean(p.datosOperacion);
 
       if (!yaAtendida && ord >= posicionInsercion) {
         return {
@@ -332,7 +351,7 @@ export async function insertarNuevoClienteEnSecuencia(nuevaParada, paradaActualO
           OrdenVisita: ord + 1,
         };
       }
-      return p;
+      return { ...p };
     });
 
     // Inserción de la nueva parada
@@ -341,14 +360,13 @@ export async function insertarNuevoClienteEnSecuencia(nuevaParada, paradaActualO
       orden: posicionInsercion,
       secuencia: posicionInsercion,
       OrdenVisita: posicionInsercion,
-      estado: nuevaParada.estado || "PENDIENTE",
-      Estado: nuevaParada.Estado || "PENDIENTE",
+      estado: nuevaParada.estado || nuevaParada.Estado || "PENDIENTE",
+      Estado: nuevaParada.Estado || nuevaParada.estado || "PENDIENTE",
     };
 
-    paradasModificadas.push(paradaAInsertar);
+    const listaFinal = [...paradasDesplazadas, paradaAInsertar];
+    const listaOrdenada = ordenarParadasAscendente(listaFinal);
 
-    // Reordenar limpiamente 1..N
-    const listaOrdenada = ordenarParadasAscendente(paradasModificadas);
     const rutaActualizada = {
       ...ruta,
       paradas: listaOrdenada,
