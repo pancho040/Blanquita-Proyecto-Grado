@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { Alert } from "react-native";
 import { AuthApi } from "../api/authApi";
 import { SecureStorage } from "../services/secureStorage";
 import { LocalDB } from "../database/localDb";
@@ -136,20 +137,23 @@ export function AuthProvider({ children }) {
   // Requisito Subagente B: La cola de operaciones está ligada al id del usuario y NO se borra al cerrar sesión.
   const cerrarSesion = async (forzar = false) => {
     try {
-      const usuarioId = usuario?.IdUsuario;
-      const resumen = await SyncQueue.obtenerResumenDineroPendiente(usuarioId);
+      const usuarioId = usuario?.IdUsuario || usuario?.id_usuario;
       const pendientesTotales = await SyncQueue.contarPendientes(usuarioId);
+      const resumen = await SyncQueue.obtenerResumenDineroPendiente(usuarioId);
 
-      // Si hay cobros/dinero reintentables pendientes y no se ha confirmado forzar:
-      if (resumen.bloqueoRequerido && !forzar) {
+      // Si hay cobros/dinero reintentables pendientes o pendientes de enviar y no se ha confirmado forzar:
+      if ((resumen?.bloqueoRequerido || pendientesTotales > 0) && !forzar) {
         return {
           bloqueado: true,
           requiereConfirmacion: true,
-          cantidad: resumen.cantidadReintentables,
-          montoTotal: resumen.totalDineroBs,
-          desgloseReintentables: resumen.reintentables,
-          desgloseNoReintentables: resumen.noReintentables4xx,
-          mensaje: `Tienes ${resumen.cantidadReintentables} cobro(s) con dinero por un total de Bs. ${resumen.totalDineroBs.toFixed(2)} sin sincronizar (${pendientesTotales} operaciones en total). Si cierras sesión, quedarán guardadas en el teléfono y se enviarán al volver a iniciar sesión con tu cuenta.`,
+          cantidad: pendientesTotales,
+          cantidadReintentables: resumen?.cantidadReintentables || pendientesTotales,
+          montoTotal: resumen?.totalDineroBs || 0,
+          desgloseReintentables: resumen?.reintentables || [],
+          desgloseNoReintentables: resumen?.noReintentables4xx || [],
+          mensaje: (resumen?.totalDineroBs > 0)
+            ? `Tienes ${pendientesTotales} operación(es) pendiente(s) de enviar (incluye cobros por Bs. ${resumen.totalDineroBs.toFixed(2)}). Si cierras sesión, quedarán guardadas de forma segura en el teléfono para tu usuario y se enviarán al volver a iniciar sesión con tu cuenta. Te sugerimos sincronizar primero.`
+            : `Tienes ${pendientesTotales} operación(es) pendiente(s) de enviar al servidor. Si cierras sesión, quedarán guardadas de forma segura en el teléfono para tu usuario y se enviarán al volver a iniciar sesión. Te sugerimos sincronizar primero.`,
         };
       }
 
@@ -168,13 +172,67 @@ export function AuthProvider({ children }) {
         advertenciaPendientes: pendientesTotales > 0
           ? `Quedan ${pendientesTotales} operaciones guardadas en el teléfono, pendientes de enviar.`
           : null,
-        advertencia4xx: resumen.cantidadNoReintentables4xx > 0
+        advertencia4xx: resumen?.cantidadNoReintentables4xx > 0
           ? `Hay ${resumen.cantidadNoReintentables4xx} operaciones con error de validación 4xx archivadas.`
           : null,
       };
     } catch (e) {
       console.error("[AuthContext] Error al cerrar sesión:", e);
       return { exito: false, error: e.message };
+    }
+  };
+
+  /**
+   * Cierre de sesión asistido con modal/alerta de confirmación segura (Subagente A).
+   * Advierte con precisión cuántas operaciones y dinero faltan transmitir,
+   * garantizando que quedan resguardadas en el dispositivo para este chofer.
+   */
+  const cerrarSesionConConfirmacion = async (onExito = null) => {
+    try {
+      const usuarioId = usuario?.IdUsuario || usuario?.id_usuario;
+      const pendientesTotales = await SyncQueue.contarPendientes(usuarioId);
+      const resumen = await SyncQueue.obtenerResumenDineroPendiente(usuarioId);
+
+      const ejecutarLogout = async () => {
+        const res = await cerrarSesion(true);
+        if (res.exito && onExito) {
+          onExito();
+        }
+      };
+
+      if (pendientesTotales > 0) {
+        const detalleMonto = resumen?.totalDineroBs > 0
+          ? ` por un total de Bs. ${resumen.totalDineroBs.toFixed(2)}`
+          : "";
+        Alert.alert(
+          "Operaciones Pendientes de Enviar",
+          `Faltan ${pendientesTotales} operación(es)${detalleMonto} por enviar al servidor.\n\nQuedarán guardadas de forma segura en el teléfono para tu usuario, pero te sugerimos sincronizar antes de cerrar sesión.\n\n¿Deseas cerrar sesión de todas formas?`,
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Cerrar sesión",
+              style: "destructive",
+              onPress: ejecutarLogout,
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Cerrar Sesión",
+          "¿Estás seguro de que deseas cerrar sesión?",
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Cerrar sesión",
+              style: "destructive",
+              onPress: ejecutarLogout,
+            },
+          ]
+        );
+      }
+    } catch (e) {
+      console.error("[AuthContext] Error en confirmación de cierre de sesión:", e);
+      Alert.alert("Error", "No se pudo procesar el cierre de sesión.");
     }
   };
 
@@ -205,6 +263,8 @@ export function AuthProvider({ children }) {
         login: loginWrapper,
         cerrarSesion,
         logout: cerrarSesion,
+        cerrarSesionConConfirmacion,
+        logoutConConfirmacion: cerrarSesionConConfirmacion,
       }}
     >
       {children}

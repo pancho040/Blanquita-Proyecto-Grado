@@ -1,14 +1,20 @@
 import NetInfo from "@react-native-community/netinfo";
 import { syncService } from "./syncService";
+import { SyncQueue } from "../database/syncQueue";
 
 /**
  * Servicio de Auto-Sincronización en Segundo Plano (Offline-First)
- * Unificado con syncService para garantizar una sola sincronización a la vez,
- * respeto de candados, watchdog y orden FIFO estricto.
+ * Optimizado para plan gratuito: SOLO se ejecuta si existen operaciones
+ * pendientes en la cola (SyncQueue.contarPendientes() > 0). Cero polling.
  */
 
 export const runSyncIfConnected = async (onSyncSuccess = null) => {
   try {
+    const cantPendientes = await SyncQueue.contarPendientes();
+    if (cantPendientes <= 0) {
+      return;
+    }
+
     const netState = await NetInfo.fetch();
     if (!netState.isConnected || netState.isInternetReachable === false) {
       return;

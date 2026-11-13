@@ -1,6 +1,5 @@
-// import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Wifi, WifiOff, RefreshCw, User, ChevronLeft } from "lucide-react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from "react-native";
+import { Wifi, WifiOff, RefreshCw, User, ChevronLeft, LogOut } from "lucide-react-native";
 import { Colors } from "../../constants/Colors";
 import { useNetwork } from "../../context/NetworkContext";
 import { useAuth } from "../../context/AuthContext";
@@ -15,11 +14,21 @@ export const Header = ({
   showBackButton = false,
   onBackPress = null,
   showSyncButton = true,
+  showActualizarButton = true,
+  showLogoutButton = true,
+  onActualizarPress = null,
+  onLogoutPress = null,
   showLogo = true,
 }) => {
   const navigation = useNavigation();
-  const { isOnline, syncInProgress, forzarSincronizacion } = useNetwork();
-  const { token } = useAuth();
+  const {
+    isOnline,
+    syncInProgress,
+    forzarSincronizacion,
+    actualizandoDatos,
+    refrescarDatosServidor,
+  } = useNetwork();
+  const { token, estaAutenticado, cerrarSesionConConfirmacion } = useAuth();
 
   const textoTitulo = title || titulo || "Blanquita";
   const textoSubtitulo = subtitle || subtitulo;
@@ -38,6 +47,34 @@ export const Header = ({
     }
   };
 
+  const handleActualizar = async () => {
+    if (onActualizarPress) {
+      await onActualizarPress();
+      return;
+    }
+    if (!isOnline) {
+      Alert.alert(
+        "Sin Conexión",
+        "No hay conexión a internet para actualizar datos desde el servidor central."
+      );
+      return;
+    }
+    const res = await refrescarDatosServidor();
+    if (res && res.exito) {
+      Alert.alert("Actualizado", "Datos actualizados correctamente desde el servidor central.");
+    } else {
+      Alert.alert("Aviso", res?.error || res?.mensaje || "No se pudo actualizar en este momento.");
+    }
+  };
+
+  const handleLogout = () => {
+    if (onLogoutPress) {
+      onLogoutPress();
+    } else if (cerrarSesionConConfirmacion) {
+      cerrarSesionConConfirmacion();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.leftSection}>
@@ -46,6 +83,8 @@ export const Header = ({
             onPress={handleBack}
             style={styles.backBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Volver"
+            accessibilityRole="button"
           >
             <ChevronLeft size={24} color={Colors.text} />
           </TouchableOpacity>
@@ -72,6 +111,23 @@ export const Header = ({
       </View>
 
       <View style={styles.actionsRow}>
+        {showActualizarButton && estaAutenticado && (
+          <TouchableOpacity
+            onPress={handleActualizar}
+            activeOpacity={0.7}
+            disabled={actualizandoDatos || syncInProgress}
+            style={styles.actionIconBtn}
+            accessibilityLabel="Actualizar datos del servidor"
+            accessibilityRole="button"
+          >
+            {actualizandoDatos ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <RefreshCw size={16} color={Colors.primary} />
+            )}
+          </TouchableOpacity>
+        )}
+
         {showSyncButton && (
           <TouchableOpacity
             onPress={handleSync}
@@ -95,13 +151,18 @@ export const Header = ({
             >
               {syncInProgress ? "..." : isOnline ? "Online" : "Offline"}
             </Text>
-            {isOnline && (
-              <RefreshCw
-                size={11}
-                color={Colors.success}
-                style={{ marginLeft: 2 }}
-              />
-            )}
+          </TouchableOpacity>
+        )}
+
+        {showLogoutButton && estaAutenticado && (
+          <TouchableOpacity
+            onPress={handleLogout}
+            activeOpacity={0.7}
+            style={styles.logoutBtn}
+            accessibilityLabel="Cerrar sesión"
+            accessibilityRole="button"
+          >
+            <LogOut size={16} color={Colors.danger} />
           </TouchableOpacity>
         )}
 
@@ -110,6 +171,8 @@ export const Header = ({
             style={styles.perfilBtn}
             onPress={onPerfilPress}
             activeOpacity={0.7}
+            accessibilityLabel="Perfil de usuario"
+            accessibilityRole="button"
           >
             <User size={17} color="#FFFFFF" />
           </TouchableOpacity>
@@ -172,6 +235,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  actionIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoutBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    alignItems: "center",
+    justifyContent: "center",
   },
   syncBadge: {
     flexDirection: "row",

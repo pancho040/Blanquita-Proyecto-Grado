@@ -30,15 +30,53 @@ import {
   Lock,
   User,
   Clock,
+  LogOut,
 } from "lucide-react-native";
 
 export const SincronizacionScreen = () => {
   const { isOnline, connectionType, forzarSincronizacion, syncInProgress, pendientes } = useNetwork();
-  const { usuario, sesionExpirada } = useAuth();
+  const { usuario, sesionExpirada, cerrarSesion, cerrarSesionConConfirmacion } = useAuth();
 
   const [itemsCola, setItemsCola] = useState([]);
   const [cargandoCola, setCargandoCola] = useState(false);
   const [ultimaSync, setUltimaSync] = useState(null);
+
+  const handleCerrarSesion = async () => {
+    if (cerrarSesionConConfirmacion) {
+      await cerrarSesionConConfirmacion();
+    } else {
+      const usuarioId = usuario?.IdUsuario || usuario?.id_usuario;
+      const cant = await SyncQueue.contarPendientes(usuarioId);
+      const resumen = await SyncQueue.obtenerResumenDineroPendiente(usuarioId);
+
+      const proceder = async () => {
+        await cerrarSesion(true);
+      };
+
+      if (cant > 0) {
+        const dineroTexto = resumen?.totalDineroBs > 0
+          ? ` por Bs. ${resumen.totalDineroBs.toFixed(2)}`
+          : "";
+        Alert.alert(
+          "Operaciones Pendientes de Enviar",
+          `Faltan ${cant} operación(es)${dineroTexto} por enviar al servidor.\n\nQuedarán guardadas de forma segura en el teléfono para tu usuario, pero te sugerimos sincronizar antes de cerrar sesión.\n\n¿Deseas cerrar sesión de todas formas?`,
+          [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Cerrar sesión", style: "destructive", onPress: proceder },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Cerrar Sesión",
+          "¿Estás seguro de que deseas cerrar sesión?",
+          [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Cerrar sesión", style: "destructive", onPress: proceder },
+          ]
+        );
+      }
+    }
+  };
 
   const cargarCola = useCallback(async () => {
     setCargandoCola(true);
@@ -227,6 +265,18 @@ export const SincronizacionScreen = () => {
             <Text style={styles.lastSyncText}>
               Último envío exitoso: {formatearFechaHora(ultimaSync)}
             </Text>
+          </View>
+
+          {/* Botón Destacado de Cerrar Sesión */}
+          <View style={styles.logoutBtnBox}>
+            <Button
+              title="Cerrar sesión"
+              icon={LogOut}
+              variant="danger"
+              size="md"
+              onPress={handleCerrarSesion}
+              style={styles.btnCerrarSesion}
+            />
           </View>
         </Card>
 
@@ -522,6 +572,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: Colors.primaryDark,
+  },
+  logoutBtnBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  btnCerrarSesion: {
+    backgroundColor: Colors.danger,
+    borderRadius: 4,
   },
 });
 

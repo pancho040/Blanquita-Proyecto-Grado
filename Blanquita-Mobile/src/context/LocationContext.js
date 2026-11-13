@@ -107,52 +107,20 @@ export function LocationProvider({ children }) {
     }
   };
 
+  const idRepartidorRef = useRef(null);
+  const idAsignacionRef = useRef(null);
+
   /**
-   * Iniciar telemetría periódica de la flota para visualización en vivo en la Web
-   * Alimenta directamente el módulo de Rastreo Choferes en Tiempo Real
-   * Aplica filtro de desplazamiento > 25 metros para ahorro de batería y cuota
+   * Telemetría bajo demanda para el chofer móvil (Optimizado Cero Polling / Plan Gratuito).
+   * Se elimina el setInterval continuo en background. Las posiciones satelitales
+   * se capturan en eventos operativos (entregas, cobros) o cuando el servidor
+   * central solicita la ubicación actual puntual vía WebSocket ('solicitar_ubicacion_actual').
    */
   const iniciarTelemetria = (idRepartidor, idAsignacion) => {
+    idRepartidorRef.current = idRepartidor;
+    idAsignacionRef.current = idAsignacion;
     detenerTelemetria();
-
-    telemetriaIntervalRef.current = setInterval(async () => {
-      try {
-        const gps = await obtenerUbicacionActual();
-        if (!gps || !gps.latitud || !gps.longitud) return;
-
-        // Filtro de movimiento: no emitir si no hubo desplazamiento >= 25 metros
-        const ultima = ultimaUbicacionEmitidaRef.current;
-        if (ultima) {
-          const distancia = calcularDistanciaMetros(
-            ultima.latitud,
-            ultima.longitud,
-            gps.latitud,
-            gps.longitud
-          );
-          if (distancia < 25 && (gps.velocidad || 0) < 5) {
-            return;
-          }
-        }
-
-        ultimaUbicacionEmitidaRef.current = gps;
-
-        const payload = {
-          IdUsuarioRepartidor: idRepartidor,
-          IdAsignacion: idAsignacion,
-          Latitud: gps.latitud,
-          Longitud: gps.longitud,
-          PrecisionMts: gps.precision,
-          VelocidadKmh: gps.velocidad,
-        };
-
-        // Enviar al servidor o encolar si está offline
-        LogisticaApi.enviarTelemetriaPing(payload).catch(() => {
-          SyncQueue.encolarOperacion("PING_GPS", payload, gps).catch(() => {});
-        });
-      } catch (_e) {
-        // Ignorar fallos de telemetría silenciosos en background
-      }
-    }, CONFIG.GPS.INTERVALO_PING_SEGUNDOS * 1000);
+    // Cero Polling: Sin setInterval continuo de telemetría en background
   };
 
   const detenerTelemetria = () => {
