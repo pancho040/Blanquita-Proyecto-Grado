@@ -35,7 +35,16 @@ import { ObtenerClientesSimple } from "@/services/Logistica/ClienteService";
 import AlertaSolicitudesCargaBanner from "./Reparto/AlertaSolicitudesCargaBanner";
 
 export default function InicioSupervisor({ usuario }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
+  const {
+    sucursal,
+    setSucursal,
+    sucursalesPermitidas,
+    esMultisede,
+    cargando: cargandoAlcance,
+    listoParaConsultar,
+    errorAlcance,
+    reintentar
+  } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });
@@ -127,6 +136,18 @@ export default function InicioSupervisor({ usuario }) {
     <div className="space-y-4">
       {/* 0. BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
       <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarLogistica(true)} />
+
+      {errorAlcance && (
+        <div className="p-6 text-center bg-red-50/50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800">
+          <AlertCircle className="mx-auto h-8 w-8 text-red-500 mb-2" />
+          <p className="text-sm font-semibold text-red-800 dark:text-red-200">No se pudo cargar tu sede</p>
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1 mb-3">Ocurrió un error al verificar tu alcance territorial de sucursales.</p>
+          <Button onClick={reintentar} size="sm" variant="outline" className="gap-2">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Reintentar
+          </Button>
+        </div>
+      )}
 
       {/* 1. ENCABEZADO INDUSTRIAL OPERATIVO */}
       <PageHeader

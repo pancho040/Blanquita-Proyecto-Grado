@@ -38,6 +38,7 @@ import {
   FileText,
   Printer,
   Radio,
+  AlertCircle,
   Receipt,
   Boxes,
   History,
@@ -71,7 +72,17 @@ const FLOTA_VEHICULOS = [
 ];
 
 export default function TablaAsignaciones({ usuario = null, vistaInicial = "despachos" }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, nombreSucursalActual, listoParaConsultar } = usePaginaSucursal({
+  const {
+    sucursal,
+    setSucursal,
+    sucursalesPermitidas,
+    esMultisede,
+    cargando: cargandoAlcance,
+    nombreSucursalActual,
+    listoParaConsultar,
+    errorAlcance,
+    reintentar
+  } = usePaginaSucursal({
     usuario,
     permiteTodas: false,
   });
@@ -837,7 +848,17 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
         {/* 4. Tabla de Asignaciones */}
         <CardContent className="p-0">
-          {loading ? (
+          {errorAlcance ? (
+            <div className="p-8 text-center bg-red-50/50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800 m-4">
+              <AlertCircle className="mx-auto h-8 w-8 text-red-500 mb-2" />
+              <p className="text-sm font-semibold text-red-800 dark:text-red-200">No se pudo cargar tu sede</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1 mb-3">Ocurrió un error al verificar tu alcance territorial de sucursales.</p>
+              <Button onClick={reintentar} size="sm" variant="outline" className="gap-2">
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reintentar
+              </Button>
+            </div>
+          ) : loading ? (
             <div className="p-4">
               <SkeletonTable
                 rows={6}

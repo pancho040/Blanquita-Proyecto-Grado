@@ -33,6 +33,7 @@ import {
   ListOrdered, 
   Navigation,
   Search,
+  AlertCircle,
   Store,
   Radio,
   Lock,
@@ -75,7 +76,16 @@ const OPCIONES_DIAS = Object.entries(DIAS_SEMANA).map(([num, nom]) => ({
 }));
 
 export default function GestorRutas({ usuario = null }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
+  const {
+    sucursal,
+    setSucursal,
+    sucursalesPermitidas,
+    esMultisede,
+    cargando: cargandoAlcance,
+    listoParaConsultar,
+    errorAlcance,
+    reintentar
+  } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });
@@ -717,7 +727,17 @@ export default function GestorRutas({ usuario = null }) {
             </div>
 
             <div className="p-3 space-y-2 max-h-[600px] overflow-y-auto">
-              {loading ? (
+              {errorAlcance ? (
+                <div className="py-8 px-4 text-center bg-red-50/50 rounded border border-red-200">
+                  <AlertCircle className="mx-auto h-6 w-6 text-red-500 mb-1.5" />
+                  <p className="text-xs font-semibold text-red-800">No se pudo cargar tu sede</p>
+                  <p className="text-[11px] text-red-600 mt-0.5 mb-2.5">Ocurrió un error al verificar tu alcance territorial de sucursales.</p>
+                  <Button onClick={reintentar} size="sm" variant="outline" className="gap-1.5 h-7 text-xs">
+                    <RotateCcw className="h-3 w-3" />
+                    Reintentar
+                  </Button>
+                </div>
+              ) : loading ? (
                 <div className="py-12 flex flex-col justify-center items-center gap-2">
                   <Loader2 className="h-6 w-6 animate-spin text-[#1C96C5]" />
                   <p className="text-xs text-slate-500">Cargando rutas...</p>
