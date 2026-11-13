@@ -54,6 +54,7 @@ import HistorialRepartoTab from "../Reparto/HistorialRepartoTab";
 import EditorParadasDinamicoModal from "../Rutas/EditorParadasDinamicoModal";
 import ModalReasignarParadas from "../Rutas/ModalReasignarParadas";
 import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
+import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
@@ -253,12 +254,18 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       cargarAsignaciones(true);
     });
 
+    const handleCustomWs = (e) => {
+      cargarAsignaciones(true);
+    };
+    window.addEventListener("blanquita:ws-event", handleCustomWs);
+
     return () => {
       unsubEstado();
       unsubCarga();
       unsubOp();
       unsubReorden();
       unsubFin();
+      window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
   }, [cargarAsignaciones]);
 
@@ -449,6 +456,9 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
   return (
     <div className="space-y-4">
+      {/* BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
+      <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarAsignaciones(true)} />
+
       {/* 1. Header con botón principal y pestañas unificadas */}
       <PageHeader
         title="Centro Operativo de Reparto y Despachos"
@@ -602,20 +612,68 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       )}
 
       {vistaActiva === "entregas" && (
-        <EntregaChoferMovil
-          usuario={usuario}
-          choferPreseleccionado={choferAccionRapida?.idChofer}
-          asignacionPreseleccionada={choferAccionRapida?.asignacion}
-          alCompletar={recargarAsignacionesSilencioso}
-        />
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
+            <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-[#1C96C5]" />
+              <span>Registrar Entrega / Cobro en Ruta</span>
+            </h3>
+            <EntregaChoferMovil
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              asignacionPreseleccionada={choferAccionRapida?.asignacion}
+              alCompletar={recargarAsignacionesSilencioso}
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
+            <div className="border-b border-slate-200 pb-2 mb-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[#1C96C5]" />
+                <span>Historial de Entregas y Cobros de la Ruta (Auditoría 1 a 1)</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Aprueba [✓], observa [⚠] o rechaza [✕] individualmente cada entrega y cobro realizado por los choferes
+              </p>
+            </div>
+            <HistorialRepartoTab
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              fechaInicial={fecha}
+              alActualizar={recargarAsignacionesSilencioso}
+            />
+          </div>
+        </div>
       )}
 
       {vistaActiva === "cierre" && (
-        <CierreTurnoChoferComponent
-          usuario={usuario}
-          choferPreseleccionado={choferAccionRapida?.idChofer}
-          alCompletar={recargarAsignacionesSilencioso}
-        />
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
+            <CierreTurnoChoferComponent
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              alCompletar={recargarAsignacionesSilencioso}
+            />
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
+            <div className="border-b border-slate-200 pb-2 mb-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span>Historial de Entregas y Cobros de la Ruta para Liquidación y Cierre</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Auditoría obligatoria de cierre: se verifica que 0 operaciones estén en PENDIENTE antes de finalizar la ruta
+              </p>
+            </div>
+            <HistorialRepartoTab
+              usuario={usuario}
+              choferPreseleccionado={choferAccionRapida?.idChofer}
+              fechaInicial={fecha}
+              alActualizar={recargarAsignacionesSilencioso}
+            />
+          </div>
+        </div>
       )}
 
       {vistaActiva === "despachos" && (

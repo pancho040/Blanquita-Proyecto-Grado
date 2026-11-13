@@ -67,8 +67,12 @@ export default function HistorialRepartoTab({
   const [modalObservarAbierto, setModalObservarAbierto] = useState(false);
   const [operacionParaObservar, setOperacionParaObservar] = useState(null);
   const [textoObservacion, setTextoObservacion] = useState("");
+  const [modalRechazarAbierto, setModalRechazarAbierto] = useState(false);
+  const [operacionParaRechazar, setOperacionParaRechazar] = useState(null);
+  const [textoRechazo, setTextoRechazo] = useState("");
   const [modalFinalizarRutaAbierto, setModalFinalizarRutaAbierto] = useState(false);
   const [observacionFinalizar, setObservacionFinalizar] = useState("");
+  const [estadoFinalRuta, setEstadoFinalRuta] = useState("APROBADA");
   const [finalizandoRuta, setFinalizandoRuta] = useState(false);
   const [wsConectado, setWsConectado] = useState(false);
 
@@ -243,16 +247,42 @@ export default function HistorialRepartoTab({
       consultarNotas(false);
     });
 
+    const handleCustomWs = (e) => {
+      const { tipo } = e.detail || {};
+      if (tipo === "operacion_ruta_registrada" || tipo === "operacion_revisada" || tipo === "ruta_finalizada_admin") {
+        consultarNotas(false);
+        if (seccionActiva === "cierres") {
+          consultarTurnos();
+        }
+      }
+    };
+    window.addEventListener("blanquita:ws-event", handleCustomWs);
+
     return () => {
       unsubEstado();
       unsubOp();
       unsubRev();
+      window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 
-  // 4. Filtrado en memoria de notas de venta
+  // 4. Filtrado en memoria de notas de venta (excluyendo registros sin venta)
   const notasFiltradas = useMemo(() => {
     return notas.filter((n) => {
+      // Excluir registros sin venta
+      if (
+        n.SinVenta ||
+        n.es_sin_venta ||
+        n.Estado === "SIN_VENTA" ||
+        n.estado === "SIN_VENTA" ||
+        (Number(n.TotalNeto ?? n.ImporteNeto ?? n.TotalVentaBruto ?? 0) <= 0 &&
+          !n.TieneVenta &&
+          !n.Items?.length &&
+          !n.detalles?.length)
+      ) {
+        return false;
+      }
+
       // Filtro por Chofer
       if (filtroChoferId !== "TODOS") {
         const idN = n.IdChofer || n.id_chofer || n.IdUsuarioRepartidor;
@@ -306,7 +336,7 @@ export default function HistorialRepartoTab({
 
       return true;
     });
-  }, [notas, filtroChoferId, filtroFormaPago, filtroEstadoCobro, repartidores]);
+  }, [notas, filtroChoferId, filtroTipoOperacion, filtroEstadoRevision, filtroFormaPago, filtroEstadoCobro, repartidores]);
 
   // 5. KPIs Resumidos del Historial
   const kpis = useMemo(() => {
@@ -437,6 +467,29 @@ export default function HistorialRepartoTab({
     }
   };
 
+  const abrirModalRechazar = (nota) => {
+    setOperacionParaRechazar(nota);
+    setTextoRechazo("");
+    setModalRechazarAbierto(true);
+  };
+
+  const handleConfirmarRechazo = async () => {
+    if (!operacionParaRechazar) return;
+    const id = operacionParaRechazar.IdNotaVenta || operacionParaRechazar.id_nota_venta || operacionParaRechazar.id || operacionParaRechazar.IdOperacion || operacionParaRechazar.id_operacion;
+    if (!textoRechazo.trim()) {
+      toast.error("Debes ingresar el motivo de rechazo");
+      return;
+    }
+    try {
+      await RevisarOperacionRuta(id, "RECHAZADO", textoRechazo);
+      toast.error(`Operación RECHAZADA`);
+      setModalRechazarAbierto(false);
+      consultarNotas(true);
+    } catch (err) {
+      toast.error(err.message || "Error al rechazar operación");
+    }
+  };
+
   const handleFinalizarRutaAdmin = async () => {
     if (operacionesPendientesCount > 0) {
       toast.error(`No se puede finalizar la ruta: restan ${operacionesPendientesCount} operaciones en PENDIENTE de revisión`);
@@ -445,8 +498,12 @@ export default function HistorialRepartoTab({
     try {
       setFinalizandoRuta(true);
       const idAsig = asignacionesTurno[0]?.IdAsignacionRuta || 1;
-      await FinalizarRutaAdmin(idAsig, observacionFinalizar || "Ruta del día finalizada y auditada conforme por Administración");
-      toast.success("¡Ruta del día finalizada y aprobada por Administración!");
+      await FinalizarRutaAdmin(
+        idAsig,
+        observacionFinalizar || "Ruta del día finalizada y auditada conforme por Administración",
+        estadoFinalRuta
+      );
+      toast.success(`¡Ruta del día finalizada con estado: ${estadoFinalRuta}!`);
       setModalFinalizarRutaAbierto(false);
       consultarNotas(true);
       consultarTurnos();
@@ -954,18 +1011,29 @@ export default function HistorialRepartoTab({
                                     <button
                                       type="button"
                                       onClick={() => handleAprobarOperacion(n)}
-                                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-semibold transition-colors cursor-pointer"
-                                      title="Aprobar entrega/cobro en auditoría"
+                                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-semibold transition-colors cursor-pointer flex items-center gap-0.5"
+                                      title="✓ Aprobar entrega o cobro"
                                     >
-                                      Aprobar
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      <span>Aprobar</span>
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => abrirModalObservar(n)}
-                                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-medium transition-colors cursor-pointer"
-                                      title="Ingresar observación a esta entrega"
+                                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-0.5"
+                                      title="⚠ Ingresar observación"
                                     >
-                                      Observar
+                                      <AlertCircle className="h-3 w-3 text-amber-600" />
+                                      <span>Observar</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirModalRechazar(n)}
+                                      className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-0.5"
+                                      title="✕ Rechazar entrega o cobro"
+                                    >
+                                      <X className="h-3 w-3 text-rose-600" />
+                                      <span>Rechazar</span>
                                     </button>
                                   </div>
                                 )}
@@ -1488,6 +1556,62 @@ export default function HistorialRepartoTab({
       )}
 
       {/* ============================================================== */}
+      {/* 6.5. MODAL PARA REGISTRAR RECHAZO DE OPERACIÓN */}
+      {/* ============================================================== */}
+      {modalRechazarAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-4 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-rose-700 flex items-center gap-1.5">
+                <X className="h-4 w-4 text-rose-600" />
+                <span>Rechazar Operación de Ruta</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalRechazarAbierto(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-slate-600">
+                Operación: <strong>{operacionParaRechazar?.NumeroNota || operacionParaRechazar?.NumeroNotaVenta || "NV"}</strong> • Cliente: <strong>{operacionParaRechazar?.RazonSocial || operacionParaRechazar?.ClienteNombre || "Comercio"}</strong>
+              </p>
+              <label className="block font-semibold text-slate-700">
+                Motivo del Rechazo (Obligatorio):
+              </label>
+              <textarea
+                value={textoRechazo}
+                onChange={(e) => setTextoRechazo(e.target.value)}
+                placeholder="Ej: Entrega rechazada porque el cliente no recibió mercadería o pago falso no acreditado..."
+                rows={3}
+                className="w-full p-2 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setModalRechazarAbierto(false)}
+                className="px-3 py-1.5 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarRechazo}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold"
+              >
+                Confirmar Rechazo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* 7. MODAL DE CIERRE / FINALIZACIÓN OFICIAL DE RUTA (ADMIN) */}
       {/* ============================================================== */}
       {modalFinalizarRutaAbierto && (
@@ -1507,20 +1631,38 @@ export default function HistorialRepartoTab({
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs text-slate-600">
+            <div className="space-y-3 text-xs text-slate-600">
               <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800">
-                ✓ <strong>0 operaciones en PENDIENTE.</strong> Todas las entregas y cobros de la jornada han sido revisados y validados.
+                ✓ <strong>0 operaciones en PENDIENTE.</strong> Todas las entregas y cobros de la jornada han sido auditados y revisados.
               </div>
-              <label className="block font-semibold text-slate-700">
-                Observación General de Cierre de Jornada (Opcional):
-              </label>
-              <textarea
-                value={observacionFinalizar}
-                onChange={(e) => setObservacionFinalizar(e.target.value)}
-                placeholder="Ej: Ruta 101 auditada satisfactoriamente con arqueo físico y bancario completo..."
-                rows={3}
-                className="w-full p-2 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
-              />
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Estado Final de Cierre de Ruta:
+                </label>
+                <select
+                  value={estadoFinalRuta}
+                  onChange={(e) => setEstadoFinalRuta(e.target.value)}
+                  className="w-full h-8 px-2.5 border border-slate-300 rounded text-xs text-slate-800 bg-white font-semibold"
+                >
+                  <option value="APROBADA">APROBADA (100% Conforme sin incidentes)</option>
+                  <option value="CON OBSERVACIÓN">CON OBSERVACIÓN (Cierre con inconsistencias justificadas)</option>
+                  <option value="INCOMPLETA / ABANDONADA">INCOMPLETA / ABANDONADA (Ruta interrumpida o no completada)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Observación General de Cierre de Jornada (Opcional):
+                </label>
+                <textarea
+                  value={observacionFinalizar}
+                  onChange={(e) => setObservacionFinalizar(e.target.value)}
+                  placeholder="Ej: Ruta 101 auditada satisfactoriamente con arqueo físico y bancario verificado..."
+                  rows={3}
+                  className="w-full p-2 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t">

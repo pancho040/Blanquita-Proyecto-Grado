@@ -202,10 +202,19 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       setUltimaActualizacion(new Date());
     });
 
+    const handleCustomWs = (e) => {
+      const { tipo } = e.detail || {};
+      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping") {
+        cargarTelemetria(true);
+      }
+    };
+    window.addEventListener("blanquita:ws-event", handleCustomWs);
+
     return () => {
       desubicar();
+      window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
-  }, []);
+  }, [cargarTelemetria]);
 
   // Carga inicial y por cambio de sucursal (sin polling constante que agota cuota)
   useEffect(() => {
@@ -610,7 +619,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             title="Solicita reporte GPS inmediato al móvil de todos los repartidores"
           >
             <Navigation className={`h-3.5 w-3.5 ${solicitandoGps ? "animate-spin" : ""}`} />
-            <span>{solicitandoGps ? "Solicitando señal..." : "Ver ubicación actual de choferes"}</span>
+            <span>{solicitandoGps ? "Solicitando señal..." : "📍 Solicitar Ubicación Actual de Todos los Choferes"}</span>
           </Button>
 
           <Button
@@ -704,12 +713,12 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                       {tieneSenal ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-300">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>En línea ahora</span>
+                          <span>En línea - Ubicación actual</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={`Último ping hace ${segReporte} segundos`}>
                           <Clock className="h-2.5 w-2.5 text-slate-400" />
-                          <span>Última ubic. hace {minReporte} min</span>
+                          <span>Última ubicación conocida (hace {minReporte} min)</span>
                         </span>
                       )}
                     </div>

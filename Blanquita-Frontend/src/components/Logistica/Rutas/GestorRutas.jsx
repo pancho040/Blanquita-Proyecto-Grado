@@ -8,12 +8,17 @@ import {
   ObtenerRutas, 
   CrearRuta, 
   ObtenerRutaDetalle, 
-  GuardarPuntosVentaRuta 
+  GuardarPuntosVentaRuta,
+  ObtenerRepartidores,
+  ObtenerAsignaciones,
+  CrearAsignacion,
+  SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
 import { ObtenerTodosPuntosVenta } from "@/services/Logistica/ClienteService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { 
@@ -32,11 +37,22 @@ import {
   Radio,
   Lock,
   RotateCcw,
-  ShieldCheck
+  ShieldCheck,
+  Calendar,
+  Truck,
+  UserCheck,
+  Clock,
+  Boxes,
+  FileText,
+  CheckCircle2,
+  ArrowRightLeft
 } from "lucide-react";
 import MapaRuta from "./MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
 import MapaSelectorUbicacion from "../Common/MapaSelectorUbicacion";
+import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
+import EditorParadasDinamicoModal from "./EditorParadasDinamicoModal";
+import ModalReasignarParadas from "./ModalReasignarParadas";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
@@ -67,6 +83,63 @@ export default function GestorRutas({ usuario = null }) {
   const [zonas, setZonas] = useState([]);
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Selector de fecha de rutas (Rutas de Hoy vs Rutas Históricas)
+  const hoyStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const [fechaFiltro, setFechaFiltro] = useState(hoyStr);
+  const [repartidores, setRepartidores] = useState([]);
+  const [asignaciones, setAsignaciones] = useState([]);
+
+  // Plantillas automáticas de chofer por ruta (localStorage)
+  const [plantillasAuto, setPlantillasAuto] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const g = localStorage.getItem("blanquita_rutas_plantilla_auto");
+        return g ? JSON.parse(g) : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+
+  const toggleAsignacionAutomatica = (idRuta, idChofer) => {
+    const copia = { ...plantillasAuto };
+    if (copia[idRuta] === idChofer) {
+      delete copia[idRuta];
+      toast.info("Asignación automática deshabilitada para esta ruta");
+    } else {
+      copia[idRuta] = idChofer;
+      toast.success("Plantilla guardada: este chofer se asignará automáticamente a esta ruta");
+    }
+    setPlantillasAuto(copia);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("blanquita_rutas_plantilla_auto", JSON.stringify(copia));
+    }
+  };
+
+  // Modales
+  const [modalEditorParadas, setModalEditorParadas] = useState(false);
+  const [modalAsignarRuta, setModalAsignarRuta] = useState(false);
+  const [rutaParaAsignar, setRutaParaAsignar] = useState(null);
+  const [choferAsignarId, setChoferAsignarId] = useState("");
+  const [kmInicialAsignar, setKmInicialAsignar] = useState("45120");
+  const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
+  const [modalReasignar, setModalReasignar] = useState(false);
+  const [asignacionParaReasignar, setAsignacionParaReasignar] = useState(null);
+  const [solicitandoGps, setSolicitandoGps] = useState(false);
+
+  const solicitarUbicacionGPS = async () => {
+    try {
+      setSolicitandoGps(true);
+      await SolicitarUbicacionActualChoferes(sucursal);
+      toast.success("Solicitud de señal GPS emitida bajo demanda a todos los choferes");
+    } catch (err) {
+      toast.error(err.message || "Error al solicitar telemetría");
+    } finally {
+      setSolicitandoGps(false);
+    }
+  };
 
   // Filtros del panel izquierdo de rutas
   const [filtroZona, setFiltroZona] = useState("TODAS");
@@ -115,40 +188,26 @@ export default function GestorRutas({ usuario = null }) {
   const cargarDatos = useCallback(async (silencioso = false, forzar = false) => {
     try {
       const sid = sucursal === "todas" ? null : sucursal;
-      const cacheKey = `logistica:${sid || "todas"}`;
-
-      if (!silencioso && !forzar) {
-        const cZonas = cache.get(`${cacheKey}:zonas`);
-        const cRutas = cache.get(`${cacheKey}:rutas`);
-        const cPv = cache.get(`${cacheKey}:todosPuntosVenta`);
-        if (cZonas && cRutas && cPv) {
-          setZonas(cZonas);
-          setRutas(cRutas);
-          setTodosPuntosVenta(cPv);
-          setLoading(false);
-          if (cRutas.length > 0 && !rutaSeleccionadaRef.current) {
-            seleccionarRuta(cRutas[0]);
-          }
-          return;
-        }
-      }
-
       if (!silencioso) setLoading(true);
-      const [resZ, resR, resPv] = await Promise.allSettled([
+
+      const [resZ, resR, resPv, resRep, resAsig] = await Promise.allSettled([
         ObtenerZonas(sid),
         ObtenerRutas(null, sid),
-        ObtenerTodosPuntosVenta(sid)
+        ObtenerTodosPuntosVenta(sid),
+        ObtenerRepartidores(sid),
+        ObtenerAsignaciones(fechaFiltro, null, sid)
       ]);
       const z = resZ.status === "fulfilled" && Array.isArray(resZ.value) ? resZ.value : [];
       const r = resR.status === "fulfilled" && Array.isArray(resR.value) ? resR.value : [];
       const pv = resPv.status === "fulfilled" && Array.isArray(resPv.value) ? resPv.value : [];
+      const rep = resRep.status === "fulfilled" && Array.isArray(resRep.value) ? resRep.value : [];
+      const asig = resAsig.status === "fulfilled" ? (Array.isArray(resAsig.value) ? resAsig.value : resAsig.value?.items || []) : [];
 
       setZonas(z);
       setRutas(r);
       setTodosPuntosVenta(pv);
-      cache.set(`${cacheKey}:zonas`, z, 300);
-      cache.set(`${cacheKey}:rutas`, r, 300);
-      cache.set(`${cacheKey}:todosPuntosVenta`, pv, 300);
+      setRepartidores(rep);
+      setAsignaciones(asig);
 
       if (r.length > 0 && (!rutaSeleccionadaRef.current || !r.some(item => item.IdRutaDistribucion === rutaSeleccionadaRef.current.IdRutaDistribucion))) {
         seleccionarRuta(r[0]);
@@ -161,18 +220,18 @@ export default function GestorRutas({ usuario = null }) {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, [sucursal, seleccionarRuta]);
+  }, [sucursal, fechaFiltro, seleccionarRuta]);
 
   const [wsConectado, setWsConectado] = useState(false);
 
-  // Carga reactiva al cambiar sucursal
+  // Carga reactiva al cambiar sucursal o fecha
   useEffect(() => {
     if (!cargandoAlcance) {
       cargarDatos(false, true);
     }
-  }, [sucursal, cargandoAlcance, cargarDatos]);
+  }, [sucursal, fechaFiltro, cargandoAlcance, cargarDatos]);
 
-  // WebSocket en tiempo real: Cero Polling innecesario para optimización en plan gratuito
+  // WebSocket en tiempo real + Escucha de 'blanquita:ws-event'
   useEffect(() => {
     logisticaSocket.conectar();
     const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
@@ -185,6 +244,11 @@ export default function GestorRutas({ usuario = null }) {
       cargarDatos(true);
     });
 
+    const handleCustomWs = (e) => {
+      cargarDatos(true);
+    };
+    window.addEventListener("blanquita:ws-event", handleCustomWs);
+
     const handleFocus = () => cargarDatos(true);
     window.addEventListener("focus", handleFocus);
 
@@ -192,6 +256,7 @@ export default function GestorRutas({ usuario = null }) {
       unsubEstado();
       unsubReorden();
       unsubCarga();
+      window.removeEventListener("blanquita:ws-event", handleCustomWs);
       window.removeEventListener("focus", handleFocus);
     };
   }, [cargarDatos]);
@@ -352,12 +417,40 @@ export default function GestorRutas({ usuario = null }) {
     }
   };
 
+  const handleCrearAsignacionRapida = async (e) => {
+    e.preventDefault();
+    if (!rutaParaAsignar || !choferAsignarId) {
+      toast.error("Selecciona un chofer para la asignación");
+      return;
+    }
+    try {
+      setGuardandoAsignacion(true);
+      await CrearAsignacion({
+        IdRutaDistribucion: Number(rutaParaAsignar.IdRutaDistribucion),
+        IdUsuarioRepartidor: Number(choferAsignarId),
+        FechaAsignacion: fechaFiltro,
+        KilometrajeInicial: kmInicialAsignar ? Number(kmInicialAsignar) : 45120,
+        Observacion: `Asignación programada desde Centro de Control (${fechaFiltro})`
+      });
+      toast.success(`¡Ruta asignada a chofer para el día ${fechaFiltro}!`);
+      setModalAsignarRuta(false);
+      cargarDatos(true);
+    } catch (err) {
+      toast.error(err.message || "Error al asignar ruta");
+    } finally {
+      setGuardandoAsignacion(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* 1. Header con botones de creación */}
+      {/* 0. BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
+      <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarDatos(true)} />
+
+      {/* 1. Header con botones de creación y GPS bajo demanda */}
       <PageHeader
         title="Rutas y Zonas de Distribución"
-        subtitle="Configuración vial, paradas secuenciales y georreferenciación de itinerarios de distribución."
+        subtitle="Configuración vial, paradas secuenciales 1..N y georreferenciación de itinerarios de distribución."
         branchFilter={
           <BranchFilter
             sucursal={sucursal}
@@ -388,12 +481,24 @@ export default function GestorRutas({ usuario = null }) {
           </Button>
         </div>
 
+        <Button
+          type="button"
+          size="sm"
+          onClick={solicitarUbicacionGPS}
+          disabled={solicitandoGps}
+          className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
+          title="Emitir ping de telemetría satelital a los choferes"
+        >
+          <Navigation className={`h-3.5 w-3.5 ${solicitandoGps ? "animate-spin" : ""}`} />
+          <span>📍 Solicitar Ubicación Actual de Todos los Choferes</span>
+        </Button>
+
         <a
           href="/supervisor/rutas/rastreo"
-          className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
+          className="inline-flex items-center h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
         >
           <Radio className="h-3.5 w-3.5" />
-          <span>Rastreo GPS</span>
+          <span>Ver Mapa GPS</span>
         </a>
 
         <Button 
@@ -422,6 +527,55 @@ export default function GestorRutas({ usuario = null }) {
           <span>Nueva Ruta</span>
         </Button>
       </PageHeader>
+
+      {/* BARRA SUPERIOR DE SELECTOR DE FECHA (RUTAS DE HOY VS HISTÓRICAS) */}
+      <div className="bg-white border border-slate-200 rounded p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 text-[#1C96C5]" />
+            <span>Itinerario y Despachos:</span>
+          </span>
+          <Input
+            type="date"
+            value={fechaFiltro}
+            onChange={(e) => setFechaFiltro(e.target.value)}
+            className="w-auto h-8 text-xs font-semibold bg-white border-slate-300"
+          />
+          <div className="inline-flex rounded border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setFechaFiltro(hoyStr)}
+              className={`px-3 py-1 rounded font-medium transition-colors ${
+                fechaFiltro === hoyStr
+                  ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Rutas de Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = new Date();
+                m.setDate(m.getDate() + 1);
+                setFechaFiltro(m.toISOString().split("T")[0]);
+              }}
+              className="px-3 py-1 rounded font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              Mañana
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>Fecha activa: <strong className="text-slate-800 font-mono">{fechaFiltro}</strong></span>
+          {fechaFiltro !== hoyStr && (
+            <Badge variant="outline" className="text-amber-800 bg-amber-50 border-amber-300 text-[10px]">
+              Modo Histórico
+            </Badge>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* PANEL IZQUIERDO: Filtros y Lista de Rutas */}
@@ -488,13 +642,17 @@ export default function GestorRutas({ usuario = null }) {
               ) : (
                 paginacionRutas.itemsPaginados.map((r) => {
                   const seleccionada = rutaSeleccionada?.IdRutaDistribucion === r.IdRutaDistribucion;
+                  const asigMatch = asignaciones.find((a) => a.IdRutaDistribucion === r.IdRutaDistribucion);
+                  const choferAutoId = plantillasAuto[r.IdRutaDistribucion];
+                  const choferAutoObj = repartidores.find((rep) => Number(rep.IdUsuario) === Number(choferAutoId));
+
                   return (
                     <div
                       key={r.IdRutaDistribucion}
                       onClick={() => seleccionarRuta(r)}
-                      className={`p-3 rounded border transition-colors cursor-pointer ${
+                      className={`p-3 rounded border transition-colors cursor-pointer space-y-2 ${
                         seleccionada
-                          ? "border-[#1C96C5] bg-sky-50 text-slate-900"
+                          ? "border-[#1C96C5] bg-sky-50/50 text-slate-900"
                           : "border-slate-200 bg-white hover:border-slate-300"
                       }`}
                     >
@@ -510,11 +668,93 @@ export default function GestorRutas({ usuario = null }) {
                           {DIAS_SEMANA[r.DiaSemana] || "Flexible"}
                         </span>
                       </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-slate-600 pt-1.5 border-t border-slate-100">
-                        <span className="font-mono">{r.TotalPuntosVenta || 0} paradas</span>
-                        <span className={`text-[11px] font-semibold ${seleccionada ? "text-[#1C96C5]" : "text-slate-500"}`}>
-                          {seleccionada ? "Activa" : "Ver"}
-                        </span>
+
+                      {/* Estado del despacho para la fecha seleccionada */}
+                      <div className="text-[11px] pt-1 border-t border-slate-100">
+                        {asigMatch ? (
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-slate-700 font-medium truncate flex items-center gap-1">
+                              <Truck className="h-3 w-3 text-[#1C96C5]" />
+                              <span className="truncate">{asigMatch.NombreRepartidor}</span>
+                            </span>
+                            <Badge variant="outline" className={`text-[10px] px-1 py-0 ${
+                              asigMatch.Estado === "Finalizada" ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                              asigMatch.Estado === "En Ruta" ? "bg-sky-50 text-sky-700 border-sky-300" :
+                              "bg-amber-50 text-amber-800 border-amber-300"
+                            }`}>
+                              {asigMatch.Estado}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 italic">
+                            Sin despacho programado para {fechaFiltro === hoyStr ? "hoy" : fechaFiltro}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Switch: Asignación Automática Diaria */}
+                      <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                        <label className="flex items-center gap-1 text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(choferAutoId)}
+                            onChange={() => {
+                              const defaultChofer = choferAutoId || (repartidores[0]?.IdUsuario);
+                              toggleAsignacionAutomatica(r.IdRutaDistribucion, defaultChofer);
+                            }}
+                            className="rounded text-[#1C96C5] focus:ring-0 h-3 w-3"
+                          />
+                          <span className="text-[10px] font-medium">Auto-asignación</span>
+                        </label>
+
+                        {choferAutoId && (
+                          <select
+                            value={choferAutoId}
+                            onChange={(e) => {
+                              toggleAsignacionAutomatica(r.IdRutaDistribucion, Number(e.target.value));
+                            }}
+                            className="h-6 text-[10px] border border-slate-200 rounded px-1 bg-white max-w-[120px] truncate"
+                          >
+                            {repartidores.map((rep) => (
+                              <option key={rep.IdUsuario} value={rep.IdUsuario}>
+                                {rep.NombreCompleto}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Botones de acción rápida por ruta */}
+                      <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+                        <span className="font-mono text-[11px] text-slate-500">{r.TotalPuntosVenta || 0} paradas</span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setRutaParaAsignar(r);
+                              setModalAsignarRuta(true);
+                            }}
+                            className="h-6 px-1.5 text-[10px] text-emerald-700 border-emerald-300 hover:bg-emerald-50 rounded"
+                            title="Asignar esta ruta a un chofer para la fecha seleccionada"
+                          >
+                            <Truck className="h-3 w-3 mr-0.5" />
+                            <span>Asignar</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setRutaSeleccionada(r);
+                              setModalEditorParadas(true);
+                            }}
+                            className="h-6 px-1.5 text-[10px] text-[#1C96C5] border-sky-300 hover:bg-sky-50 rounded font-semibold"
+                            title="Editar Paradas 1..N dinámicamente"
+                          >
+                            <ListOrdered className="h-3 w-3 mr-0.5" />
+                            <span>1..N</span>
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -543,14 +783,40 @@ export default function GestorRutas({ usuario = null }) {
                 )}
               </div>
               {rutaSeleccionada && (
-                <Button
-                  onClick={guardarItinerario}
-                  disabled={guardandoItinerario}
-                  className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold px-3.5 h-8 text-xs rounded"
-                >
-                  {guardandoItinerario && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                  Guardar Itinerario
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setModalEditorParadas(true)}
+                    className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-bold px-3 h-8 text-xs rounded gap-1.5 shadow-none"
+                    title="Editar orden 1..N, agregar o mover clientes"
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    <span>Editar Paradas / Agregar o Mover Clientes (1..N)</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setRutaParaAsignar(rutaSeleccionada);
+                      setModalAsignarRuta(true);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 h-8 text-xs rounded gap-1.5 shadow-none"
+                    title="Asignar o programar esta ruta a un chofer"
+                  >
+                    <Truck className="h-3.5 w-3.5" />
+                    <span>Asignar Ruta a Chofer</span>
+                  </Button>
+                  <Button
+                    onClick={guardarItinerario}
+                    disabled={guardandoItinerario}
+                    variant="outline"
+                    className="text-slate-700 font-semibold px-3 h-8 text-xs rounded"
+                  >
+                    {guardandoItinerario && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                    Guardar
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -581,6 +847,18 @@ export default function GestorRutas({ usuario = null }) {
                     >
                       <ListOrdered className="h-3.5 w-3.5" />
                       <span>Secuencia & Puntos ({puntosRuta.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubTabRuta("historial")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                        subTabRuta === "historial"
+                          ? "bg-white text-slate-900 border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <Clock className="h-3.5 w-3.5 text-slate-500" />
+                      <span>Historial y Despacho ({fechaFiltro})</span>
                     </button>
                   </div>
 
@@ -699,6 +977,102 @@ export default function GestorRutas({ usuario = null }) {
                       </div>
                     </div>
                   )}
+
+                  {/* TAB 3: HISTORIAL Y EJECUCIÓN DE LA RUTA */}
+                  {subTabRuta === "historial" && (() => {
+                    const asigRuta = asignaciones.find((a) => a.IdRutaDistribucion === rutaSeleccionada.IdRutaDistribucion);
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-[#1C96C5]" />
+                                <span>Ejecución del Despacho para {fechaFiltro === hoyStr ? "Hoy" : fechaFiltro}</span>
+                              </h4>
+                              <p className="text-[11px] text-slate-500">
+                                Datos registrados por telemetría móvil y auditoría web
+                              </p>
+                            </div>
+                            {asigRuta && (
+                              <Badge className={`text-xs ${
+                                asigRuta.Estado === "Finalizada" ? "bg-emerald-600 text-white" :
+                                asigRuta.Estado === "En Ruta" ? "bg-[#1C96C5] text-white" :
+                                "bg-amber-100 text-amber-900 border-amber-300"
+                              }`}>
+                                {asigRuta.Estado}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {asigRuta ? (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="p-2.5 bg-white border border-slate-200 rounded">
+                                  <span className="text-[10px] text-slate-500 font-medium block">Chofer Asignado:</span>
+                                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1 mt-0.5">
+                                    <UserCheck className="h-3.5 w-3.5 text-[#1C96C5]" />
+                                    {asigRuta.NombreRepartidor}
+                                  </span>
+                                </div>
+                                <div className="p-2.5 bg-white border border-slate-200 rounded">
+                                  <span className="text-[10px] text-slate-500 font-medium block">Vehículo y Odómetro:</span>
+                                  <span className="text-xs font-bold text-slate-900 font-mono mt-0.5 block">
+                                    {asigRuta.KilometrajeInicial || 0} km inicial {asigRuta.KilometrajeFinal ? `→ ${asigRuta.KilometrajeFinal} km` : ""}
+                                  </span>
+                                </div>
+                                <div className="p-2.5 bg-white border border-slate-200 rounded">
+                                  <span className="text-[10px] text-slate-500 font-medium block">Total Recaudado en Ruta:</span>
+                                  <span className="text-xs font-bold text-emerald-700 font-mono mt-0.5 block">
+                                    Bs. {Number(asigRuta.TotalCobrado || asigRuta.MontoCobrado || 0).toLocaleString("es-BO", { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {asigRuta.Observacion && (
+                                <div className="p-2.5 bg-white border border-slate-200 rounded text-xs text-slate-700">
+                                  <strong className="text-slate-800">Observaciones:</strong> {asigRuta.Observacion}
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setAsignacionParaReasignar(asigRuta);
+                                    setModalReasignar(true);
+                                  }}
+                                  className="h-8 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 gap-1.5"
+                                >
+                                  <Users className="h-3.5 w-3.5 text-amber-600" />
+                                  <span>Reasignar Paradas Pendientes</span>
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-6 text-center text-xs text-slate-500 space-y-2">
+                              <p>No existe asignación de salida registrada para esta ruta en la fecha {fechaFiltro}.</p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                  setRutaParaAsignar(rutaSeleccionada);
+                                  setModalAsignarRuta(true);
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5"
+                              >
+                                <Truck className="h-3.5 w-3.5" />
+                                <span>Programar Despacho para {fechaFiltro}</span>
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-16 text-slate-500 text-xs">
@@ -840,6 +1214,109 @@ export default function GestorRutas({ usuario = null }) {
           </form>
         </DialogContent>
       </Dialog>
+      )}
+
+      {/* MODAL 3: EDITOR DINÁMICO DE PARADAS 1..N */}
+      {modalEditorParadas && (
+        <EditorParadasDinamicoModal
+          abierto={modalEditorParadas}
+          onOpenChange={setModalEditorParadas}
+          ruta={rutaSeleccionada}
+          todosPuntosVenta={todosPuntosVenta}
+          sucursal={sucursal}
+          alGuardar={() => {
+            if (rutaSeleccionada) seleccionarRuta(rutaSeleccionada);
+            cargarDatos(true);
+          }}
+        />
+      )}
+
+      {/* MODAL 4: ASIGNAR RUTA A CHOFER */}
+      {modalAsignarRuta && (
+        <Dialog open={modalAsignarRuta} onOpenChange={setModalAsignarRuta}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-emerald-600" />
+                <span>Asignar Ruta a Chofer</span>
+              </DialogTitle>
+            </DialogHeader>
+
+            <form onSubmit={handleCrearAsignacionRapida} className="space-y-3 py-2 text-xs">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                <span className="text-[10px] text-slate-500 font-medium">Ruta seleccionada:</span>
+                <p className="font-bold text-slate-900 mt-0.5">
+                  {rutaParaAsignar?.NombreRuta} ({rutaParaAsignar?.NombreZona})
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700">Fecha de Asignación:</Label>
+                <Input
+                  type="date"
+                  value={fechaFiltro}
+                  onChange={(e) => setFechaFiltro(e.target.value)}
+                  className="h-8 text-xs font-medium mt-1"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700">Chofer Repartidor:</Label>
+                <select
+                  value={choferAsignarId}
+                  onChange={(e) => setChoferAsignarId(e.target.value)}
+                  className="w-full h-8 text-xs border border-slate-300 rounded px-2 mt-1 bg-white font-medium text-slate-800"
+                  required
+                >
+                  <option value="">Seleccione un chofer...</option>
+                  {repartidores.map((rep) => (
+                    <option key={rep.IdUsuario} value={rep.IdUsuario}>
+                      {rep.NombreCompleto} {rep.EnRuta ? "(En ruta)" : "(Disponible)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700">Kilometraje Inicial del Vehículo:</Label>
+                <Input
+                  type="number"
+                  value={kmInicialAsignar}
+                  onChange={(e) => setKmInicialAsignar(e.target.value)}
+                  className="h-8 text-xs font-medium mt-1 font-mono"
+                  placeholder="45120"
+                />
+              </div>
+
+              <DialogFooter className="gap-2 pt-2 border-t">
+                <Button type="button" variant="outline" size="sm" onClick={() => setModalAsignarRuta(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={guardandoAsignacion}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"
+                >
+                  <Truck className="h-3.5 w-3.5" />
+                  <span>{guardandoAsignacion ? "Asignando..." : "Confirmar Asignación"}</span>
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* MODAL 5: REASIGNAR PARADAS PENDIENTES */}
+      {modalReasignar && asignacionParaReasignar && (
+        <ModalReasignarParadas
+          abierto={modalReasignar}
+          onOpenChange={setModalReasignar}
+          asignacion={asignacionParaReasignar}
+          repartidores={repartidores}
+          alCompletar={() => cargarDatos(true)}
+        />
       )}
     </div>
   );

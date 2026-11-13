@@ -32,6 +32,7 @@ import {
   ObtenerRutas,
 } from "@/services/Logistica/RutaService";
 import { ObtenerClientesSimple } from "@/services/Logistica/ClienteService";
+import AlertaSolicitudesCargaBanner from "./Reparto/AlertaSolicitudesCargaBanner";
 
 export default function InicioSupervisor({ usuario }) {
   const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
@@ -97,6 +98,15 @@ export default function InicioSupervisor({ usuario }) {
     if (!cargandoAlcance) {
       cargarLogistica();
     }
+
+    const handleCustomWs = (e) => {
+      cargarLogistica(true);
+    };
+    window.addEventListener("blanquita:ws-event", handleCustomWs);
+
+    return () => {
+      window.removeEventListener("blanquita:ws-event", handleCustomWs);
+    };
   }, [sucursal, cargandoAlcance, cargarLogistica]);
 
   const repartidoresEnRuta = repartidores.filter(
@@ -115,6 +125,9 @@ export default function InicioSupervisor({ usuario }) {
 
   return (
     <div className="space-y-4">
+      {/* 0. BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
+      <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarLogistica(true)} />
+
       {/* 1. ENCABEZADO INDUSTRIAL OPERATIVO */}
       <PageHeader
         title="Centro de Control Logístico"

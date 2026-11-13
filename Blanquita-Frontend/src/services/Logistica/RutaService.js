@@ -310,7 +310,146 @@ export async function ReasignarParadasPendientes(idAsignacionOrigen, idChoferDes
   return await response.json();
 }
 
-export async function RevisarOperacionRuta(idOperacion, estado, observacion = "") {
+export async function ListarSolicitudesCarga(idAsignacion = null, estado = null) {
+  const params = new URLSearchParams();
+  if (idAsignacion) params.append("id_asignacion", idAsignacion);
+  if (estado && estado !== "TODOS") params.append("estado", estado);
+  const qs = params.toString();
+  const url = `/api/logistica/solicitudes-carga${qs ? `?${qs}` : ""}`;
+  const response = await fetchConCache(url, {}, 5000);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}
+
+export async function ObtenerSolicitudCarga(idSolicitud) {
+  const response = await fetchConCache(`/api/logistica/solicitudes-carga/${idSolicitud}`, {}, 5000);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}
+
+export async function RevisarSolicitudCarga(idSolicitud, dto = {}) {
+  const response = await fetch(`/api/logistica/solicitudes-carga/${idSolicitud}/revisar`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dto),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+// -------------------------------------------------------------
+// Motor de Reordenamiento y Secuencia Vial 1..N
+// -------------------------------------------------------------
+export async function RecalcularOrdenParadas(idRuta) {
+  const response = await fetch(`/api/logistica/rutas/${idRuta}/paradas/reordenar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function InsertarParadaOrden(idRuta, idPuntoVenta, posicion = null) {
+  const response = await fetch("/api/logistica/rutas/paradas/insertar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      IdRuta: Number(idRuta),
+      IdPuntoVenta: Number(idPuntoVenta),
+      Posicion: posicion ? Number(posicion) : null,
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function QuitarParadaRuta(idRuta, idPuntoVenta, fecha = null) {
+  let url = "/api/logistica/rutas/paradas/quitar";
+  if (fecha) url += `?fecha=${fecha}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      IdRuta: Number(idRuta),
+      IdPuntoVenta: Number(idPuntoVenta),
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function MoverParadaRuta(idPuntoVenta, idRutaOrigen, idRutaDestino, posicionDestino = null, fecha = null) {
+  let url = "/api/logistica/rutas/paradas/mover";
+  if (fecha) url += `?fecha=${fecha}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      IdPuntoVenta: Number(idPuntoVenta),
+      IdRutaOrigen: Number(idRutaOrigen),
+      IdRutaDestino: Number(idRutaDestino),
+      PosicionDestino: posicionDestino ? Number(posicionDestino) : null,
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function GenerarRutasDiarias(fecha = null) {
+  let url = "/api/logistica/rutas/generar-diarias";
+  if (fecha) url += `?fecha=${fecha}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function RevisarOperacionRuta(idOperacion, estado, observacion = "", tipo = "entrega") {
+  // Intentar endpoint REST 1 a 1 de auditoría
+  const tipoNorm = tipo === "cobro" ? "cobro" : "entrega";
+  try {
+    const resPatch = await fetch(`/api/logistica/operaciones-ruta/${tipoNorm}/${idOperacion}/revisar`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        estado: estado, // 'APROBADO' | 'OBSERVADO' | 'RECHAZADO'
+        observacion: observacion,
+      }),
+    });
+    if (resPatch.ok) {
+      invalidarCache("/api/logistica");
+      invalidarCache("/api/cxc");
+      return await resPatch.json();
+    }
+  } catch (err) {
+    // Si falla conexión directa, intentar fallback
+  }
+
   const response = await fetch(`/api/logistica/operaciones/${idOperacion}/revisar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -323,15 +462,19 @@ export async function RevisarOperacionRuta(idOperacion, estado, observacion = ""
     await manejarErrorBackend(response);
   }
   invalidarCache("/api/logistica");
+  invalidarCache("/api/cxc");
   return await response.json();
 }
 
-export async function FinalizarRutaAdmin(idAsignacion, observacionGeneral = "") {
+export async function FinalizarRutaAdmin(idAsignacion, observacionGeneral = "", estadoFinal = "APROBADA") {
   const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/finalizar-admin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       observacion_general: observacionGeneral,
+      ObservacionCierre: observacionGeneral,
+      estado_final: estadoFinal,
+      EstadoFinal: estadoFinal,
     }),
   });
   if (!response.ok) {

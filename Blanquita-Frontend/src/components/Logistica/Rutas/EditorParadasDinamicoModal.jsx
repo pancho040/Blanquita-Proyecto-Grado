@@ -21,7 +21,14 @@ import {
   Route
 } from "lucide-react";
 import BuscadorSelect from "../Common/BuscadorSelect";
-import { GuardarPuntosVentaRuta, ObtenerRutas } from "@/services/Logistica/RutaService";
+import { 
+  GuardarPuntosVentaRuta, 
+  ObtenerRutas, 
+  InsertarParadaOrden, 
+  QuitarParadaRuta, 
+  MoverParadaRuta, 
+  RecalcularOrdenParadas 
+} from "@/services/Logistica/RutaService";
 
 export default function EditorParadasDinamicoModal({
   abierto,
@@ -137,7 +144,7 @@ export default function EditorParadasDinamicoModal({
     setPosicionInsertar(reordenadas.length + 1);
   };
 
-  const agregarParadaEnPosicion = () => {
+  const agregarParadaEnPosicion = async () => {
     if (!puntoSeleccionado) {
       toast.error("Selecciona un comercio o punto de venta");
       return;
@@ -145,6 +152,17 @@ export default function EditorParadasDinamicoModal({
 
     const pvObj = todosPuntosVenta.find((p) => String(p.IdPuntoVenta) === String(puntoSeleccionado));
     if (!pvObj) return;
+
+    const idRuta = ruta?.IdRutaDistribucion || asignacion?.IdRutaDistribucion;
+    if (idRuta) {
+      try {
+        await InsertarParadaOrden(idRuta, pvObj.IdPuntoVenta, posicionInsertar);
+        toast.success(`Parada #${posicionInsertar} insertada en base de datos; desplazando siguientes +1`);
+      } catch (err) {
+        toast.error(err.message || "Error al insertar parada en el servidor");
+        return;
+      }
+    }
 
     const nuevaParada = {
       IdPuntoVenta: pvObj.IdPuntoVenta,
@@ -166,34 +184,62 @@ export default function EditorParadasDinamicoModal({
     setParadas(reordenadas);
     setPuntoSeleccionado("");
     setPosicionInsertar(reordenadas.length + 1);
-    toast.success(`Parada agregada en posición #${idxInsert + 1}: ${pvObj.NombreCliente}`);
+
+    if (alGuardar) {
+      alGuardar(reordenadas);
+    }
   };
 
-  const eliminarParada = (index) => {
+  const eliminarParada = async (index) => {
     const objetivo = paradas[index];
     if (objetivo.esEjecutada) {
-      toast.error("No se puede eliminar una parada ya ejecutada hoy");
+      toast.error("Regla inquebrantable: Prohibido eliminar una parada ya ejecutada o cobrada hoy");
       return;
+    }
+
+    const idRuta = ruta?.IdRutaDistribucion || asignacion?.IdRutaDistribucion;
+    if (idRuta) {
+      try {
+        await QuitarParadaRuta(idRuta, objetivo.IdPuntoVenta);
+        toast.info("Parada quitada y secuencia 1..N compactada en base de datos");
+      } catch (err) {
+        toast.error(err.message || "Error al quitar parada en servidor");
+        return;
+      }
     }
 
     const filtradas = paradas.filter((_, idx) => idx !== index);
     const reordenadas = reordenarCompacto(filtradas);
     setParadas(reordenadas);
     setPosicionInsertar(reordenadas.length + 1);
-    toast.info("Parada eliminada de la secuencia");
+
+    if (alGuardar) {
+      alGuardar(reordenadas);
+    }
   };
 
   const abrirModalMover = (parada) => {
     if (parada.esEjecutada) {
-      toast.error("Parada ya ejecutada hoy: no se puede mover");
+      toast.error("Parada ya ejecutada hoy: no se puede mover o cambiar de ruta");
       return;
     }
     setParadaParaMover(parada);
     setModalMoverAbierto(true);
   };
 
-  const confirmarMoverParada = () => {
+  const confirmarMoverParada = async () => {
     if (!paradaParaMover || !rutaDestinoId) return;
+
+    const idRutaOrigen = ruta?.IdRutaDistribucion || asignacion?.IdRutaDistribucion;
+    if (idRutaOrigen) {
+      try {
+        await MoverParadaRuta(paradaParaMover.IdPuntoVenta, idRutaOrigen, rutaDestinoId);
+        toast.success("Cliente trasladado a la ruta destino. Orden 1..N recalculado en ambas rutas");
+      } catch (err) {
+        toast.error(err.message || "Error al mover cliente de ruta");
+        return;
+      }
+    }
 
     // Remover de la lista local de la ruta actual
     const filtradas = paradas.filter((p) => p.IdPuntoVenta !== paradaParaMover.IdPuntoVenta);
@@ -201,7 +247,26 @@ export default function EditorParadasDinamicoModal({
     setParadas(reordenadas);
     setModalMoverAbierto(false);
 
-    toast.success(`Cliente movido exitosamente a la ruta seleccionada`);
+    if (alGuardar) {
+      alGuardar(reordenadas);
+    }
+  };
+
+  const handleRecalcularOrden = async () => {
+    const idRuta = ruta?.IdRutaDistribucion || asignacion?.IdRutaDistribucion;
+    if (!idRuta) return;
+    try {
+      setGuardando(true);
+      const res = await RecalcularOrdenParadas(idRuta);
+      if (Array.isArray(res) && res.length > 0) {
+        setParadas(res.map((p, idx) => ({ ...p, OrdenVisita: idx + 1 })));
+      }
+      toast.success("Secuencia vial 1..N compactada sin huecos");
+    } catch (err) {
+      toast.error(err.message || "Error al recalcular paradas");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const guardarCambios = async () => {
@@ -433,9 +498,18 @@ export default function EditorParadasDinamicoModal({
           </div>
 
           <DialogFooter className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between sm:justify-between">
-            <span className="text-[11px] text-slate-500">
-              * El orden 1..N se normaliza automáticamente al mover o insertar.
-            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRecalcularOrden}
+              disabled={guardando}
+              className="text-xs text-slate-700 border-slate-300 gap-1.5"
+              title="Compactar la secuencia vial 1..N sin huecos"
+            >
+              <ListOrdered className="h-3.5 w-3.5 text-[#1C96C5]" />
+              <span>Compactar 1..N</span>
+            </Button>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
