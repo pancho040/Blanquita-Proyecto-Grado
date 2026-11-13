@@ -42,6 +42,7 @@ export const HojaRutaScreen = ({ navigation }) => {
     ultimaSincronizacion,
     estadoRuta,
     asignacionActiva,
+    selloCarga,
   } = useRuta();
 
   const [vista, setVista] = useState('mapa'); // 'mapa' | 'lista'
@@ -208,23 +209,91 @@ export const HojaRutaScreen = ({ navigation }) => {
 
       {/* CASO 3: ESTADO CARGA_SOLICITADA */}
       {estadoActual === (ESTADOS_RUTA?.CARGA_SOLICITADA || 'CARGA_SOLICITADA') && (
-        <View style={styles.stateCenterCard}>
-          <View style={[styles.iconCircleWait, { backgroundColor: 'rgba(2, 132, 199, 0.12)' }]}>
-            <Clock size={40} color="#0284C7" />
+        <View style={styles.stateContainerPadding}>
+          <View style={styles.solicitudEnviadaCard}>
+            <View style={styles.badgeSolicitudEnviada}>
+              <CheckCircle2 size={18} color="#059669" />
+              <Text style={styles.badgeSolicitudTexto}>
+                ✓ Solicitud enviada — Esperando aprobación en Web
+              </Text>
+            </View>
+
+            <View style={styles.solicitudEnviadaHeader}>
+              <View style={styles.solicitudIconBox}>
+                <Clock size={22} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.solicitudEnviadaTitulo}>
+                  {asignacionActiva?.NombreRuta || hojaRuta?.nombre_ruta || 'Ruta del Día'}
+                </Text>
+                <Text style={styles.solicitudEnviadaSub}>
+                  Placa {asignacionActiva?.Vehiculo?.Placa || '2458-BLQ'} • Enviado a las {
+                    selloCarga?.fecha_solicitud
+                      ? new Date(selloCarga.fecha_solicitud).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : 'Reciente'
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {/* Resumen de carga solicitada */}
+            <View style={styles.resumenSolicitudBox}>
+              <View style={styles.resumenSolicitudHeaderRow}>
+                <Package size={15} color="#0284C7" />
+                <Text style={styles.resumenSolicitudHeaderLabel}>Resumen de stock solicitado:</Text>
+              </View>
+
+              {selloCarga?.usar_remanente && (
+                <View style={styles.resumenItemFila}>
+                  <Text style={styles.resumenItemBullet}>•</Text>
+                  <Text style={styles.resumenItemTexto}>
+                    Salida con stock remanente en camión confirmada
+                  </Text>
+                </View>
+              )}
+
+              {selloCarga?.items_solicitados && selloCarga.items_solicitados.length > 0 ? (
+                selloCarga.items_solicitados.map((it, idx) => (
+                  <View key={it.presentacion_id || idx} style={styles.resumenItemFila}>
+                    <Text style={styles.resumenItemBullet}>•</Text>
+                    <Text style={styles.resumenItemTexto} numberOfLines={1}>
+                      {it.nombre_producto || `Presentación #${it.presentacion_id}`}:{' '}
+                      <Text style={styles.resumenItemCant}>
+                        {it.cantidad_solicitada || it.cantidad || 0} bultos
+                      </Text>
+                    </Text>
+                  </View>
+                ))
+              ) : !selloCarga?.usar_remanente ? (
+                <Text style={styles.resumenItemTexto}>
+                  • Carga estándar programada para el camión
+                </Text>
+              ) : null}
+
+              {selloCarga?.observacion ? (
+                <Text style={styles.resumenItemObs}>
+                  Nota chofer: "{selloCarga.observacion}"
+                </Text>
+              ) : null}
+            </View>
+
+            <Text style={styles.solicitudEnviadaNota}>
+              El encargado de almacén debe autorizar tu salida desde el panel Web. Las paradas se desbloquearán de forma automática.
+            </Text>
+
+            {/* Botón secundario pequeño "Actualizar estado" */}
+            <View style={styles.btnActualizarContainer}>
+              <Button
+                title="Actualizar estado"
+                icon={RotateCw}
+                variant="outline"
+                size="sm"
+                onPress={onRefresh}
+                loading={refreshing}
+                style={styles.btnActualizarPequeno}
+              />
+            </View>
           </View>
-          <Text style={styles.stateTitle}>Solicitud de stock enviada a Web</Text>
-          <Text style={styles.stateSubtitle}>
-            Esperando aprobación del encargado para habilitar tu ruta... Tan pronto como se apruebe tu carga en Almacén, se desbloquearán tus paradas de entrega automáticamente.
-          </Text>
-          <Button
-            title="Actualizar"
-            icon={RotateCw}
-            variant="primary"
-            size="md"
-            onPress={onRefresh}
-            loading={refreshing}
-            style={styles.stateBtn}
-          />
         </View>
       )}
 
@@ -587,6 +656,122 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#64748B',
     lineHeight: 16,
+  },
+  solicitudEnviadaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  badgeSolicitudEnviada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#059669',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    marginBottom: 14,
+  },
+  badgeSolicitudTexto: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+    flex: 1,
+  },
+  solicitudEnviadaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  solicitudIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  solicitudEnviadaTitulo: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  solicitudEnviadaSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  resumenSolicitudBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginVertical: 8,
+    gap: 6,
+  },
+  resumenSolicitudHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  resumenSolicitudHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  resumenItemFila: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  resumenItemBullet: {
+    fontSize: 13,
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  resumenItemTexto: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  resumenItemCant: {
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  resumenItemObs: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: '#64748B',
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  solicitudEnviadaNota: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  btnActualizarContainer: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  btnActualizarPequeno: {
+    minWidth: 150,
   },
 });
 

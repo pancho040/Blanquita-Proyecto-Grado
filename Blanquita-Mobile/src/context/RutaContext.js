@@ -14,7 +14,7 @@ export { ESTADOS_RUTA };
  * Determina el estado del flujo de ruta del chofer:
  * SIN_RUTA, PENDIENTE_CARGA, CARGA_SOLICITADA, APROBADA_EN_RUTA, FINALIZADA
  */
-export function determinarEstadoRuta(ruta) {
+export function determinarEstadoRuta(ruta, selloLocal = null) {
   if (!ruta || (!ruta.IdAsignacion && !ruta.IdAsignacionRuta && !ruta.id)) {
     return ESTADOS_RUTA.SIN_RUTA;
   }
@@ -22,17 +22,7 @@ export function determinarEstadoRuta(ruta) {
   if (estadoRaw === "FINALIZADA" || estadoRaw === "CERRADA") {
     return ESTADOS_RUTA.FINALIZADA;
   }
-  if (ruta.estado_flujo && Object.values(ESTADOS_RUTA).includes(ruta.estado_flujo)) {
-    return ruta.estado_flujo;
-  }
   const estadoCarga = String(ruta.estado_carga || ruta.EstadoCarga || "").toUpperCase();
-  if (
-    estadoCarga === "SOLICITADA" ||
-    estadoCarga === "PENDIENTE_APROBACION" ||
-    estadoRaw === "CARGA_SOLICITADA"
-  ) {
-    return ESTADOS_RUTA.CARGA_SOLICITADA;
-  }
   const habilitada = Boolean(
     ruta.habilitada_para_reparto === true ||
     ruta.HabilitadaParaReparto === true ||
@@ -43,6 +33,24 @@ export function determinarEstadoRuta(ruta) {
   );
   if (habilitada) {
     return ESTADOS_RUTA.APROBADA_EN_RUTA;
+  }
+  // Si existe sello local para esta asignación y la ruta no está en APROBADA_EN_RUTA ni FINALIZADA
+  if (
+    selloLocal &&
+    (selloLocal.estado_operativo === "CARGA_SOLICITADA" ||
+      selloLocal.estado_operativo === ESTADOS_RUTA.CARGA_SOLICITADA)
+  ) {
+    return ESTADOS_RUTA.CARGA_SOLICITADA;
+  }
+  if (ruta.estado_flujo && Object.values(ESTADOS_RUTA).includes(ruta.estado_flujo)) {
+    return ruta.estado_flujo;
+  }
+  if (
+    estadoCarga === "SOLICITADA" ||
+    estadoCarga === "PENDIENTE_APROBACION" ||
+    estadoRaw === "CARGA_SOLICITADA"
+  ) {
+    return ESTADOS_RUTA.CARGA_SOLICITADA;
   }
   return ESTADOS_RUTA.PENDIENTE_CARGA;
 }
@@ -56,6 +64,7 @@ export function RutaProvider({ children }) {
 
   const [asignacionActiva, setAsignacionActiva] = useState(null);
   const [estadoRuta, setEstadoRuta] = useState(ESTADOS_RUTA.SIN_RUTA);
+  const [selloCarga, setSelloCarga] = useState(null);
   const [cargandoRuta, setCargandoRuta] = useState(false);
   const [errorRuta, setErrorRuta] = useState(null);
   const [comprobanteActual, setComprobanteActual] = useState(null);
@@ -84,6 +93,15 @@ export function RutaProvider({ children }) {
    * Permite recibir una nueva asignación de ruta en el mismo día (Soporte Multi-Ruta).
    */
   const limpiarRutaActiva = async () => {
+    const idAsig =
+      asignacionActiva?.IdAsignacion ||
+      asignacionActiva?.IdAsignacionRuta ||
+      asignacionActiva?.id;
+    if (idAsig) {
+      await LocalDB.limpiarSelloSolicitudCarga(idAsig);
+    }
+    await LocalDB.limpiarSelloSolicitudCarga();
+    setSelloCarga(null);
     setAsignacionActiva(null);
     setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
     setRecaudacion({
@@ -128,6 +146,16 @@ export function RutaProvider({ children }) {
     // 1. Evento: Carga de camión aprobada en Web
     const unsubCargaAprobada = wsService.on("carga_camion_aprobada", async (data) => {
       console.log("[RutaContext] Evento WebSocket carga_camion_aprobada recibido:", data);
+      const idAsig =
+        asignacionActiva?.IdAsignacion ||
+        asignacionActiva?.IdAsignacionRuta ||
+        asignacionActiva?.id ||
+        data?.id_asignacion;
+      if (idAsig) {
+        await LocalDB.limpiarSelloSolicitudCarga(idAsig);
+      }
+      await LocalDB.limpiarSelloSolicitudCarga();
+      setSelloCarga(null);
       setAsignacionActiva((prev) => {
         if (!prev) return prev;
         const actualizada = {
@@ -141,8 +169,8 @@ export function RutaProvider({ children }) {
         return actualizada;
       });
       setEstadoRuta(ESTADOS_RUTA.APROBADA_EN_RUTA);
-      if (usuario && asignacionActiva) {
-        iniciarTelemetria(usuario.IdUsuario || usuario.id, asignacionActiva.IdAsignacion || asignacionActiva.IdAsignacionRuta);
+      if (usuario && (asignacionActiva || idAsig)) {
+        iniciarTelemetria(usuario.IdUsuario || usuario.id, idAsig);
       }
       // Refrescar para sincronizar paradas y stock oficial
       if (cargarHojaRutaRef.current) {
@@ -184,7 +212,10 @@ export function RutaProvider({ children }) {
     try {
       const rutaLocal = await LocalDB.obtenerRutaActiva();
       if (rutaLocal && (rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta || rutaLocal.id)) {
-        const estadoLocal = determinarEstadoRuta(rutaLocal);
+        const idAsig = rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta || rutaLocal.id;
+        const selloLocal = await LocalDB.obtenerSelloSolicitudCarga(idAsig);
+        setSelloCarga(selloLocal);
+        const estadoLocal = determinarEstadoRuta(rutaLocal, selloLocal);
         if (estadoLocal === ESTADOS_RUTA.FINALIZADA) {
           await limpiarRutaActiva();
         } else {
@@ -192,14 +223,16 @@ export function RutaProvider({ children }) {
           setEstadoRuta(estadoLocal);
           recalcularRecaudacion(rutaLocal);
           if (estadoLocal === ESTADOS_RUTA.APROBADA_EN_RUTA && usuario) {
-            iniciarTelemetria(usuario.IdUsuario || usuario.id, rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta);
+            iniciarTelemetria(usuario.IdUsuario || usuario.id, idAsig);
           }
         }
       } else {
+        setSelloCarga(null);
         setAsignacionActiva(null);
         setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
       }
     } catch (_e) {
+      setSelloCarga(null);
       setAsignacionActiva(null);
       setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
     } finally {
@@ -218,24 +251,44 @@ export function RutaProvider({ children }) {
         }
 
         if (rutaChofer && (rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta || rutaChofer.id)) {
+          const idAsig = rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta || rutaChofer.id;
           // Si trae paradas del endpoint especializado
           if (resHoja && resHoja.paradas && (!rutaChofer.paradas || rutaChofer.paradas.length === 0)) {
             rutaChofer.paradas = resHoja.paradas;
           }
-          const nuevoEstado = determinarEstadoRuta(rutaChofer);
+
+          // Consultar si existe sello local de solicitud de carga antes de sobreescribir el estado
+          const selloLocal = await LocalDB.obtenerSelloSolicitudCarga(idAsig);
+          setSelloCarga(selloLocal);
+
+          const nuevoEstado = determinarEstadoRuta(rutaChofer, selloLocal);
 
           if (nuevoEstado === ESTADOS_RUTA.FINALIZADA) {
+            await LocalDB.limpiarSelloSolicitudCarga(idAsig);
+            setSelloCarga(null);
             await limpiarRutaActiva();
-          } else {
+          } else if (nuevoEstado === ESTADOS_RUTA.APROBADA_EN_RUTA) {
+            // Aprobada por Administración/Almacén: limpiar sello local y desbloquear ruta
+            await LocalDB.limpiarSelloSolicitudCarga(idAsig);
+            setSelloCarga(null);
             setAsignacionActiva(rutaChofer);
             setEstadoRuta(nuevoEstado);
             await LocalDB.guardarRutaActiva(rutaChofer);
             recalcularRecaudacion(rutaChofer);
             setUltimaSincronizacion(new Date());
 
-            if (nuevoEstado === ESTADOS_RUTA.APROBADA_EN_RUTA) {
-              iniciarTelemetria(idChofer, rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta);
+            iniciarTelemetria(idChofer, idAsig);
+          } else {
+            // Si el sello local existe y el servidor aún no aprobó, mantener CARGA_SOLICITADA
+            if (nuevoEstado === ESTADOS_RUTA.CARGA_SOLICITADA) {
+              rutaChofer.estado_carga = "SOLICITADA";
+              rutaChofer.estado_flujo = ESTADOS_RUTA.CARGA_SOLICITADA;
             }
+            setAsignacionActiva(rutaChofer);
+            setEstadoRuta(nuevoEstado);
+            await LocalDB.guardarRutaActiva(rutaChofer);
+            recalcularRecaudacion(rutaChofer);
+            setUltimaSincronizacion(new Date());
           }
         } else {
           // Servidor confirma que no tiene ruta asignada para hoy
@@ -274,31 +327,49 @@ export function RutaProvider({ children }) {
    * Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
    * Permite solicitar stock adicional o confirmar salida con stock remanente
    */
-  const solicitarCargaCamion = async ({ usarRemanente = false, observacion = "", items = [] } = {}) => {
+  const solicitarCargaCamion = async ({ usarRemanente = false, usar_remanente = false, observacion = "", items = [] } = {}) => {
     if (!asignacionActiva) {
       return { success: false, error: "No tienes una asignación activa para solicitar carga." };
     }
     const idAsig = asignacionActiva.IdAsignacion || asignacionActiva.IdAsignacionRuta || asignacionActiva.id || 1;
+    const flagRemanente = Boolean(usarRemanente || usar_remanente);
+
+    // 1. Guardar sello inmediatamente en LocalDB para persistencia y bloqueo
+    const selloData = {
+      estado_operativo: ESTADOS_RUTA.CARGA_SOLICITADA,
+      fecha_solicitud: new Date().toISOString(),
+      items_solicitados: items,
+      usar_remanente: flagRemanente,
+      observacion: observacion || "",
+    };
+    await LocalDB.guardarSelloSolicitudCarga(idAsig, selloData);
+    setSelloCarga(selloData);
+
+    // 2. Actualizar estado y persistir ruta activa local de forma optimista
+    const rutaActualizada = {
+      ...asignacionActiva,
+      estado_carga: "SOLICITADA",
+      estado_flujo: ESTADOS_RUTA.CARGA_SOLICITADA,
+      sello_solicitud: selloData,
+    };
+    setAsignacionActiva(rutaActualizada);
+    setEstadoRuta(ESTADOS_RUTA.CARGA_SOLICITADA);
+    try {
+      await LocalDB.guardarRutaActiva(rutaActualizada);
+    } catch (_e) {}
+
+    // 3. Enviar solicitud a la API central
     const res = await LogisticaApi.solicitarCargaCamion({
       id_asignacion: idAsig,
-      usar_remanente: usarRemanente,
+      usar_remanente: flagRemanente,
       observacion,
       items,
     });
 
     if (res.success || res.codigo === "EXITO") {
-      const rutaActualizada = {
-        ...asignacionActiva,
-        estado_carga: "SOLICITADA",
-        estado_flujo: ESTADOS_RUTA.CARGA_SOLICITADA,
-      };
-      setAsignacionActiva(rutaActualizada);
-      setEstadoRuta(ESTADOS_RUTA.CARGA_SOLICITADA);
-      try {
-        await LocalDB.guardarRutaActiva(rutaActualizada);
-      } catch (_e) {}
       return { success: true, data: res.data, mensaje: res.mensaje };
     }
+    // Si la API falla por red, el sello local ya garantiza que el chofer no duplique solicitudes
     return res;
   };
 
@@ -713,6 +784,8 @@ export function RutaProvider({ children }) {
       value={{
         asignacionActiva,
         estadoRuta,
+        estadoOperativo: estadoRuta,
+        selloCarga,
         ESTADOS_RUTA,
         hojaRuta,
         metricas,

@@ -19,6 +19,8 @@ import {
   AlertCircle,
   Gift,
   DollarSign,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { Header } from '../../components/common/Header';
@@ -33,7 +35,15 @@ import { SolicitarCargaModal } from './SolicitarCargaModal';
 export const MiInventarioScreen = () => {
   const { user } = useAuth();
   const rutaCtx = useRuta?.() || {};
-  const { asignacionActiva } = rutaCtx;
+  const {
+    asignacionActiva,
+    estadoRuta,
+    estadoOperativo: estadoOpCtx,
+    selloCarga,
+    cargarRutaDelDia,
+  } = rutaCtx;
+  const estadoOperativo = estadoOpCtx || estadoRuta;
+  const esCargaSolicitada = estadoOperativo === 'CARGA_SOLICITADA';
 
   const [inventario, setInventario] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -338,15 +348,86 @@ export const MiInventarioScreen = () => {
                   </View>
                 </View>
 
-                {/* Botón de acceso a Solicitud de Carga */}
-                <Button
-                  title="Solicitar Carga / Stock a Almacén"
-                  icon={Package}
-                  variant="outline"
-                  size="md"
-                  onPress={() => setModalCargaVisible(true)}
-                  style={{ marginTop: 4 }}
-                />
+                {/* Estado Operativo de Carga / Botón */}
+                {esCargaSolicitada ? (
+                  <View style={styles.bannerSolicitudEnviadaInv}>
+                    <View style={styles.badgeSolicitudEnviadaInv}>
+                      <CheckCircle2 size={16} color="#059669" />
+                      <Text style={styles.badgeSolicitudTextoInv}>
+                        ✓ Solicitud enviada — Esperando aprobación en Web
+                      </Text>
+                    </View>
+
+                    <View style={styles.solicitudInfoFilaInv}>
+                      <Clock size={13} color="#94A3B8" />
+                      <Text style={styles.solicitudSubInv}>
+                        Hora de envío: {
+                          selloCarga?.fecha_solicitud
+                            ? new Date(selloCarga.fecha_solicitud).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : 'Reciente'
+                        }
+                      </Text>
+                    </View>
+
+                    {/* Resumen de productos solicitados */}
+                    <View style={styles.resumenItemsInv}>
+                      <Text style={styles.resumenItemsTituloInv}>Stock solicitado:</Text>
+                      {selloCarga?.usar_remanente && (
+                        <Text style={styles.resumenItemTextoInv}>
+                          • Salida con stock remanente en camión confirmada
+                        </Text>
+                      )}
+                      {selloCarga?.items_solicitados && selloCarga.items_solicitados.length > 0 ? (
+                        selloCarga.items_solicitados.map((it, idx) => (
+                          <Text key={it.presentacion_id || idx} style={styles.resumenItemTextoInv}>
+                            • {it.nombre_producto || `Item #${it.presentacion_id}`}:{' '}
+                            <Text style={{ fontWeight: '800', color: '#F8FAFC' }}>
+                              {it.cantidad_solicitada || it.cantidad || 0} bultos
+                            </Text>
+                          </Text>
+                        ))
+                      ) : !selloCarga?.usar_remanente ? (
+                        <Text style={styles.resumenItemTextoInv}>
+                          • Carga estándar programada para el camión
+                        </Text>
+                      ) : null}
+                      {selloCarga?.observacion ? (
+                        <Text style={[styles.resumenItemTextoInv, { fontStyle: 'italic', color: '#94A3B8', marginTop: 2 }]}>
+                          Nota: "{selloCarga.observacion}"
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {/* Botón secundario pequeño "Actualizar estado" */}
+                    <TouchableOpacity
+                      style={styles.btnActualizarEstadoPequeno}
+                      onPress={() => {
+                        cargarDatos(true);
+                        if (cargarRutaDelDia) cargarRutaDelDia(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <RotateCw size={13} color="#38BDF8" />
+                      <Text style={styles.btnActualizarEstadoTexto}>Actualizar estado</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : estadoOperativo === 'APROBADA_EN_RUTA' ? (
+                  <View style={styles.bannerRutaAprobadaInv}>
+                    <ShieldCheck size={16} color="#16A34A" />
+                    <Text style={styles.bannerRutaAprobadaTexto}>
+                      ✓ Inventario habilitado para repartos y cobranzas
+                    </Text>
+                  </View>
+                ) : (
+                  <Button
+                    title="Solicitar Carga / Stock a Almacén"
+                    icon={Package}
+                    variant="outline"
+                    size="md"
+                    onPress={() => setModalCargaVisible(true)}
+                    style={{ marginTop: 4 }}
+                  />
+                )}
               </View>
             ) : null
           }
@@ -694,5 +775,91 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
     lineHeight: 16,
+  },
+  bannerSolicitudEnviadaInv: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    padding: 14,
+    marginTop: 4,
+    gap: 8,
+  },
+  badgeSolicitudEnviadaInv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(5, 150, 105, 0.15)',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  badgeSolicitudTextoInv: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '800',
+    flex: 1,
+  },
+  solicitudInfoFilaInv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  solicitudSubInv: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+  },
+  resumenItemsInv: {
+    backgroundColor: '#1E293B',
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  resumenItemsTituloInv: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#38BDF8',
+    marginBottom: 2,
+  },
+  resumenItemTextoInv: {
+    fontSize: 11.5,
+    color: '#CBD5E1',
+  },
+  btnActualizarEstadoPequeno: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'center',
+    marginTop: 4,
+    gap: 6,
+  },
+  btnActualizarEstadoTexto: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bannerRutaAprobadaInv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(22, 163, 74, 0.15)',
+    borderWidth: 1,
+    borderColor: '#16A34A',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 4,
+    gap: 8,
+  },
+  bannerRutaAprobadaTexto: {
+    color: '#4ADE80',
+    fontSize: 12.5,
+    fontWeight: '700',
+    flex: 1,
   },
 });

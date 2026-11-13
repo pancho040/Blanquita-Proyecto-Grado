@@ -235,18 +235,22 @@ export const LogisticaApi = {
   },
 
   // 10. Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
-  async solicitarCargaCamion({ id_asignacion, usar_remanente = false, observacion = "", items = [] } = {}, idempotencyKey = null) {
+  async solicitarCargaCamion(
+    { id_asignacion, idAsignacion, usar_remanente = false, usarRemanente = false, observacion = "", items = [] } = {},
+    idempotencyKey = null
+  ) {
     const headers = {};
     if (idempotencyKey) {
       headers["X-Idempotency-Key"] = idempotencyKey;
     }
     const payload = {
-      id_asignacion,
-      usar_remanente: Boolean(usar_remanente),
+      id_asignacion: id_asignacion || idAsignacion,
+      usar_remanente: Boolean(usar_remanente || usarRemanente),
       observacion: observacion || "",
       items: (items || []).map((it) => ({
         presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
         cantidad_solicitada: Number(it.cantidad_solicitada || it.cantidad || 0),
+        nombre_producto: it.nombre_producto || it.nombre || undefined,
       })),
     };
     try {

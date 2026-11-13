@@ -13,6 +13,8 @@ import { Colors } from '../../constants/Colors';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { LogisticaApi } from '../../api/logisticaApi';
+import { LocalDB } from '../../database/localDb';
+import { useRuta } from '../../context/RutaContext';
 import {
   Truck,
   Package,
@@ -31,6 +33,10 @@ export const SolicitarCargaModal = ({
   inventarioRemanente = [],
   onSolicitudExitosa,
 }) => {
+  const rutaCtx = useRuta?.() || {};
+  const { solicitarCargaCamion, estadoRuta, estadoOperativo: estadoOpCtx } = rutaCtx;
+  const estadoOperativo = estadoOpCtx || estadoRuta;
+
   const [usarRemanente, setUsarRemanente] = useState(false);
   const [cantidades, setCantidades] = useState({});
   const [observacion, setObservacion] = useState('');
@@ -78,6 +84,11 @@ export const SolicitarCargaModal = ({
   const handleEnviar = async () => {
     setErrorMsg(null);
 
+    if (estadoOperativo === 'CARGA_SOLICITADA') {
+      setErrorMsg('Ya existe una solicitud de carga enviada a Administración pendiente de aprobación.');
+      return;
+    }
+
     // Si no usa remanente y no pide cantidades adicionales, avisar al chofer
     if (!usarRemanente && totalBultosSolicitados <= 0) {
       setErrorMsg('Selecciona al menos una cantidad a cargar o activa "Confirmar salida con stock remanente".');
@@ -88,33 +99,47 @@ export const SolicitarCargaModal = ({
     try {
       const itemsPayload = Object.entries(cantidades)
         .filter(([, cant]) => Number(cant) > 0)
-        .map(([id, cant]) => ({
-          presentacion_id: Number(id),
-          cantidad_solicitada: Number(cant),
-        }));
+        .map(([id, cant]) => {
+          const itemRef = itemsDisponibles.find(
+            (it) => String(it.presentacion_id) === String(id)
+          );
+          return {
+            presentacion_id: Number(id),
+            cantidad_solicitada: Number(cant),
+            nombre_producto: itemRef?.nombre || `Producto #${id}`,
+          };
+        });
 
       const payload = {
         id_asignacion: idAsignacion || 1,
         usar_remanente: usarRemanente,
+        usarRemanente,
         observacion: observacion.trim(),
         items: itemsPayload,
       };
 
-      const res = await LogisticaApi.solicitarCargaCamion(payload);
+      let res;
+      if (solicitarCargaCamion) {
+        res = await solicitarCargaCamion(payload);
+      } else {
+        // Fallback: guardar sello localmente si no vino por contexto
+        await LocalDB.guardarSelloSolicitudCarga(payload.id_asignacion, {
+          estado_operativo: 'CARGA_SOLICITADA',
+          fecha_solicitud: new Date().toISOString(),
+          items_solicitados: itemsPayload,
+          usar_remanente: usarRemanente,
+          observacion: payload.observacion,
+        });
+        res = await LogisticaApi.solicitarCargaCamion(payload);
+      }
 
       if (res.success || res.codigo === 'EXITO') {
+        onClose();
+        if (onSolicitudExitosa) onSolicitudExitosa(res.data || payload);
         Alert.alert(
-          'Solicitud Enviada',
-          'Tu solicitud de carga ha sido remitida a Almacén/Web. Espera la confirmación del encargado para iniciar ruta.',
-          [
-            {
-              text: 'Entendido',
-              onPress: () => {
-                if (onSolicitudExitosa) onSolicitudExitosa(res.data || payload);
-                onClose();
-              },
-            },
-          ]
+          '✓ Solicitud de carga enviada a Administración',
+          'Tu solicitud ha sido remitida con éxito. Espera la confirmación del encargado para iniciar tu ruta de reparto.',
+          [{ text: 'Entendido' }]
         );
       } else {
         setErrorMsg(res.error || 'No se pudo enviar la solicitud de carga.');
@@ -153,6 +178,15 @@ export const SolicitarCargaModal = ({
             <View style={styles.errorBox}>
               <AlertCircle size={16} color={Colors.danger} />
               <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          )}
+
+          {estadoOperativo === 'CARGA_SOLICITADA' && (
+            <View style={styles.alertaYaEnviadaBox}>
+              <CheckCircle2 size={16} color="#059669" />
+              <Text style={styles.alertaYaEnviadaTexto}>
+                Ya tienes una solicitud de carga enviada a Administración pendiente de aprobación.
+              </Text>
             </View>
           )}
 
@@ -284,13 +318,23 @@ export const SolicitarCargaModal = ({
               disabled={enviando}
             />
             <Button
-              title={enviando ? 'Enviando...' : 'Enviar Solicitud'}
+              title={
+                enviando
+                  ? 'Enviando...'
+                  : estadoOperativo === 'CARGA_SOLICITADA'
+                  ? 'Solicitud ya enviada'
+                  : 'Enviar Solicitud'
+              }
               icon={CheckCircle2}
               variant="primary"
               size="md"
               onPress={handleEnviar}
               loading={enviando}
-              disabled={enviando || (!usarRemanente && totalBultosSolicitados <= 0)}
+              disabled={
+                enviando ||
+                estadoOperativo === 'CARGA_SOLICITADA' ||
+                (!usarRemanente && totalBultosSolicitados <= 0)
+              }
               style={{ flex: 1.5 }}
             />
           </View>
@@ -361,6 +405,23 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 12,
     color: '#991B1B',
+    flex: 1,
+  },
+  alertaYaEnviadaBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#059669',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    gap: 8,
+  },
+  alertaYaEnviadaTexto: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
     flex: 1,
   },
   remanenteCard: {

@@ -275,9 +275,69 @@ export const LocalDB = {
     }
   },
 
+  // -------------------------------------------------------------
+  // SELLO LOCAL DE SOLICITUD DE CARGA (SUBAGENTE A - PERSISTENCIA Y BLOQUEO)
+  // -------------------------------------------------------------
+  async guardarSelloSolicitudCarga(idAsignacion, datos = {}) {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const clave = `@blanquita_sello_solicitud_carga_${idAsignacion || "activa"}`;
+      const payload = {
+        idAsignacion: idAsignacion || "activa",
+        estado_operativo: "CARGA_SOLICITADA",
+        fecha_solicitud: datos?.fecha_solicitud || new Date().toISOString(),
+        fecha_dia: hoy,
+        items_solicitados: datos?.items_solicitados || datos?.items || [],
+        usar_remanente: Boolean(datos?.usar_remanente ?? datos?.usarRemanente),
+        observacion: datos?.observacion || "",
+      };
+      await AsyncStorage.setItem(clave, JSON.stringify(payload));
+      return payload;
+    } catch (e) {
+      console.error("Error guardando sello de solicitud de carga local:", e);
+      return null;
+    }
+  },
+
+  async obtenerSelloSolicitudCarga(idAsignacion) {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      let clave = `@blanquita_sello_solicitud_carga_${idAsignacion || "activa"}`;
+      let raw = await AsyncStorage.getItem(clave);
+      if (!raw && idAsignacion && idAsignacion !== "activa") {
+        clave = "@blanquita_sello_solicitud_carga_activa";
+        raw = await AsyncStorage.getItem(clave);
+      }
+      if (!raw) return null;
+      const sello = JSON.parse(raw);
+      if (sello.fecha_dia && sello.fecha_dia !== hoy) {
+        await AsyncStorage.removeItem(clave);
+        return null;
+      }
+      return sello;
+    } catch (e) {
+      console.error("Error leyendo sello de solicitud de carga local:", e);
+      return null;
+    }
+  },
+
+  async limpiarSelloSolicitudCarga(idAsignacion) {
+    try {
+      if (idAsignacion && idAsignacion !== "activa") {
+        await AsyncStorage.removeItem(`@blanquita_sello_solicitud_carga_${idAsignacion}`);
+      }
+      await AsyncStorage.removeItem("@blanquita_sello_solicitud_carga_activa");
+      return true;
+    } catch (e) {
+      console.error("Error eliminando sello de solicitud de carga local:", e);
+      return false;
+    }
+  },
+
   // Limpiar toda la base local (excepto cola de sincronización si tuviera pendientes)
   async limpiarTodo() {
     try {
+      await this.limpiarSelloSolicitudCarga();
       await AsyncStorage.multiRemove([
         CONFIG.SYNC.CLAVE_STORAGE_SESION,
         CONFIG.SYNC.CLAVE_STORAGE_RUTA,
