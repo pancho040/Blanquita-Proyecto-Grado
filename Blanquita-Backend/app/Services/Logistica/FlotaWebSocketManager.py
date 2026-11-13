@@ -41,7 +41,8 @@ class FlotaWebSocketManager:
         self,
         usuario_id: int,
         sucursales_permitidas: Optional[List[int]] = None,
-        duracion_segundos: int = 60
+        duracion_segundos: int = 60,
+        rol: Optional[int] = None
     ) -> str:
         """
         Emite un ticket efímero de un solo uso y corta vida para establecer la conexión WebSocket.
@@ -51,6 +52,8 @@ class FlotaWebSocketManager:
         self.tickets_efimeros[ticket] = {
             "expira_en": time.time() + duracion_segundos,
             "usuario_id": usuario_id,
+            "id_chofer": usuario_id,
+            "rol": rol,
             "sucursales_permitidas": sucursales_permitidas
         }
         return ticket
@@ -80,9 +83,14 @@ class FlotaWebSocketManager:
         Acepta la conexión WebSocket, la registra en el hub y emite el snapshot inicial de choferes.
         """
         try:
-            await websocket.accept()
+            from starlette.websockets import WebSocketState
+            if getattr(websocket, "client_state", None) == WebSocketState.CONNECTING:
+                await websocket.accept()
         except Exception:
-            pass
+            try:
+                await websocket.accept()
+            except Exception:
+                pass
 
         self.active_connections[websocket] = {
             "usuario_id": ticket_data.get("usuario_id"),
@@ -184,6 +192,8 @@ class FlotaWebSocketManager:
         """Envía un evento a los observadores web activos."""
         conexiones_cerradas = []
         for ws, meta in list(self.active_connections.items()):
+            if meta.get("tipo_cliente") == "movil":
+                continue
             suc_permitidas = meta.get("sucursales_permitidas")
             if suc_permitidas is not None and sucursal_id is not None:
                 if sucursal_id not in suc_permitidas:

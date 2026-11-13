@@ -151,7 +151,7 @@ def listar_asignaciones(
     return RutaService(db).ListarAsignaciones(fecha, id_repartidor, alcance.sucursal_efectiva)
 
 @RutaRouter.post("/asignaciones", response_model=dict)
-def crear_asignacion(
+async def crear_asignacion(
     dto: AsignacionRutaCrear,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
@@ -162,7 +162,52 @@ def crear_asignacion(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ruta de distribución no encontrada")
     alcance.validar_recurso(row[0], nombre_recurso="ruta", responder_404=True)
-    return RutaService(db).CrearAsignacion(dto, usuario["IdUsuario"])
+    res = RutaService(db).CrearAsignacion(dto, usuario["IdUsuario"])
+
+    asig_id = None
+    if isinstance(res, dict):
+        asig_id = res.get("IdAsignacionRuta") or (res.get("datos", {}).get("IdAsignacionRuta") if isinstance(res.get("datos"), dict) else None)
+        if not asig_id and "id" in res:
+            asig_id = res["id"]
+
+    # Asignación nace en estado_operativo = 'PENDIENTE_CARGA'
+    if asig_id:
+        db.execute(text("""
+            UPDATE public."AsignacionRuta"
+            SET "estado_operativo" = 'PENDIENTE_CARGA'
+            WHERE "IdAsignacionRuta" = :asig_id;
+        """), {"asig_id": asig_id})
+
+        # Notificación interna para el chofer
+        db.execute(text("""
+            INSERT INTO public."NotificacionInterna" (
+                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+            ) VALUES (
+                :uid, 'Ruta Asignada', 'Se le ha asignado una nueva ruta de distribución para el día de hoy.', 'RUTA_ASIGNADA', :ref, false, NOW()
+            );
+        """), {
+            "uid": dto.IdUsuarioRepartidor,
+            "ref": asig_id
+        })
+        db.commit()
+
+        # Emitir WebSocket ruta_asignada al chofer
+        evento_ws = {
+            "tipo": "ruta_asignada",
+            "id_asignacion": asig_id,
+            "id_ruta": dto.IdRutaDistribucion,
+            "id_chofer": dto.IdUsuarioRepartidor,
+            "fecha": str(dto.FechaAsignacion),
+            "estado_operativo": "PENDIENTE_CARGA",
+            "habilitada_para_reparto": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            await flota_ws_manager.emitir_a_chofer(dto.IdUsuarioRepartidor, evento_ws)
+        except Exception as e_ws:
+            logger.debug(f"[WS ruta_asignada] Error emitiendo ws: {e_ws}")
+
+    return res
 
 @RutaRouter.put("/asignaciones/{id_asignacion}", response_model=dict)
 def actualizar_asignacion(
@@ -215,49 +260,106 @@ def cambiar_estado_repartidor(
 # -------------------------------------------------------------
 # Telemetría y rastreo en vivo
 # -------------------------------------------------------------
+ROLES_TICKET_FLOTA = [1, 2, 3, 4, 5, 6, 7]
+
 @RutaRouter.post("/flota/ws-ticket")
 def generar_ticket_websocket_flota(
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    usuario: dict = Depends(require_role(ROLES_TICKET_FLOTA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
 ):
     """
     Emite un ticket efímero de un solo uso y corta duración (60s) para autenticar
     la conexión WebSocket del mapa satelital sin exponer el JWT en URLs o logs del proxy.
+    Permite roles administrativos y choferes operativos.
     """
-    sucursales_permitidas = [alcance.sucursal_efectiva] if alcance.sucursal_efectiva else None
+    suc_efectiva = alcance.sucursal_efectiva or usuario.get("IdSucursal")
+    sucursales_permitidas = [int(suc_efectiva)] if suc_efectiva else None
     ticket = flota_ws_manager.crear_ticket(
         usuario_id=usuario["IdUsuario"],
         sucursales_permitidas=sucursales_permitidas,
-        duracion_segundos=60
+        duracion_segundos=60,
+        rol=usuario.get("IdRol")
     )
     return {"ticket": ticket, "expira_en_segundos": 60}
 
 
-async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] = None):
+async def websocket_flota_endpoint(
+    websocket: WebSocket,
+    ticket: Optional[str] = None,
+    token: Optional[str] = None
+):
     """Lógica central de conexión WebSocket para telemetría de flota y eventos operativos de logística."""
-    ticket_data = flota_ws_manager.validar_y_consumir_ticket(ticket)
-    if not ticket_data and ticket:
-        try:
-            from app.Auth.Jwt import verificar_token
-            payload = verificar_token(ticket)
-            if payload:
-                uid = payload.get("id_usuario") or payload.get("sub") or payload.get("IdUsuario")
-                rol = payload.get("id_rol") or payload.get("rol")
-                suc = payload.get("id_sucursal") or payload.get("IdSucursal")
-                ticket_data = {
-                    "usuario_id": int(uid) if uid else None,
-                    "id_chofer": int(uid) if uid else None,
-                    "rol": rol,
-                    "tipo_cliente": "movil" if rol == ROL_AGENTE_REPARTO else "web",
-                    "sucursales_permitidas": [int(suc)] if suc else None
-                }
-        except Exception:
-            pass
+    auth_val = ticket or token
+    if not auth_val:
+        auth_val = websocket.query_params.get("ticket") or websocket.query_params.get("token")
+    if not auth_val:
+        auth_header = websocket.headers.get("authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            auth_val = auth_header[7:].strip()
+    if not auth_val:
+        ws_proto = websocket.headers.get("sec-websocket-protocol")
+        if ws_proto:
+            partes = [p.strip() for p in ws_proto.split(",")]
+            for p in partes:
+                if p.startswith("ws_flota_") or len(p) > 20:
+                    auth_val = p
+                    break
 
-    if not ticket_data:
-        # Código 4401: Ticket inválido o expirado
-        await websocket.close(code=4401, reason="Ticket invalido o expirado")
+    if auth_val and auth_val.lower().startswith("bearer "):
+        auth_val = auth_val[7:].strip()
+
+    ticket_data = None
+    if auth_val:
+        ticket_data = flota_ws_manager.validar_y_consumir_ticket(auth_val)
+        if not ticket_data:
+            try:
+                from app.Auth.Jwt import verificar_token
+                payload = verificar_token(auth_val)
+                if payload:
+                    meta = payload.get("app_metadata", {})
+                    uid = meta.get("IdUsuario") or payload.get("id_usuario") or payload.get("IdUsuario")
+                    rol = meta.get("IdRol") or payload.get("id_rol") or payload.get("IdRol")
+                    auth_sub = payload.get("sub")
+                    estado_usr = meta.get("IdEstadoUsuario")
+                    suc_id = meta.get("IdSucursal") or payload.get("id_sucursal") or payload.get("IdSucursal")
+
+                    with SessionLocal() as db_session:
+                        usr = None
+                        if not uid and auth_sub:
+                            usr = db_session.execute(
+                                text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "AuthUserId" = :sub LIMIT 1;'),
+                                {"sub": str(auth_sub)}
+                            ).fetchone()
+                        elif uid:
+                            usr = db_session.execute(
+                                text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "IdUsuario" = :uid LIMIT 1;'),
+                                {"uid": int(uid)}
+                            ).fetchone()
+
+                        if usr:
+                            uid = usr[0]
+                            rol = usr[1]
+                            estado_usr = usr[2]
+                            if usr[3] is not None:
+                                suc_id = usr[3]
+
+                    if estado_usr == 1 or estado_usr is None:
+                        rol_int = int(rol) if rol is not None else 6
+                        es_chofer = rol_int in (5, 6, 7)
+                        ticket_data = {
+                            "usuario_id": int(uid) if uid else None,
+                            "id_chofer": int(uid) if uid else None,
+                            "rol": rol_int,
+                            "tipo_cliente": "movil" if es_chofer else "web",
+                            "sucursales_permitidas": [int(suc_id)] if (suc_id and es_chofer) else None
+                        }
+            except Exception as e_tok:
+                logger.debug(f"[WS-Flota] Error al validar JWT en handshake: {e_tok}")
+
+    if not ticket_data or not ticket_data.get("usuario_id"):
+        # Código 4401: Ticket o token inválido o expirado
+        await websocket.close(code=4401, reason="Ticket o token invalido o expirado")
         return
 
     # Cargar snapshot inicial de choferes en vivo
@@ -307,8 +409,12 @@ async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] =
 @RutaRouter.websocket("/flota/ws")
 @RutaRouter.websocket("/ws")
 @RutaRouter.websocket("/ws/logistica")
-async def websocket_flota(websocket: WebSocket, ticket: Optional[str] = None):
-    await websocket_flota_endpoint(websocket, ticket)
+async def websocket_flota(
+    websocket: WebSocket,
+    ticket: Optional[str] = None,
+    token: Optional[str] = None
+):
+    await websocket_flota_endpoint(websocket, ticket=ticket, token=token)
 
 
 @RutaRouter.post("/telemetria/ping", response_model=dict)
@@ -437,18 +543,24 @@ def cerrar_y_liquidar_ruta(
 def recalcular_orden_paradas(
     id_ruta: int,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Recalcula el orden secuencial compacto 1..N sin huecos de las paradas de la ruta.
     """
+    r = RutaService(db).ObtenerRutaDetalle(id_ruta)
+    if not r:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ruta no encontrada")
+    alcance.validar_recurso(r.get("IdSucursal"), nombre_recurso="ruta", responder_404=True)
     return RutaService(db).recalcular_orden_paradas_ruta(id_ruta)
 
 @RutaRouter.post("/rutas/paradas/insertar", response_model=list[dict])
 def insertar_parada_orden(
     dto: InsertarParadaOrdenRequest,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role([ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR, 6, 7]))
+    usuario: dict = Depends(require_role([ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR, 6, 7])),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Inserta una nueva parada manual o por ENTREGA_INMEDIATA.
@@ -461,7 +573,8 @@ def quitar_parada_ruta(
     dto: QuitarParadaRequest,
     fecha: Optional[date] = Query(None, description="Fecha de operación (default hoy)"),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Quita una parada PENDIENTE y compacta 1..N.
@@ -474,7 +587,8 @@ def mover_parada_ruta(
     dto: MoverParadaRutaRequest,
     fecha: Optional[date] = Query(None, description="Fecha de operación (default hoy)"),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Mueve un cliente PENDIENTE a otra ruta del mismo día o de otro día de la semana.
@@ -486,7 +600,8 @@ def mover_parada_ruta(
 def generar_rutas_diarias(
     fecha: Optional[date] = Query(None, description="Fecha a generar (default hoy)"),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Invoca la función fn_generar_rutas_diarias para calcular las rutas y asignaciones automáticas del día.
@@ -500,7 +615,8 @@ def generar_rutas_diarias(
 def crear_solicitud_carga(
     dto: SolicitudCargaCrear,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user)
+    usuario: dict = Depends(get_current_user),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     El chofer solicita carga de camión registrando stock remanente + stock adicional solicitado.
@@ -512,21 +628,109 @@ def crear_solicitud_carga(
 
 @RutaRouter.get("/solicitudes-carga", response_model=list[dict])
 def listar_solicitudes_carga(
-    id_asignacion: Optional[int] = Query(None),
-    estado: Optional[str] = Query(None),
+    sucursal_id: Optional[int] = Query(None, description="Filtrar por ID de sucursal"),
+    id_sucursal: Optional[int] = Query(None, description="Alias sucursal"),
+    id_asignacion: Optional[int] = Query(None, description="Filtrar por asignación"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado (PENDIENTE, APROBADO, RECHAZADO)"),
+    fecha: Optional[date] = Query(None, description="Filtrar por fecha"),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user)
+    usuario: dict = Depends(get_current_user),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
-    Lista las solicitudes de carga registradas.
+    Lista las solicitudes de carga de camión con desglose de stock remanente en camión
+    + stock adicional pedido.
     """
-    return RutaService(db).ListarSolicitudesCarga(id_asignacion, estado)
+    suc_efectiva = sucursal_id or id_sucursal or alcance.sucursal_efectiva
+
+    conds = []
+    params = {}
+
+    if suc_efectiva:
+        conds.append('r."IdSucursal" = :suc_id')
+        params["suc_id"] = int(suc_efectiva)
+
+    if id_asignacion is not None:
+        conds.append('s."id_asignacion_ruta" = :id_asig')
+        params["id_asig"] = int(id_asignacion)
+
+    if estado:
+        conds.append('s."estado" = :estado')
+        params["estado"] = estado
+
+    if fecha:
+        conds.append('DATE(s."fecha_solicitud") = :fecha')
+        params["fecha"] = fecha
+
+    where_sql = f"WHERE {' AND '.join(conds)}" if conds else ""
+
+    sql = f"""
+        SELECT 
+            s."id_solicitud",
+            s."id_asignacion_ruta",
+            s."id_chofer",
+            CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "nombre_chofer",
+            r."IdSucursal" as "id_sucursal",
+            r."NombreRuta" as "nombre_ruta",
+            s."estado",
+            s."observacion_chofer",
+            s."observacion_admin",
+            s."id_admin_revision",
+            s."fecha_solicitud",
+            s."fecha_revision",
+            s."created_at"
+        FROM public."solicitud_carga_camion" s
+        JOIN public."Usuario" u ON s."id_chofer" = u."IdUsuario"
+        JOIN public."AsignacionRuta" ar ON s."id_asignacion_ruta" = ar."IdAsignacionRuta"
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        {where_sql}
+        ORDER BY s."fecha_solicitud" DESC, s."id_solicitud" DESC;
+    """
+
+    filas = db.execute(text(sql), params).mappings().fetchall()
+    resultado = []
+    for f in filas:
+        sol_dict = dict(f)
+        if sol_dict.get("fecha_solicitud"):
+            sol_dict["fecha_solicitud"] = sol_dict["fecha_solicitud"].isoformat()
+        if sol_dict.get("fecha_revision"):
+            sol_dict["fecha_revision"] = sol_dict["fecha_revision"].isoformat()
+        if sol_dict.get("created_at"):
+            sol_dict["created_at"] = sol_dict["created_at"].isoformat()
+
+        # Desglose de productos de la solicitud
+        sql_det = text("""
+            SELECT 
+                d."id_detalle",
+                d."id_solicitud",
+                d."id_presentacion",
+                pp."CodigoPresentacion",
+                prod."NombreProducto",
+                pp."TipoContenedor",
+                COALESCE(d."stock_remanente", 0) as "stock_remanente",
+                COALESCE(d."stock_adicional_solicitado", 0) as "stock_adicional_solicitado",
+                COALESCE(d."stock_adicional_aprobado", 0) as "stock_adicional_aprobado",
+                d."observacion"
+            FROM public."detalle_solicitud_carga_camion" d
+            JOIN public."PresentacionProducto" pp ON d."id_presentacion" = pp."IdPresentacion"
+            JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+            WHERE d."id_solicitud" = :sid
+            ORDER BY prod."NombreProducto" ASC;
+        """)
+        detalles = [dict(d) for d in db.execute(sql_det, {"sid": f["id_solicitud"]}).mappings().fetchall()]
+        sol_dict["detalles"] = detalles
+        sol_dict["items"] = detalles
+        sol_dict["items_solicitados"] = detalles
+        resultado.append(sol_dict)
+
+    return resultado
 
 @RutaRouter.get("/solicitudes-carga/{id_solicitud}", response_model=dict)
 def obtener_solicitud_carga(
     id_solicitud: int,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(get_current_user)
+    usuario: dict = Depends(get_current_user),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     return RutaService(db).ObtenerSolicitudCargaPorId(id_solicitud)
 
@@ -535,7 +739,8 @@ def revisar_solicitud_carga(
     id_solicitud: int,
     dto: SolicitudCargaRevision,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Supervisor o Administrador aprueba o rechaza la carga del camión.
@@ -550,7 +755,8 @@ def revisar_entrega_web(
     id_pedido: int,
     dto: RevisionWebOperacionRequest,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Auditoría Web para aprobar, observar o rechazar una entrega física.
@@ -562,7 +768,8 @@ def revisar_pago_web(
     id_pago_pedido: int,
     dto: RevisionWebOperacionRequest,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
     Auditoría Web para aprobar, observar o rechazar un pago o cobro de ruta.
@@ -574,8 +781,10 @@ def revisar_pago_web(
 # APROBACIÓN DE CARGA EN WEB
 # -------------------------------------------------------------
 @RutaRouter.post("/asignaciones/{id}/aprobar-carga", response_model=dict)
+@RutaRouter.post("/asignaciones/{id_asignacion}/aprobar-carga", response_model=dict)
 async def aprobar_carga_camion_web(
-    id: int,
+    id: Optional[int] = None,
+    id_asignacion: Optional[int] = None,
     dto: Optional[AprobarCargaRequest] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
@@ -583,10 +792,12 @@ async def aprobar_carga_camion_web(
 ):
     """
     Aprobación de Carga en Web:
-    Suma el stock aprobado a inventario_chofer, pasa estado_operativo a APROBADA_EN_RUTA
-    y emite evento WebSocket carga_camion_aprobada al chofer.
+    Suma el stock adicional a inventario_chofer, cambia AsignacionRuta.estado_operativo = 'APROBADA_EN_RUTA',
+    guarda NotificacionInterna para el chofer y emite WebSocket carga_camion_aprobada al chofer.
     """
-    asig_id = id
+    asig_id = id if id is not None else id_asignacion
+    if not asig_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de asignación requerido")
 
     sql_asig = text("""
         SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
@@ -635,7 +846,7 @@ async def aprobar_carga_camion_web(
                 cantidad_aprobada=float(r.stock_adicional_solicitado)
             ))
 
-    # Sumar stock aprobado a inventario_chofer
+    # Sumar stock adicional a inventario_chofer
     for item in items_a_aprobar:
         cant = float(item.cantidad_aprobada or 0.0)
         pid = item.presentacion_id
@@ -686,7 +897,7 @@ async def aprobar_carga_camion_web(
             "sid": sol.id_solicitud
         })
 
-    # Pasa estado_operativo a APROBADA_EN_RUTA y Estado a 'En Ruta'
+    # Cambiar AsignacionRuta.estado_operativo = 'APROBADA_EN_RUTA' y Estado = 'En Ruta'
     db.execute(text("""
         UPDATE public."AsignacionRuta"
         SET "estado_operativo" = 'APROBADA_EN_RUTA',
@@ -694,25 +905,33 @@ async def aprobar_carga_camion_web(
         WHERE "IdAsignacionRuta" = :asig_id;
     """), {"asig_id": asig_id})
 
+    # Guardar NotificacionInterna para el chofer
+    db.execute(text("""
+        INSERT INTO public."NotificacionInterna" (
+            "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+        ) VALUES (
+            :uid, 'Carga de Camión Aprobada', 'Su solicitud de carga ha sido aprobada. Puede iniciar el reparto.', 'CARGA_APROBADA', :asig_id, false, NOW()
+        );
+    """), {
+        "uid": chofer_id,
+        "asig_id": asig_id
+    })
+
     db.commit()
 
-    # Emitir evento WebSocket carga_camion_aprobada al chofer
+    # Emitir WebSocket carga_camion_aprobada al chofer
     evento_ws = {
         "tipo": "carga_camion_aprobada",
         "id_asignacion": asig_id,
+        "id_chofer": chofer_id,
         "estado_operativo": "APROBADA_EN_RUTA",
         "habilitada_para_reparto": True,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     try:
-        import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
-        except RuntimeError:
-            asyncio.run(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
-    except Exception as e:
-        logger.debug(f"[WS carga_camion_aprobada] Error: {e}")
+        await flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws)
+    except Exception as e_ws:
+        logger.debug(f"[WS carga_camion_aprobada] Error emitiendo ws: {e_ws}")
 
     return {
         "codigo": "EXITO",

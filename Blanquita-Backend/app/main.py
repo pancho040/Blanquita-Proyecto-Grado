@@ -162,10 +162,14 @@ def health_check():
 
 @app.websocket("/ws/flota")
 @app.websocket("/ws/logistica")
-async def ws_flota_root(websocket: WebSocket, ticket: Optional[str] = None):
+async def ws_flota_root(
+    websocket: WebSocket,
+    ticket: Optional[str] = None,
+    token: Optional[str] = None
+):
     """Acceso WebSocket directo para telemetría de flota y eventos de logística en tiempo real."""
     from app.Routes.Logistica.RutaRouter import websocket_flota_endpoint
-    await websocket_flota_endpoint(websocket, ticket)
+    await websocket_flota_endpoint(websocket, ticket=ticket, token=token)
 
 
 # ROUTER MOVIL V1

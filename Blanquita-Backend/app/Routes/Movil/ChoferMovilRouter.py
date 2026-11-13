@@ -646,8 +646,51 @@ def obtener_hoja_ruta_activa_movil(
     tracking = service.ObtenerTrackingAsignacion(id_asig)
 
     # Validar aislamiento: si es chofer, no ver asignación ajena
-    if usuario.get("IdRol") == ROL_AGENTE_REPARTO and tracking.get("IdUsuarioRepartidor") != chofer_id:
+    if usuario.get("IdRol") in (ROL_AGENTE_REPARTO, 6, 7) and tracking.get("IdUsuarioRepartidor") != chofer_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
+
+    # Consultar si tiene solicitud de carga de camión pendiente
+    sql_sol_pend = text("""
+        SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer"
+        FROM public."solicitud_carga_camion" s
+        WHERE s."id_asignacion_ruta" = :id_asig AND s."estado" = 'PENDIENTE'
+        ORDER BY s."id_solicitud" DESC LIMIT 1;
+    """)
+    sol_pend = db.execute(sql_sol_pend, {"id_asig": id_asig}).mappings().fetchone()
+
+    items_solicitados = []
+    if sol_pend:
+        sql_items_sol = text("""
+            SELECT 
+                d."id_detalle",
+                d."id_presentacion",
+                pp."CodigoPresentacion",
+                prod."NombreProducto",
+                pp."TipoContenedor",
+                COALESCE(d."stock_remanente", 0) as "stock_remanente",
+                COALESCE(d."stock_adicional_solicitado", 0) as "stock_adicional_solicitado",
+                COALESCE(d."stock_adicional_aprobado", 0) as "stock_adicional_aprobado"
+            FROM public."detalle_solicitud_carga_camion" d
+            JOIN public."PresentacionProducto" pp ON d."id_presentacion" = pp."IdPresentacion"
+            JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+            WHERE d."id_solicitud" = :sid
+            ORDER BY prod."NombreProducto" ASC;
+        """)
+        items_solicitados = [dict(it) for it in db.execute(sql_items_sol, {"sid": sol_pend["id_solicitud"]}).mappings().fetchall()]
+
+    estado_op = tracking.get("estado_operativo") or "PENDIENTE_CARGA"
+    if sol_pend or estado_op == "CARGA_SOLICITADA":
+        estado_op = "CARGA_SOLICITADA"
+
+    es_pendiente_carga = bool(sol_pend) or (estado_op == "CARGA_SOLICITADA")
+
+    tracking["estado_operativo"] = estado_op
+    tracking["solicitud_carga_pendiente"] = es_pendiente_carga
+    tracking["solicitud_carga_items"] = items_solicitados
+    tracking["items_solicitados"] = items_solicitados
+    tracking["habilitada_para_reparto"] = (estado_op == "APROBADA_EN_RUTA")
+    if sol_pend:
+        tracking["id_solicitud_carga"] = sol_pend["id_solicitud"]
 
     # Enriquecer paradas con detalle de productos del pedido
     paradas = tracking.get("Paradas", [])
@@ -681,7 +724,12 @@ def obtener_hoja_ruta_activa_movil(
         datos={
             "asignacion": tracking,
             "paradas": paradas,
-            "total_paradas": len(paradas)
+            "total_paradas": len(paradas),
+            "estado_operativo": estado_op,
+            "solicitud_carga_pendiente": es_pendiente_carga,
+            "solicitud_carga_items": items_solicitados,
+            "items_solicitados": items_solicitados,
+            "habilitada_para_reparto": (estado_op == "APROBADA_EN_RUTA")
         }
     )
 
@@ -1836,6 +1884,7 @@ async def solicitar_carga_camion_movil(
     """
     Registra una solicitud de carga de camión para la asignación activa del chofer.
     Pasa el estado operativo a CARGA_SOLICITADA (habilitada_para_reparto: false).
+    Si ya se encuentra en CARGA_SOLICITADA o existe solicitud pendiente, responde 200 idempotente.
     """
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
@@ -1859,8 +1908,70 @@ async def solicitar_carga_camion_movil(
     if not asig:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
 
-    if usuario.get("IdRol") == ROL_AGENTE_REPARTO and asig.IdUsuarioRepartidor != uid:
+    if usuario.get("IdRol") in (ROL_AGENTE_REPARTO, 6, 7) and asig.IdUsuarioRepartidor != uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para esta asignación")
+
+    # Idempotencia: Verificar si ya existe una solicitud en estado PENDIENTE o si ya está en CARGA_SOLICITADA
+    sql_sol_existente = text("""
+        SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer"
+        FROM public."solicitud_carga_camion" s
+        WHERE s."id_asignacion_ruta" = :id_asig AND s."estado" = 'PENDIENTE'
+        ORDER BY s."id_solicitud" DESC LIMIT 1;
+    """)
+    sol_existente = db.execute(sql_sol_existente, {"id_asig": dto.id_asignacion}).mappings().fetchone()
+
+    if sol_existente or asig.estado_operativo == "CARGA_SOLICITADA":
+        id_sol_existente = sol_existente["id_solicitud"] if sol_existente else None
+        items_existentes = []
+        if id_sol_existente:
+            sql_items_existentes = text("""
+                SELECT 
+                    d."id_detalle",
+                    d."id_presentacion",
+                    pp."CodigoPresentacion",
+                    prod."NombreProducto",
+                    pp."TipoContenedor",
+                    COALESCE(d."stock_remanente", 0) as "stock_remanente",
+                    COALESCE(d."stock_adicional_solicitado", 0) as "stock_adicional_solicitado",
+                    COALESCE(d."stock_adicional_aprobado", 0) as "stock_adicional_aprobado"
+                FROM public."detalle_solicitud_carga_camion" d
+                JOIN public."PresentacionProducto" pp ON d."id_presentacion" = pp."IdPresentacion"
+                JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+                WHERE d."id_solicitud" = :sid
+                ORDER BY prod."NombreProducto" ASC;
+            """)
+            items_existentes = [dict(it) for it in db.execute(sql_items_existentes, {"sid": id_sol_existente}).mappings().fetchall()]
+
+        resp_idempotente = {
+            "codigo": "EXITO",
+            "mensaje": "Solicitud de carga ya registrada previamente.",
+            "request_id": req_id,
+            "datos": {
+                "id_solicitud": id_sol_existente,
+                "id_asignacion": dto.id_asignacion,
+                "estado_operativo": "CARGA_SOLICITADA",
+                "solicitud_carga_pendiente": True,
+                "habilitada_para_reparto": False,
+                "items_solicitados": items_existentes,
+                "solicitud_carga_items": items_existentes
+            }
+        }
+        if x_idempotency_key:
+            _registrar_respuesta_idempotente(
+                session=db,
+                usuario_id=uid,
+                clave=x_idempotency_key,
+                endpoint=request.url.path,
+                hash_cuerpo=hash_cuerpo,
+                codigo_estado=200,
+                cuerpo_respuesta=resp_idempotente
+            )
+            db.commit()
+        return JSONResponse(status_code=200, content=resp_idempotente)
+
+    # Nombre del chofer
+    sql_chofer = text('SELECT CONCAT("PrimerNombre", \' \', "ApellidoPaterno") FROM public."Usuario" WHERE "IdUsuario" = :uid LIMIT 1;')
+    nombre_chofer = db.execute(sql_chofer, {"uid": uid}).scalar() or f"Chofer #{uid}"
 
     # Crear registro en solicitud_carga_camion
     sql_ins = text("""
@@ -1878,6 +1989,8 @@ async def solicitar_carga_camion_movil(
     id_solicitud = sol_row[0]
 
     # Insertar detalles
+    items_solicitados_ws = []
+    total_remanente = 0.0
     for item in dto.items:
         remanente = 0.0
         if dto.usar_remanente:
@@ -1889,6 +2002,8 @@ async def solicitar_carga_camion_movil(
             """)
             r = db.execute(sql_rem, {"uid": uid, "pid": item.presentacion_id}).scalar()
             remanente = float(r or 0.0)
+
+        total_remanente += remanente
 
         sql_det = text("""
             INSERT INTO public."detalle_solicitud_carga_camion" (
@@ -1904,6 +2019,12 @@ async def solicitar_carga_camion_movil(
             "cant": item.cantidad_solicitada
         })
 
+        items_solicitados_ws.append({
+            "id_presentacion": item.presentacion_id,
+            "stock_remanente": remanente,
+            "stock_adicional_solicitado": item.cantidad_solicitada
+        })
+
     # Actualizar estado_operativo de AsignacionRuta a CARGA_SOLICITADA
     db.execute(text("""
         UPDATE public."AsignacionRuta"
@@ -1911,19 +2032,55 @@ async def solicitar_carga_camion_movil(
         WHERE "IdAsignacionRuta" = :id_asig;
     """), {"id_asig": dto.id_asignacion})
 
+    # Guardar NotificacionInterna para Supervisores/Administradores de esa sucursal
+    supervisores = db.execute(text("""
+        SELECT "IdUsuario" FROM public."Usuario"
+        WHERE ("IdSucursal" = :suc_id OR "IdSucursal" IS NULL)
+          AND "IdRol" IN (1, 2, 3, 5)
+          AND "IdEstadoUsuario" = 1;
+    """), {"suc_id": asig.IdSucursal}).fetchall()
+
+    if supervisores:
+        for sup in supervisores:
+            db.execute(text("""
+                INSERT INTO public."NotificacionInterna" (
+                    "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+                ) VALUES (
+                    :uid_dest, 'Solicitud de Carga Recibida', :msg, 'SOLICITUD_CARGA', :ref, false, NOW()
+                );
+            """), {
+                "uid_dest": sup.IdUsuario,
+                "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion}.",
+                "ref": id_solicitud
+            })
+    else:
+        db.execute(text("""
+            INSERT INTO public."NotificacionInterna" (
+                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+            ) VALUES (
+                NULL, 'Solicitud de Carga Recibida', :msg, 'SOLICITUD_CARGA', :ref, false, NOW()
+            );
+        """), {
+            "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion}.",
+            "ref": id_solicitud
+        })
+
     db.commit()
 
-    # Emitir WebSocket a Web
+    # Emitir WebSocket evento solicitud_carga_recibida con formato requerido
+    evento_ws = {
+        "tipo": "solicitud_carga_recibida",
+        "id_solicitud": id_solicitud,
+        "id_asignacion": dto.id_asignacion,
+        "id_chofer": uid,
+        "nombre_chofer": nombre_chofer,
+        "sucursal_id": asig.IdSucursal,
+        "items_solicitados": items_solicitados_ws,
+        "stock_remanente": total_remanente,
+        "fecha": datetime.now(timezone.utc).isoformat()
+    }
     try:
         import asyncio
-        evento_ws = {
-            "tipo": "solicitud_carga_creada",
-            "id_solicitud": id_solicitud,
-            "id_asignacion": dto.id_asignacion,
-            "id_chofer": uid,
-            "items_count": len(dto.items),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(flota_ws_manager.emitir_a_web(evento_ws, asig.IdSucursal))
@@ -1934,12 +2091,31 @@ async def solicitar_carga_camion_movil(
 
     respuesta = {
         "codigo": "EXITO",
+        "mensaje": "Solicitud de carga registrada exitosamente.",
+        "request_id": req_id,
         "datos": {
             "id_solicitud": id_solicitud,
+            "id_asignacion": dto.id_asignacion,
             "estado_operativo": "CARGA_SOLICITADA",
-            "habilitada_para_reparto": False
+            "solicitud_carga_pendiente": True,
+            "habilitada_para_reparto": False,
+            "items_solicitados": items_solicitados_ws,
+            "solicitud_carga_items": items_solicitados_ws
         }
     }
+
+    if x_idempotency_key:
+        _registrar_respuesta_idempotente(
+            session=db,
+            usuario_id=uid,
+            clave=x_idempotency_key,
+            endpoint=request.url.path,
+            hash_cuerpo=hash_cuerpo,
+            codigo_estado=200,
+            cuerpo_respuesta=respuesta
+        )
+        db.commit()
+
     return JSONResponse(status_code=200, content=respuesta)
 
 
@@ -2005,6 +2181,40 @@ def obtener_resumen_sincronizacion_movil(
                 items_p = db.execute(sql_det, {"id_ped": id_ped}).mappings().fetchall()
                 p["items"] = [dict(it) for it in items_p]
 
+        # Verificar si existe solicitud de carga pendiente
+        sql_sol_pend = text("""
+            SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer"
+            FROM public."solicitud_carga_camion" s
+            WHERE s."id_asignacion_ruta" = :id_asig AND s."estado" = 'PENDIENTE'
+            ORDER BY s."id_solicitud" DESC LIMIT 1;
+        """)
+        sol_pend = db.execute(sql_sol_pend, {"id_asig": id_asig}).mappings().fetchone()
+
+        items_solicitados = []
+        if sol_pend:
+            sql_items_sol = text("""
+                SELECT 
+                    d."id_detalle",
+                    d."id_presentacion",
+                    pp."CodigoPresentacion",
+                    prod."NombreProducto",
+                    pp."TipoContenedor",
+                    COALESCE(d."stock_remanente", 0) as "stock_remanente",
+                    COALESCE(d."stock_adicional_solicitado", 0) as "stock_adicional_solicitado",
+                    COALESCE(d."stock_adicional_aprobado", 0) as "stock_adicional_aprobado"
+                FROM public."detalle_solicitud_carga_camion" d
+                JOIN public."PresentacionProducto" pp ON d."id_presentacion" = pp."IdPresentacion"
+                JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+                WHERE d."id_solicitud" = :sid
+                ORDER BY prod."NombreProducto" ASC;
+            """)
+            items_solicitados = [dict(it) for it in db.execute(sql_items_sol, {"sid": sol_pend["id_solicitud"]}).mappings().fetchall()]
+
+        if sol_pend or estado_op == "CARGA_SOLICITADA":
+            estado_op = "CARGA_SOLICITADA"
+
+        es_pendiente_carga = bool(sol_pend) or (estado_op == "CARGA_SOLICITADA")
+
         asignacion_activa = {
             "id_asignacion": id_asig,
             "id_ruta": asig_row["IdRutaDistribucion"],
@@ -2013,6 +2223,10 @@ def obtener_resumen_sincronizacion_movil(
             "estado": asig_row["Estado"],
             "estado_operativo": estado_op,
             "habilitada_para_reparto": (estado_op == "APROBADA_EN_RUTA"),
+            "solicitud_carga_pendiente": es_pendiente_carga,
+            "solicitud_carga_items": items_solicitados,
+            "items_solicitados": items_solicitados,
+            "id_solicitud_carga": sol_pend["id_solicitud"] if sol_pend else None,
             "kilometraje_inicial": float(asig_row["KilometrajeInicial"] or 0.0),
             "paradas": paradas,
             "total_paradas": len(paradas)
@@ -2122,6 +2336,10 @@ def obtener_resumen_sincronizacion_movil(
         "codigo": "EXITO",
         "datos": {
             "asignacion_activa": asignacion_activa,
+            "estado_operativo": asignacion_activa.get("estado_operativo") if asignacion_activa else None,
+            "solicitud_carga_pendiente": asignacion_activa.get("solicitud_carga_pendiente", False) if asignacion_activa else False,
+            "solicitud_carga_items": asignacion_activa.get("solicitud_carga_items", []) if asignacion_activa else [],
+            "items_solicitados": asignacion_activa.get("items_solicitados", []) if asignacion_activa else [],
             "inventario_camion": inventario_camion,
             "historial_operaciones_hoy": historial_operaciones_hoy
         }
