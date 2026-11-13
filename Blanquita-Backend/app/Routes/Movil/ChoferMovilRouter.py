@@ -40,6 +40,7 @@ from app.Services.Logistica.RutaService import RutaService
 from app.Services.Contabilidad.CuentasCobrarService import CuentasCobrarService
 from app.Services.Logistica.InventarioComercialService import InventarioComercialService
 from app.Services.Common.FileStorageService import FileStorageService
+from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
 from app.Routes.Logistica.ChoferRouter import _validar_pertenencia_pedido_chofer, ROLES_CHOFER_OPERATIVO
 from app.Models.Movil.MovilModel import MovilResponse
 from app.Models.Movil.ChoferMovilModel import (
@@ -49,7 +50,10 @@ from app.Models.Movil.ChoferMovilModel import (
     CierreTurnoMovilRequest,
     ClienteMovilRequest,
     ResumenInventarioChoferDTO,
-    ItemInventarioCamionDTO
+    ItemInventarioCamionDTO,
+    SolicitarCargaRequest,
+    ClienteEnRutaRequest,
+    DatosClienteEnRutaDTO
 )
 from app.Models.Contabilidad.CuentasCobrarModel import (
     AbonoCuentaCobrarCrear,
@@ -63,6 +67,52 @@ def _obtener_request_id(request: Request) -> str:
     return request.headers.get("x-request-id") or str(uuid.uuid4())
 
 
+def _validar_gatekeeper_carga_camion(db: Session, id_pedido: Optional[int], uid: int):
+    """
+    Gatekeeper de Carga de Camión:
+    Mientras la asignación del chofer esté en PENDIENTE_CARGA o CARGA_SOLICITADA,
+    devolver HTTP 403 con mensaje 'La carga de tu camión aún no fue aprobada en Web'.
+    """
+    row = None
+    if id_pedido:
+        sql = text("""
+            SELECT ar."IdAsignacionRuta", COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA') AS estado_operativo
+            FROM public."Pedido" p
+            JOIN public."AsignacionRuta" ar ON p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+            WHERE p."IdPedido" = :id_pedido AND ar."IdUsuarioRepartidor" = :uid;
+        """)
+        row = db.execute(sql, {"id_pedido": id_pedido, "uid": uid}).fetchone()
+
+        if not row:
+            # Si el pedido existe pero pertenece a otra asignación/chofer, dejamos que el endpoint maneje el 404
+            ped_ajeno = db.execute(text("""
+                SELECT "IdPedido" FROM public."Pedido" WHERE "IdPedido" = :pid;
+            """), {"pid": id_pedido}).fetchone()
+            if ped_ajeno:
+                return
+
+    if not row:
+        sql_asig = text("""
+            SELECT "IdAsignacionRuta", COALESCE("estado_operativo", 'PENDIENTE_CARGA') AS estado_operativo
+            FROM public."AsignacionRuta"
+            WHERE "IdUsuarioRepartidor" = :uid
+              AND "FechaAsignacion" = CURRENT_DATE
+              AND "Estado" NOT IN ('Completada', 'Cancelada', 'Finalizada')
+            ORDER BY "IdAsignacionRuta" DESC LIMIT 1;
+        """)
+        row = db.execute(sql_asig, {"uid": uid}).fetchone()
+
+    if row:
+        estado_op = str(row.estado_operativo or "").strip().upper()
+        if estado_op in ("PENDIENTE_CARGA", "CARGA_SOLICITADA"):
+            logger.warning(f"[GATEKEEPER BLOQUEO 403] Chofer {uid} intentó operar pero asignación está en {estado_op}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="La carga de tu camión aún no fue aprobada en Web"
+            )
+
+
+
 def _verificar_idempotencia_escritura(
     db: Session,
     uid: int,
@@ -71,7 +121,7 @@ def _verificar_idempotencia_escritura(
     cuerpo_bytes: bytes
 ):
     if not x_idempotency_key:
-        msg = "La cabecera X-Idempotency-Key es obligatoria para toda operación de escritura móvil."
+        msg = "La cabecera X-Idempotency-Key (UUID v4) es obligatoria para toda operación de escritura móvil."
         logger.warning(f"[_verificar_idempotencia_escritura RECHAZADO 400] {msg} | Endpoint: {endpoint} | Chofer: {uid}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,7 +131,7 @@ def _verificar_idempotencia_escritura(
     try:
         uuid_obj = uuid.UUID(key_limpia)
     except (ValueError, AttributeError):
-        msg = f"La cabecera X-Idempotency-Key debe ser un UUID válido (recibido: '{x_idempotency_key}')."
+        msg = f"La cabecera X-Idempotency-Key debe ser un UUID v4 válido (recibido: '{x_idempotency_key}')."
         logger.warning(f"[_verificar_idempotencia_escritura RECHAZADO 400] {msg} | Endpoint: {endpoint} | Chofer: {uid}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -776,6 +826,10 @@ async def registrar_entrega_movil(
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
     sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
+
+    # 0. Gatekeeper de Carga de Camión (bloqueo preventivo antes de procesar)
+    _validar_gatekeeper_carga_camion(db, dto.id_pedido, uid)
+
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -1187,6 +1241,10 @@ async def registrar_cobro_movil(
     req_id = _obtener_request_id(request)
     uid = usuario["IdUsuario"]
     sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
+
+    # 0. Gatekeeper de Carga de Camión
+    _validar_gatekeeper_carga_camion(db, dto.id_pedido, uid)
+
     cuerpo_bytes = await request.body()
 
     hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
@@ -1749,22 +1807,6 @@ async def registrar_nuevo_cliente_movil(
     if respuesta_cacheada:
         return respuesta_cacheada
 
-    datos_cliente = _crear_cliente_y_punto_venta_en_ruta(
-        db=db,
-        uid=uid,
-        payload=dto.model_dump(),
-        lat=dto.latitud,
-        lng=dto.longitud,
-        alcance=alcance
-    )
-
-    respuesta_datos = {
-        "codigo": "EXITO",
-        "mensaje": "Nuevo cliente y punto de venta registrados exitosamente",
-        "request_id": req_id,
-        "datos": datos_cliente
-    }
-
     IdempotenciaService.registrar_respuesta(
         session=db,
         usuario_id=uid,
@@ -1777,4 +1819,540 @@ async def registrar_nuevo_cliente_movil(
     db.commit()
 
     return JSONResponse(status_code=200, content=respuesta_datos)
+
+
+# ==============================================================================
+# 10. SOLICITUD DE CARGA DE CAMIÓN (GATEKEEPER)
+# ==============================================================================
+@ChoferMovilRouter.post("/solicitar-carga")
+async def solicitar_carga_camion_movil(
+    request: Request,
+    dto: SolicitarCargaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
+    x_idempotency_key: Optional[str] = Header(None, alias="X-Idempotency-Key")
+):
+    """
+    Registra una solicitud de carga de camión para la asignación activa del chofer.
+    Pasa el estado operativo a CARGA_SOLICITADA (habilitada_para_reparto: false).
+    """
+    req_id = _obtener_request_id(request)
+    uid = usuario["IdUsuario"]
+    cuerpo_bytes = await request.body()
+
+    if x_idempotency_key:
+        hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
+            db, uid, request.url.path, x_idempotency_key, cuerpo_bytes
+        )
+        if respuesta_cacheada:
+            return respuesta_cacheada
+
+    # Verificar asignación
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :id_asig;
+    """)
+    asig = db.execute(sql_asig, {"id_asig": dto.id_asignacion}).fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
+
+    if usuario.get("IdRol") == ROL_AGENTE_REPARTO and asig.IdUsuarioRepartidor != uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para esta asignación")
+
+    # Crear registro en solicitud_carga_camion
+    sql_ins = text("""
+        INSERT INTO public."solicitud_carga_camion" (
+            "id_asignacion_ruta", "id_chofer", "estado", "observacion_chofer", "fecha_solicitud"
+        ) VALUES (
+            :id_asig, :id_chofer, 'PENDIENTE', :obs, NOW()
+        ) RETURNING "id_solicitud";
+    """)
+    sol_row = db.execute(sql_ins, {
+        "id_asig": dto.id_asignacion,
+        "id_chofer": uid,
+        "obs": dto.observacion or ""
+    }).fetchone()
+    id_solicitud = sol_row[0]
+
+    # Insertar detalles
+    for item in dto.items:
+        remanente = 0.0
+        if dto.usar_remanente:
+            sql_rem = text("""
+                SELECT COALESCE(cantidad_remanente, 0)
+                FROM public.inventario_chofer
+                WHERE chofer_id = :uid AND presentacion_id = :pid
+                ORDER BY id DESC LIMIT 1;
+            """)
+            r = db.execute(sql_rem, {"uid": uid, "pid": item.presentacion_id}).scalar()
+            remanente = float(r or 0.0)
+
+        sql_det = text("""
+            INSERT INTO public."detalle_solicitud_carga_camion" (
+                "id_solicitud", "id_presentacion", "stock_remanente", "stock_adicional_solicitado"
+            ) VALUES (
+                :id_sol, :pid, :rem, :cant
+            );
+        """)
+        db.execute(sql_det, {
+            "id_sol": id_solicitud,
+            "pid": item.presentacion_id,
+            "rem": remanente,
+            "cant": item.cantidad_solicitada
+        })
+
+    # Actualizar estado_operativo de AsignacionRuta a CARGA_SOLICITADA
+    db.execute(text("""
+        UPDATE public."AsignacionRuta"
+        SET "estado_operativo" = 'CARGA_SOLICITADA'
+        WHERE "IdAsignacionRuta" = :id_asig;
+    """), {"id_asig": dto.id_asignacion})
+
+    db.commit()
+
+    # Emitir WebSocket a Web
+    try:
+        import asyncio
+        evento_ws = {
+            "tipo": "solicitud_carga_creada",
+            "id_solicitud": id_solicitud,
+            "id_asignacion": dto.id_asignacion,
+            "id_chofer": uid,
+            "items_count": len(dto.items),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(flota_ws_manager.emitir_a_web(evento_ws, asig.IdSucursal))
+        except RuntimeError:
+            asyncio.run(flota_ws_manager.emitir_a_web(evento_ws, asig.IdSucursal))
+    except Exception as e:
+        logger.debug(f"[WS solicitud-carga] Error emitiendo ws: {e}")
+
+    respuesta = {
+        "codigo": "EXITO",
+        "datos": {
+            "id_solicitud": id_solicitud,
+            "estado_operativo": "CARGA_SOLICITADA",
+            "habilitada_para_reparto": False
+        }
+    }
+    return JSONResponse(status_code=200, content=respuesta)
+
+
+# ==============================================================================
+# 11. RESUMEN DE SINCRONIZACIÓN MÓVIL
+# ==============================================================================
+@ChoferMovilRouter.get("/resumen-sincronizacion")
+def obtener_resumen_sincronizacion_movil(
+    request: Request,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Devuelve la asignación activa (con estado_operativo, habilitada_para_reparto y paradas),
+    el inventario actual en camión y el historial de operaciones de hoy (con estado_revision_web).
+    """
+    uid = usuario["IdUsuario"]
+    service = RutaService(db)
+
+    # 1. Asignación activa
+    sql_asig = text("""
+        SELECT 
+            ar."IdAsignacionRuta",
+            ar."IdRutaDistribucion",
+            r."NombreRuta",
+            ar."FechaAsignacion",
+            ar."Estado",
+            COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA') AS estado_operativo,
+            ar."KilometrajeInicial",
+            ar."KilometrajeFinal",
+            ar."Observacion"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdUsuarioRepartidor" = :uid
+          AND (ar."FechaAsignacion" = CURRENT_DATE OR ar."Estado" NOT IN ('Finalizada', 'Cancelada'))
+        ORDER BY ar."FechaAsignacion" DESC, ar."IdAsignacionRuta" DESC
+        LIMIT 1;
+    """)
+    asig_row = db.execute(sql_asig, {"uid": uid}).mappings().fetchone()
+
+    asignacion_activa = None
+    if asig_row:
+        id_asig = asig_row["IdAsignacionRuta"]
+        estado_op = asig_row["estado_operativo"]
+        tracking = service.ObtenerTrackingAsignacion(id_asig)
+        paradas = tracking.get("Paradas", [])
+
+        # Enriquecer paradas con items del pedido
+        for p in paradas:
+            id_ped = p.get("IdPedido")
+            if id_ped:
+                sql_det = text("""
+                    SELECT dp."IdPresentacion", prod."NombreProducto", dp."Cantidad",
+                           dp."PrecioUnitarioAplicado", dp."Subtotal",
+                           COALESCE(p."estado_revision_web", 'PENDIENTE') AS estado_revision_web
+                    FROM public."DetallePedido" dp
+                    JOIN public."Pedido" p ON dp."IdPedido" = p."IdPedido"
+                    JOIN public."PresentacionProducto" pp ON dp."IdPresentacion" = pp."IdPresentacion"
+                    JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+                    WHERE dp."IdPedido" = :id_ped;
+                """)
+                items_p = db.execute(sql_det, {"id_ped": id_ped}).mappings().fetchall()
+                p["items"] = [dict(it) for it in items_p]
+
+        asignacion_activa = {
+            "id_asignacion": id_asig,
+            "id_ruta": asig_row["IdRutaDistribucion"],
+            "nombre_ruta": asig_row["NombreRuta"],
+            "fecha": str(asig_row["FechaAsignacion"]),
+            "estado": asig_row["Estado"],
+            "estado_operativo": estado_op,
+            "habilitada_para_reparto": (estado_op == "APROBADA_EN_RUTA"),
+            "kilometraje_inicial": float(asig_row["KilometrajeInicial"] or 0.0),
+            "paradas": paradas,
+            "total_paradas": len(paradas)
+        }
+
+    # 2. Inventario Camión
+    sql_inv = text("""
+        SELECT 
+            ic.id,
+            ic.presentacion_id,
+            pp."TipoContenedor",
+            prod."NombreProducto",
+            ic.cantidad_cargada,
+            ic.cantidad_vendida,
+            (ic.cantidad_cargada - ic.cantidad_vendida) AS saldo_actual,
+            ic.cantidad_remanente,
+            ic.precio_vigente_carga,
+            COALESCE(pcc."EsBandeo", false) AS es_bandeo,
+            COALESCE(pcc."ValorBandeo", 0) AS valor_bandeo
+        FROM public.inventario_chofer ic
+        JOIN public."PresentacionProducto" pp ON ic.presentacion_id = pp."IdPresentacion"
+        JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+        LEFT JOIN public."ProductoConfigComercial" pcc ON prod."IdProducto" = pcc."IdProducto"
+        WHERE ic.chofer_id = :uid
+        ORDER BY prod."NombreProducto" ASC;
+    """)
+    filas_inv = db.execute(sql_inv, {"uid": uid}).mappings().fetchall()
+    inventario_camion = []
+    for f in filas_inv:
+        inventario_camion.append({
+            "id": f["id"],
+            "presentacion_id": f["presentacion_id"],
+            "nombre_producto": f["NombreProducto"],
+            "tipo_contenedor": f["TipoContenedor"],
+            "cantidad_cargada": float(f["cantidad_cargada"] or 0),
+            "cantidad_vendida": float(f["cantidad_vendida"] or 0),
+            "saldo_actual": float(f["saldo_actual"] or 0),
+            "cantidad_remanente": float(f["cantidad_remanente"] or 0),
+            "precio_vigente_carga": float(f["precio_vigente_carga"] or 0),
+            "es_bandeo": bool(f["es_bandeo"]),
+            "valor_bandeo": int(f["valor_bandeo"] or 0)
+        })
+
+    # 3. Historial de Operaciones Hoy (excluye clientes nuevos sin venta)
+    sql_hist_entregas = text("""
+        SELECT 
+            'entrega' AS tipo,
+            p."IdPedido" AS id,
+            p."NumeroPedido" AS referencia,
+            p."FechaEntrega" AS fecha_hora,
+            p."MontoTotal" AS monto,
+            c."RazonSocial" AS cliente,
+            COALESCE(p."estado_revision_web", 'PENDIENTE') AS estado_revision_web,
+            p."observacion_revision"
+        FROM public."Pedido" p
+        JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        WHERE p."IdUsuarioRepartidor" = :uid
+          AND (DATE(p."FechaEntrega") = CURRENT_DATE OR DATE(p."FechaPedido") = CURRENT_DATE);
+    """)
+    entregas = db.execute(sql_hist_entregas, {"uid": uid}).mappings().fetchall()
+
+    sql_hist_cobros = text("""
+        SELECT 
+            'cobro' AS tipo,
+            pp."IdPagoPedido" AS id,
+            p."NumeroPedido" AS referencia,
+            pp."FechaPago" AS fecha_hora,
+            pp."MontoPagado" AS monto,
+            c."RazonSocial" AS cliente,
+            COALESCE(pp."estado_revision_web", 'PENDIENTE') AS estado_revision_web,
+            pp."observacion_revision"
+        FROM public."PagoPedido" pp
+        JOIN public."Pedido" p ON pp."IdPedido" = p."IdPedido"
+        JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        WHERE p."IdUsuarioRepartidor" = :uid
+          AND DATE(pp."FechaPago") = CURRENT_DATE;
+    """)
+    cobros = db.execute(sql_hist_cobros, {"uid": uid}).mappings().fetchall()
+
+    historial_operaciones_hoy = []
+    for e in entregas:
+        historial_operaciones_hoy.append({
+            "tipo": e["tipo"],
+            "id": e["id"],
+            "referencia": e["referencia"],
+            "fecha_hora": e["fecha_hora"].isoformat() if e["fecha_hora"] else None,
+            "monto": float(e["monto"] or 0.0),
+            "cliente": e["cliente"],
+            "estado_revision_web": e["estado_revision_web"],
+            "observacion_revision": e["observacion_revision"]
+        })
+    for c in cobros:
+        historial_operaciones_hoy.append({
+            "tipo": c["tipo"],
+            "id": c["id"],
+            "referencia": c["referencia"],
+            "fecha_hora": c["fecha_hora"].isoformat() if c["fecha_hora"] else None,
+            "monto": float(c["monto"] or 0.0),
+            "cliente": c["cliente"],
+            "estado_revision_web": c["estado_revision_web"],
+            "observacion_revision": c["observacion_revision"]
+        })
+
+    historial_operaciones_hoy.sort(key=lambda x: x["fecha_hora"] or "", reverse=True)
+
+    return {
+        "codigo": "EXITO",
+        "datos": {
+            "asignacion_activa": asignacion_activa,
+            "inventario_camion": inventario_camion,
+            "historial_operaciones_hoy": historial_operaciones_hoy
+        }
+    }
+
+
+# ==============================================================================
+# 12. CLIENTE EN RUTA (SOLO_REGISTRO, PROGRAMAR_ENTREGA, ENTREGA_INMEDIATA)
+# ==============================================================================
+@ChoferMovilRouter.post("/cliente-en-ruta")
+async def registrar_cliente_en_ruta(
+    request: Request,
+    dto: ClienteEnRutaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
+    x_idempotency_key: Optional[str] = Header(None, alias="X-Idempotency-Key")
+):
+    """
+    Registra cliente en ruta bajo 3 modalidades:
+    - SOLO_REGISTRO: solo alta de cliente y punto de venta.
+    - PROGRAMAR_ENTREGA: programa visita para un día de la semana.
+    - ENTREGA_INMEDIATA: inserta parada en parada_actual_orden + 1, desplaza siguientes,
+      ejecuta entrega con cobro y devuelve ruta reordenada 1..N.
+    """
+    req_id = _obtener_request_id(request)
+    uid = usuario["IdUsuario"]
+    sucursal_id = alcance.sucursal_efectiva or usuario.get("IdSucursal", 1)
+    cuerpo_bytes = await request.body()
+
+    if x_idempotency_key:
+        hash_cuerpo, respuesta_cacheada = _verificar_idempotencia_escritura(
+            db, uid, request.url.path, x_idempotency_key, cuerpo_bytes
+        )
+        if respuesta_cacheada:
+            return respuesta_cacheada
+
+    modalidad = (dto.modalidad or "SOLO_REGISTRO").upper()
+    cli_data = dto.datos_cliente
+
+    # 1. Buscar asignación y ruta activa de hoy para el chofer
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdRutaDistribucion", ar."estado_operativo"
+        FROM public."AsignacionRuta" ar
+        WHERE ar."IdUsuarioRepartidor" = :uid
+          AND (ar."FechaAsignacion" = CURRENT_DATE OR ar."Estado" NOT IN ('Finalizada', 'Cancelada'))
+        ORDER BY ar."FechaAsignacion" DESC, ar."IdAsignacionRuta" DESC
+        LIMIT 1;
+    """)
+    asig = db.execute(sql_asig, {"uid": uid}).fetchone()
+    id_asig = asig.IdAsignacionRuta if asig else None
+    id_ruta = asig.IdRutaDistribucion if asig else None
+
+    # Si es ENTREGA_INMEDIATA, el gatekeeper de carga aplica
+    if modalidad == "ENTREGA_INMEDIATA":
+        if asig and str(asig.estado_operativo).strip().upper() in ("PENDIENTE_CARGA", "CARGA_SOLICITADA"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="La carga de tu camión aún no fue aprobada en Web"
+            )
+
+    # 2. Crear Cliente en BD
+    sql_cli = text("""
+        INSERT INTO public."Cliente" (
+            "IdEstadoCliente", "RazonSocial", "NombreComercial", "NombrePropietario", "NitCi",
+            "Telefono", "Direccion", "Latitud", "Longitud", "CiudadDestino",
+            "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion", "IdSucursal",
+            "modalidad_registro", "dia_semana_programado", "id_ruta_sugerida"
+        ) VALUES (
+            1, :razon, :nom_com, :nom_prop, :nit,
+            :tel, :dir, :lat, :lng, :ciudad,
+            0, 0, :uid, :obs, :sid,
+            :modalidad, :dia_prog, :id_ruta
+        ) RETURNING "IdCliente";
+    """)
+    cli_row = db.execute(sql_cli, {
+        "razon": cli_data.razon_social,
+        "nom_com": cli_data.nombre_comercial or cli_data.razon_social,
+        "nom_prop": cli_data.nombre_propietario,
+        "nit": cli_data.nit_ci,
+        "tel": cli_data.telefono,
+        "dir": cli_data.direccion or "Sin dirección especificada",
+        "lat": cli_data.latitud,
+        "lng": cli_data.longitud,
+        "ciudad": cli_data.ciudad_destino or "Sucre",
+        "uid": uid,
+        "obs": cli_data.observacion,
+        "sid": sucursal_id,
+        "modalidad": modalidad,
+        "dia_prog": dto.dia_semana_programado,
+        "id_ruta": id_ruta
+    }).fetchone()
+    id_cliente = cli_row[0]
+
+    # 3. Crear Punto de Venta
+    sql_pv = text("""
+        INSERT INTO public."PuntoVenta" (
+            "IdCliente", "NombrePuntoVenta", "Direccion",
+            "Latitud", "Longitud", "Referencia", "Activo"
+        ) VALUES (
+            :cli, :nom_com, :dir,
+            :lat, :lng, :ref, true
+        ) RETURNING "IdPuntoVenta";
+    """)
+    pv_row = db.execute(sql_pv, {
+        "cli": id_cliente,
+        "nom_com": cli_data.nombre_comercial or cli_data.razon_social,
+        "dir": cli_data.direccion or "Sin dirección especificada",
+        "lat": cli_data.latitud,
+        "lng": cli_data.longitud,
+        "ref": cli_data.observacion
+    }).fetchone()
+    id_punto_venta = pv_row[0]
+
+    ruta_reordenada = []
+
+    # 4. Procesar según modalidad
+    if modalidad == "ENTREGA_INMEDIATA":
+        if not id_ruta:
+            raise HTTPException(status_code=400, detail="No se encontró una ruta activa para insertar la entrega inmediata")
+
+        nuevo_orden = (dto.parada_actual_orden or 0) + 1
+
+        # Desplazar siguientes paradas
+        db.execute(text("""
+            UPDATE public."RutaPuntoVenta"
+            SET "OrdenVisita" = "OrdenVisita" + 1
+            WHERE "IdRutaDistribucion" = :rid
+              AND "OrdenVisita" >= :orden;
+        """), {"rid": id_ruta, "orden": nuevo_orden})
+
+        # Insertar nueva parada en parada_actual_orden + 1
+        db.execute(text("""
+            INSERT INTO public."RutaPuntoVenta" ("IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita")
+            VALUES (:rid, :pvid, :orden);
+        """), {"rid": id_ruta, "pvid": id_punto_venta, "orden": nuevo_orden})
+
+        # Si viene entrega_con_cobro, ejecutar la entrega inmediata
+        if dto.entrega_con_cobro:
+            subtotal = 0.0
+            for item in (dto.entrega_con_cobro.items_entregados or []):
+                p_unit = db.execute(text("""
+                    SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto"
+                    WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid)
+                    LIMIT 1;
+                """), {"pid": item.presentacion_id}).scalar() or 0.0
+                subtotal += float(p_unit) * float(item.cantidad)
+
+            num_ped = f"PED-INM-{int(datetime.now().timestamp())}"
+            ped_row = db.execute(text("""
+                INSERT INTO public."Pedido" (
+                    "NumeroPedido", "IdCliente", "IdPuntoVenta", "IdUsuarioRepartidor",
+                    "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "FechaEntrega",
+                    "EsVentaDirecta", "SubTotal", "Descuento", "MontoTotal",
+                    "LatitudEntrega", "LongitudEntrega", "SincronizadoDesdeMovil"
+                ) VALUES (
+                    :nped, :cid, :pvid, :uid,
+                    4, :asig, NOW(), NOW(),
+                    true, :sub, 0, :sub,
+                    :lat, :lng, true
+                ) RETURNING "IdPedido";
+            """), {
+                "nped": num_ped, "cid": id_cliente, "pvid": id_punto_venta, "uid": uid,
+                "asig": id_asig, "sub": subtotal, "lat": cli_data.latitud, "lng": cli_data.longitud
+            }).fetchone()
+            nuevo_id_pedido = ped_row[0]
+
+            dto.entrega_con_cobro.id_pedido = nuevo_id_pedido
+            for item in (dto.entrega_con_cobro.items_entregados or []):
+                p_unit = db.execute(text("""
+                    SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto"
+                    WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid)
+                    LIMIT 1;
+                """), {"pid": item.presentacion_id}).scalar() or 0.0
+                st = float(p_unit) * float(item.cantidad)
+                db.execute(text("""
+                    INSERT INTO public."DetallePedido" (
+                        "IdPedido", "IdPresentacion", "Cantidad", "PrecioUnitarioAplicado", "Subtotal"
+                    ) VALUES (
+                        :ped, :pid, :cant, :pu, :st
+                    );
+                """), {"ped": nuevo_id_pedido, "pid": item.presentacion_id, "cant": item.cantidad, "pu": p_unit, "st": st})
+
+            await registrar_entrega_movil(
+                request=request,
+                dto=dto.entrega_con_cobro,
+                db=db,
+                usuario=usuario,
+                alcance=alcance,
+                x_idempotency_key=f"INMEDIATA-{uuid.uuid4()}"
+            )
+
+        # Consultar la ruta reordenada 1..N
+        filas_reord = db.execute(text("""
+            SELECT 
+                rpv."OrdenVisita",
+                pv."IdPuntoVenta",
+                pv."NombrePuntoVenta",
+                c."IdCliente",
+                c."RazonSocial",
+                pv."Direccion",
+                pv."Latitud",
+                pv."Longitud"
+            FROM public."RutaPuntoVenta" rpv
+            JOIN public."PuntoVenta" pv ON rpv."IdPuntoVenta" = pv."IdPuntoVenta"
+            JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+            WHERE rpv."IdRutaDistribucion" = :rid
+            ORDER BY rpv."OrdenVisita" ASC;
+        """), {"rid": id_ruta}).mappings().fetchall()
+
+        idx = 1
+        for f in filas_reord:
+            parada = dict(f)
+            parada["OrdenVisita"] = idx
+            ruta_reordenada.append(parada)
+            idx += 1
+
+    elif modalidad == "PROGRAMAR_ENTREGA":
+        pass  # Guardado para la generación por cron
+
+    db.commit()
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Cliente registrado exitosamente bajo modalidad {modalidad}",
+        "datos": {
+            "id_cliente": id_cliente,
+            "id_punto_venta": id_punto_venta,
+            "modalidad": modalidad,
+            "ruta_reordenada": ruta_reordenada
+        }
+    }
+
 

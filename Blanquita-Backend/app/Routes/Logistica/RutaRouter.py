@@ -573,11 +573,9 @@ def revisar_pago_web(
 # -------------------------------------------------------------
 # APROBACIÓN DE CARGA EN WEB
 # -------------------------------------------------------------
-@RutaRouter.post("/asignaciones/{id_asignacion}/aprobar-carga", response_model=dict)
 @RutaRouter.post("/asignaciones/{id}/aprobar-carga", response_model=dict)
 async def aprobar_carga_camion_web(
-    id_asignacion: Optional[int] = None,
-    id: Optional[int] = None,
+    id: int,
     dto: Optional[AprobarCargaRequest] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
@@ -588,9 +586,7 @@ async def aprobar_carga_camion_web(
     Suma el stock aprobado a inventario_chofer, pasa estado_operativo a APROBADA_EN_RUTA
     y emite evento WebSocket carga_camion_aprobada al chofer.
     """
-    asig_id = id_asignacion or id
-    if not asig_id:
-        raise HTTPException(status_code=400, detail="ID de asignación no provisto")
+    asig_id = id
 
     sql_asig = text("""
         SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
@@ -616,8 +612,16 @@ async def aprobar_carga_camion_web(
     sol = db.execute(sql_sol, {"asig_id": asig_id}).fetchone()
 
     items_a_aprobar = []
-    if dto and dto.items:
-        items_a_aprobar = dto.items
+    lista_items = (dto.items or dto.items_aprobados or dto.ItemsAprobados) if dto else None
+    if lista_items:
+        for it in lista_items:
+            if isinstance(it, dict):
+                pid = it.get("presentacion_id") or it.get("IdPresentacion") or it.get("id_presentacion")
+                cant = it.get("cantidad_aprobada") or it.get("stock_adicional_aprobado") or it.get("cantidad") or 0.0
+                if pid:
+                    items_a_aprobar.append(ItemAprobarCargaDTO(presentacion_id=int(pid), cantidad_aprobada=float(cant)))
+            elif hasattr(it, "presentacion_id"):
+                items_a_aprobar.append(it)
     elif sol:
         sql_det = text("""
             SELECT id_presentacion, stock_adicional_solicitado
@@ -633,7 +637,7 @@ async def aprobar_carga_camion_web(
 
     # Sumar stock aprobado a inventario_chofer
     for item in items_a_aprobar:
-        cant = float(item.cantidad_aprobada)
+        cant = float(item.cantidad_aprobada or 0.0)
         pid = item.presentacion_id
 
         existe = db.execute(text("""
@@ -724,13 +728,11 @@ async def aprobar_carga_camion_web(
 # -------------------------------------------------------------
 # APROBACIÓN 1 A 1 DE HISTORIAL (ENTREGA O COBRO)
 # -------------------------------------------------------------
-@RutaRouter.patch("/operaciones-ruta/{tipo}/{id_operacion}/revisar", response_model=dict)
 @RutaRouter.patch("/operaciones-ruta/{tipo}/{id}/revisar", response_model=dict)
 async def revisar_operacion_ruta_1a1(
     tipo: str,
+    id: int,
     dto: RevisionOperacionRequest,
-    id_operacion: Optional[int] = None,
-    id: Optional[int] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
@@ -740,9 +742,7 @@ async def revisar_operacion_ruta_1a1(
     Permite al encargado Web marcar cada entrega o cobro como APROBADO, OBSERVADO o RECHAZADO
     con comentario/observación, y emite WebSocket operacion_revisada al chofer.
     """
-    op_id = id_operacion or id
-    if not op_id:
-        raise HTTPException(status_code=400, detail="ID de operación no provisto")
+    op_id = id
 
     tipo_norm = str(tipo or "").strip().lower()
     if tipo_norm not in ("entrega", "cobro"):
@@ -751,13 +751,14 @@ async def revisar_operacion_ruta_1a1(
             detail=f"Tipo de operación inválido: '{tipo}'. Debe ser 'entrega' o 'cobro'."
         )
 
-    estado_norm = str(dto.estado or "").strip().upper()
+    estado_norm = str(dto.estado or dto.EstadoRevisionWeb or "").strip().upper()
     if estado_norm not in ("APROBADO", "OBSERVADO", "RECHAZADO"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Estado de revisión inválido: '{dto.estado}'. Debe ser 'APROBADO', 'OBSERVADO' o 'RECHAZADO'."
+            detail=f"Estado de revisión inválido: '{dto.estado or dto.EstadoRevisionWeb}'. Debe ser 'APROBADO', 'OBSERVADO' o 'RECHAZADO'."
         )
 
+    obs_norm = dto.observacion or dto.ObservacionRevision or ""
     chofer_id = None
     admin_id = usuario["IdUsuario"]
 
@@ -781,7 +782,7 @@ async def revisar_operacion_ruta_1a1(
                 "revisado_por_id" = :adm,
                 "fecha_revision" = NOW()
             WHERE "IdPedido" = :op_id;
-        """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+        """), {"est": estado_norm, "obs": obs_norm, "adm": admin_id, "op_id": op_id})
 
     elif tipo_norm == "cobro":
         sql_pago = text("""
@@ -802,7 +803,7 @@ async def revisar_operacion_ruta_1a1(
                     "revisado_por_id" = :adm,
                     "fecha_revision" = NOW()
                 WHERE "IdPagoPedido" = :op_id;
-            """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+            """), {"est": estado_norm, "obs": obs_norm, "adm": admin_id, "op_id": op_id})
         else:
             sql_ab = text("""
                 SELECT a."IdAbonoCuentaCobrar", a."IdUsuario"
@@ -820,7 +821,7 @@ async def revisar_operacion_ruta_1a1(
                     "AprobadoPor" = :adm,
                     "FechaAprobacion" = NOW()
                 WHERE "IdAbonoCuentaCobrar" = :op_id;
-            """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+            """), {"est": estado_norm, "obs": obs_norm, "adm": admin_id, "op_id": op_id})
 
     db.commit()
 
@@ -831,7 +832,7 @@ async def revisar_operacion_ruta_1a1(
             "tipo_operacion": tipo_norm,
             "id_operacion": op_id,
             "estado_revision_web": estado_norm,
-            "observacion_revision": dto.observacion or "",
+            "observacion_revision": obs_norm,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         try:
@@ -851,7 +852,7 @@ async def revisar_operacion_ruta_1a1(
             "tipo": tipo_norm,
             "id": op_id,
             "estado_revision_web": estado_norm,
-            "observacion": dto.observacion
+            "observacion": obs_norm
         }
     }
 
@@ -859,11 +860,9 @@ async def revisar_operacion_ruta_1a1(
 # -------------------------------------------------------------
 # CIERRE Y LIQUIDACIÓN EXCLUSIVO DE ADMIN
 # -------------------------------------------------------------
-@RutaRouter.post("/asignaciones/{id_asignacion}/finalizar-admin", response_model=dict)
 @RutaRouter.post("/asignaciones/{id}/finalizar-admin", response_model=dict)
 def finalizar_ruta_admin(
-    id_asignacion: Optional[int] = None,
-    id: Optional[int] = None,
+    id: int,
     dto: Optional[FinalizarAdminRequest] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(get_current_user),
@@ -888,9 +887,7 @@ def finalizar_ruta_admin(
             detail="Permisos insuficientes para finalizar ruta"
         )
 
-    asig_id = id_asignacion or id
-    if not asig_id:
-        raise HTTPException(status_code=400, detail="ID de asignación no provisto")
+    asig_id = id
 
     sql_asig = text("""
         SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
@@ -961,12 +958,10 @@ def finalizar_ruta_admin(
     }
 
 
-@RutaRouter.post("/asignaciones/{id_asignacion}/reasignar-pendientes", response_model=dict)
 @RutaRouter.post("/asignaciones/{id}/reasignar-pendientes", response_model=dict)
 def reasignar_paradas_pendientes(
-    id_asignacion: Optional[int] = None,
-    id: Optional[int] = None,
-    dto: ReasignarPendientesRequest = None,
+    id: int,
+    dto: ReasignarPendientesRequest,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
@@ -975,9 +970,7 @@ def reasignar_paradas_pendientes(
     Reasigna las paradas/pedidos pendientes de una asignación que fue finalizada o abandonada
     hacia otro chofer o nueva asignación.
     """
-    asig_id = id_asignacion or id
-    if not asig_id or not dto:
-        raise HTTPException(status_code=400, detail="Parámetros incompletos")
+    asig_id = id
 
     sql_ped_pend = text("""
         SELECT "IdPedido"

@@ -242,16 +242,44 @@ class RevisionWebOperacionRequest(BaseModel):
     EstadoRevisionWeb: str # 'PENDIENTE', 'APROBADO', 'OBSERVADO', 'RECHAZADO'
     ObservacionRevision: Optional[str] = None
 
-# Alias y DTOs complementarios
-ItemAprobarCargaDTO = ItemSolicitudCarga
-AprobarCargaRequest = SolicitudCargaRevision
-RevisionOperacionRequest = RevisionWebOperacionRequest
+# -------------------------------------------------------------
+# DTOs PARA APROBACIONES, FINALIZACIÓN Y REASIGNACIÓN
+# -------------------------------------------------------------
+class ItemAprobarCargaDTO(BaseModel):
+    presentacion_id: Optional[int] = None
+    IdPresentacion: Optional[int] = None
+    cantidad_aprobada: Optional[float] = None
+    stock_adicional_aprobado: Optional[float] = None
+
+
+class AprobarCargaRequest(BaseModel):
+    items: Optional[List[dict]] = None
+    items_aprobados: Optional[List[dict]] = None
+    ItemsAprobados: Optional[List[dict]] = None
+    observacion: Optional[str] = None
+    ObservacionAdmin: Optional[str] = None
+    Estado: Optional[str] = "APROBADO"
+
+
+class RevisionOperacionRequest(BaseModel):
+    estado: Optional[str] = None
+    EstadoRevisionWeb: Optional[str] = None
+    observacion: Optional[str] = None
+    ObservacionRevision: Optional[str] = None
+
 
 class FinalizarAdminRequest(BaseModel):
-    IdAsignacionRuta: int
+    IdAsignacionRuta: Optional[int] = None
+    observacion_cierre_admin: Optional[str] = None
     ObservacionCierre: Optional[str] = None
+    kilometraje_final: Optional[float] = None
+
 
 class ReasignarPendientesRequest(BaseModel):
-    IdRutaDestino: int
+    nuevo_id_chofer: Optional[int] = None
+    nueva_id_asignacion: Optional[int] = None
+    IdRutaDestino: Optional[int] = None
+    observacion: Optional[str] = None
     FechaNueva: Optional[date] = None
+
 

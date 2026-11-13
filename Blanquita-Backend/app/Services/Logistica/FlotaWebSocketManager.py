@@ -79,21 +79,29 @@ class FlotaWebSocketManager:
         """
         Acepta la conexión WebSocket, la registra en el hub y emite el snapshot inicial de choferes.
         """
-        await websocket.accept()
+        try:
+            await websocket.accept()
+        except Exception:
+            pass
+
         self.active_connections[websocket] = {
-            "usuario_id": ticket_data["usuario_id"],
-            "sucursales_permitidas": ticket_data["sucursales_permitidas"]
+            "usuario_id": ticket_data.get("usuario_id"),
+            "id_chofer": ticket_data.get("id_chofer") or ticket_data.get("usuario_id"),
+            "rol": ticket_data.get("rol"),
+            "tipo_cliente": ticket_data.get("tipo_cliente", "web"),
+            "sucursales_permitidas": ticket_data.get("sucursales_permitidas")
         }
         logger.info(
-            f"[WS-Flota] Cliente conectado (Usuario #{ticket_data['usuario_id']}, "
-            f"Sucursales: {ticket_data['sucursales_permitidas'] or 'Todas'}). "
+            f"[WS-Flota] Cliente conectado (Usuario #{ticket_data.get('usuario_id')}, "
+            f"Tipo: {ticket_data.get('tipo_cliente', 'web')}, "
+            f"Sucursales: {ticket_data.get('sucursales_permitidas') or 'Todas'}). "
             f"Conexiones activas: {len(self.active_connections)}"
         )
 
         if snapshot_inicial is not None:
             try:
                 # Filtrar snapshot inicial según las sucursales permitidas
-                suc_permitidas = ticket_data["sucursales_permitidas"]
+                suc_permitidas = ticket_data.get("sucursales_permitidas")
                 if suc_permitidas is not None:
                     snapshot_filtrado = [
                         c for c in snapshot_inicial
@@ -128,6 +136,79 @@ class FlotaWebSocketManager:
             })
         except Exception:
             self.desconectar(websocket)
+
+    def obtener_choferes_conectados(self) -> set:
+        """Retorna el conjunto de IDs de choferes con conexión WebSocket activa."""
+        conectados = set()
+        for meta in self.active_connections.values():
+            uid = meta.get("id_chofer") or meta.get("usuario_id")
+            if uid:
+                conectados.add(int(uid))
+        return conectados
+
+    async def emitir_a_chofer(self, id_chofer: int, evento: Dict[str, Any]):
+        """Envía un evento WebSocket directamente al chofer especificado."""
+        conexiones_cerradas = []
+        destinatario_encontrado = False
+        for ws, meta in list(self.active_connections.items()):
+            uid = meta.get("id_chofer") or meta.get("usuario_id")
+            if uid and int(uid) == int(id_chofer):
+                destinatario_encontrado = True
+                try:
+                    await ws.send_json(evento)
+                except Exception as e:
+                    logger.debug(f"[WS-Flota] Error al emitir a chofer #{id_chofer}: {e}")
+                    conexiones_cerradas.append(ws)
+
+        for ws in conexiones_cerradas:
+            self.desconectar(ws)
+
+        # También notificar a observadores web sobre este cambio operativo
+        await self.emitir_a_web(evento)
+        return destinatario_encontrado
+
+    async def emitir_a_todos_los_choferes(self, evento: Dict[str, Any]):
+        """Emite un evento a todos los choferes conectados."""
+        conexiones_cerradas = []
+        for ws, meta in list(self.active_connections.items()):
+            try:
+                await ws.send_json(evento)
+            except Exception as e:
+                logger.debug(f"[WS-Flota] Error en broadcast a chofer: {e}")
+                conexiones_cerradas.append(ws)
+
+        for ws in conexiones_cerradas:
+            self.desconectar(ws)
+
+    async def emitir_a_web(self, evento: Dict[str, Any], sucursal_id: Optional[int] = None):
+        """Envía un evento a los observadores web activos."""
+        conexiones_cerradas = []
+        for ws, meta in list(self.active_connections.items()):
+            suc_permitidas = meta.get("sucursales_permitidas")
+            if suc_permitidas is not None and sucursal_id is not None:
+                if sucursal_id not in suc_permitidas:
+                    continue
+            try:
+                await ws.send_json(evento)
+            except Exception as e:
+                logger.debug(f"[WS-Flota] Error en emitir_a_web: {e}")
+                conexiones_cerradas.append(ws)
+
+        for ws in conexiones_cerradas:
+            self.desconectar(ws)
+
+    async def broadcast_general(self, evento: Dict[str, Any]):
+        """Envía un evento a todas las conexiones WebSocket activas."""
+        conexiones_cerradas = []
+        for ws in list(self.active_connections.keys()):
+            try:
+                await ws.send_json(evento)
+            except Exception as e:
+                logger.debug(f"[WS-Flota] Error en broadcast_general: {e}")
+                conexiones_cerradas.append(ws)
+
+        for ws in conexiones_cerradas:
+            self.desconectar(ws)
 
     async def broadcast_ubicacion(self, datos: Dict[str, Any]):
         """

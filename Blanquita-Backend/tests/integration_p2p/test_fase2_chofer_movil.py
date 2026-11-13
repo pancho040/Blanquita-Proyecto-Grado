@@ -86,15 +86,15 @@ def _obtener_o_crear_asignacion(db, uid, sid):
     if row:
         db.execute(text("""
             UPDATE public."AsignacionRuta"
-            SET "IdRutaDistribucion" = :rid, "Estado" = 'En Ruta'
+            SET "IdRutaDistribucion" = :rid, "Estado" = 'En Ruta', "estado_operativo" = 'APROBADA_EN_RUTA'
             WHERE "IdAsignacionRuta" = :asig;
         """), {"rid": id_ruta, "asig": row[0]})
         db.flush()
         return row[0]
 
     ins = db.execute(text("""
-        INSERT INTO public."AsignacionRuta" ("IdRutaDistribucion", "IdUsuarioRepartidor", "FechaAsignacion", "Estado", "IdUsuarioAsigna")
-        VALUES (:rid, :uid, CURRENT_DATE, 'En Ruta', :uid)
+        INSERT INTO public."AsignacionRuta" ("IdRutaDistribucion", "IdUsuarioRepartidor", "FechaAsignacion", "Estado", "estado_operativo", "IdUsuarioAsigna")
+        VALUES (:rid, :uid, CURRENT_DATE, 'En Ruta', 'APROBADA_EN_RUTA', :uid)
         RETURNING "IdAsignacionRuta";
     """), {"rid": id_ruta, "uid": uid}).fetchone()
     db.flush()

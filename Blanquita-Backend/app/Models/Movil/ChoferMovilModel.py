@@ -160,3 +160,56 @@ class ClienteMovilRequest(BaseModel):
     latitud: float = Field(..., validation_alias=AliasChoices("latitud", "Latitud"))
     longitud: float = Field(..., validation_alias=AliasChoices("longitud", "Longitud"))
 
+
+# ==============================================================================
+# Modelos para Carga de Camión, Sincronización y Cliente en Ruta
+# ==============================================================================
+
+class ItemSolicitudCargaDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    presentacion_id: int = Field(..., gt=0, validation_alias=AliasChoices("presentacion_id", "id_presentacion", "IdPresentacion"))
+    cantidad_solicitada: float = Field(..., gt=0, validation_alias=AliasChoices("cantidad_solicitada", "cantidad", "CantidadSolicitada"))
+
+
+class SolicitarCargaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id_asignacion: int = Field(..., gt=0, validation_alias=AliasChoices("id_asignacion", "IdAsignacionRuta", "id_asignacion_ruta"))
+    usar_remanente: bool = Field(False, validation_alias=AliasChoices("usar_remanente", "usarRemanente"))
+    observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "observaciones", "Observacion"))
+    items: List[ItemSolicitudCargaDTO] = Field(default_factory=list, validation_alias=AliasChoices("items", "Items"))
+
+
+class DatosClienteEnRutaDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    razon_social: str = Field(..., min_length=2, validation_alias=AliasChoices("razon_social", "RazonSocial"))
+    nombre_comercial: Optional[str] = Field(None, validation_alias=AliasChoices("nombre_comercial", "NombreComercial"))
+    nombre_propietario: Optional[str] = Field(None, validation_alias=AliasChoices("nombre_propietario", "NombrePropietario"))
+    nit_ci: Optional[str] = Field(None, validation_alias=AliasChoices("nit_ci", "NitCi", "nit"))
+    telefono: Optional[str] = Field(None, validation_alias=AliasChoices("telefono", "Telefono"))
+    direccion: Optional[str] = Field(None, validation_alias=AliasChoices("direccion", "Direccion"))
+    latitud: Optional[float] = Field(None, validation_alias=AliasChoices("latitud", "Latitud"))
+    longitud: Optional[float] = Field(None, validation_alias=AliasChoices("longitud", "Longitud"))
+    ciudad_destino: Optional[str] = Field("Sucre", validation_alias=AliasChoices("ciudad_destino", "CiudadDestino"))
+    observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "observaciones", "Observacion"))
+
+
+class ItemProgramadoDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    presentacion_id: int = Field(..., gt=0)
+    cantidad: float = Field(..., gt=0)
+
+
+class ClienteEnRutaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    datos_cliente: DatosClienteEnRutaDTO = Field(..., validation_alias=AliasChoices("datos_cliente", "datosCliente"))
+    modalidad: str = Field(
+        "SOLO_REGISTRO",
+        description="'SOLO_REGISTRO' | 'PROGRAMAR_ENTREGA' | 'ENTREGA_INMEDIATA'",
+        validation_alias=AliasChoices("modalidad", "Modalidad")
+    )
+    dia_semana_programado: Optional[int] = Field(None, ge=1, le=7, validation_alias=AliasChoices("dia_semana_programado", "diaSemanaProgramado"))
+    items_programados: Optional[List[ItemProgramadoDTO]] = Field(default_factory=list, validation_alias=AliasChoices("items_programados", "itemsProgramados"))
+    parada_actual_orden: Optional[int] = Field(0, ge=0, validation_alias=AliasChoices("parada_actual_orden", "paradaActualOrden"))
+    entrega_con_cobro: Optional[EntregaMovilRequest] = Field(None, validation_alias=AliasChoices("entrega_con_cobro", "entregaConCobro"))
+
+
