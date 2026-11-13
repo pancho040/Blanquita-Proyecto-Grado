@@ -66,6 +66,9 @@ class EntregaMovilRequestPayload(EntregaMovilRequest):
     id_pedido: Optional[int] = Field(None, ge=0, validation_alias=AliasChoices("id_pedido", "IdPedido", "idPedido"))
     id_punto_venta: Optional[int] = Field(None, ge=0, validation_alias=AliasChoices("id_punto_venta", "IdPuntoVenta", "idPuntoVenta"))
     id_cliente: Optional[int] = Field(None, ge=0, validation_alias=AliasChoices("id_cliente", "IdCliente", "idCliente"))
+    latitud: Optional[float] = Field(0.0, validation_alias=AliasChoices("latitud", "LatitudEntrega", "lat"))
+    longitud: Optional[float] = Field(0.0, validation_alias=AliasChoices("longitud", "LongitudEntrega", "lng"))
+    firma_chofer: Optional[str] = Field("firma_chofer_digital", validation_alias=AliasChoices("firma_chofer", "FirmaChofer", "firmaChofer"))
 
 ChoferMovilRouter = APIRouter(prefix="/chofer", tags=["Móvil - Choferes (Fase 2)"])
 
