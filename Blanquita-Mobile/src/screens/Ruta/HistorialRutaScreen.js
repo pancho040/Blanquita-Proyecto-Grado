@@ -544,13 +544,13 @@ const styles = StyleSheet.create({
   },
   metricaTotalLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: "#334155",
     fontWeight: "600",
   },
   metricaTotalMonto: {
     fontSize: 20,
     fontWeight: "800",
-    color: Colors.primaryDark,
+    color: Colors.primaryDark || "#0369A1",
     fontVariant: ["tabular-nums"],
   },
   refreshBtn: {
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
   filtroBtnText: {
     fontSize: 11,
     fontWeight: "600",
-    color: Colors.textSecondary,
+    color: "#334155",
   },
   filtroBtnTextActivo: {
     color: "#FFFFFF",
@@ -643,6 +643,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flex: 1,
+    flexShrink: 1,
+    paddingRight: 6,
   },
   iconWrap: {
     width: 30,
@@ -650,6 +653,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   iconEntrega: {
     backgroundColor: Colors.primaryMuted,
@@ -660,12 +664,14 @@ const styles = StyleSheet.create({
   tipoTexto: {
     fontSize: 12,
     fontWeight: "700",
-    color: Colors.text,
+    color: "#0F172A",
+    flexShrink: 1,
   },
   horaTexto: {
     fontSize: 10,
-    color: Colors.textSecondary,
+    color: "#334155",
     marginTop: 1,
+    flexShrink: 1,
   },
   badgeBase: {
     flexDirection: "row",
@@ -675,6 +681,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     gap: 4,
+    flexShrink: 0,
   },
   badgePendienteEnviar: {
     backgroundColor: "#FEF3C7",
@@ -709,17 +716,19 @@ const styles = StyleSheet.create({
   clienteNombre: {
     fontSize: 13,
     fontWeight: "700",
-    color: Colors.text,
+    color: "#0F172A",
+    flexShrink: 1,
   },
   metodoTexto: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: "#334155",
     marginTop: 2,
+    flexShrink: 1,
   },
   montoNumero: {
     fontSize: 15,
     fontWeight: "800",
-    color: Colors.text,
+    color: "#0F172A",
     fontVariant: ["tabular-nums"],
   },
   observacionBox: {

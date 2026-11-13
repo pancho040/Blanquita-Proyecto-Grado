@@ -12,13 +12,17 @@ import { useNotificaciones } from "../../context/NotificacionesContext";
 import { Header } from "../../components/common/Header";
 import {
   BellOff,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   FileEdit,
   TrendingUp,
   AlertTriangle,
   Clock,
   Info,
+  MapPin,
+  RefreshCw,
+  ClipboardCheck,
+  Flag,
 } from "lucide-react-native";
 
 export const BandejaAvisosScreen = ({ navigation }) => {
@@ -31,11 +35,68 @@ export const BandejaAvisosScreen = ({ navigation }) => {
   } = useNotificaciones();
 
   const obtenerIconoYColorPorTipo = (tipo) => {
-    switch (tipo) {
+    const tipoNorm = String(tipo || "").toUpperCase();
+    switch (tipoNorm) {
+      case "RUTA_ASIGNADA":
+        return {
+          icono: MapPin,
+          color: "#0284C7",
+          fondoBadge: "#F0F9FF",
+          bordeBadge: "#BAE6FD",
+          etiqueta: "Ruta Asignada",
+        };
+      case "CARGA_CAMION_APROBADA":
+        return {
+          icono: CheckCircle2,
+          color: "#15803D",
+          fondoBadge: "#F0FDF4",
+          bordeBadge: "#86EFAC",
+          etiqueta: "Carga Aprobada",
+        };
+      case "CARGA_CAMION_OBSERVADA":
+        return {
+          icono: AlertTriangle,
+          color: "#B45309",
+          fondoBadge: "#FFFBEB",
+          bordeBadge: "#FDE68A",
+          etiqueta: "Carga Observada",
+        };
+      case "CARGA_CAMION_RECHAZADA":
+        return {
+          icono: XCircle,
+          color: "#B91C1C",
+          fondoBadge: "#FEF2F2",
+          bordeBadge: "#FCA5A5",
+          etiqueta: "Carga Rechazada",
+        };
+      case "RUTA_REORDENADA":
+        return {
+          icono: RefreshCw,
+          color: "#0E7490",
+          fondoBadge: "#F0FDFA",
+          bordeBadge: "#99F6E4",
+          etiqueta: "Ruta Reordenada",
+        };
+      case "OPERACION_REVISADA":
+        return {
+          icono: ClipboardCheck,
+          color: "#0E7490",
+          fondoBadge: "#F0FDFA",
+          bordeBadge: "#99F6E4",
+          etiqueta: "Operación Revisada",
+        };
+      case "RUTA_FINALIZADA_ADMIN":
+        return {
+          icono: Flag,
+          color: "#4338CA",
+          fondoBadge: "#EEF2FF",
+          bordeBadge: "#C7D2FE",
+          etiqueta: "Ruta Finalizada",
+        };
       case "ABONO_APROBADO":
         return {
-          icono: CheckCircle,
-          color: Colors.secondary,
+          icono: CheckCircle2,
+          color: "#15803D",
           fondoBadge: "#F0FDF4",
           bordeBadge: "#86EFAC",
           etiqueta: "Abono QR Aprobado",
@@ -43,7 +104,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
       case "ABONO_RECHAZADO":
         return {
           icono: XCircle,
-          color: Colors.danger,
+          color: "#B91C1C",
           fondoBadge: "#FEF2F2",
           bordeBadge: "#FCA5A5",
           etiqueta: "Abono QR Observado",
@@ -85,7 +146,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
       default:
         return {
           icono: Info,
-          color: Colors.primary,
+          color: Colors.primaryDark || "#0369A1",
           fondoBadge: "#F0F9FF",
           bordeBadge: "#BAE6FD",
           etiqueta: tipo || "Aviso Oficial",
@@ -162,7 +223,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <BellOff size={40} color={Colors.textSecondary} />
+            <BellOff size={40} color="#64748B" />
             <Text style={styles.emptyTitle}>Sin avisos pendientes</Text>
             <Text style={styles.emptySubtitle}>
               Aquí se notificarán aprobaciones/rechazos de cobros QR, ajustes de notas de venta y avisos de revalorización.
@@ -185,7 +246,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: 6,
     padding: 14,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -201,6 +262,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    gap: 8,
   },
   tipoBadge: {
     flexDirection: "row",
@@ -210,28 +272,35 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
     borderWidth: 1,
+    flexShrink: 1,
   },
   tipoTexto: {
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   fecha: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: "#334155",
     fontVariant: ["tabular-nums"],
+    flexShrink: 0,
   },
   titulo: {
     fontSize: 14,
     fontWeight: "700",
-    color: Colors.text,
+    color: "#0F172A",
     marginBottom: 4,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
   mensaje: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: "#334155",
     lineHeight: 18,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
   badgePendiente: {
     alignSelf: "flex-start",
@@ -246,7 +315,7 @@ const styles = StyleSheet.create({
   badgePendienteText: {
     fontSize: 10,
     fontWeight: "800",
-    color: Colors.primary,
+    color: Colors.primaryDark || "#0369A1",
     letterSpacing: 0.5,
   },
   emptyContainer: {
@@ -258,11 +327,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: Colors.text,
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: "#334155",
     textAlign: "center",
     paddingHorizontal: 24,
     lineHeight: 18,

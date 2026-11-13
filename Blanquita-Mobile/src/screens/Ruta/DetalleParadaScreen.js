@@ -23,6 +23,7 @@ import {
   FileCheck,
   Package,
   XCircle,
+  X,
 } from 'lucide-react-native';
 
 // Catálogo cerrado de motivos de no entrega
@@ -339,38 +340,56 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <XCircle size={22} color={Colors.danger} style={{ marginRight: 8 }} />
-              <Text style={styles.modalTitulo}>Reportar No-Entrega</Text>
-            </View>
-            <Text style={styles.modalSubtitulo}>
-              Seleccione el motivo del catálogo cerrado para registrar la visita no concretada:
-            </Text>
-
-            <View style={styles.modalListaMotivos}>
-              {MOTIVOS_NO_ENTREGA.map((m) => (
-                <TouchableOpacity
-                  key={m.clave}
-                  style={styles.modalOpcionMotivo}
-                  onPress={() => confirmarNoEntrega(m.clave)}
-                  disabled={guardandoNoEntrega}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.modalOpcionTextoCol}>
-                    <Text style={styles.modalOpcionTitulo}>{m.etiqueta}</Text>
-                    <Text style={styles.modalOpcionSub}>{m.detalle}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              <View style={styles.modalHeaderLeft}>
+                <XCircle size={20} color={Colors.danger} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitulo} numberOfLines={1}>Reportar No-Entrega</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !guardandoNoEntrega && setModalNoEntregaVisible(false)}
+                style={styles.modalBotonCerrarX}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Cerrar modal"
+                accessibilityRole="button"
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.modalBotonCancelar}
-              onPress={() => setModalNoEntregaVisible(false)}
-              disabled={guardandoNoEntrega}
-              activeOpacity={0.7}
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
             >
-              <Text style={styles.modalBotonCancelarTexto}>Cancelar y Volver</Text>
-            </TouchableOpacity>
+              <Text style={styles.modalSubtitulo}>
+                Seleccione el motivo del catálogo cerrado para registrar la visita no concretada:
+              </Text>
+
+              <View style={styles.modalListaMotivos}>
+                {MOTIVOS_NO_ENTREGA.map((m) => (
+                  <TouchableOpacity
+                    key={m.clave}
+                    style={styles.modalOpcionMotivo}
+                    onPress={() => confirmarNoEntrega(m.clave)}
+                    disabled={guardandoNoEntrega}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.modalOpcionTextoCol}>
+                      <Text style={styles.modalOpcionTitulo}>{m.etiqueta}</Text>
+                      <Text style={styles.modalOpcionSub}>{m.detalle}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalBotonCancelar}
+                onPress={() => setModalNoEntregaVisible(false)}
+                disabled={guardandoNoEntrega}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalBotonCancelarTexto}>Cancelar y Volver</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -626,26 +645,57 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     width: '100%',
     maxWidth: 420,
-    borderRadius: 4,
+    maxHeight: '80%',
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    padding: 18,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    flexShrink: 1,
+    paddingRight: 8,
   },
   modalTitulo: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
+    flexShrink: 1,
+  },
+  modalBotonCerrarX: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  modalScroll: {
+    maxHeight: '100%',
+  },
+  modalScrollContent: {
+    padding: 16,
   },
   modalSubtitulo: {
     fontSize: 12.5,
-    color: '#475569',
+    color: '#334155',
     marginBottom: 14,
     lineHeight: 18,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   modalListaMotivos: {
     gap: 8,
@@ -668,11 +718,14 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
   },
   modalOpcionSub: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: '#475569',
     marginTop: 2,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   modalBotonCancelar: {
     minHeight: 48,
@@ -686,7 +739,7 @@ const styles = StyleSheet.create({
   modalBotonCancelarTexto: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
+    color: '#0F172A',
   },
 });
 

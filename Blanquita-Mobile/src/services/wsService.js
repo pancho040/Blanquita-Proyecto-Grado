@@ -1,17 +1,28 @@
 import { CONFIG } from "../constants/Config";
-import { getTokenEnMemoria, setTokenRenovadoListener } from "../api/client";
+import apiClient, { getTokenEnMemoria, setTokenRenovadoListener } from "../api/client";
 import * as clientModule from "../api/client";
 import { SecureStorage } from "./secureStorage";
+
+/**
+ * Valida si un string de token posee formato mínimo admisible.
+ */
+const esTokenValido = (t) => {
+  return Boolean(
+    t &&
+      typeof t === "string" &&
+      t.trim().length > 20 &&
+      t !== "undefined" &&
+      t !== "null"
+  );
+};
 
 /**
  * Servicio de WebSocket para Blanquita Choferes Móvil.
  * Conexión bidireccional en tiempo real a /ws/logistica.
  * Soporta autenticación fresca (token en memoria y SecureStore),
- * cabeceras de autorización en React Native, fallback por ws-ticket,
- * reconexión inteligente con backoff exponencial y suscripción
- * reactiva a la renovación del token de acceso en segundo plano.
+ * prevención de llamadas con token vencido, obtención de tickets protegida
+ * contra colisiones de refresh, y despacho tipado de eventos.
  */
-
 class WsService {
   constructor() {
     this.ws = null;
@@ -31,20 +42,21 @@ class WsService {
    * Garantiza que nunca se intente conectar con credenciales cacheadas viejas.
    */
   async resolverTokenMasReciente(tokenParam = null) {
-    if (tokenParam) {
+    if (esTokenValido(tokenParam)) {
       return tokenParam;
     }
     const enMemoria = getTokenEnMemoria();
-    if (enMemoria) {
+    if (esTokenValido(enMemoria)) {
       return enMemoria;
     }
     try {
       const tokenSeguro = await SecureStorage.obtenerToken();
-      if (tokenSeguro) {
+      if (esTokenValido(tokenSeguro)) {
         return tokenSeguro;
       }
     } catch (_e) {}
-    return this.tokenActual || null;
+
+    return esTokenValido(this.tokenActual) ? this.tokenActual : null;
   }
 
   /**
@@ -74,31 +86,46 @@ class WsService {
   /**
    * Solicita un ticket efímero de un solo uso como fallback cuando el handshake
    * directo por JWT es rechazado con 403 Forbidden por la pasarela o proxy.
+   * Utiliza apiClient para beneficiarse de la deduplicación y renovación
+   * automática de token single-flight si fuese necesario.
    */
-  async solicitarWsTicket(token) {
+  async solicitarWsTicket(token = null) {
     try {
-      const baseHttp = CONFIG.API_BASE_URL || "http://192.168.1.65:8000";
-      const resp = await fetch(`${baseHttp}/logistica/flota/ws-ticket`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (resp.ok) {
-        const data = await resp.json();
-        const ticket = data?.ticket || data?.datos?.ticket;
+      if (apiClient && typeof apiClient.post === "function") {
+        const resp = await apiClient.post(
+          "/logistica/flota/ws-ticket",
+          {},
+          { timeout: 10000 }
+        );
+        const data = resp?.data?.datos || resp?.data || {};
+        const ticket = data.ticket;
         if (ticket) {
           console.log("[wsService] Ticket WebSocket efímero obtenido exitosamente.");
           return ticket;
         }
       } else {
-        console.log(`[wsService] Solicitud de ws-ticket retornó estado HTTP ${resp.status}`);
+        const baseHttp = CONFIG.API_BASE_URL || "http://192.168.1.65:8000";
+        const tok = token || this.tokenActual;
+        const resp = await fetch(`${baseHttp}/logistica/flota/ws-ticket`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${tok}`,
+          },
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const ticket = data?.ticket || data?.datos?.ticket;
+          if (ticket) {
+            console.log("[wsService] Ticket WebSocket efímero obtenido exitosamente (fetch fallback).");
+            return ticket;
+          }
+        }
       }
     } catch (err) {
-      console.log("[wsService] Error solicitando ws-ticket:", err.message);
+      console.log("[wsService] Aviso solicitando ws-ticket:", err.message);
     }
     return null;
   }
@@ -107,14 +134,14 @@ class WsService {
    * Inicia la conexión WebSocket asegurando el token más reciente y cabeceras de autorización.
    */
   async conectar(token = null, ticketForzado = null) {
-    // 1. Obtener SIEMPRE el token más reciente en el instante exacto
+    // 1. Obtener SIEMPRE el token más reciente y verificar su validez
     const tokenFresco = await this.resolverTokenMasReciente(token);
-    if (tokenFresco) {
+    if (esTokenValido(tokenFresco)) {
       this.tokenActual = tokenFresco;
     }
 
-    if (!this.tokenActual) {
-      console.log("[wsService] Sin token disponible; no se inicia conexión WebSocket.");
+    if (!esTokenValido(this.tokenActual)) {
+      console.log("[wsService] Sin token válido disponible; no se inicia conexión WebSocket.");
       return;
     }
 
@@ -123,7 +150,10 @@ class WsService {
     }
 
     // Evitar conexiones duplicadas si ya está abierta o en proceso de apertura
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -132,7 +162,9 @@ class WsService {
 
     try {
       const url = this.obtenerWsUrl(this.tokenActual, this.ticketActual);
-      console.log(`[wsService] Conectando a WebSocket: ${url.replace(/token=([^&]{6})[^&]+/, "token=$1...")}`);
+      console.log(
+        `[wsService] Conectando a WebSocket: ${url.replace(/token=([^&]{6})[^&]+/, "token=$1...")}`
+      );
 
       // En React Native WebSocket: enviar token tanto en query param como en cabecera Authorization
       const options = {
@@ -180,7 +212,13 @@ class WsService {
             }
           }
 
-          const tipo = (data.tipo || data.event || data.type || data.accion || "").toLowerCase();
+          const tipo = (
+            data.tipo ||
+            data.event ||
+            data.type ||
+            data.accion ||
+            ""
+          ).toLowerCase();
           console.log(`[wsService] Mensaje recibido [${tipo || "generico"}]:`, data);
 
           if (tipo) {
@@ -198,19 +236,18 @@ class WsService {
         this.estaConectadoVal = false;
         this.conectando = false;
 
-        // Fallback con ws-ticket si hubo rechazo 403 o error en el primer handshake
+        // Fallback con ws-ticket si hubo rechazo 403 o error en el handshake
         const esRechazoAuth =
           errorMsg.includes("403") ||
           errorMsg.includes("Expected HTTP 101") ||
           errorMsg.includes("handshake");
 
-        if (esRechazoAuth && !this.intentoTicketFallback && this.tokenActual) {
+        if (esRechazoAuth && !this.intentoTicketFallback && esTokenValido(this.tokenActual)) {
           this.intentoTicketFallback = true;
           console.log("[wsService] Handshake rechazado (403/101). Solicitando ws-ticket como fallback...");
           const ticket = await this.solicitarWsTicket(this.tokenActual);
           if (ticket) {
             this.ticketActual = ticket;
-            // Cerrar socket fallido y reconectar inmediatamente con ticket
             this.desconectarSocketInterno();
             this.conectar(this.tokenActual, ticket);
             return;
@@ -225,15 +262,18 @@ class WsService {
         this.emitir("desconexion", { codigo: event?.code });
 
         // Código 4401 indica ticket o token inválido/expirado
-        if (event?.code === 4401 && !this.intentoTicketFallback && this.tokenActual) {
-          this.intentoTicketFallback = true;
-          console.log("[wsService] Socket cerrado con 4401. Intentando fallback vía ws-ticket...");
-          const ticket = await this.solicitarWsTicket(this.tokenActual);
-          if (ticket) {
-            this.ticketActual = ticket;
-            this.desconectarSocketInterno();
-            this.conectar(this.tokenActual, ticket);
-            return;
+        if (event?.code === 4401) {
+          console.log("[wsService] Socket cerrado con 4401 (token expirado). Esperando renovación limpia...");
+          try {
+            if (typeof clientModule.renovarTokenSingleFlight === "function") {
+              const nuevoToken = await clientModule.renovarTokenSingleFlight();
+              if (esTokenValido(nuevoToken)) {
+                this.actualizarTokenYReconectar(nuevoToken);
+                return;
+              }
+            }
+          } catch (errRenovacion) {
+            console.log("[wsService] Intento de renovación tras 4401 no completado:", errRenovacion.message);
           }
         }
 
@@ -268,7 +308,7 @@ class WsService {
    * Cancela el socket previo y reinicia el contador de backoff.
    */
   actualizarTokenYReconectar(nuevoToken) {
-    if (!nuevoToken) return;
+    if (!esTokenValido(nuevoToken)) return;
     console.log("[wsService] Actualizando token y reconectando WebSocket de inmediato...");
 
     if (this.reconnectTimer) {
@@ -290,7 +330,7 @@ class WsService {
   }
 
   programarReconexion() {
-    if (!this.debeReconectar || !this.tokenActual) return;
+    if (!this.debeReconectar || !esTokenValido(this.tokenActual)) return;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -303,7 +343,9 @@ class WsService {
     const jitter = Math.floor(Math.random() * 1000);
     const tiempoTotal = delayMs + jitter;
 
-    console.log(`[wsService] Programando reconexión en ${Math.round(tiempoTotal / 1000)}s (intento ${this.reintentos})...`);
+    console.log(
+      `[wsService] Programando reconexión en ${Math.round(tiempoTotal / 1000)}s (intento ${this.reintentos})...`
+    );
     this.reconnectTimer = setTimeout(() => {
       this.conectar();
     }, tiempoTotal);
@@ -384,7 +426,7 @@ try {
     const listenersRegistrados = new Set();
 
     listenersRegistrados.add((nuevoToken) => {
-      if (nuevoToken) {
+      if (esTokenValido(nuevoToken)) {
         wsService.actualizarTokenYReconectar(nuevoToken);
       }
     });
@@ -396,7 +438,9 @@ try {
         }
         origSet((access, refresh) => {
           listenersRegistrados.forEach((cb) => {
-            try { cb(access, refresh); } catch (_err) {}
+            try {
+              cb(access, refresh);
+            } catch (_err) {}
           });
         });
       };
@@ -404,12 +448,14 @@ try {
 
     origSet((access, refresh) => {
       listenersRegistrados.forEach((cb) => {
-        try { cb(access, refresh); } catch (_err) {}
+        try {
+          cb(access, refresh);
+        } catch (_err) {}
       });
     });
   } else if (typeof setTokenRenovadoListener === "function") {
     setTokenRenovadoListener((nuevoToken) => {
-      if (nuevoToken) {
+      if (esTokenValido(nuevoToken)) {
         wsService.actualizarTokenYReconectar(nuevoToken);
       }
     });

@@ -146,7 +146,7 @@ export const Header = ({
             <Text
               style={[
                 styles.syncText,
-                { color: isOnline ? Colors.success : Colors.danger },
+                { color: isOnline ? "#15803D" : "#B91C1C" },
               ]}
             >
               {syncInProgress ? "..." : isOnline ? "Online" : "Offline"}
@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
   },
   leftSection: {
     flex: 1,
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 8,
@@ -208,6 +209,7 @@ const styles = StyleSheet.create({
   backBtn: {
     marginRight: 8,
     padding: 2,
+    flexShrink: 0,
   },
   logo: {
     width: 34,
@@ -215,26 +217,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
     backgroundColor: "#F0F9FF",
+    flexShrink: 0,
   },
   infoCol: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   titulo: {
     fontSize: 16,
     fontWeight: "900",
     color: "#0F172A",
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
   subtitulo: {
     fontSize: 11.5,
-    color: Colors.primary,
+    color: Colors.primaryDark || "#0369A1",
     fontWeight: "700",
     marginTop: 1,
+    flexShrink: 1,
   },
   actionsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   actionIconBtn: {
     width: 32,

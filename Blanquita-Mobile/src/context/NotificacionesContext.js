@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { AppState, Alert } from "react-native";
+import { AppState } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { NotificacionesApi } from "../api/notificacionesApi";
@@ -9,6 +9,19 @@ import { LogisticaApi } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
 import apiClient, { getTokenEnMemoria } from "../api/client";
+
+/**
+ * Sanitiza cualquier texto entrante removiendo emojis decorativos de IA.
+ */
+const limpiarTextoEmojis = (texto) => {
+  if (!texto || typeof texto !== "string") return "";
+  return texto
+    .replace(
+      /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2300}-\u{23FF}\u{2B50}\u{203C}\u{2049}\u{2139}]/gu,
+      ""
+    )
+    .trim();
+};
 
 export const NotificacionesContext = createContext(null);
 
@@ -37,10 +50,15 @@ export function NotificacionesProvider({ children, navigationRef }) {
       try {
         const items = await NotificacionesApi.obtenerNotificaciones({ soloNoLeidas: false });
         const listado = Array.isArray(items) ? items : [];
-        setNotificaciones(listado);
-        const noLeidas = listado.filter((n) => !n.leido).length;
+        const listadoLimpio = listado.map((n) => ({
+          ...n,
+          titulo: limpiarTextoEmojis(n.titulo),
+          mensaje: limpiarTextoEmojis(n.mensaje),
+        }));
+        setNotificaciones(listadoLimpio);
+        const noLeidas = listadoLimpio.filter((n) => !n.leido).length;
         setConteoNoLeidas(noLeidas);
-        return listado;
+        return listadoLimpio;
       } catch (_err) {
         return [];
       } finally {
@@ -55,7 +73,11 @@ export function NotificacionesProvider({ children, navigationRef }) {
   // Refrescar estado local tras eventos WebSocket en tiempo real
   const refrescarEstadoLocalDesdeWS = useCallback(async (tipoEvento) => {
     try {
-      if (tipoEvento === "carga_camion_aprobada") {
+      if (
+        tipoEvento === "carga_camion_aprobada" ||
+        tipoEvento === "carga_camion_observada" ||
+        tipoEvento === "carga_camion_rechazada"
+      ) {
         const inv = await LogisticaApi.obtenerMiInventarioCamion();
         if (inv) await LocalDB.guardarInventarioCamion(inv);
       } else {
@@ -81,8 +103,8 @@ export function NotificacionesProvider({ children, navigationRef }) {
     async (titulo, mensaje, tipo, metadata = {}) => {
       const nuevaNotif = {
         id: `ws-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        titulo,
-        mensaje,
+        titulo: limpiarTextoEmojis(titulo),
+        mensaje: limpiarTextoEmojis(mensaje),
         tipo: (tipo || "AVISO_ADMIN").toUpperCase(),
         leido: false,
         fecha_creacion: new Date().toISOString(),
@@ -236,30 +258,53 @@ export function NotificacionesProvider({ children, navigationRef }) {
       wsService.actualizarTokenYReconectar(tokenActual);
     }
 
-    // Suscripción a eventos requeridos
+    // Suscripción a eventos requeridos con textos vectoriales limpios
     const unsubs = [
       wsService.on("ruta_asignada", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
         registrarAvisoPush(
-          "Nueva Ruta Asignada",
-          d?.mensaje || "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario.",
+          "Ruta Asignada",
+          msg || "Ruta Asignada: Se te asignó una nueva ruta para hoy. Solicita tu carga de inventario.",
           "ruta_asignada",
           d
         );
       }),
 
       wsService.on("carga_camion_aprobada", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
         registrarAvisoPush(
           "Carga Aprobada",
-          d?.mensaje || "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir.",
+          msg || "Carga Aprobada: Tu carga de inventario fue aprobada. Ya puedes iniciar tu reparto.",
           "carga_camion_aprobada",
           d
         );
       }),
 
+      wsService.on("carga_camion_observada", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
+        registrarAvisoPush(
+          "Carga Observada",
+          msg || "Carga Observada: Tu solicitud de carga tiene observaciones. Revisa los detalles para corregirla.",
+          "carga_camion_observada",
+          d
+        );
+      }),
+
+      wsService.on("carga_camion_rechazada", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
+        registrarAvisoPush(
+          "Carga Rechazada",
+          msg || "Carga Rechazada: Tu solicitud de carga fue rechazada por Administración.",
+          "carga_camion_rechazada",
+          d
+        );
+      }),
+
       wsService.on("ruta_reordenada", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
         registrarAvisoPush(
           "Ruta Reordenada",
-          d?.mensaje || "🔄 Administración actualizó el orden de paradas de tu ruta.",
+          msg || "Ruta Reordenada: Administración actualizó el orden de tus paradas.",
           "ruta_reordenada",
           d
         );
@@ -272,22 +317,24 @@ export function NotificacionesProvider({ children, navigationRef }) {
           Boolean(d?.observado) ||
           Boolean(d?.es_observado);
 
-        const txt = d?.mensaje || (esObservado
-          ? "📋 Tu entrega/cobro fue observado por Administración."
-          : "📋 Tu entrega/cobro fue revisado por Administración.");
+        const msg = limpiarTextoEmojis(d?.mensaje);
+        const fallback = esObservado
+          ? "Operación Observada: Tu entrega o cobro fue observado por Administración."
+          : "Operación Revisada: Tu entrega o cobro fue revisado por Administración.";
 
         registrarAvisoPush(
           esObservado ? "Operación Observada" : "Operación Revisada",
-          txt,
+          msg || fallback,
           "operacion_revisada",
           d
         );
       }),
 
       wsService.on("ruta_finalizada_admin", (d) => {
+        const msg = limpiarTextoEmojis(d?.mensaje);
         registrarAvisoPush(
           "Ruta Finalizada",
-          d?.mensaje || "🏁 Administración dio por finalizada y aprobada tu ruta.",
+          msg || "Ruta Finalizada: Administración dio por concluida tu ruta de hoy.",
           "ruta_finalizada_admin",
           d
         );
@@ -341,6 +388,8 @@ export function NotificacionesProvider({ children, navigationRef }) {
           }
           break;
         case "CARGA_CAMION_APROBADA":
+        case "CARGA_CAMION_OBSERVADA":
+        case "CARGA_CAMION_RECHAZADA":
           nav.navigate("MiInventarioTab");
           break;
         case "ABONO_APROBADO":
