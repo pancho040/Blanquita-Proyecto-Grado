@@ -167,8 +167,9 @@ describe("Subagente B - Tests Unitarios Frontend", () => {
     const navFile = path.join(SRC_DIR, "components/layout/NavBar.jsx");
     const navContent = fs.readFileSync(navFile, "utf8");
 
-    // Icono Bell limpio y sin animate-ping
-    assert.ok(bellContent.includes('className="w-5 h-5 shrink-0 text-slate-600"'), "Debe contener el icono Bell con w-5 h-5 shrink-0 text-slate-600");
+    // Icono Bell limpio y sin animate-ping, con posicionamiento inline blindado
+    assert.ok(bellContent.includes('position: "relative"') || bellContent.includes("position: 'relative'"), "Debe tener posición relative blindada");
+    assert.ok(bellContent.includes('position: "absolute"') || bellContent.includes("position: 'absolute'"), "Debe tener badge con posición absolute blindada");
     assert.ok(!bellContent.includes("animate-ping"), "NotificacionesBell NO debe contener animate-ping");
     assert.ok(!bellContent.includes("animate-wiggle"), "NotificacionesBell NO debe contener animate-wiggle");
     assert.ok(!navContent.includes("animate-ping"), "NavBar NO debe contener animate-ping");
