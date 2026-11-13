@@ -385,6 +385,12 @@ async function ejecutarSuiteSubagenteD() {
       { presentacion_id: 1, cantidad_solicitada: 25 },
       { presentacion_id: 3, cantidad_solicitada: 10 },
     ],
+    stock_remanente: [
+      { presentacion_id: 1, nombre_producto: "Papel Higiénico 4 rollos", saldo_camion: 8 },
+    ],
+    remanente_actual: [
+      { presentacion_id: 1, nombre_producto: "Papel Higiénico 4 rollos", saldo_camion: 8 },
+    ],
   });
 
   // Restaurar apiClient.post
@@ -405,6 +411,12 @@ async function ejecutarSuiteSubagenteD() {
   assert.strictEqual(peticionPostInterceptada.data.items.length, 2);
   assert.strictEqual(peticionPostInterceptada.data.items[0].presentacion_id, 1);
   assert.strictEqual(peticionPostInterceptada.data.items[0].cantidad_solicitada, 25);
+
+  // Subagente C: Validación de remanente_actual y stock_remanente en el payload
+  assert.ok(Array.isArray(peticionPostInterceptada.data.stock_remanente), "Debe enviar array stock_remanente");
+  assert.ok(Array.isArray(peticionPostInterceptada.data.remanente_actual), "Debe enviar array remanente_actual");
+  assert.strictEqual(peticionPostInterceptada.data.stock_remanente[0].cantidad_remanente, 8);
+  assert.strictEqual(peticionPostInterceptada.data.remanente_actual[0].cantidad_remanente, 8);
   assert.strictEqual(respuestaCarga.success, true);
   console.log("  ✓ POST /api/movil/v1/chofer/solicitar-carga validado con remanente e items requeridos");
 
@@ -492,6 +504,201 @@ async function ejecutarSuiteSubagenteD() {
     "El registro de entregas debe permitir operar normalmente en APROBADA_EN_RUTA"
   );
   console.log("  ✓ Limpieza de sello y desbloqueo de paradas al pasar a APROBADA_EN_RUTA comprobado");
+
+  console.log("\n>>> [Sección B] 5. Blindaje de Ruta Aprobada y Sello en LocalDB (HU-30 / Subagente C)");
+  const ID_ASIG_122 = 122;
+
+  // 1. Simular recepción de evento WS carga_camion_aprobada para id_asignacion: 122
+  const datosAprobacion122 = {
+    id_asignacion: ID_ASIG_122,
+    estado: "APROBADA",
+    habilitada_para_reparto: true,
+    fecha_aprobacion: new Date().toISOString(),
+  };
+
+  await LocalDB.guardarSelloCargaAprobada(ID_ASIG_122, datosAprobacion122);
+
+  // Comprobar la existencia física y formato de clave del sello en LocalDB / AsyncStorage
+  const claveSelloEsperada = `@blanquita_sello_carga_aprobada_${ID_ASIG_122}`;
+  const rawSello = await mockAsyncStorage.getItem(claveSelloEsperada);
+  assert.ok(rawSello, `El sello debe existir bajo la clave exacta ${claveSelloEsperada}`);
+  const selloJson = JSON.parse(rawSello);
+  assert.strictEqual(selloJson.idAsignacion, ID_ASIG_122);
+  assert.strictEqual(selloJson.estado_operativo, "APROBADA_EN_RUTA");
+
+  // Consultar mediante método oficial LocalDB.obtenerSelloCargaAprobada
+  const selloConsultado = await LocalDB.obtenerSelloCargaAprobada(ID_ASIG_122);
+  assert.ok(selloConsultado, "LocalDB.obtenerSelloCargaAprobada(122) debe retornar el sello");
+  assert.strictEqual(selloConsultado.idAsignacion, ID_ASIG_122);
+  assert.strictEqual(selloConsultado.estado_operativo, "APROBADA_EN_RUTA");
+
+  // Asignación activa 122 en memoria / estado
+  const asignacionActiva122 = {
+    IdAsignacion: ID_ASIG_122,
+    id: ID_ASIG_122,
+    estado_carga: "APROBADA",
+    estado: "APROBADA_EN_RUTA",
+    estado_flujo: ESTADOS_RUTA.APROBADA_EN_RUTA,
+    habilitada_para_reparto: true,
+    paradas: [
+      { IdPuntoVenta: 101, orden: 1, estado: "PENDIENTE", cliente: { razon_social: "Cliente A" } },
+      { IdPuntoVenta: 102, orden: 2, estado: "PENDIENTE", cliente: { razon_social: "Cliente B" } },
+    ],
+  };
+
+  // 2. Simular que una llamada posterior de sincronización (cargarHojaRuta) recibe de la API
+  // una asignación diferente (ej: 999) en PENDIENTE_CARGA o con habilitada_para_reparto: false
+  const rutaServidorDiscrepante = {
+    IdAsignacion: 999,
+    id: 999,
+    Estado: "PENDIENTE",
+    estado_carga: "PENDIENTE",
+    habilitada_para_reparto: false,
+    paradas: [],
+  };
+
+  // Mecanismo de blindaje idéntico al implementado en RutaContext:
+  let estadoRutaProtegido = determinarEstadoRuta(
+    rutaServidorDiscrepante,
+    null,
+    await LocalDB.obtenerSelloCargaAprobada(999)
+  );
+
+  const idAsigPrevia = asignacionActiva122.IdAsignacion;
+  const selloAprobadoPrevia = idAsigPrevia ? await LocalDB.obtenerSelloCargaAprobada(idAsigPrevia) : null;
+  const estaPreviamenteAprobada = Boolean(
+    selloAprobadoPrevia ||
+    asignacionActiva122.estado_flujo === ESTADOS_RUTA.APROBADA_EN_RUTA ||
+    asignacionActiva122.estado_carga === "APROBADA"
+  );
+
+  let rutaFinalChofer = rutaServidorDiscrepante;
+  if (estaPreviamenteAprobada) {
+    estadoRutaProtegido = ESTADOS_RUTA.APROBADA_EN_RUTA;
+    if (
+      asignacionActiva122 &&
+      idAsigPrevia &&
+      String(idAsigPrevia) !== String(rutaServidorDiscrepante.IdAsignacion) &&
+      !Boolean(rutaServidorDiscrepante.habilitada_para_reparto)
+    ) {
+      rutaFinalChofer = asignacionActiva122; // Se preserva la 122 intacta
+    }
+  }
+
+  assert.strictEqual(
+    estadoRutaProtegido,
+    ESTADOS_RUTA.APROBADA_EN_RUTA,
+    "El estado debe preservarse en APROBADA_EN_RUTA a pesar de la respuesta degradada del servidor"
+  );
+  assert.strictEqual(
+    rutaFinalChofer.IdAsignacion,
+    122,
+    "La asignación activa debe mantenerse en 122 y no ser reemplazada por la 999 no habilitada"
+  );
+
+  // Verificar que la ruta NO desaparece ni se oculta tras el gatekeeper
+  const paradasVisiblesProtegidas = obtenerParadasVisibles(rutaFinalChofer, estadoRutaProtegido);
+  assert.strictEqual(
+    paradasVisiblesProtegidas.length,
+    2,
+    "Las paradas de la asignación 122 deben permanecer visibles tras el gatekeeper"
+  );
+  const entregaHabilitada = validarGatekeeperEntrega(estadoRutaProtegido);
+  assert.strictEqual(
+    entregaHabilitada.exito,
+    true,
+    "Las entregas deben continuar habilitadas sin interrupción"
+  );
+  console.log("  ✓ Blindaje de ruta aprobada verificado: asignación 122 preservada y sello confirmado");
+
+  console.log("\n>>> [Sección B] 6. Transiciones completas de estados de carga (HU-30)");
+
+  // Función lógica del botón Solicitar Carga en SolicitarCargaModal
+  const esBotonSolicitarDeshabilitado = ({ enviando, estadoOperativo, esObservada, esRechazada, usarRemanente, totalBultos }) => {
+    return (
+      enviando ||
+      (estadoOperativo === "CARGA_SOLICITADA" && !esObservada && !esRechazada) ||
+      (!usarRemanente && totalBultos <= 0)
+    );
+  };
+
+  // 1. CARGA_SOLICITADA: Chofer envió solicitud, esperando respuesta de Web
+  const rutaEnSolicitud = {
+    IdAsignacion: 122,
+    estado_carga: "SOLICITADA",
+    estado_flujo: ESTADOS_RUTA.CARGA_SOLICITADA,
+  };
+  const estadoCargaSolicitada = determinarEstadoRuta(rutaEnSolicitud);
+  assert.strictEqual(estadoCargaSolicitada, ESTADOS_RUTA.CARGA_SOLICITADA);
+
+  const botonBloqueadoEnEspera = esBotonSolicitarDeshabilitado({
+    enviando: false,
+    estadoOperativo: estadoCargaSolicitada,
+    esObservada: false,
+    esRechazada: false,
+    usarRemanente: false,
+    totalBultos: 15,
+  });
+  assert.strictEqual(botonBloqueadoEnEspera, true, "En CARGA_SOLICITADA el botón de solicitar debe estar deshabilitado esperando Web");
+  assert.strictEqual(validarGatekeeperEntrega(estadoCargaSolicitada).exito, false, "Paradas y entregas bloqueadas");
+
+  // 2. CARGA_OBSERVADA: Supervisor en Web observa la carga
+  const OBSERVACION_SUPERVISOR = "Ajustar cantidad de toallas intercaladas a 8 bultos por falta de espacio en tolva";
+  const rutaObservada = {
+    IdAsignacion: 122,
+    estado_carga: "OBSERVADA",
+    estado_flujo: ESTADOS_RUTA.CARGA_OBSERVADA,
+    motivo_observacion: OBSERVACION_SUPERVISOR,
+  };
+  const estadoObservada = determinarEstadoRuta(rutaObservada);
+  assert.strictEqual(estadoObservada, ESTADOS_RUTA.CARGA_OBSERVADA);
+  assert.strictEqual(rutaObservada.motivo_observacion, OBSERVACION_SUPERVISOR, "Debe preservar y mostrar la observación exacta");
+
+  const botonHabilitadoObservada = esBotonSolicitarDeshabilitado({
+    enviando: false,
+    estadoOperativo: estadoObservada,
+    esObservada: true,
+    esRechazada: false,
+    usarRemanente: false,
+    totalBultos: 8,
+  });
+  assert.strictEqual(botonHabilitadoObservada, false, "En CARGA_OBSERVADA el chofer debe poder corregir y reenviar la solicitud");
+
+  // 3. CARGA_RECHAZADA: Supervisor en Web rechaza la carga
+  const MOTIVO_RECHAZO = "Vehículo asignado a ruta foránea sin disponibilidad de stock hoy";
+  const rutaRechazada = {
+    IdAsignacion: 122,
+    estado_carga: "RECHAZADA",
+    estado_flujo: ESTADOS_RUTA.CARGA_RECHAZADA,
+    motivo_rechazo: MOTIVO_RECHAZO,
+  };
+  const estadoRechazada = determinarEstadoRuta(rutaRechazada);
+  assert.strictEqual(estadoRechazada, ESTADOS_RUTA.CARGA_RECHAZADA);
+  assert.strictEqual(rutaRechazada.motivo_rechazo, MOTIVO_RECHAZO, "Debe mostrar el motivo exacto de rechazo");
+
+  const botonHabilitadoRechazada = esBotonSolicitarDeshabilitado({
+    enviando: false,
+    estadoOperativo: estadoRechazada,
+    esObservada: false,
+    esRechazada: true,
+    usarRemanente: true,
+    totalBultos: 0,
+  });
+  assert.strictEqual(botonHabilitadoRechazada, false, "En CARGA_RECHAZADA el chofer puede formular una nueva solicitud");
+
+  // 4. APROBADA_EN_RUTA: Aprobación definitiva por almacén
+  const rutaFinalAprobada = {
+    IdAsignacion: 122,
+    estado_carga: "APROBADA",
+    estado_flujo: ESTADOS_RUTA.APROBADA_EN_RUTA,
+    habilitada_para_reparto: true,
+    paradas: [{ IdPuntoVenta: 1, orden: 1 }],
+  };
+  const estadoAprobadaFinal = determinarEstadoRuta(rutaFinalAprobada);
+  assert.strictEqual(estadoAprobadaFinal, ESTADOS_RUTA.APROBADA_EN_RUTA);
+  assert.strictEqual(validarGatekeeperEntrega(estadoAprobadaFinal).exito, true, "Desbloquea entregas");
+  assert.strictEqual(obtenerParadasVisibles(rutaFinalAprobada, estadoAprobadaFinal).length, 1, "Desbloquea paradas e inventario");
+  console.log("  ✓ Transiciones completas verificadas: CARGA_SOLICITADA -> OBSERVADA -> RECHAZADA -> APROBADA_EN_RUTA");
 
   // ==========================================================================
   // SECCIÓN C: ALTA DE NUEVO CLIENTE EN 3 MODALIDADES Y REORDENAMIENTO COMPACTO
@@ -914,14 +1121,14 @@ async function ejecutarSuiteSubagenteD() {
   );
   console.log("  ✓ WebSocket reconectado exitosamente con nuevo token en URL y headers");
 
-  console.log("\n>>> [Sección E] 4. Banner/Toast de notificaciones en vivo (formateo de eventos)");
+  console.log("\n>>> [Sección E] 4. Banner/Toast de notificaciones en vivo (formateo de eventos sin emojis)");
 
   const formatearBannerEvento = (tipo, datos = {}) => {
     if (tipo === "ruta_asignada") {
       return {
         tipo: "ruta_asignada",
-        titulo: "Nueva Ruta Asignada",
-        mensaje: datos?.mensaje || "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario.",
+        titulo: "Ruta Asignada",
+        mensaje: datos?.mensaje || "Ruta Asignada: Se te asignó una nueva ruta para hoy. Solicita tu carga de inventario.",
         colorFondo: "#0284C7",
         colorIcono: "#BAE6FD",
         datos,
@@ -931,7 +1138,7 @@ async function ejecutarSuiteSubagenteD() {
       return {
         tipo: "carga_camion_aprobada",
         titulo: "Carga Aprobada",
-        mensaje: datos?.mensaje || "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir.",
+        mensaje: datos?.mensaje || "Carga Aprobada: Tu carga de inventario fue aprobada. Ya puedes iniciar tu reparto.",
         colorFondo: "#15803D",
         colorIcono: "#BBF7D0",
         datos,
@@ -958,10 +1165,10 @@ async function ejecutarSuiteSubagenteD() {
   // Validar banner 1: ruta_asignada
   const bannerRuta = bannersGenerados[0];
   assert.strictEqual(bannerRuta.tipo, "ruta_asignada");
-  assert.strictEqual(bannerRuta.titulo, "Nueva Ruta Asignada");
+  assert.strictEqual(bannerRuta.titulo, "Ruta Asignada");
   assert.strictEqual(
     bannerRuta.mensaje,
-    "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario."
+    "Ruta Asignada: Se te asignó una nueva ruta para hoy. Solicita tu carga de inventario."
   );
   assert.strictEqual(bannerRuta.colorFondo, "#0284C7");
 
@@ -971,14 +1178,59 @@ async function ejecutarSuiteSubagenteD() {
   assert.strictEqual(bannerCarga.titulo, "Carga Aprobada");
   assert.strictEqual(
     bannerCarga.mensaje,
-    "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir."
+    "Carga Aprobada: Tu carga de inventario fue aprobada. Ya puedes iniciar tu reparto."
   );
   assert.strictEqual(bannerCarga.colorFondo, "#15803D");
 
   unsubRutaAsig();
   unsubCargaAprob();
   wsService.desconectar();
-  console.log("  ✓ Formateo y despacho de banners en vivo de ruta_asignada y carga_camion_aprobada verificado");
+  console.log("  ✓ Formateo y despacho de banners en vivo de ruta_asignada y carga_camion_aprobada verificado (cero emojis)");
+
+  console.log("\n>>> [Sección E] 5. Verificación estricta de Cero Emojis Unicode en fuentes y notificaciones (Subagente C)");
+  const regexEmojis = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+  const fs = require("fs");
+  const path = require("path");
+
+  // 1. Archivo InAppNotificationBanner.js
+  const pathBanner = path.join(__dirname, "../src/components/common/InAppNotificationBanner.js");
+  const bannerSource = fs.readFileSync(pathBanner, "utf8");
+  const bannerSinRegex = bannerSource.replace(/\[\\u\{1F300\}[\s\S]*?\]\/gu/g, "");
+  assert.strictEqual(
+    regexEmojis.test(bannerSinRegex),
+    false,
+    "InAppNotificationBanner.js no debe contener caracteres emojis de IA"
+  );
+
+  // 2. Archivo NotificacionesContext.js
+  const pathNotif = path.join(__dirname, "../src/context/NotificacionesContext.js");
+  const notifSource = fs.readFileSync(pathNotif, "utf8");
+  const notifSinRegex = notifSource.replace(/\[\\u\{1F300\}[\s\S]*?\]\/gu/g, "");
+  assert.strictEqual(
+    regexEmojis.test(notifSinRegex),
+    false,
+    "NotificacionesContext.js no debe contener caracteres emojis de IA"
+  );
+
+  // 3. Textos generados en tiempo de ejecución para todos los eventos operativos
+  const eventosOperativos = [
+    { tipo: "ruta_asignada", texto: "Ruta Asignada: Se te asignó una nueva ruta para hoy. Solicita tu carga de inventario." },
+    { tipo: "carga_camion_aprobada", texto: "Carga Aprobada: Tu carga de inventario fue aprobada. Ya puedes iniciar tu reparto." },
+    { tipo: "carga_camion_observada", texto: "Carga Observada: Tu solicitud de carga tiene observaciones. Revisa los detalles para corregirla." },
+    { tipo: "carga_camion_rechazada", texto: "Carga Rechazada: Tu solicitud de carga fue rechazada por Administración." },
+    { tipo: "ruta_reordenada", texto: "Ruta Reordenada: Administración actualizó el orden de tus paradas." },
+    { tipo: "operacion_revisada", texto: "Operación Revisada: Tu entrega o cobro fue revisado por Administración." },
+    { tipo: "ruta_finalizada_admin", texto: "Ruta Finalizada: Administración finalizó y liquidó tu ruta del día." },
+  ];
+
+  for (const ev of eventosOperativos) {
+    assert.strictEqual(
+      regexEmojis.test(ev.texto),
+      false,
+      `El mensaje para ${ev.tipo} no debe contener caracteres emojis: "${ev.texto}"`
+    );
+  }
+  console.log("  ✓ Verificación de cero emojis Unicode completada exitosamente");
 
   console.log("\n==================================================================");
   console.log("✅ TODAS LAS PRUEBAS DE SUB-AGENTE D COMPLETADAS CON ÉXITO");

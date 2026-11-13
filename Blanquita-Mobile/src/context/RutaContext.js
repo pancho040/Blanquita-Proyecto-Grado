@@ -431,8 +431,17 @@ export function RutaProvider({ children }) {
           const estaFinalizadaEnServidor =
             estadoServidorRaw === "FINALIZADA" || estadoServidorRaw === "CERRADA";
 
+          const idAsigPrevia =
+            asignacionActiva?.IdAsignacion ||
+            asignacionActiva?.IdAsignacionRuta ||
+            asignacionActiva?.id;
+          const selloAprobadoPrevia = idAsigPrevia
+            ? await LocalDB.obtenerSelloCargaAprobada(idAsigPrevia)
+            : null;
+
           const estaPreviamenteAprobada = Boolean(
             selloAprobado ||
+            selloAprobadoPrevia ||
             estadoRuta === ESTADOS_RUTA.APROBADA_EN_RUTA ||
             asignacionActiva?.estado_flujo === ESTADOS_RUTA.APROBADA_EN_RUTA ||
             asignacionActiva?.estado_carga === "APROBADA"
@@ -440,12 +449,23 @@ export function RutaProvider({ children }) {
 
           if (estaPreviamenteAprobada && !estaFinalizadaEnServidor) {
             nuevoEstado = ESTADOS_RUTA.APROBADA_EN_RUTA;
-            rutaChofer.habilitada_para_reparto = true;
-            rutaChofer.estado_carga = "APROBADA";
-            rutaChofer.estado = "APROBADA_EN_RUTA";
-            rutaChofer.estado_flujo = ESTADOS_RUTA.APROBADA_EN_RUTA;
-            if ((!rutaChofer.paradas || rutaChofer.paradas.length === 0) && asignacionActiva?.paradas?.length > 0) {
-              rutaChofer.paradas = asignacionActiva.paradas;
+            // Si la API devolvió otra asignación o no habilitada mientras la previa ya estaba aprobada,
+            // preservar la previa (ej: id_asignacion 122) y evitar que desaparezca o se degrade tras el gatekeeper.
+            if (
+              asignacionActiva &&
+              idAsigPrevia &&
+              String(idAsigPrevia) !== String(idAsig) &&
+              !Boolean(rutaChofer.habilitada_para_reparto || rutaChofer.HabilitadaParaReparto)
+            ) {
+              rutaChofer = asignacionActiva;
+            } else {
+              rutaChofer.habilitada_para_reparto = true;
+              rutaChofer.estado_carga = "APROBADA";
+              rutaChofer.estado = "APROBADA_EN_RUTA";
+              rutaChofer.estado_flujo = ESTADOS_RUTA.APROBADA_EN_RUTA;
+              if ((!rutaChofer.paradas || rutaChofer.paradas.length === 0) && asignacionActiva?.paradas?.length > 0) {
+                rutaChofer.paradas = asignacionActiva.paradas;
+              }
             }
           }
 
@@ -613,13 +633,6 @@ export function RutaProvider({ children }) {
       stock_remanente: remanenteArray,
       remanente_actual: remanenteArray,
     });
-
-    if (res.success || res.codigo === "EXITO") {
-      return { success: true, data: res.data, mensaje: res.mensaje };
-    }
-    // Si la API falla por red, el sello local ya garantiza que el chofer no duplique solicitudes
-    return res;
-  };
 
     if (res.success || res.codigo === "EXITO") {
       return { success: true, data: res.data, mensaje: res.mensaje };
