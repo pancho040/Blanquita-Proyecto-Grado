@@ -11,6 +11,8 @@ import { RutasNavBar, RutasReportes, RutasSupervisor, RutasContador, RutasAdmin 
 import { PREFIJO_POR_ROL, Roles } from "@/constants/Values";
 import { useBranch } from "@/stores/branchStore";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import NotificacionesBell from "@/components/common/NotificacionesBell";
+import ToastLiveContainer from "@/components/common/ToastLiveContainer";
 import {
   Sheet,
   SheetTrigger,
@@ -361,6 +363,13 @@ export default function NavBar({
             <span className="truncate max-w-[140px]">{rolTexto}</span>
           </div>
 
+          {/* Campana de Notificaciones en Tiempo Real */}
+          <NotificacionesBell
+            idRol={idRol}
+            esAdmin={esAdmin}
+            basePath={basePath}
+          />
+
           {/* Botón de Modo Oscuro Inerte (Listo para activar más adelante) */}
           <ThemeToggle />
 
@@ -394,6 +403,9 @@ export default function NavBar({
 
         </div>
       </div>
+
+      {/* Contenedor Global de Toasts en Tiempo Real vía WebSocket */}
+      <ToastLiveContainer basePath={basePath} esAdmin={esAdmin} />
     </header>
   );
 }
