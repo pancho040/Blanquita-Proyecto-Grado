@@ -1,5 +1,6 @@
 import { SyncQueue } from "../database/syncQueue";
 import { LogisticaApi } from "../api/logisticaApi";
+import { ClientesApi } from "../api/clientesApi";
 import { LocalDB } from "../database/localDb";
 
 /**
@@ -23,6 +24,20 @@ export function sanitizarPayloadParaLog(obj) {
         ...p,
         foto_uri: p.foto_uri ? `[Foto Tramo length: ${p.foto_uri.length}]` : null,
       }));
+    }
+    if (copia.entrega_con_cobro) {
+      if (copia.entrega_con_cobro.firma_chofer) {
+        copia.entrega_con_cobro.firma_chofer = `[Firma Chofer length: ${copia.entrega_con_cobro.firma_chofer.length}]`;
+      }
+      if (copia.entrega_con_cobro.firma_cliente) {
+        copia.entrega_con_cobro.firma_cliente = `[Firma Cliente length: ${copia.entrega_con_cobro.firma_cliente.length}]`;
+      }
+      if (copia.entrega_con_cobro.cobro && Array.isArray(copia.entrega_con_cobro.cobro.pagos)) {
+        copia.entrega_con_cobro.cobro.pagos = copia.entrega_con_cobro.cobro.pagos.map((p) => ({
+          ...p,
+          foto_uri: p.foto_uri ? `[Foto Tramo length: ${p.foto_uri.length}]` : null,
+        }));
+      }
     }
     return copia;
   } catch (_e) {
@@ -184,6 +199,168 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
   }
 
   return payloadFinal;
+}
+
+/**
+ * Ordenar paradas ascendentemente y garantizar numeración compacta 1..N (Subagente C)
+ * @param {Array} paradas - Lista de paradas de la ruta
+ * @returns {Array} Lista ordenada por orden ascendente con secuencia normalizada 1..N
+ */
+export function ordenarParadasAscendente(paradas = []) {
+  if (!Array.isArray(paradas) || paradas.length === 0) return [];
+
+  const ordenadas = [...paradas].sort((a, b) => {
+    const ordA = Number(a.orden ?? a.secuencia ?? a.OrdenVisita ?? 999999);
+    const ordB = Number(b.orden ?? b.secuencia ?? b.OrdenVisita ?? 999999);
+    if (ordA !== ordB) return ordA - ordB;
+    const idA = Number(a.id ?? a.IdPuntoVenta ?? a.id_parada ?? 0);
+    const idB = Number(b.id ?? b.IdPuntoVenta ?? b.id_parada ?? 0);
+    return idA - idB;
+  });
+
+  return ordenadas.map((p, index) => {
+    const nuevoOrden = index + 1;
+    return {
+      ...p,
+      orden: nuevoOrden,
+      secuencia: nuevoOrden,
+      OrdenVisita: nuevoOrden,
+    };
+  });
+}
+
+/**
+ * Actualiza la hoja de ruta en el dispositivo aplicando el nuevo orden 1..N
+ * y conservando intacto el estado de las paradas ya atendidas/entregadas (Subagente C)
+ * @param {Array} paradasNuevasOReordenadas - Lista de paradas recibida desde el servidor o evento
+ * @returns {Promise<Array>} Paradas actualizadas y persistidas
+ */
+export async function aplicarReordenamientoRuta(paradasNuevasOReordenadas = []) {
+  try {
+    const rutaActual = await LocalDB.obtenerRutaActiva();
+    if (!rutaActual) return paradasNuevasOReordenadas;
+
+    const paradasLocales = rutaActual.paradas || [];
+    const mapaLocales = new Map();
+
+    paradasLocales.forEach((p) => {
+      const clave = String(p.id || p.IdPuntoVenta || p.id_parada || p.id_pedido || "");
+      if (clave) mapaLocales.set(clave, p);
+    });
+
+    // Combinar conservando estado de atendidas
+    const listaCombinada = (paradasNuevasOReordenadas || []).map((pServidor) => {
+      const clave = String(pServidor.id || pServidor.IdPuntoVenta || pServidor.id_parada || pServidor.id_pedido || "");
+      const paradaLocal = mapaLocales.get(clave);
+
+      if (paradaLocal) {
+        const estadoLocal = String(paradaLocal.estado || paradaLocal.Estado || "").toUpperCase();
+        const yaAtendida =
+          estadoLocal === "ENTREGADO" ||
+          estadoLocal === "NO_ENTREGADO" ||
+          Boolean(paradaLocal.cobro) ||
+          Boolean(paradaLocal.datosOperacion);
+
+        if (yaAtendida) {
+          return {
+            ...pServidor,
+            ...paradaLocal,
+            orden: pServidor.orden ?? paradaLocal.orden,
+            secuencia: pServidor.secuencia ?? pServidor.orden ?? paradaLocal.secuencia,
+            OrdenVisita: pServidor.OrdenVisita ?? pServidor.orden ?? paradaLocal.OrdenVisita,
+            estado: paradaLocal.estado || paradaLocal.Estado,
+            Estado: paradaLocal.Estado || paradaLocal.estado,
+          };
+        }
+      }
+      return pServidor;
+    });
+
+    // Asegurar paradas locales que no vengan en el array nuevo (ej: nuevos clientes locales al paso)
+    paradasLocales.forEach((pLocal) => {
+      const clave = String(pLocal.id || pLocal.IdPuntoVenta || pLocal.id_parada || pLocal.id_pedido || "");
+      const yaEnLista = listaCombinada.some((p) => {
+        const c = String(p.id || p.IdPuntoVenta || p.id_parada || p.id_pedido || "");
+        return c === clave;
+      });
+      if (!yaEnLista) {
+        listaCombinada.push(pLocal);
+      }
+    });
+
+    const listaOrdenada = ordenarParadasAscendente(listaCombinada);
+    const rutaActualizada = {
+      ...rutaActual,
+      paradas: listaOrdenada,
+      ultimaActualizacion: new Date().toISOString(),
+    };
+
+    await LocalDB.guardarRutaActiva(rutaActualizada);
+    return listaOrdenada;
+  } catch (err) {
+    console.error("[SyncService] Error aplicando reordenamiento de ruta:", err);
+    return paradasNuevasOReordenadas;
+  }
+}
+
+/**
+ * Inserta un nuevo cliente en ruta inmediatamente después de la parada atendida actual,
+ * desplazando las paradas pendientes en +1 y compactando la secuencia 1..N (Subagente C)
+ * @param {Object} nuevaParada - Datos de la parada del nuevo cliente
+ * @param {number} paradaActualOrden - Orden de la parada actual o última atendida (ej: 2)
+ * @returns {Promise<Array>} Paradas actualizadas de la ruta
+ */
+export async function insertarNuevoClienteEnSecuencia(nuevaParada, paradaActualOrden = 0) {
+  try {
+    const ruta = await LocalDB.obtenerRutaActiva();
+    if (!ruta) return [nuevaParada];
+
+    const paradasActuales = ruta.paradas || [];
+    const posicionInsercion = Number(paradaActualOrden || 0) + 1;
+
+    // Desplazar pendientes
+    const paradasModificadas = paradasActuales.map((p) => {
+      const ord = Number(p.orden ?? p.secuencia ?? p.OrdenVisita ?? 0);
+      const estado = String(p.estado || p.Estado || "").toUpperCase();
+      const yaAtendida = estado === "ENTREGADO" || estado === "NO_ENTREGADO";
+
+      if (!yaAtendida && ord >= posicionInsercion) {
+        return {
+          ...p,
+          orden: ord + 1,
+          secuencia: ord + 1,
+          OrdenVisita: ord + 1,
+        };
+      }
+      return p;
+    });
+
+    // Inserción de la nueva parada
+    const paradaAInsertar = {
+      ...nuevaParada,
+      orden: posicionInsercion,
+      secuencia: posicionInsercion,
+      OrdenVisita: posicionInsercion,
+      estado: nuevaParada.estado || "PENDIENTE",
+      Estado: nuevaParada.Estado || "PENDIENTE",
+    };
+
+    paradasModificadas.push(paradaAInsertar);
+
+    // Reordenar limpiamente 1..N
+    const listaOrdenada = ordenarParadasAscendente(paradasModificadas);
+    const rutaActualizada = {
+      ...ruta,
+      paradas: listaOrdenada,
+      ultimaActualizacion: new Date().toISOString(),
+    };
+
+    await LocalDB.guardarRutaActiva(rutaActualizada);
+    return listaOrdenada;
+  } catch (err) {
+    console.error("[SyncService] Error al insertar nuevo cliente en secuencia:", err);
+    return [];
+  }
 }
 
 /**
@@ -449,6 +626,66 @@ class SyncService {
               break;
             }
 
+            case "CLIENTE_EN_RUTA": {
+              let payloadClienteRuta = { ...item.payload };
+
+              // Subir fotos pendientes en tramos de cobro (QR o Transferencia) si viene con entrega_con_cobro
+              if (payloadClienteRuta.entrega_con_cobro) {
+                const entregaCobro = { ...payloadClienteRuta.entrega_con_cobro };
+
+                if (entregaCobro.cobro && Array.isArray(entregaCobro.cobro.pagos)) {
+                  for (const tramo of entregaCobro.cobro.pagos) {
+                    if (tramo.foto_uri && !tramo.id_comprobante_archivo) {
+                      const subida = await LogisticaApi.subirArchivoComprobante(
+                        tramo.foto_uri,
+                        "COMPROBANTE_COBRO",
+                        0
+                      );
+                      if (subida.success) {
+                        tramo.id_comprobante_archivo = subida.idComprobante;
+                        tramo.url_comprobante = subida.urlArchivo;
+                      } else {
+                        const err = new Error(subida.error || `Fallo al subir comprobante ${tramo.metodo}`);
+                        err.status = subida.status || 500;
+                        throw err;
+                      }
+                    }
+                  }
+
+                  // Limpiar foto_uri efímera antes de despachar al servidor
+                  entregaCobro.cobro.pagos = entregaCobro.cobro.pagos.map((p) => {
+                    const { foto_uri: _f, ...resto } = p;
+                    return resto;
+                  });
+                }
+
+                payloadClienteRuta.entrega_con_cobro = entregaCobro;
+              }
+
+              const resClienteRuta = await ClientesApi.registrarClienteEnRuta(payloadClienteRuta, idempotencyKey);
+              if (!resClienteRuta.success) {
+                const err = new Error(resClienteRuta.error);
+                err.status = resClienteRuta.status;
+                err.serverDetail = resClienteRuta.serverDetail;
+                throw err;
+              }
+
+              // Si fue entrega inmediata con stock entregado, asegurar descuento en inventario de camión local
+              if (
+                payloadClienteRuta.modalidad === "ENTREGA_INMEDIATA" &&
+                Array.isArray(payloadClienteRuta.entrega_con_cobro?.items_entregados)
+              ) {
+                await LocalDB.descontarInventarioCamion(payloadClienteRuta.entrega_con_cobro.items_entregados);
+              }
+
+              // Si el servidor devolvió la ruta o paradas reordenadas, compactar y actualizar 1..N
+              const paradasServidor = resClienteRuta.data?.paradas || resClienteRuta.data?.ruta?.paradas;
+              if (Array.isArray(paradasServidor) && paradasServidor.length > 0) {
+                await aplicarReordenamientoRuta(paradasServidor);
+              }
+              break;
+            }
+
             case "ALTA_CLIENTE":
             case "NUEVO_CLIENTE": {
               const payloadCliente = {
@@ -578,6 +815,68 @@ class SyncService {
       // Candado liberado SIEMPRE en finally (Subagente C)
       this.sincronizando = false;
       this.horaInicioSync = null;
+    }
+  }
+
+  /**
+   * Reordena y sincroniza la lista de paradas locales 1..N conservando el estado de las paradas atendidas (Subagente C)
+   * @param {Array} paradasServidor - Paradas provistas por el backend o evento WebSocket
+   */
+  async actualizarRutaConReordenamiento(paradasServidor) {
+    const actualizadas = await aplicarReordenamientoRuta(paradasServidor);
+    this.notificar({
+      enProgreso: false,
+      mensaje: "Ruta reordenada y actualizada.",
+      paradas: actualizadas,
+    });
+    return actualizadas;
+  }
+
+  /**
+   * Inserta nuevo cliente en la secuencia tras la última parada atendida (Subagente C)
+   */
+  async insertarClienteEnRuta(paradaNueva, paradaActualOrden) {
+    const actualizadas = await insertarNuevoClienteEnSecuencia(paradaNueva, paradaActualOrden);
+    this.notificar({
+      enProgreso: false,
+      mensaje: "Cliente insertado en ruta.",
+      paradas: actualizadas,
+    });
+    return actualizadas;
+  }
+
+  /**
+   * Manejador del evento WebSocket 'ruta_reordenada' (Subagente C)
+   * @param {Object} evento - Payload recibido por /ws/logistica
+   */
+  async procesarEventoRutaReordenada(evento) {
+    console.log("[SyncService] Evento ruta_reordenada recibido:", evento);
+    const paradas = evento?.paradas || evento?.ruta?.paradas || (Array.isArray(evento) ? evento : []);
+    if (paradas.length > 0) {
+      return await this.actualizarRutaConReordenamiento(paradas);
+    }
+    return null;
+  }
+
+  /**
+   * Procesa la respuesta de GET /api/movil/v1/chofer/resumen-sincronizacion (Subagente C)
+   * Actualiza paradas reordenadas conservando atendidas, e inventario en camión
+   */
+  async procesarResumenSincronizacion(datosResumen) {
+    if (!datosResumen) return;
+
+    if (datosResumen.asignacion_activa?.paradas) {
+      await this.actualizarRutaConReordenamiento(datosResumen.asignacion_activa.paradas);
+    }
+
+    if (Array.isArray(datosResumen.inventario_camion)) {
+      await LocalDB.guardarInventarioCamion({
+        items: datosResumen.inventario_camion,
+        total_saldo_camion: datosResumen.inventario_camion.reduce(
+          (sum, i) => sum + Number(i.cantidad_disponible || i.saldo_camion || 0),
+          0
+        ),
+      });
     }
   }
 }

@@ -22,7 +22,9 @@ import { SignaturePad } from '../../components/common/SignaturePad';
 import { PhotoCapture } from '../../components/common/PhotoCapture';
 import { ComprobanteModal } from '../../components/ruta/ComprobanteModal';
 import { LogisticaApi } from '../../api/logisticaApi';
+import { ClientesApi } from '../../api/clientesApi';
 import { LocalDB } from '../../database/localDb';
+import { SyncQueue } from '../../database/syncQueue';
 import {
   PackageCheck,
   UserCheck,
@@ -99,29 +101,65 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
 
+  const esNuevoClienteEnRuta = Boolean(
+    route.params?.esNuevoClienteEnRuta ||
+    route.params?.nuevoClientePayload ||
+    parada?.EsNuevoEnCampo
+  );
+  const [comprobanteLocal, setComprobanteLocal] = useState(null);
+
   // Cargar inventario del camión para verificar saldo
   useEffect(() => {
     let activo = true;
     async function cargarStock() {
+      let itemsCamion = [];
       try {
         const datos = await LogisticaApi.obtenerMiInventarioCamion();
         if (activo && datos?.items) {
-          setInventarioCamion(datos.items);
-          return;
+          itemsCamion = datos.items;
         }
       } catch (_e) {}
 
       // Fallback a LocalDB
-      const localInv = await LocalDB.obtenerInventarioCamion();
-      if (activo && localInv?.items) {
-        setInventarioCamion(localInv.items);
+      if (itemsCamion.length === 0) {
+        const localInv = await LocalDB.obtenerInventarioCamion();
+        if (activo && localInv?.items) {
+          itemsCamion = localInv.items;
+        }
+      }
+
+      if (activo && itemsCamion.length > 0) {
+        setInventarioCamion(itemsCamion);
+
+        // Si es un cliente nuevo en ruta, precargar productos del stock en camión con cantidad a entregar en 0
+        setItems((prevItems) => {
+          if (esNuevoClienteEnRuta || prevItems.length === 0) {
+            return itemsCamion.map((c, idx) => {
+              const saldo = Number(c.saldo_camion ?? c.cantidad_disponible ?? c.cantidad ?? 0);
+              const precio = Number(c.precio_unitario || c.precio || 25);
+              return {
+                id: idx,
+                presentacion_id: c.presentacion_id || c.IdPresentacion || c.id || idx + 1,
+                producto_nombre: c.nombre_producto || c.nombre || `Producto #${idx + 1}`,
+                cantidadPedida: saldo,
+                cantidadYaEntregada: 0,
+                cantidadPendiente: saldo,
+                cantidadAEntregar: 0,
+                precio_unitario: precio,
+                es_bandeo: false,
+                valor_bandeo: 0,
+              };
+            });
+          }
+          return prevItems;
+        });
       }
     }
     cargarStock();
     return () => {
       activo = false;
     };
-  }, []);
+  }, [esNuevoClienteEnRuta]);
 
   const handleRefrescarGps = async () => {
     setGettingGps(true);
@@ -354,6 +392,97 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       cobro: bloqueCobro,
     };
 
+    if (esNuevoClienteEnRuta) {
+      const payloadClienteRuta = {
+        ...(route.params?.nuevoClientePayload || {
+          datos_cliente: {
+            razon_social: receptorNombre.trim(),
+            nombre_comercial: parada?.cliente?.nombre_comercial || receptorNombre.trim(),
+            direccion: parada?.cliente?.direccion || parada?.Direccion || 'En ruta',
+            latitud: location?.latitude || -19.0435,
+            longitud: location?.longitude || -65.2580,
+          },
+          modalidad: 'ENTREGA_INMEDIATA',
+          dia_semana_programado: null,
+          items_programados: null,
+          parada_actual_orden: parada?.orden ? parada.orden - 1 : 0,
+        }),
+        entrega_con_cobro: {
+          latitud: location?.latitude || -19.0435,
+          longitud: location?.longitude || -65.2580,
+          tipo_entrega: tipoEntrega,
+          recibido_por: receptorNombre.trim(),
+          ci_receptor: receptorCi.trim(),
+          observacion: observaciones.trim(),
+          firma_chofer: firmaChofer,
+          firma_cliente: firmaCliente,
+          items_entregados: items
+            .filter((i) => i.cantidadAEntregar > 0)
+            .map((i) => ({
+              presentacion_id: i.presentacion_id,
+              producto_nombre: i.producto_nombre,
+              cantidad: i.cantidadAEntregar,
+              precio_unitario: i.precio_unitario,
+              es_cortesia_bandeo: i.es_bandeo,
+              subtotal: i.es_bandeo ? 0 : i.cantidadAEntregar * i.precio_unitario,
+            })),
+          cobro: bloqueCobro,
+        },
+      };
+
+      const idempotencyKey = SyncQueue.generarUuidV4();
+      const numeroNota = `NE-${Date.now().toString().slice(-6)}`;
+      const numeroRecibo = `REC-${Date.now().toString().slice(-6)}`;
+
+      try {
+        const res = await ClientesApi.registrarClienteEnRuta(payloadClienteRuta, idempotencyKey);
+        if (!res.success) {
+          // Encolar en la cola offline con X-Idempotency-Key
+          await SyncQueue.encolarOperacion(
+            'CLIENTE_EN_RUTA',
+            payloadClienteRuta,
+            { latitud: location?.latitude || -19.0435, longitud: location?.longitude || -65.2580 },
+            idempotencyKey
+          );
+        }
+
+        // Actualizar parada a ENTREGADO en base local
+        await LocalDB.actualizarEstadoParada(parada.id || parada.IdPuntoVenta, 'ENTREGADO', {
+          numeroNota,
+          numeroRecibo,
+          items: payloadClienteRuta.entrega_con_cobro.items_entregados,
+          cobro: bloqueCobro,
+        });
+
+        // Descontar inventario en camión local
+        await LocalDB.descontarInventarioCamion(payloadClienteRuta.entrega_con_cobro.items_entregados);
+
+        setLoading(false);
+
+        // Emitir comprobante digital
+        const compEmitido = {
+          numeroNota,
+          numeroRecibo,
+          fechaHora: new Date().toISOString(),
+          cliente: receptorNombre.trim(),
+          direccion: parada?.cliente?.direccion || parada?.Direccion || 'En ruta',
+          items: payloadClienteRuta.entrega_con_cobro.items_entregados.map((i) => ({
+            nombre: i.producto_nombre,
+            cantidad: i.cantidad,
+            subtotal: i.subtotal,
+          })),
+          totalCobrado: totalPagadoAhora,
+          saldoPendiente: saldoCreditoCalculado,
+          metodoPago,
+        };
+        setComprobanteLocal(compEmitido);
+      } catch (err) {
+        setLoading(false);
+        Alert.alert('Error', err.message || 'No se pudo guardar la entrega del nuevo cliente.');
+      }
+      return;
+    }
+
     const resultado = await registrarEntrega(parada.id || parada.IdPuntoVenta, payloadEntregaCompuesta);
     setLoading(false);
 
@@ -367,6 +496,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   };
 
   const handleCerrarComprobanteYVolver = () => {
+    setComprobanteLocal(null);
     cerrarComprobante();
     navigation.popToTop();
   };
@@ -828,8 +958,8 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
 
       {/* Modal de Comprobante Digital */}
       <ComprobanteModal
-        visible={Boolean(comprobanteActual)}
-        comprobante={comprobanteActual}
+        visible={Boolean(comprobanteActual || comprobanteLocal)}
+        comprobante={comprobanteActual || comprobanteLocal}
         onClose={handleCerrarComprobanteYVolver}
       />
     </SafeAreaView>
