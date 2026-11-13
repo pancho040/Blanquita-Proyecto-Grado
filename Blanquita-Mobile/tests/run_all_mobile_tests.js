@@ -21,6 +21,7 @@ const testFiles = [
   "test_fase3_pantallas_y_cliente.test.js",
   "test_subagente_c_d_sync_entrega_compuesta.test.js",
   "test_token_refresh_persistencia.test.js",
+  "test_flujo_completo_ruta_carga_cliente_historial.test.js",
 ];
 
 console.log("==================================================================");

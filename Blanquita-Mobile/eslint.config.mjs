@@ -35,6 +35,7 @@ export default [
         process: "readonly",
         __dirname: "readonly",
         __DEV__: "readonly",
+        WebSocket: "readonly",
       },
     },
     rules: {
