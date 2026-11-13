@@ -148,9 +148,10 @@ class RutaService:
 
     def RevisarSolicitudCarga(self, id_solicitud: int, dto: SolicitudCargaRevision, id_admin: int) -> dict:
         try:
+            estado_val = getattr(dto, "decision", None) or dto.Estado or dto.estado or "APROBADA"
             res = self.repo.RevisarSolicitudCarga(
                 id_solicitud=id_solicitud,
-                estado=dto.Estado or dto.estado,
+                estado=estado_val,
                 id_admin=id_admin,
                 obs_admin=dto.ObservacionAdmin or dto.observacion,
                 items_aprobados=dto.ItemsAprobados or dto.items_aprobados

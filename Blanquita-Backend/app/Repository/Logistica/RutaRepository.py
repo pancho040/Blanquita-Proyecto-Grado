@@ -277,7 +277,17 @@ class RutaRepository:
             JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
             JOIN "Usuario" u ON ar."IdUsuarioRepartidor" = u."IdUsuario"
             {where_sql}
-            ORDER BY ar."FechaAsignacion" DESC, r."NombreRuta" ASC;
+            ORDER BY 
+                CASE 
+                    WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) IN ('APROBADA_EN_RUTA', 'EN_RUTA') THEN 1
+                    WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) = 'CARGA_SOLICITADA' THEN 2
+                    WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) IN ('OBSERVADA', 'RECHAZADA', 'CARGA_OBSERVADA', 'CARGA_RECHAZADA') THEN 3
+                    WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) = 'PENDIENTE_CARGA' THEN 4
+                    ELSE 5
+                END ASC,
+                ar."FechaAsignacion" DESC,
+                ar."IdAsignacionRuta" DESC,
+                r."NombreRuta" ASC;
         """
         return self.caller.LlamarFuncion(sql, params)
 
@@ -590,6 +600,80 @@ class RutaRepository:
             "id_ruta": asig["IdRutaDistribucion"],
             "id_asignacion": id_asignacion
         })
+
+        # Fallback 1: Si no hay paradas en RutaPuntoVenta, buscar pedidos vinculados a la asignación
+        if not paradas:
+            sql_pedidos = """
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY p."IdPedido" ASC) as "OrdenVisita",
+                    pv."IdPuntoVenta",
+                    pv."NombrePuntoVenta",
+                    pv."Direccion",
+                    pv."Latitud",
+                    pv."Longitud",
+                    pv."Referencia",
+                    c."IdCliente",
+                    COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                    c."Telefono" as "TelefonoCliente",
+                    p."IdPedido",
+                    p."NumeroPedido",
+                    p."MontoTotal" as "MontoPedido",
+                    p."IdEstadoPedido",
+                    CASE 
+                        WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
+                        WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
+                        WHEN p."IdEstadoPedido" = 4 THEN 'Cancelado'
+                        WHEN p."IdPedido" IS NOT NULL THEN 'Pendiente'
+                        ELSE 'Visita Comercial'
+                    END as "EstadoEntrega",
+                    p."LatitudEntrega",
+                    p."LongitudEntrega",
+                    p."FechaEntrega",
+                    COALESCE((
+                        SELECT SUM(pp."Monto") 
+                        FROM "PagoPedido" pp 
+                        WHERE pp."IdPedido" = p."IdPedido"
+                    ), 0) as "MontoCobrado"
+                FROM "Pedido" p
+                JOIN "PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+                JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
+                WHERE p."IdAsignacionRuta" = :id_asignacion
+                ORDER BY p."IdPedido" ASC;
+            """
+            paradas = self.caller.LlamarFuncion(sql_pedidos, {"id_asignacion": id_asignacion})
+
+        # Fallback 2: Si aún no hay paradas, cargar puntos de venta activos de la zona/sucursal
+        if not paradas:
+            sql_puntos_zona = """
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY pv."IdPuntoVenta" ASC) as "OrdenVisita",
+                    pv."IdPuntoVenta",
+                    pv."NombrePuntoVenta",
+                    pv."Direccion",
+                    pv."Latitud",
+                    pv."Longitud",
+                    pv."Referencia",
+                    c."IdCliente",
+                    COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                    c."Telefono" as "TelefonoCliente",
+                    NULL::integer as "IdPedido",
+                    NULL::varchar as "NumeroPedido",
+                    0.0 as "MontoPedido",
+                    NULL::integer as "IdEstadoPedido",
+                    'Visita Comercial' as "EstadoEntrega",
+                    NULL::numeric as "LatitudEntrega",
+                    NULL::numeric as "LongitudEntrega",
+                    NULL::timestamp as "FechaEntrega",
+                    0.0 as "MontoCobrado"
+                FROM "PuntoVenta" pv
+                JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
+                JOIN "RutaDistribucion" r ON r."IdRutaDistribucion" = :id_ruta
+                WHERE (c."IdSucursal" = r."IdSucursal" OR pv."IdZona" = r."IdZonaDistribucion")
+                  AND pv."Activo" = true
+                ORDER BY pv."IdPuntoVenta" ASC
+                LIMIT 10;
+            """
+            paradas = self.caller.LlamarFuncion(sql_puntos_zona, {"id_ruta": asig["IdRutaDistribucion"]})
 
         asig["Paradas"] = paradas
         asig["TotalParadas"] = len(paradas)
@@ -1011,6 +1095,8 @@ class RutaRepository:
                 s."id_asignacion_ruta",
                 s."id_chofer",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "nombre_chofer",
+                r."IdSucursal" as "id_sucursal",
+                r."NombreRuta" as "nombre_ruta",
                 s."estado",
                 s."observacion_chofer",
                 s."observacion_admin",
@@ -1020,25 +1106,106 @@ class RutaRepository:
                 s."created_at"
             FROM public."solicitud_carga_camion" s
             JOIN public."Usuario" u ON s."id_chofer" = u."IdUsuario"
+            LEFT JOIN public."AsignacionRuta" ar ON s."id_asignacion_ruta" = ar."IdAsignacionRuta"
+            LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
             WHERE s."id_solicitud" = :id_sol;
         """
         sol = self.caller.LlamarUnRegistro(sql, {"id_sol": id_solicitud})
         if not sol:
             return None
 
-        sql_det = """
-            SELECT * FROM public."detalle_solicitud_carga_camion"
-            WHERE "id_solicitud" = :id_sol
-            ORDER BY "id_detalle" ASC;
+        # Stock remanente real del chofer desde inventario_chofer
+        sql_rem = """
+            SELECT 
+                ic.presentacion_id as id_presentacion,
+                ic.presentacion_id as "IdPresentacion",
+                pp."CodigoPresentacion" as codigo_presentacion,
+                pp."CodigoPresentacion" as "CodigoPresentacion",
+                prod."NombreProducto" as nombre_producto,
+                prod."NombreProducto" as "NombreProducto",
+                COALESCE(pp."TipoContenedor", 'Paquete') as tipo_contenedor,
+                COALESCE(pp."TipoContenedor", 'Paquete') as "TipoContenedor",
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad,
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as stock_remanente,
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad_remanente,
+                ic.cantidad_cargada,
+                ic.cantidad_vendida,
+                ic.precio_vigente_carga
+            FROM public.inventario_chofer ic
+            JOIN public."PresentacionProducto" pp ON ic.presentacion_id = pp."IdPresentacion"
+            JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+            WHERE ic.chofer_id = :id_chofer
+              AND COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) > 0
+            ORDER BY prod."NombreProducto" ASC, pp."CodigoPresentacion" ASC;
         """
-        sol["detalles"] = self.caller.LlamarFuncion(sql_det, {"id_sol": id_solicitud})
+        stock_rem = self.caller.LlamarFuncion(sql_rem, {"id_chofer": sol["id_chofer"]})
+        sol["stock_remanente"] = stock_rem
+
+        sql_det = """
+            SELECT 
+                d."id_detalle",
+                d."id_solicitud",
+                d."id_presentacion",
+                pp."CodigoPresentacion",
+                prod."NombreProducto",
+                pp."TipoContenedor",
+                COALESCE(d."stock_remanente", 0) as "stock_remanente",
+                COALESCE(d."stock_adicional_solicitado", 0) as "stock_adicional_solicitado",
+                COALESCE(d."stock_adicional_aprobado", 0) as "stock_adicional_aprobado",
+                d."observacion"
+            FROM public."detalle_solicitud_carga_camion" d
+            JOIN public."PresentacionProducto" pp ON d."id_presentacion" = pp."IdPresentacion"
+            JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+            WHERE d."id_solicitud" = :id_sol
+            ORDER BY prod."NombreProducto" ASC;
+        """
+        detalles = self.caller.LlamarFuncion(sql_det, {"id_sol": id_solicitud})
+        if not detalles:
+            sql_sug = """
+                SELECT 
+                    NULL::integer as id_detalle,
+                    pp."IdPresentacion" as id_presentacion,
+                    pp."IdPresentacion" as "IdPresentacion",
+                    pp."CodigoPresentacion" as "CodigoPresentacion",
+                    pp."CodigoPresentacion" as codigo_presentacion,
+                    prod."NombreProducto" as "NombreProducto",
+                    prod."NombreProducto" as nombre_producto,
+                    COALESCE(pp."TipoContenedor", 'Paquete') as "TipoContenedor",
+                    COALESCE(pp."TipoContenedor", 'Paquete') as tipo_contenedor,
+                    0.0 as stock_remanente,
+                    0.0 as stock_adicional_solicitado,
+                    0.0 as stock_adicional_aprobado,
+                    'Sugerido para ruta' as observacion
+                FROM public."PresentacionProducto" pp
+                JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+                WHERE pp."Activo" = true
+                ORDER BY prod."NombreProducto" ASC, pp."CodigoPresentacion" ASC
+                LIMIT 15;
+            """
+            detalles = self.caller.LlamarFuncion(sql_sug, {})
+
+        sol["detalles"] = detalles
+        sol["items"] = detalles
+        sol["items_solicitados"] = detalles
         return sol
 
     def RevisarSolicitudCarga(self, id_solicitud: int, estado: str, id_admin: int,
                               obs_admin: str | None = None, items_aprobados: list[dict] | None = None) -> dict:
         estado_normalizado = estado.upper().strip()
-        if estado_normalizado not in ('APROBADO', 'RECHAZADO'):
-            raise ValueError("Estado de revisión no válido. Debe ser 'APROBADO' o 'RECHAZADO'.")
+        if estado_normalizado in ('APROBADO', 'APROBADA'):
+            estado_db = 'APROBADA'
+            nuevo_estado_op = 'APROBADA_EN_RUTA'
+        elif estado_normalizado in ('OBSERVADO', 'OBSERVADA', 'CARGA_OBSERVADA'):
+            estado_db = 'OBSERVADA'
+            nuevo_estado_op = 'CARGA_OBSERVADA'
+        elif estado_normalizado in ('RECHAZADO', 'RECHAZADA', 'CARGA_RECHAZADA'):
+            estado_db = 'RECHAZADA'
+            nuevo_estado_op = 'CARGA_RECHAZADA'
+        elif estado_normalizado == 'PENDIENTE':
+            estado_db = 'PENDIENTE'
+            nuevo_estado_op = 'CARGA_SOLICITADA'
+        else:
+            raise ValueError("Estado de revisión no válido. Debe ser 'APROBADA', 'OBSERVADA' o 'RECHAZADA'.")
 
         sql_up = """
             UPDATE public."solicitud_carga_camion"
@@ -1050,7 +1217,7 @@ class RutaRepository:
             RETURNING *;
         """
         sol = self.caller.LlamarUnRegistro(sql_up, {
-            "estado": estado_normalizado,
+            "estado": estado_db,
             "id_admin": id_admin,
             "obs_admin": obs_admin,
             "id_sol": id_solicitud
@@ -1064,7 +1231,7 @@ class RutaRepository:
         if items_aprobados:
             for it in items_aprobados:
                 d_id = it.get("id_detalle")
-                cant_aprobada = it.get("stock_adicional_aprobado")
+                cant_aprobada = it.get("stock_adicional_aprobado") or it.get("cantidad_aprobada")
                 if d_id and cant_aprobada is not None:
                     self.caller.LlamarFuncion(
                         'UPDATE public."detalle_solicitud_carga_camion" SET "stock_adicional_aprobado" = :cant WHERE "id_detalle" = :d_id;',
@@ -1072,10 +1239,13 @@ class RutaRepository:
                         commit=True
                     )
 
-        nuevo_estado_op = "APROBADA_EN_RUTA" if estado_normalizado == "APROBADO" else "OBSERVADA"
         self.caller.LlamarFuncion(
-            'UPDATE public."AsignacionRuta" SET "estado_operativo" = :nuevo_estado WHERE "IdAsignacionRuta" = :id_asig;',
-            {"nuevo_estado": nuevo_estado_op, "id_asig": id_asig},
+            'UPDATE public."AsignacionRuta" SET "estado_operativo" = :nuevo_estado, "Estado" = :estado_gen WHERE "IdAsignacionRuta" = :id_asig;',
+            {
+                "nuevo_estado": nuevo_estado_op,
+                "estado_gen": "En Ruta" if nuevo_estado_op == "APROBADA_EN_RUTA" else "Asignada",
+                "id_asig": id_asig
+            },
             commit=True
         )
 

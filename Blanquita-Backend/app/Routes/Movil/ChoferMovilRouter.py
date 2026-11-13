@@ -67,11 +67,21 @@ def _obtener_request_id(request: Request) -> str:
     return request.headers.get("x-request-id") or str(uuid.uuid4())
 
 
+def _obtener_nombre_sucursal(db: Session, id_sucursal: Optional[int]) -> str:
+    if not id_sucursal:
+        return "Sucursal Central Sucre"
+    nombre = db.execute(
+        text('SELECT nombre FROM public.sucursales WHERE id = :id LIMIT 1;'),
+        {"id": id_sucursal}
+    ).scalar()
+    return nombre or f"Sucursal {id_sucursal}"
+
+
 def _validar_gatekeeper_carga_camion(db: Session, id_pedido: Optional[int], uid: int):
     """
     Gatekeeper de Carga de Camión:
-    Mientras la asignación del chofer esté en PENDIENTE_CARGA o CARGA_SOLICITADA,
-    devolver HTTP 403 con mensaje 'La carga de tu camión aún no fue aprobada en Web'.
+    Mientras la asignación del chofer esté en PENDIENTE_CARGA, CARGA_SOLICITADA,
+    CARGA_OBSERVADA o CARGA_RECHAZADA, devolver HTTP 403 bloqueando la operación en ruta.
     """
     row = None
     if id_pedido:
@@ -98,17 +108,31 @@ def _validar_gatekeeper_carga_camion(db: Session, id_pedido: Optional[int], uid:
             WHERE "IdUsuarioRepartidor" = :uid
               AND "FechaAsignacion" = CURRENT_DATE
               AND "Estado" NOT IN ('Completada', 'Cancelada', 'Finalizada')
-            ORDER BY "IdAsignacionRuta" DESC LIMIT 1;
+            ORDER BY 
+                CASE 
+                    WHEN UPPER(COALESCE("estado_operativo", 'PENDIENTE_CARGA')) IN ('APROBADA_EN_RUTA', 'EN_RUTA') THEN 1
+                    WHEN UPPER(COALESCE("estado_operativo", 'PENDIENTE_CARGA')) = 'CARGA_SOLICITADA' THEN 2
+                    WHEN UPPER(COALESCE("estado_operativo", 'PENDIENTE_CARGA')) IN ('OBSERVADA', 'RECHAZADA', 'CARGA_OBSERVADA', 'CARGA_RECHAZADA') THEN 3
+                    WHEN UPPER(COALESCE("estado_operativo", 'PENDIENTE_CARGA')) = 'PENDIENTE_CARGA' THEN 4
+                    ELSE 5
+                END ASC,
+                "IdAsignacionRuta" DESC LIMIT 1;
         """)
         row = db.execute(sql_asig, {"uid": uid}).fetchone()
 
     if row:
         estado_op = str(row.estado_operativo or "").strip().upper()
-        if estado_op in ("PENDIENTE_CARGA", "CARGA_SOLICITADA"):
+        if estado_op in ("PENDIENTE_CARGA", "CARGA_SOLICITADA", "CARGA_OBSERVADA", "CARGA_RECHAZADA", "OBSERVADA", "RECHAZADA"):
             logger.warning(f"[GATEKEEPER BLOQUEO 403] Chofer {uid} intentó operar pero asignación está en {estado_op}")
+            if estado_op in ("CARGA_OBSERVADA", "OBSERVADA"):
+                detalle_msg = "La carga de tu camión ha sido observada en Web. Contacta a tu supervisor."
+            elif estado_op in ("CARGA_RECHAZADA", "RECHAZADA"):
+                detalle_msg = "La carga de tu camión ha sido rechazada en Web."
+            else:
+                detalle_msg = "La carga de tu camión aún no fue aprobada en Web"
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="La carga de tu camión aún no fue aprobada en Web"
+                detail=detalle_msg
             )
 
 
@@ -499,6 +523,7 @@ def _asegurar_cxc_y_abono_bancario_chofer(
         abono_db = cxc_service.RegistrarAbonoChofer(dto_abono, id_usuario=uid)
         id_abono_creado = abono_db.get("IdAbonoCuentaCobrar")
 
+        nom_suc_cxc = _obtener_nombre_sucursal(db, id_sucursal_ped)
         db.execute(text("""
             INSERT INTO public."NotificacionInterna" (
                 "IdUsuarioDestinatario", "Tipo", "Titulo", "Mensaje",
@@ -508,7 +533,7 @@ def _asegurar_cxc_y_abono_bancario_chofer(
                 :msj, :id_ped, false, NOW()
             );
         """), {
-            "msj": f"El chofer #{uid} registró un cobro de Bs. {monto:.2f} vía {metodo.upper()} para Pedido #{id_pedido}. Requiere validación de Kevin.",
+            "msj": f"El chofer #{uid} registró un cobro de Bs. {monto:.2f} vía {metodo.upper()} para Pedido #{id_pedido} en {nom_suc_cxc}. Requiere validación de Kevin.",
             "id_ped": id_pedido
         })
 
@@ -642,6 +667,29 @@ def obtener_hoja_ruta_activa_movil(
             datos={"asignacion": None, "paradas": [], "total_paradas": 0}
         )
 
+    # Orden de prioridad estricto para móvil:
+    # 1º APROBADA_EN_RUTA (o EN_RUTA)
+    # 2º CARGA_SOLICITADA
+    # 3º OBSERVADA / RECHAZADA / CARGA_OBSERVADA / CARGA_RECHAZADA
+    # 4º PENDIENTE_CARGA
+    # Empate: IdAsignacionRuta DESC
+    def _prioridad_asignacion_chofer(a: dict) -> tuple:
+        st = str(a.get("estado_operativo") or a.get("EstadoOperativo") or "PENDIENTE_CARGA").strip().upper()
+        if st in ("APROBADA_EN_RUTA", "EN_RUTA"):
+            prio = 1
+        elif st == "CARGA_SOLICITADA":
+            prio = 2
+        elif st in ("OBSERVADA", "RECHAZADA", "CARGA_OBSERVADA", "CARGA_RECHAZADA"):
+            prio = 3
+        elif st == "PENDIENTE_CARGA":
+            prio = 4
+        else:
+            prio = 5
+        id_as = int(a.get("IdAsignacionRuta") or 0)
+        return (prio, -id_as)
+
+    asignaciones.sort(key=_prioridad_asignacion_chofer)
+
     id_asig = asignaciones[0]["IdAsignacionRuta"]
     tracking = service.ObtenerTrackingAsignacion(id_asig)
 
@@ -694,6 +742,77 @@ def obtener_hoja_ruta_activa_movil(
 
     # Enriquecer paradas con detalle de productos del pedido
     paradas = tracking.get("Paradas", [])
+
+    # Fallback si no hay paradas en tracking: buscar pedidos vinculados a la asignación o puntos de la ruta
+    if not paradas:
+        sql_ped_fb = text("""
+            SELECT 
+                ROW_NUMBER() OVER (ORDER BY p."IdPedido" ASC) as "OrdenVisita",
+                pv."IdPuntoVenta",
+                pv."NombrePuntoVenta",
+                pv."Direccion",
+                pv."Latitud",
+                pv."Longitud",
+                pv."Referencia",
+                c."IdCliente",
+                COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                c."Telefono" as "TelefonoCliente",
+                p."IdPedido",
+                p."NumeroPedido",
+                p."MontoTotal" as "MontoPedido",
+                p."IdEstadoPedido",
+                CASE 
+                    WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
+                    WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
+                    WHEN p."IdEstadoPedido" = 4 THEN 'Cancelado'
+                    WHEN p."IdPedido" IS NOT NULL THEN 'Pendiente'
+                    ELSE 'Visita Comercial'
+                END as "EstadoEntrega",
+                p."LatitudEntrega",
+                p."LongitudEntrega",
+                p."FechaEntrega",
+                0.0 as "MontoCobrado"
+            FROM public."Pedido" p
+            JOIN public."PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+            JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+            WHERE p."IdAsignacionRuta" = :id_asig
+            ORDER BY p."IdPedido" ASC;
+        """)
+        paradas = [dict(r) for r in db.execute(sql_ped_fb, {"id_asig": id_asig}).mappings().fetchall()]
+
+    if not paradas:
+        id_ruta_asig = tracking.get("IdRutaDistribucion")
+        if id_ruta_asig:
+            sql_pv_fb = text("""
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY pv."IdPuntoVenta" ASC) as "OrdenVisita",
+                    pv."IdPuntoVenta",
+                    pv."NombrePuntoVenta",
+                    pv."Direccion",
+                    pv."Latitud",
+                    pv."Longitud",
+                    pv."Referencia",
+                    c."IdCliente",
+                    COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                    c."Telefono" as "TelefonoCliente",
+                    NULL::integer as "IdPedido",
+                    NULL::varchar as "NumeroPedido",
+                    0.0 as "MontoPedido",
+                    NULL::integer as "IdEstadoPedido",
+                    'Visita Comercial' as "EstadoEntrega",
+                    NULL::numeric as "LatitudEntrega",
+                    NULL::numeric as "LongitudEntrega",
+                    NULL::timestamp as "FechaEntrega",
+                    0.0 as "MontoCobrado"
+                FROM public."PuntoVenta" pv
+                JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                JOIN public."RutaDistribucion" r ON r."IdRutaDistribucion" = :rid
+                WHERE (c."IdSucursal" = r."IdSucursal" OR pv."IdZona" = r."IdZonaDistribucion")
+                  AND pv."Activo" = true
+                ORDER BY pv."IdPuntoVenta" ASC
+                LIMIT 10;
+            """)
+            paradas = [dict(r) for r in db.execute(sql_pv_fb, {"rid": id_ruta_asig}).mappings().fetchall()]
     for p in paradas:
         id_ped = p.get("IdPedido")
         if id_ped:
@@ -2040,6 +2159,8 @@ async def solicitar_carga_camion_movil(
           AND "IdEstadoUsuario" = 1;
     """), {"suc_id": asig.IdSucursal}).fetchall()
 
+    nom_suc = _obtener_nombre_sucursal(db, asig.IdSucursal)
+
     if supervisores:
         for sup in supervisores:
             db.execute(text("""
@@ -2050,7 +2171,7 @@ async def solicitar_carga_camion_movil(
                 );
             """), {
                 "uid_dest": sup.IdUsuario,
-                "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion}.",
+                "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion} en {nom_suc}.",
                 "ref": id_solicitud
             })
     else:
@@ -2061,7 +2182,7 @@ async def solicitar_carga_camion_movil(
                 NULL, 'Solicitud de Carga Recibida', :msg, 'SOLICITUD_CARGA', :ref, false, NOW()
             );
         """), {
-            "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion}.",
+            "msg": f"El chofer {nombre_chofer} ha solicitado carga de camión para la asignación #{dto.id_asignacion} en {nom_suc}.",
             "ref": id_solicitud
         })
 
@@ -2075,6 +2196,8 @@ async def solicitar_carga_camion_movil(
         "id_chofer": uid,
         "nombre_chofer": nombre_chofer,
         "sucursal_id": asig.IdSucursal,
+        "id_sucursal": asig.IdSucursal,
+        "nombre_sucursal": nom_suc,
         "items_solicitados": items_solicitados_ws,
         "stock_remanente": total_remanente,
         "fecha": datetime.now(timezone.utc).isoformat()
@@ -2152,7 +2275,16 @@ def obtener_resumen_sincronizacion_movil(
         JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
         WHERE ar."IdUsuarioRepartidor" = :uid
           AND (ar."FechaAsignacion" = CURRENT_DATE OR ar."Estado" NOT IN ('Finalizada', 'Cancelada'))
-        ORDER BY ar."FechaAsignacion" DESC, ar."IdAsignacionRuta" DESC
+        ORDER BY 
+            (ar."FechaAsignacion" = CURRENT_DATE) DESC,
+            CASE 
+                WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) IN ('APROBADA_EN_RUTA', 'EN_RUTA') THEN 1
+                WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) = 'CARGA_SOLICITADA' THEN 2
+                WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) IN ('OBSERVADA', 'RECHAZADA', 'CARGA_OBSERVADA', 'CARGA_RECHAZADA') THEN 3
+                WHEN UPPER(COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA')) = 'PENDIENTE_CARGA' THEN 4
+                ELSE 5
+            END ASC,
+            ar."IdAsignacionRuta" DESC
         LIMIT 1;
     """)
     asig_row = db.execute(sql_asig, {"uid": uid}).mappings().fetchone()
@@ -2163,6 +2295,77 @@ def obtener_resumen_sincronizacion_movil(
         estado_op = asig_row["estado_operativo"]
         tracking = service.ObtenerTrackingAsignacion(id_asig)
         paradas = tracking.get("Paradas", [])
+
+        # Fallback si tracking no tiene paradas
+        if not paradas:
+            sql_ped_fb2 = text("""
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY p."IdPedido" ASC) as "OrdenVisita",
+                    pv."IdPuntoVenta",
+                    pv."NombrePuntoVenta",
+                    pv."Direccion",
+                    pv."Latitud",
+                    pv."Longitud",
+                    pv."Referencia",
+                    c."IdCliente",
+                    COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                    c."Telefono" as "TelefonoCliente",
+                    p."IdPedido",
+                    p."NumeroPedido",
+                    p."MontoTotal" as "MontoPedido",
+                    p."IdEstadoPedido",
+                    CASE 
+                        WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
+                        WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
+                        WHEN p."IdEstadoPedido" = 4 THEN 'Cancelado'
+                        WHEN p."IdPedido" IS NOT NULL THEN 'Pendiente'
+                        ELSE 'Visita Comercial'
+                    END as "EstadoEntrega",
+                    p."LatitudEntrega",
+                    p."LongitudEntrega",
+                    p."FechaEntrega",
+                    0.0 as "MontoCobrado"
+                FROM public."Pedido" p
+                JOIN public."PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+                JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                WHERE p."IdAsignacionRuta" = :id_asig
+                ORDER BY p."IdPedido" ASC;
+            """)
+            paradas = [dict(r) for r in db.execute(sql_ped_fb2, {"id_asig": id_asig}).mappings().fetchall()]
+
+        if not paradas:
+            id_ruta_asig2 = asig_row["IdRutaDistribucion"]
+            if id_ruta_asig2:
+                sql_pv_fb2 = text("""
+                    SELECT 
+                        ROW_NUMBER() OVER (ORDER BY pv."IdPuntoVenta" ASC) as "OrdenVisita",
+                        pv."IdPuntoVenta",
+                        pv."NombrePuntoVenta",
+                        pv."Direccion",
+                        pv."Latitud",
+                        pv."Longitud",
+                        pv."Referencia",
+                        c."IdCliente",
+                        COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                        c."Telefono" as "TelefonoCliente",
+                        NULL::integer as "IdPedido",
+                        NULL::varchar as "NumeroPedido",
+                        0.0 as "MontoPedido",
+                        NULL::integer as "IdEstadoPedido",
+                        'Visita Comercial' as "EstadoEntrega",
+                        NULL::numeric as "LatitudEntrega",
+                        NULL::numeric as "LongitudEntrega",
+                        NULL::timestamp as "FechaEntrega",
+                        0.0 as "MontoCobrado"
+                    FROM public."PuntoVenta" pv
+                    JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                    JOIN public."RutaDistribucion" r ON r."IdRutaDistribucion" = :rid
+                    WHERE (c."IdSucursal" = r."IdSucursal" OR pv."IdZona" = r."IdZonaDistribucion")
+                      AND pv."Activo" = true
+                    ORDER BY pv."IdPuntoVenta" ASC
+                    LIMIT 10;
+                """)
+                paradas = [dict(r) for r in db.execute(sql_pv_fb2, {"rid": id_ruta_asig2}).mappings().fetchall()]
 
         # Enriquecer paradas con items del pedido
         for p in paradas:
