@@ -18,7 +18,7 @@ from app.Models.Logistica.RutaModel import (
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
     RepartidorCrear, TelemetriaPing, InsertarParadaOrdenRequest, QuitarParadaRequest,
     MoverParadaRutaRequest, SolicitudCargaCrear, SolicitudCargaRevision,
-    RevisionWebOperacionRequest, ItemAprobarCargaDTO, AprobarCargaRequest,
+    RevisionWebOperacionRequest, ItemAprobarCargaDTO, AprobarCargaRequest, ResolverCargaRequest,
     RevisionOperacionRequest, FinalizarAdminRequest, ReasignarPendientesRequest
 )
 
@@ -609,6 +609,134 @@ def generar_rutas_diarias(
     return RutaService(db).GenerarRutasDiarias(fecha)
 
 # -------------------------------------------------------------
+# HELPER FUNCTIONS - LOGÍSTICA, SUCURSALES Y STOCK
+# -------------------------------------------------------------
+def _obtener_nombre_sucursal(db: Session, id_sucursal: Optional[int]) -> str:
+    if not id_sucursal:
+        return "Sucursal Central Sucre"
+    nombre = db.execute(
+        text('SELECT nombre FROM public.sucursales WHERE id = :id LIMIT 1;'),
+        {"id": id_sucursal}
+    ).scalar()
+    return nombre or f"Sucursal {id_sucursal}"
+
+
+def _obtener_stock_remanente_real_chofer(db: Session, id_chofer: int) -> list[dict]:
+    """
+    Realiza la consulta real a inventario_chofer (JOIN PresentacionProducto / Producto) para el chofer.
+    Devuelve todos los productos con cantidad > 0 actualmente en el camión.
+    """
+    sql_rem = text("""
+        SELECT 
+            ic.presentacion_id as id_presentacion,
+            ic.presentacion_id as "IdPresentacion",
+            pp."CodigoPresentacion" as codigo_presentacion,
+            pp."CodigoPresentacion" as "CodigoPresentacion",
+            prod."NombreProducto" as nombre_producto,
+            prod."NombreProducto" as "NombreProducto",
+            COALESCE(pp."TipoContenedor", 'Paquete') as tipo_contenedor,
+            COALESCE(pp."TipoContenedor", 'Paquete') as "TipoContenedor",
+            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad,
+            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as stock_remanente,
+            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad_remanente,
+            ic.cantidad_cargada,
+            ic.cantidad_vendida,
+            ic.precio_vigente_carga
+        FROM public.inventario_chofer ic
+        JOIN public."PresentacionProducto" pp ON ic.presentacion_id = pp."IdPresentacion"
+        JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+        WHERE ic.chofer_id = :id_chofer
+          AND COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) > 0
+        ORDER BY prod."NombreProducto" ASC, pp."CodigoPresentacion" ASC;
+    """)
+    return [dict(r) for r in db.execute(sql_rem, {"id_chofer": id_chofer}).mappings().fetchall()]
+
+
+def _obtener_presentaciones_sugeridas_ruta(db: Session, id_sucursal: Optional[int] = None) -> list[dict]:
+    """
+    Precarga presentaciones sugeridas del catálogo para que el supervisor
+    pueda visualizarlas y ajustarlas si la solicitud no contiene filas de detalle.
+    """
+    sql_sug = text("""
+        SELECT 
+            NULL::integer as id_detalle,
+            pp."IdPresentacion" as id_presentacion,
+            pp."IdPresentacion" as "IdPresentacion",
+            pp."CodigoPresentacion" as "CodigoPresentacion",
+            pp."CodigoPresentacion" as codigo_presentacion,
+            prod."NombreProducto" as "NombreProducto",
+            prod."NombreProducto" as nombre_producto,
+            COALESCE(pp."TipoContenedor", 'Paquete') as "TipoContenedor",
+            COALESCE(pp."TipoContenedor", 'Paquete') as tipo_contenedor,
+            0.0 as stock_remanente,
+            0.0 as stock_adicional_solicitado,
+            0.0 as stock_adicional_aprobado,
+            'Sugerido para ruta' as observacion
+        FROM public."PresentacionProducto" pp
+        JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
+        WHERE pp."Activo" = true
+        ORDER BY prod."NombreProducto" ASC, pp."CodigoPresentacion" ASC
+        LIMIT 15;
+    """)
+    return [dict(r) for r in db.execute(sql_sug).mappings().fetchall()]
+
+
+def _asegurar_paradas_reales_asignacion(db: Session, id_asignacion: int, id_ruta: int, id_sucursal: int, id_chofer: int):
+    """
+    Garantiza que la asignación tenga paradas reales de RutaPuntoVenta o Pedido
+    para que la hoja de ruta nunca retorne paradas vacías ([]).
+    """
+    cant_pv = db.execute(text("""
+        SELECT COUNT(*) FROM public."RutaPuntoVenta" WHERE "IdRutaDistribucion" = :rid;
+    """), {"rid": id_ruta}).scalar() or 0
+
+    if cant_pv == 0:
+        pedidos = db.execute(text("""
+            SELECT "IdPedido", "IdPuntoVenta"
+            FROM public."Pedido"
+            WHERE ("IdAsignacionRuta" = :asig_id OR ("IdUsuarioRepartidor" = :cid AND "FechaPedido" = CURRENT_DATE))
+              AND "IdPuntoVenta" IS NOT NULL;
+        """), {"asig_id": id_asignacion, "cid": id_chofer}).fetchall()
+
+        orden = 1
+        for ped in pedidos:
+            db.execute(text("""
+                UPDATE public."Pedido"
+                SET "IdAsignacionRuta" = :asig_id
+                WHERE "IdPedido" = :pid AND ("IdAsignacionRuta" IS NULL OR "IdAsignacionRuta" != :asig_id);
+            """), {"asig_id": id_asignacion, "pid": ped.IdPedido})
+
+            db.execute(text("""
+                INSERT INTO public."RutaPuntoVenta" ("IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita")
+                VALUES (:rid, :pvid, :orden)
+                ON CONFLICT ("IdRutaDistribucion", "IdPuntoVenta") DO NOTHING;
+            """), {"rid": id_ruta, "pvid": ped.IdPuntoVenta, "orden": orden})
+            orden += 1
+
+        cant_pv_recheck = db.execute(text("""
+            SELECT COUNT(*) FROM public."RutaPuntoVenta" WHERE "IdRutaDistribucion" = :rid;
+        """), {"rid": id_ruta}).scalar() or 0
+
+        if cant_pv_recheck == 0:
+            puntos_suc = db.execute(text("""
+                SELECT pv."IdPuntoVenta"
+                FROM public."PuntoVenta" pv
+                JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                WHERE (c."IdSucursal" = :sid OR pv."IdZona" IN (SELECT "IdZonaDistribucion" FROM public."RutaDistribucion" WHERE "IdRutaDistribucion" = :rid))
+                  AND pv."Activo" = true
+                ORDER BY pv."IdPuntoVenta" ASC
+                LIMIT 5;
+            """), {"sid": id_sucursal, "rid": id_ruta}).fetchall()
+
+            for idx, pv_item in enumerate(puntos_suc, 1):
+                db.execute(text("""
+                    INSERT INTO public."RutaPuntoVenta" ("IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita")
+                    VALUES (:rid, :pvid, :orden)
+                    ON CONFLICT ("IdRutaDistribucion", "IdPuntoVenta") DO NOTHING;
+                """), {"rid": id_ruta, "pvid": pv_item.IdPuntoVenta, "orden": idx})
+
+
+# -------------------------------------------------------------
 # SOLICITUDES DE CARGA DE CAMIÓN
 # -------------------------------------------------------------
 @RutaRouter.post("/solicitudes-carga", response_model=dict)
@@ -639,7 +767,7 @@ def listar_solicitudes_carga(
 ):
     """
     Lista las solicitudes de carga de camión con desglose de stock remanente en camión
-    + stock adicional pedido.
+    (consulta real a inventario_chofer con cantidad > 0) + stock adicional pedido.
     """
     suc_efectiva = sucursal_id or id_sucursal or alcance.sucursal_efectiva
 
@@ -698,6 +826,10 @@ def listar_solicitudes_carga(
         if sol_dict.get("created_at"):
             sol_dict["created_at"] = sol_dict["created_at"].isoformat()
 
+        # Stock remanente real del chofer desde inventario_chofer
+        stock_rem = _obtener_stock_remanente_real_chofer(db, f["id_chofer"])
+        sol_dict["stock_remanente"] = stock_rem
+
         # Desglose de productos de la solicitud
         sql_det = text("""
             SELECT 
@@ -718,9 +850,13 @@ def listar_solicitudes_carga(
             ORDER BY prod."NombreProducto" ASC;
         """)
         detalles = [dict(d) for d in db.execute(sql_det, {"sid": f["id_solicitud"]}).mappings().fetchall()]
+        if not detalles:
+            detalles = _obtener_presentaciones_sugeridas_ruta(db, f.get("id_sucursal"))
+
         sol_dict["detalles"] = detalles
         sol_dict["items"] = detalles
         sol_dict["items_solicitados"] = detalles
+        sol_dict["nombre_sucursal"] = _obtener_nombre_sucursal(db, f.get("id_sucursal"))
         resultado.append(sol_dict)
 
     return resultado
@@ -732,7 +868,24 @@ def obtener_solicitud_carga(
     usuario: dict = Depends(get_current_user),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
-    return RutaService(db).ObtenerSolicitudCargaPorId(id_solicitud)
+    sol = RutaService(db).ObtenerSolicitudCargaPorId(id_solicitud)
+    if not sol:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitud de carga no encontrada")
+
+    id_chofer = sol.get("id_chofer")
+    if id_chofer:
+        sol["stock_remanente"] = _obtener_stock_remanente_real_chofer(db, id_chofer)
+
+    detalles = sol.get("detalles") or sol.get("items_solicitados") or []
+    if not detalles:
+        id_suc = sol.get("id_sucursal")
+        detalles = _obtener_presentaciones_sugeridas_ruta(db, id_suc)
+        sol["detalles"] = detalles
+
+    sol["items"] = detalles
+    sol["items_solicitados"] = detalles
+    sol["nombre_sucursal"] = _obtener_nombre_sucursal(db, sol.get("id_sucursal"))
+    return sol
 
 @RutaRouter.put("/solicitudes-carga/{id_solicitud}/revisar", response_model=dict)
 def revisar_solicitud_carga(
@@ -940,6 +1093,133 @@ async def aprobar_carga_camion_web(
             "id_asignacion": asig_id,
             "estado_operativo": "APROBADA_EN_RUTA",
             "habilitada_para_reparto": True
+        }
+    }
+
+
+# -------------------------------------------------------------
+# RESOLUCIÓN DE CARGA EN WEB (APROBAR / OBSERVAR / RECHAZAR)
+# -------------------------------------------------------------
+@RutaRouter.post("/asignaciones/{id_asignacion}/resolver-carga", response_model=dict)
+async def resolver_carga_camion_web(
+    id_asignacion: int,
+    dto: ResolverCargaRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Resolución de Solicitud de Carga por Supervisor:
+    Soporta 3 acciones:
+    - 'APROBADA': Suma stock, estado_operativo = 'APROBADA_EN_RUTA', emite carga_camion_aprobada.
+    - 'OBSERVADA': Registra observación, notifica al chofer, emite carga_camion_observada.
+    - 'RECHAZADA': Rechaza solicitud, cancela habilitación, emite carga_camion_rechazada.
+    """
+    decision = (dto.decision or "APROBADA").upper().strip()
+    obs = dto.observacion or dto.Observacion or dto.motivo or ""
+
+    if decision in ["APROBADA", "APROBADO"]:
+        aprobar_dto = AprobarCargaRequest(
+            items=dto.items or dto.items_aprobados,
+            items_aprobados=dto.items_aprobados or dto.items,
+            observacion=obs or "Carga física y stock aprobados por supervisor",
+            Estado="APROBADO"
+        )
+        return await aprobar_carga_camion_web(
+            id=id_asignacion,
+            id_asignacion=id_asignacion,
+            dto=aprobar_dto,
+            db=db,
+            usuario=usuario,
+            alcance=alcance
+        )
+
+    # Validar existencia de asignación y alcance
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_asig, {"asig_id": id_asignacion}).fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
+
+    alcance.validar_recurso(asig.IdSucursal, nombre_recurso="asignación de ruta", responder_404=True)
+    chofer_id = asig.IdUsuarioRepartidor
+
+    # Buscar solicitud_carga_camion pendiente
+    sql_sol = text("""
+        SELECT id_solicitud, estado
+        FROM public.solicitud_carga_camion
+        WHERE id_asignacion_ruta = :asig_id AND estado = 'PENDIENTE'
+        ORDER BY id_solicitud DESC LIMIT 1;
+    """)
+    sol = db.execute(sql_sol, {"asig_id": id_asignacion}).fetchone()
+
+    nuevo_estado_sol = "OBSERVADA" if decision in ["OBSERVADA", "OBSERVADO"] else "RECHAZADA"
+    nuevo_estado_asig = "OBSERVADA" if decision in ["OBSERVADA", "OBSERVADO"] else "CANCELADA"
+    titulo_notif = "Solicitud de Carga Observada" if nuevo_estado_sol == "OBSERVADA" else "Solicitud de Carga Rechazada"
+    tipo_notif = "CARGA_OBSERVADA" if nuevo_estado_sol == "OBSERVADA" else "CARGA_RECHAZADA"
+
+    if sol:
+        db.execute(text("""
+            UPDATE public.solicitud_carga_camion
+            SET estado = :estado,
+                observacion_admin = :obs,
+                id_admin_revision = :admin_id,
+                fecha_revision = NOW()
+            WHERE id_solicitud = :sid;
+        """), {
+            "estado": nuevo_estado_sol,
+            "obs": obs or f"Solicitud {nuevo_estado_sol.lower()} por supervisión",
+            "admin_id": usuario["IdUsuario"],
+            "sid": sol.id_solicitud
+        })
+
+    db.execute(text("""
+        UPDATE public."AsignacionRuta"
+        SET "estado_operativo" = :estado_op
+        WHERE "IdAsignacionRuta" = :asig_id;
+    """), {"estado_op": nuevo_estado_asig, "asig_id": id_asignacion})
+
+    db.execute(text("""
+        INSERT INTO public."NotificacionInterna" (
+            "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+        ) VALUES (
+            :uid, :titulo, :msg, :tipo, :asig_id, false, NOW()
+        );
+    """), {
+        "uid": chofer_id,
+        "titulo": titulo_notif,
+        "msg": obs or f"Su solicitud de carga ha sido {nuevo_estado_sol.lower()}.",
+        "tipo": tipo_notif,
+        "asig_id": id_asignacion
+    })
+
+    db.commit()
+
+    # Emitir WebSocket
+    evento_ws = {
+        "tipo": "carga_camion_observada" if nuevo_estado_sol == "OBSERVADA" else "carga_camion_rechazada",
+        "id_asignacion": id_asignacion,
+        "id_chofer": chofer_id,
+        "decision": nuevo_estado_sol,
+        "observacion": obs,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    try:
+        await flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws)
+    except Exception as e_ws:
+        logger.debug(f"[WS resolver_carga] Error emitiendo ws: {e_ws}")
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Solicitud de carga {nuevo_estado_sol.lower()} exitosamente",
+        "datos": {
+            "id_asignacion": id_asignacion,
+            "decision": nuevo_estado_sol,
+            "observacion": obs
         }
     }
 

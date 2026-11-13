@@ -12,6 +12,7 @@ import {
   Radio,
   Clock,
   ShieldAlert,
+  User,
 } from "lucide-react";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 
@@ -305,8 +306,9 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
                 </div>
 
                 {toast.nombreChofer && (
-                  <p className="mt-0.5 text-[11px] font-semibold opacity-90 truncate">
-                    👤 {toast.nombreChofer}
+                  <p className="mt-0.5 text-[11px] font-semibold opacity-90 truncate flex items-center gap-1">
+                    <User size={12} className="shrink-0 opacity-75" />
+                    <span>{toast.nombreChofer}</span>
                   </p>
                 )}
 

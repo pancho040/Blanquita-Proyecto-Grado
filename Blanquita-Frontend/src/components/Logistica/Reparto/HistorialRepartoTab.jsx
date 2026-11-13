@@ -1012,27 +1012,27 @@ export default function HistorialRepartoTab({
                                       type="button"
                                       onClick={() => handleAprobarOperacion(n)}
                                       className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-semibold transition-colors cursor-pointer flex items-center gap-0.5"
-                                      title="✓ Aprobar entrega o cobro"
+                                      title="Aprobar entrega o cobro"
                                     >
-                                      <CheckCircle2 className="h-3 w-3" />
+                                      <CheckCircle2 className="h-3 w-3 shrink-0" />
                                       <span>Aprobar</span>
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => abrirModalObservar(n)}
                                       className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-0.5"
-                                      title="⚠ Ingresar observación"
+                                      title="Ingresar observación"
                                     >
-                                      <AlertCircle className="h-3 w-3 text-amber-600" />
+                                      <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
                                       <span>Observar</span>
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => abrirModalRechazar(n)}
                                       className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-0.5"
-                                      title="✕ Rechazar entrega o cobro"
+                                      title="Rechazar entrega o cobro"
                                     >
-                                      <X className="h-3 w-3 text-rose-600" />
+                                      <X className="h-3 w-3 text-rose-600 shrink-0" />
                                       <span>Rechazar</span>
                                     </button>
                                   </div>
@@ -1632,8 +1632,9 @@ export default function HistorialRepartoTab({
             </div>
 
             <div className="space-y-3 text-xs text-slate-600">
-              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800">
-                ✓ <strong>0 operaciones en PENDIENTE.</strong> Todas las entregas y cobros de la jornada han sido auditados y revisados.
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span><strong>0 operaciones en PENDIENTE.</strong> Todas las entregas y cobros de la jornada han sido auditados y revisados.</span>
               </div>
 
               <div>

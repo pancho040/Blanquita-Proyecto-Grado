@@ -18,7 +18,8 @@ import {
   Clock,
   AlertCircle,
   Save,
-  Route
+  Route,
+  X
 } from "lucide-react";
 import BuscadorSelect from "../Common/BuscadorSelect";
 import { 
@@ -302,29 +303,38 @@ export default function EditorParadasDinamicoModal({
   return (
     <>
       <Dialog open={abierto} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="p-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded bg-sky-100 text-[#1C96C5]">
-                  <ListOrdered className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-base font-bold text-slate-800">
-                    Editor Dinámico de Paradas (1..{paradas.length})
-                  </DialogTitle>
-                  <p className="text-xs text-slate-500">
-                    Secuencia vial para: <span className="font-semibold text-slate-700">{nombreRutaDisplay}</span>
-                  </p>
-                </div>
+        <DialogContent showCloseButton={false} className="max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          {/* Header Impecable (DESIGN.md) */}
+          <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-white">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 rounded-xl bg-sky-100 text-[#1C96C5] shrink-0">
+                <ListOrdered className="h-5 w-5 shrink-0" />
               </div>
-              <Badge variant="outline" className="text-xs border-sky-300 text-sky-800 bg-sky-50">
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-bold text-slate-800 leading-tight">
+                  Editor Dinámico de Paradas (1..{paradas.length})
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                  Secuencia vial para: <span className="font-semibold text-slate-700">{nombreRutaDisplay}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Badge variant="outline" className="text-xs border-sky-300 text-sky-800 bg-sky-50 font-semibold px-2.5 py-1">
                 {paradas.length} paradas configuradas
               </Badge>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-4 w-4 shrink-0" />
+              </button>
             </div>
-          </DialogHeader>
+          </div>
 
-          <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             {/* Formulario de agregar parada en posición específica */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
               <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
@@ -497,7 +507,7 @@ export default function EditorParadasDinamicoModal({
             </div>
           </div>
 
-          <DialogFooter className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between sm:justify-between">
+          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
             <Button
               type="button"
               variant="outline"
@@ -507,7 +517,7 @@ export default function EditorParadasDinamicoModal({
               className="text-xs text-slate-700 border-slate-300 gap-1.5"
               title="Compactar la secuencia vial 1..N sin huecos"
             >
-              <ListOrdered className="h-3.5 w-3.5 text-[#1C96C5]" />
+              <ListOrdered className="h-3.5 w-3.5 text-[#1C96C5] shrink-0" />
               <span>Compactar 1..N</span>
             </Button>
             <div className="flex items-center gap-2">
@@ -527,11 +537,11 @@ export default function EditorParadasDinamicoModal({
                 disabled={guardando}
                 className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-semibold gap-1.5"
               >
-                <Save className="h-3.5 w-3.5" />
+                <Save className="h-3.5 w-3.5 shrink-0" />
                 <span>{guardando ? "Guardando..." : "Guardar Itinerario 1..N"}</span>
               </Button>
             </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

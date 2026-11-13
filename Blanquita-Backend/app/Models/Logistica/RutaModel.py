@@ -253,12 +253,28 @@ class ItemAprobarCargaDTO(BaseModel):
 
 
 class AprobarCargaRequest(BaseModel):
+    decision: Optional[str] = "APROBADA"
     items: Optional[List[dict]] = None
     items_aprobados: Optional[List[dict]] = None
     ItemsAprobados: Optional[List[dict]] = None
     observacion: Optional[str] = None
     ObservacionAdmin: Optional[str] = None
     Estado: Optional[str] = "APROBADO"
+    estado: Optional[str] = None
+
+
+class ResolverCargaRequest(BaseModel):
+    decision: Optional[str] = "APROBADA"  # 'APROBADA', 'OBSERVADA', 'RECHAZADA'
+    observacion: Optional[str] = None
+    Observacion: Optional[str] = None
+    ObservacionAdmin: Optional[str] = None
+    motivo: Optional[str] = None
+    items: Optional[List[dict]] = None
+    items_aprobados: Optional[List[dict]] = None
+    ItemsAprobados: Optional[List[dict]] = None
+    usar_remanente: Optional[bool] = True
+    Estado: Optional[str] = None
+    estado: Optional[str] = None
 
 
 class RevisionOperacionRequest(BaseModel):

@@ -14,9 +14,13 @@ import {
   Radio,
   MapPin,
   Clock,
+  User,
+  Building2,
+  Filter
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-const STORAGE_KEY = "blanquita_notificaciones_v1";
+const STORAGE_KEY = "blanquita_notificaciones_v2";
 
 const NOTIFICACIONES_SEMILLA = [
   {
@@ -25,12 +29,28 @@ const NOTIFICACIONES_SEMILLA = [
     categoria: "CARGA",
     titulo: "Solicitud de Carga de Camión",
     nombreChofer: "Carlos Méndez (Camión #3)",
+    idSucursal: 1, // Sucre
     detalle: "Solicita validación de stock remanente y carga de 150 paq. Higiénico Clásico y 80 Servilletas para iniciar Ruta 101.",
     fecha: "Hace 10 min",
     creadoEn: Date.now() - 10 * 60 * 1000,
     leida: false,
     accionUrl: "/supervisor/asignaciones",
-    accionTexto: "Ver y Aprobar Stock",
+    accionTexto: "Ver y Resolver Stock",
+    color: "amber",
+  },
+  {
+    id: "semilla-carga-102",
+    tipo: "solicitud_carga",
+    categoria: "CARGA",
+    titulo: "Solicitud de Carga de Camión - Potosí",
+    nombreChofer: "Gonzalo Rivera (Camión #5)",
+    idSucursal: 2, // Potosí
+    detalle: "Solicita validación de carga para Ruta Villa Imperial Potosí (90 paq. Clásico, 40 Servilletas).",
+    fecha: "Hace 15 min",
+    creadoEn: Date.now() - 15 * 60 * 1000,
+    leida: false,
+    accionUrl: "/supervisor/asignaciones",
+    accionTexto: "Ver y Resolver Stock",
     color: "amber",
   },
   {
@@ -39,6 +59,7 @@ const NOTIFICACIONES_SEMILLA = [
     categoria: "COBROS",
     titulo: "Nueva Entrega con Cobro en Ruta",
     nombreChofer: "Mario Flores (Camión #1)",
+    idSucursal: 1, // Sucre
     detalle: "Completó entrega a Supermercado Litoral: Cobro de Bs. 1,450.00 en efectivo registrado.",
     fecha: "Hace 22 min",
     creadoEn: Date.now() - 22 * 60 * 1000,
@@ -53,7 +74,8 @@ const NOTIFICACIONES_SEMILLA = [
     categoria: "COBROS",
     titulo: "Cobro QR Pendiente de Aprobación",
     nombreChofer: "Juan Pérez (Camión #2)",
-    detalle: "Cliente Tienda El Sol realizó abono QR por Bs. 320.00 (Ref #849201). Pendiente de conciliación contable.",
+    idSucursal: 2, // Potosí
+    detalle: "Cliente Tienda El Sol Potosí realizó abono QR por Bs. 320.00 (Ref #849201). Pendiente de conciliación.",
     fecha: "Hace 45 min",
     creadoEn: Date.now() - 45 * 60 * 1000,
     leida: false,
@@ -67,6 +89,7 @@ const NOTIFICACIONES_SEMILLA = [
     categoria: "ALERTAS",
     titulo: "Alerta: No-Entrega en Parada",
     nombreChofer: "Roberto Arce (Camión #4)",
+    idSucursal: 1, // Sucre
     detalle: "Parada #5 (Distribuidora Central) reportada como No Entregada. Motivo: Local cerrado temporalmente.",
     fecha: "Hace 1 hora",
     creadoEn: Date.now() - 60 * 60 * 1000,
@@ -77,9 +100,10 @@ const NOTIFICACIONES_SEMILLA = [
   },
 ];
 
-export default function NotificacionesBell({ idRol, esAdmin = false, basePath = "supervisor" }) {
+export default function NotificacionesBell({ idRol, esAdmin = false, basePath = "supervisor", sucursalActiva = null }) {
   const [abierto, setAbierto] = useState(false);
-  const [filtro, setFiltro] = useState("TODAS");
+  const [filtroCategoria, setFiltroCategoria] = useState("TODAS");
+  const [filtroSucursal, setFiltroSucursal] = useState("TODAS"); // 'TODAS' | '1' (Sucre) | '2' (Potosí)
   const [notificaciones, setNotificaciones] = useState([]);
   const contenedorRef = useRef(null);
 
@@ -95,7 +119,6 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
           return;
         }
       }
-      // Inicializar con semillas si es primera vez
       setNotificaciones(NOTIFICACIONES_SEMILLA);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(NOTIFICACIONES_SEMILLA));
     } catch {
@@ -113,7 +136,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
     }
   }, []);
 
-  // 3. Escuchar nuevas notificaciones emitidas por el sistema WebSocket / Toasts
+  // 3. Escuchar nuevas notificaciones emitidas por WebSocket / Toasts / CustomEvents
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -121,16 +144,23 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
       if (!e?.detail) return;
       const nuevo = e.detail;
 
-      // Normalizar categoría para filtrado
       let categoria = "ALERTAS";
       if (nuevo.tipo?.includes("carga")) categoria = "CARGA";
       else if (nuevo.tipo?.includes("cobro") || nuevo.tipo?.includes("entrega") || nuevo.tipo?.includes("operacion")) categoria = "COBROS";
       else if (nuevo.tipo?.includes("ruta") || nuevo.tipo?.includes("ubicacion")) categoria = "ALERTAS";
 
+      // Detectar sede
+      let idSede = nuevo.idSucursal || nuevo.id_sucursal || nuevo.payload?.id_sucursal || nuevo.payload?.IdSucursal;
+      if (!idSede) {
+        const textoDesc = `${nuevo.titulo || ""} ${nuevo.detalle || ""} ${nuevo.nombreChofer || ""}`.toLowerCase();
+        idSede = textoDesc.includes("potos") ? 2 : 1;
+      }
+
       const itemFormateado = {
         id: nuevo.id || `notif-${Date.now()}`,
         tipo: nuevo.tipo || "alerta",
         categoria,
+        idSucursal: Number(idSede) === 2 ? 2 : 1,
         titulo: nuevo.titulo || "Notificación de Logística",
         nombreChofer: nuevo.nombreChofer || "Chofer en ruta",
         detalle: nuevo.detalle || "Nueva actualización en vivo recibida.",
@@ -143,7 +173,6 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
       };
 
       setNotificaciones((prev) => {
-        // Evitar duplicados por id
         const existe = prev.some((n) => n.id === itemFormateado.id);
         if (existe) return prev;
         const actualizadas = [itemFormateado, ...prev.slice(0, 49)];
@@ -154,9 +183,29 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
       });
     };
 
+    const handleWsEvent = (e) => {
+      const { tipo, datos, payload } = e.detail || {};
+      const payloadDatos = datos || payload || {};
+      if (tipo === "solicitud_carga_recibida" || tipo === "solicitud_carga_creada") {
+        manejarNuevaNotificacion({
+          detail: {
+            tipo: "solicitud_carga",
+            titulo: "Solicitud de Carga de Camión",
+            nombreChofer: payloadDatos.nombre_chofer || payloadDatos.chofer || "Chofer en planta",
+            detalle: payloadDatos.mensaje || "El chofer solicitó aprobación de carga de inventario para iniciar ruta.",
+            idSucursal: payloadDatos.id_sucursal || payloadDatos.IdSucursal || 1,
+            color: "amber"
+          }
+        });
+      }
+    };
+
     window.addEventListener("blanquita:notificacion-nueva", manejarNuevaNotificacion);
+    window.addEventListener("blanquita:ws-event", handleWsEvent);
+
     return () => {
       window.removeEventListener("blanquita:notificacion-nueva", manejarNuevaNotificacion);
+      window.removeEventListener("blanquita:ws-event", handleWsEvent);
     };
   }, [esAdmin]);
 
@@ -180,11 +229,37 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
     return notificaciones.filter((n) => !n.leida).length;
   }, [notificaciones]);
 
-  // Filtro de lista
+  // Filtro y Priorización por Sucursal y Categoría
   const notificacionesFiltradas = useMemo(() => {
-    if (filtro === "TODAS") return notificaciones;
-    return notificaciones.filter((n) => n.categoria === filtro);
-  }, [notificaciones, filtro]);
+    let lista = [...notificaciones];
+
+    // Filtro por categoría
+    if (filtroCategoria !== "TODAS") {
+      lista = lista.filter((n) => n.categoria === filtroCategoria);
+    }
+
+    // Filtro explícito de sucursal
+    if (filtroSucursal !== "TODAS") {
+      const numFiltro = Number(filtroSucursal);
+      lista = lista.filter((n) => Number(n.idSucursal || 1) === numFiltro);
+    }
+
+    // Prioridad por sucursal activa en la página
+    const sedeActivaNum =
+      sucursalActiva === "2" || sucursalActiva === 2 ? 2 : (sucursalActiva === "1" || sucursalActiva === 1 ? 1 : null);
+
+    if (sedeActivaNum) {
+      lista.sort((a, b) => {
+        const sedeA = Number(a.idSucursal || 1);
+        const sedeB = Number(b.idSucursal || 1);
+        if (sedeA === sedeActivaNum && sedeB !== sedeActivaNum) return -1;
+        if (sedeB === sedeActivaNum && sedeA !== sedeActivaNum) return 1;
+        return (b.creadoEn || 0) - (a.creadoEn || 0);
+      });
+    }
+
+    return lista;
+  }, [notificaciones, filtroCategoria, filtroSucursal, sucursalActiva]);
 
   // Marcar una como leída
   const marcarComoLeida = (id, e) => {
@@ -231,7 +306,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
         title="Notificaciones en tiempo real"
         className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-all duration-150 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-white/40"
       >
-        <Bell size={18} className={cantidadNoLeidas > 0 ? "animate-wiggle" : ""} />
+        <Bell size={18} className={`shrink-0 ${cantidadNoLeidas > 0 ? "animate-wiggle" : ""}`} />
 
         {/* Badge Rojo Contador */}
         {cantidadNoLeidas > 0 && (
@@ -247,16 +322,16 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
       {/* Dropdown Flotante de Notificaciones */}
       {abierto && (
         <div
-          className="absolute right-0 top-full mt-2 w-80 sm:w-96 md:w-[410px] rounded-2xl bg-white dark:bg-slate-900 border-2 border-[#A0D9EF] shadow-2xl z-[100] text-slate-800 dark:text-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 select-text"
+          className="absolute right-0 top-full mt-2 w-80 sm:w-96 md:w-[420px] rounded-2xl bg-white dark:bg-slate-900 border-2 border-[#A0D9EF] shadow-2xl z-[100] text-slate-800 dark:text-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 select-text"
           style={{
             boxShadow: "0 20px 45px -10px rgba(28, 150, 197, 0.35), 0 0 1px 1px rgba(0, 0, 0, 0.05)",
           }}
         >
           {/* Cabecera del Dropdown */}
-          <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 flex items-center justify-between gap-2">
+          <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/50 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#20A7DB] text-white shadow-xs">
-                <Bell size={15} />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#20A7DB] text-white shadow-xs shrink-0">
+                <Bell size={15} className="shrink-0" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-none">
@@ -277,33 +352,64 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-[#1C96C5] hover:text-[#0f6080] hover:bg-sky-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 title="Marcar todas las notificaciones como leídas"
               >
-                <CheckCheck size={14} />
+                <CheckCheck size={14} className="shrink-0" />
                 <span>Marcar leídas</span>
               </button>
             )}
           </div>
 
-          {/* Filtros rápidos de pestañas */}
-          <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-            {[
-              { id: "TODAS", label: "Todas" },
-              { id: "CARGA", label: "Cargas" },
-              { id: "COBROS", label: "Cobros/QR" },
-              { id: "ALERTAS", label: "Alertas" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setFiltro(tab.id)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  filtro === tab.id
-                    ? "bg-[#20A7DB] text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* Selector de Sucursal y Categorías */}
+          <div className="px-3 pt-2 pb-2 space-y-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            {/* Filtro Sucursal (Todas, Sucre, Potosí) */}
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                <Building2 size={12} className="shrink-0 text-slate-400" />
+                <span>Sede:</span>
+              </span>
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                {[
+                  { id: "TODAS", label: "Todas" },
+                  { id: "1", label: "Sucre" },
+                  { id: "2", label: "Potosí" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setFiltroSucursal(s.id)}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
+                      filtroSucursal === s.id
+                        ? "bg-[#1C96C5] text-white shadow-2xs"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Pestañas de categoría */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { id: "TODAS", label: "Todas" },
+                { id: "CARGA", label: "Cargas" },
+                { id: "COBROS", label: "Cobros/QR" },
+                { id: "ALERTAS", label: "Alertas" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setFiltroCategoria(tab.id)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer shrink-0 ${
+                    filtroCategoria === tab.id
+                      ? "bg-[#20A7DB] text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Lista de Notificaciones con Scroll suave */}
@@ -311,10 +417,10 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
             {notificacionesFiltradas.length === 0 ? (
               <div className="py-12 px-4 text-center flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
                 <div className="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2.5">
-                  <Inbox size={22} className="opacity-60" />
+                  <Inbox size={22} className="opacity-60 shrink-0" />
                 </div>
                 <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  No hay notificaciones en esta categoría
+                  No hay notificaciones en este filtro
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Las alertas de camiones y choferes aparecerán aquí en vivo.
@@ -324,6 +430,8 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
               notificacionesFiltradas.map((notif) => {
                 const IconoComp = getIcono(notif);
                 const noLeida = !notif.leida;
+                const esPotosiNotif = Number(notif.idSucursal) === 2;
+                const sedeLabel = esPotosiNotif ? "POTOSÍ" : "SUCRE";
 
                 const bgIcono = {
                   amber: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
@@ -351,23 +459,36 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
                     <div
                       className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center shadow-2xs ${bgIcono}`}
                     >
-                      <IconoComp size={18} />
+                      <IconoComp size={18} className="shrink-0" />
                     </div>
 
                     {/* Contenido Principal */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
-                          {notif.titulo}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
+                            {notif.titulo}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[9px] font-extrabold uppercase px-1 py-0 border shrink-0 ${
+                              esPotosiNotif
+                                ? "border-purple-300 text-purple-700 bg-purple-50"
+                                : "border-sky-300 text-sky-700 bg-sky-50"
+                            }`}
+                          >
+                            [{sedeLabel}]
+                          </Badge>
+                        </div>
                         <span className="text-[10px] text-slate-400 shrink-0">
                           {notif.fecha}
                         </span>
                       </div>
 
                       {notif.nombreChofer && (
-                        <p className="text-[11px] font-semibold text-[#1C96C5] dark:text-sky-400 truncate mt-0.5">
-                          👤 {notif.nombreChofer}
+                        <p className="text-[11px] font-semibold text-[#1C96C5] dark:text-sky-400 truncate mt-0.5 flex items-center gap-1">
+                          <User size={12} className="shrink-0 text-slate-400" />
+                          <span>{notif.nombreChofer}</span>
                         </p>
                       )}
 
@@ -387,7 +508,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-[#20A7DB] hover:bg-[#1C96C5] shadow-2xs transition-colors cursor-pointer"
                           >
                             <span>{notif.accionTexto || "Ver y Gestionar"}</span>
-                            <ExternalLink size={12} />
+                            <ExternalLink size={12} className="shrink-0" />
                           </a>
 
                           <div className="flex items-center gap-1">
@@ -398,7 +519,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
                                 title="Marcar como leída"
                                 className="p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                               >
-                                <Check size={14} />
+                                <Check size={14} className="shrink-0" />
                               </button>
                             )}
                             <button
@@ -407,7 +528,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
                               title="Eliminar notificación"
                               className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={13} className="shrink-0" />
                             </button>
                           </div>
                         </div>
@@ -421,7 +542,8 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
 
           {/* Pie del Dropdown */}
           <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex items-center justify-between text-xs">
-            <span className="text-[11px] text-slate-500 font-medium">
+            <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               Conexión activa a flota
             </span>
             {notificaciones.length > 0 && (

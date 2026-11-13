@@ -3,12 +3,21 @@ import "leaflet/dist/leaflet.css";
 import { getLeaflet } from "@/lib/leafletLoader";
 import { Navigation, Eye, EyeOff, Maximize2, Info, ChevronDown, ChevronUp } from "lucide-react";
 
-const SUCRE_CENTER = [-19.0435, -65.258];
+const SUCRE_CENTER = [-19.0435, -65.2580];
+const POTOSI_CENTER = [-19.5836, -65.7531];
+
+function calcularCentroMapa(idSucursal, ruta) {
+  const sid = idSucursal || ruta?.IdSucursal;
+  if (sid === "2" || sid === 2) return POTOSI_CENTER;
+  if (String(ruta?.NombreRuta || "").toLowerCase().includes("potos")) return POTOSI_CENTER;
+  return SUCRE_CENTER;
+}
 
 export default function MapaRuta({
   puntosRuta = [],
   todosPuntosVenta = [],
   rutaSeleccionada = null,
+  idSucursal = null,
   onAgregarPunto = null,
   altura = "h-[560px]"
 }) {
@@ -46,8 +55,9 @@ export default function MapaRuta({
         mapContainerRef.current._leaflet_id = null;
       }
 
+      const centroInicial = calcularCentroMapa(idSucursal, rutaSeleccionada);
       const map = L.map(mapContainerRef.current, {
-        center: SUCRE_CENTER,
+        center: centroInicial,
         zoom: 14,
         zoomControl: true,
         scrollWheelZoom: true

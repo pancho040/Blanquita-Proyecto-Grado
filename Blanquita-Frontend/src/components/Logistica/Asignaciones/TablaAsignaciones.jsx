@@ -633,7 +633,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                 <span>Historial de Entregas y Cobros de la Ruta (Auditoría 1 a 1)</span>
               </h3>
               <p className="text-xs text-slate-500">
-                Aprueba [✓], observa [⚠] o rechaza [✕] individualmente cada entrega y cobro realizado por los choferes
+                Aprueba, observa o rechaza individualmente cada entrega y cobro realizado por los choferes
               </p>
             </div>
             <HistorialRepartoTab
@@ -1300,7 +1300,9 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           {cargandoMapa ? (
             <div className="py-24 flex flex-col justify-center items-center gap-3">
               <Loader2 className="h-10 w-10 animate-spin text-[#1C96C5]" />
-              <p className="text-sm font-medium text-slate-600">Calculando trazado vial por calles de Sucre (OSRM)...</p>
+              <p className="text-sm font-medium text-slate-600">
+                Calculando trazado vial por calles de {Number(sucursal) === 2 ? "Potosí" : "Sucre"} (OSRM)...
+              </p>
             </div>
           ) : (
             <div className="space-y-4 pt-2">
@@ -1308,13 +1310,14 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                 puntosRuta={puntosMapa}
                 todosPuntosVenta={todosPV}
                 rutaSeleccionada={rutaMapa}
+                idSucursal={sucursal}
                 altura="h-[620px]"
               />
 
               {/* Paradas ordenadas */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  Itinerario de Visitas en Sucre ({puntosMapa.length} paradas):
+                  Itinerario de Visitas en {Number(sucursal) === 2 ? "Potosí" : "Sucre"} ({puntosMapa.length} paradas):
                 </div>
                 {puntosMapa.length === 0 ? (
                   <p className="italic text-xs text-slate-400">Esta ruta aún no tiene puntos de venta asociados.</p>

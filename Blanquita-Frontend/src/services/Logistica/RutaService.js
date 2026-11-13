@@ -261,8 +261,25 @@ export async function CerrarYLiquidarRuta(idAsignacion, datos) {
 }
 
 // -------------------------------------------------------------
-// Solicitud de Carga, Aprobación y Telemetría Bajo Demanda
+// Solicitud de Carga, Resolución y Telemetría Bajo Demanda
 // -------------------------------------------------------------
+export async function ResolverSolicitudCarga(idAsignacion, datos = {}) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/resolver-carga`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!response.ok) {
+    // Si la ruta fallara por compatibilidad hacia atrás en modo aprobada, intentar fallback a aprobar-carga
+    if (datos.decision === "APROBADA" || !datos.decision) {
+      return await AprobarCargaCamion(idAsignacion, datos);
+    }
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
 export async function AprobarCargaCamion(idAsignacion, datos = {}) {
   const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/aprobar-carga`, {
     method: "POST",

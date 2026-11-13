@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Users, UserCheck, ArrowRight, Truck, CheckSquare, Square, Store, MapPin } from "lucide-react";
+import { Users, UserCheck, ArrowRight, Truck, CheckSquare, Square, Store, MapPin, X } from "lucide-react";
 import BuscadorSelect from "../Common/BuscadorSelect";
 import { ReasignarParadasPendientes } from "@/services/Logistica/RutaService";
 
@@ -92,34 +92,63 @@ export default function ModalReasignarParadas({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-            <Users className="h-4 w-4 text-[#1C96C5]" />
-            <span>Reasignar Paradas Pendientes a Otro Chofer</span>
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent showCloseButton={false} className="max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        {/* Header Impecable (DESIGN.md) */}
+        <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-white">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-sky-100 text-[#1C96C5] shrink-0">
+              <Users className="h-5 w-5 shrink-0" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-bold text-slate-800 leading-tight">
+                Reasignar Paradas Pendientes a Otro Chofer
+              </DialogTitle>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                Ruta: <span className="font-semibold text-slate-700">{asignacion?.NombreRuta || "Ruta actual"}</span> • Chofer: <span className="text-slate-700">{asignacion?.NombreRepartidor || "Asignado"}</span>
+              </p>
+            </div>
+          </div>
 
-        <div className="space-y-3.5 py-1 text-xs">
+          <div className="flex items-center gap-3 shrink-0">
+            <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 text-xs px-2.5 py-1 font-semibold">
+              {paradasPendientes.length} pendientes
+            </Badge>
+
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-4 w-4 shrink-0" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body Impecable */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-xs bg-slate-50/40">
           {/* Tarjeta de origen */}
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs">
             <div>
-              <span className="text-[11px] text-slate-400 font-semibold block uppercase">Ruta Origen</span>
+              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Ruta y Chofer Origen</span>
               <span className="font-bold text-slate-800 text-xs">
                 {asignacion?.NombreRuta || "Ruta actual"}
               </span>
-              <span className="text-slate-500 block text-[11px]">
+              <span className="text-slate-500 block text-[11px] mt-0.5">
                 Chofer actual: <strong className="text-slate-700">{asignacion?.NombreRepartidor}</strong>
               </span>
             </div>
             <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50">
-              {paradasPendientes.length} pendientes
+              {paradasPendientes.length} paradas sin entregar
             </Badge>
           </div>
 
           {/* Selección de Chofer Destino */}
           <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700">Chofer Destino Receptor:</label>
+            <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <UserCheck className="h-4 w-4 text-[#1C96C5] shrink-0" />
+              <span>Chofer Destino Receptor:</span>
+            </label>
             <BuscadorSelect
               opciones={opcionesRepartidoresDestino}
               value={choferDestinoId}
@@ -135,7 +164,7 @@ export default function ModalReasignarParadas({
               <button
                 type="button"
                 onClick={toggleTodas}
-                className="text-[11px] text-[#1C96C5] hover:underline font-medium"
+                className="text-[11px] text-[#1C96C5] hover:underline font-medium cursor-pointer"
               >
                 {paradasSeleccionadas.length === paradasPendientes.length
                   ? "Deseleccionar todas"
@@ -143,9 +172,9 @@ export default function ModalReasignarParadas({
               </button>
             </div>
 
-            <div className="max-h-56 overflow-y-auto space-y-1 border border-slate-200 rounded p-1.5 bg-white">
+            <div className="max-h-64 overflow-y-auto space-y-1.5 border border-slate-200 rounded-xl p-2 bg-white shadow-2xs">
               {paradasPendientes.length === 0 ? (
-                <div className="py-4 text-center text-slate-400">
+                <div className="py-6 text-center text-slate-400">
                   No hay paradas pendientes para transferir en esta ruta.
                 </div>
               ) : (
@@ -157,7 +186,7 @@ export default function ModalReasignarParadas({
                     <div
                       key={idPv || idx}
                       onClick={() => toggleParada(idPv)}
-                      className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all border ${
+                      className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all border ${
                         seleccionado
                           ? "bg-sky-50 border-sky-300 text-slate-800"
                           : "bg-white border-transparent text-slate-600 hover:bg-slate-50"
@@ -169,10 +198,10 @@ export default function ModalReasignarParadas({
                         <Square className="h-4 w-4 text-slate-400 shrink-0" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold truncate">
+                        <div className="font-semibold truncate text-xs">
                           {parada.NombreCliente || parada.RazonSocial || `Parada #${idx + 1}`}
                         </div>
-                        <div className="text-[10px] text-slate-400 truncate">
+                        <div className="text-[11px] text-slate-400 truncate">
                           {parada.Direccion || "Sin dirección"}
                         </div>
                       </div>
@@ -184,7 +213,8 @@ export default function ModalReasignarParadas({
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        {/* Footer Impecable */}
+        <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-6 py-4 flex flex-wrap items-center justify-end gap-3">
           <Button
             type="button"
             variant="outline"
@@ -201,10 +231,10 @@ export default function ModalReasignarParadas({
             disabled={guardando || paradasSeleccionadas.length === 0 || !choferDestinoId}
             className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-semibold gap-1.5"
           >
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
             <span>{guardando ? "Reasignando..." : `Reasignar (${paradasSeleccionadas.length})`}</span>
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

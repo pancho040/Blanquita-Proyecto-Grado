@@ -489,8 +489,8 @@ export default function GestorRutas({ usuario = null }) {
           className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
           title="Emitir ping de telemetría satelital a los choferes"
         >
-          <Navigation className={`h-3.5 w-3.5 ${solicitandoGps ? "animate-spin" : ""}`} />
-          <span>📍 Solicitar Ubicación Actual de Todos los Choferes</span>
+          <Navigation className={`h-3.5 w-3.5 shrink-0 ${solicitandoGps ? "animate-spin" : ""}`} />
+          <span>Solicitar Ubicación Actual de Todos los Choferes</span>
         </Button>
 
         <a
@@ -869,6 +869,7 @@ export default function GestorRutas({ usuario = null }) {
                         puntosRuta={puntosRuta}
                         todosPuntosVenta={todosPuntosVenta}
                         rutaSeleccionada={rutaSeleccionada}
+                        idSucursal={sucursal}
                         altura="h-[520px]"
                       />
                     </div>

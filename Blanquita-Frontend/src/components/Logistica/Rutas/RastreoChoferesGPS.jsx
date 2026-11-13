@@ -30,7 +30,15 @@ import {
   Maximize2
 } from "lucide-react";
 
-const SUCRE_CENTER = [-19.0435, -65.258];
+const SUCRE_CENTER = [-19.0435, -65.2580];
+const POTOSI_CENTER = [-19.5836, -65.7531];
+
+function obtenerCentroSucursal(sucursalId) {
+  if (sucursalId === "2" || sucursalId === 2) {
+    return POTOSI_CENTER;
+  }
+  return SUCRE_CENTER;
+}
 
 export default function RastreoChoferesGPS({ usuario = null }) {
   const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
@@ -89,8 +97,9 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         mapContainerRef.current._leaflet_id = null;
       }
 
+      const centroInicial = obtenerCentroSucursal(sucursal);
       const map = L.map(mapContainerRef.current, {
-        center: SUCRE_CENTER,
+        center: centroInicial,
         zoom: 14,
         zoomControl: true,
         scrollWheelZoom: true
@@ -222,6 +231,17 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       cargarTelemetria();
     }
   }, [sucursal, cargandoAlcance, cargarTelemetria]);
+
+  // Foco Dinámico del Mapa en Potosí ([-19.5836, -65.7531]) vs Sucre ([-19.0435, -65.2580])
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const centro = obtenerCentroSucursal(sucursal);
+    if (!choferSeleccionado) {
+      try {
+        mapInstanceRef.current.setView(centro, 14);
+      } catch {}
+    }
+  }, [sucursal, choferSeleccionado]);
 
   // Cálculo reactivo de tiempo relativo desde la última actualización
   useEffect(() => {
@@ -618,8 +638,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-8 rounded gap-1.5 shadow-none"
             title="Solicita reporte GPS inmediato al móvil de todos los repartidores"
           >
-            <Navigation className={`h-3.5 w-3.5 ${solicitandoGps ? "animate-spin" : ""}`} />
-            <span>{solicitandoGps ? "Solicitando señal..." : "📍 Solicitar Ubicación Actual de Todos los Choferes"}</span>
+            <Navigation className={`h-3.5 w-3.5 shrink-0 ${solicitandoGps ? "animate-spin" : ""}`} />
+            <span>{solicitandoGps ? "Solicitando señal..." : "Solicitar Ubicación Actual de Todos los Choferes"}</span>
           </Button>
 
           <Button
