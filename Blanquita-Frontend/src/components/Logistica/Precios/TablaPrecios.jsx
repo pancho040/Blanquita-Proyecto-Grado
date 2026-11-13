@@ -15,7 +15,7 @@ import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
 
 export default function TablaPrecios({ usuario = null }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: false,
   });
@@ -43,7 +43,12 @@ export default function TablaPrecios({ usuario = null }) {
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   const cargarPrecios = useCallback(async (forzar = false) => {
-    const sActual = Number(sucursal) || 1;
+    const sActual = (sucursal && sucursal !== "todas") ? Number(sucursal) : null;
+    if (!sActual) {
+      setPrecios([]);
+      setLoading(false);
+      return;
+    }
     const cacheKey = `logistica:precios:sucursal:${sActual}`;
     try {
       if (!forzar) {
@@ -67,11 +72,11 @@ export default function TablaPrecios({ usuario = null }) {
   }, [sucursal]);
 
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar && sucursal) {
       setPrecios([]);
       cargarPrecios();
     }
-  }, [sucursal, cargandoAlcance, cargarPrecios]);
+  }, [listoParaConsultar, sucursal, cargarPrecios]);
 
   // Identificar fecha de cambio más reciente en el catálogo
   const fechaUltimoCambioGlobal = useMemo(() => {

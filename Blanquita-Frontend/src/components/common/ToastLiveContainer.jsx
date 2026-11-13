@@ -64,12 +64,10 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       datos.payload?.IdSucursal ??
       datos.payload?.idSucursal;
 
-    if (rawSede != null && rawSede !== "") {
-      return Number(rawSede) === 2 ? 2 : 1;
+    if (rawSede != null && rawSede !== "" && rawSede !== "todas") {
+      return Number(rawSede);
     }
-
-    const textoDesc = `${datos.mensaje || ""} ${datos.detalle || ""} ${datos.titulo || ""} ${datos.nombre_chofer || ""}`.toLowerCase();
-    return textoDesc.includes("potos") ? 2 : 1;
+    return null;
   }, []);
 
   const agregarToast = useCallback(
@@ -78,8 +76,8 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
       // Aislamiento estricto: usuario de sede fija SOLO ve eventos de su sede
       if (!puedeVerTodas) {
-        const miSede = Number(sucursalAsignada || 1);
-        if (sedeEvento !== miSede) {
+        const miSede = sucursalAsignada ? Number(sucursalAsignada) : null;
+        if (miSede != null && sedeEvento != null && sedeEvento !== miSede) {
           return;
         }
       }

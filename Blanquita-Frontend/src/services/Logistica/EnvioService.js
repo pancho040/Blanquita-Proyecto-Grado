@@ -22,11 +22,14 @@ export async function ObtenerEnvio(id) {
 }
 
 export async function CrearEnvio(dto) {
-  const sid = Number(dto?.origen_id || dto?.IdSucursal || dto?.id_sucursal) || 1;
-  const response = await fetch(`/api/logistica/envios?sucursal=${sid}&id_sucursal=${sid}`, {
+  const rawSid = dto?.origen_id ?? dto?.IdSucursal ?? dto?.id_sucursal;
+  const sid = rawSid != null && rawSid !== "" && rawSid !== "todas" ? Number(rawSid) : null;
+  const query = sid != null ? `?sucursal=${sid}&id_sucursal=${sid}` : "";
+  const bodyData = sid != null ? { ...dto, origen_id: sid, IdSucursal: sid } : { ...dto };
+  const response = await fetch(`/api/logistica/envios${query}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...dto, origen_id: sid, IdSucursal: sid }),
+    body: JSON.stringify(bodyData),
   });
   if (!response.ok) {
     await manejarErrorBackend(response);
@@ -45,11 +48,14 @@ export async function DespacharEnvio(id) {
 }
 
 export async function RecepcionarEnvio(id, dto) {
-  const sid = Number(dto?.destino_id || dto?.IdSucursal || dto?.id_sucursal) || 1;
-  const response = await fetch(`/api/logistica/envios/${id}/recepcionar?sucursal=${sid}&id_sucursal=${sid}`, {
+  const rawSid = dto?.destino_id ?? dto?.IdSucursal ?? dto?.id_sucursal;
+  const sid = rawSid != null && rawSid !== "" && rawSid !== "todas" ? Number(rawSid) : null;
+  const query = sid != null ? `?sucursal=${sid}&id_sucursal=${sid}` : "";
+  const bodyData = sid != null ? { ...dto, destino_id: sid, IdSucursal: sid } : { ...dto };
+  const response = await fetch(`/api/logistica/envios/${id}/recepcionar${query}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...dto, destino_id: sid, IdSucursal: sid }),
+    body: JSON.stringify(bodyData),
   });
   if (!response.ok) {
     await manejarErrorBackend(response);

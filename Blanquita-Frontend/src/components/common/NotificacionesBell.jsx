@@ -112,7 +112,7 @@ export default function NotificacionesBell({
   const puedeVerTodas = propPuedeVerTodas !== null ? Boolean(propPuedeVerTodas) : branch.puedeVerTodas;
   const sucursalActiva = propSucursalActiva !== null ? propSucursalActiva : branch.sucursalActiva;
   const sucursalAsignada = branch.sucursalAsignada;
-  const sedeEfectiva = Number(sucursalAsignada || 1);
+  const sedeEfectiva = sucursalAsignada ? Number(sucursalAsignada) : null;
 
   const [abierto, setAbierto] = useState(false);
   const [filtroCategoria, setFiltroCategoria] = useState("TODAS");
@@ -163,14 +163,11 @@ export default function NotificacionesBell({
       else if (nuevo.tipo?.includes("ruta") || nuevo.tipo?.includes("ubicacion")) categoria = "ALERTAS";
 
       // Detectar sede
-      let idSede = nuevo.idSucursal || nuevo.id_sucursal || nuevo.payload?.id_sucursal || nuevo.payload?.IdSucursal;
-      if (!idSede) {
-        const textoDesc = `${nuevo.titulo || ""} ${nuevo.detalle || ""} ${nuevo.nombreChofer || ""}`.toLowerCase();
-        idSede = textoDesc.includes("potos") ? 2 : 1;
-      }
+      const rawSede = nuevo.idSucursal ?? nuevo.id_sucursal ?? nuevo.payload?.id_sucursal ?? nuevo.payload?.IdSucursal;
+      const idSede = rawSede != null && rawSede !== "" && rawSede !== "todas" ? Number(rawSede) : null;
 
       // Aislamiento estricto: si el usuario no es multisede, ignorar notificaciones de otra sucursal
-      if (!puedeVerTodas && Number(idSede) !== sedeEfectiva) {
+      if (!puedeVerTodas && sedeEfectiva != null && idSede != null && idSede !== sedeEfectiva) {
         return;
       }
 
@@ -178,7 +175,7 @@ export default function NotificacionesBell({
         id: nuevo.id || `notif-${Date.now()}`,
         tipo: nuevo.tipo || "alerta",
         categoria,
-        idSucursal: Number(idSede) === 2 ? 2 : 1,
+        idSucursal: idSede,
         titulo: nuevo.titulo || "Notificación de Logística",
         nombreChofer: nuevo.nombreChofer || "Chofer en ruta",
         detalle: nuevo.detalle || "Nueva actualización en vivo recibida.",
@@ -211,7 +208,7 @@ export default function NotificacionesBell({
             titulo: "Solicitud de Carga de Camión",
             nombreChofer: payloadDatos.nombre_chofer || payloadDatos.chofer || "Chofer en planta",
             detalle: payloadDatos.mensaje || "El chofer solicitó aprobación de carga de inventario para iniciar ruta.",
-            idSucursal: payloadDatos.id_sucursal || payloadDatos.IdSucursal || 1,
+            idSucursal: payloadDatos.id_sucursal || payloadDatos.IdSucursal || null,
             color: "amber"
           }
         });
@@ -225,7 +222,7 @@ export default function NotificacionesBell({
       window.removeEventListener("blanquita:notificacion-nueva", manejarNuevaNotificacion);
       window.removeEventListener("blanquita:ws-event", handleWsEvent);
     };
-  }, [esAdmin]);
+  }, [esAdmin, puedeVerTodas, sedeEfectiva]);
 
   // 4. Cerrar dropdown al hacer clic afuera
   useEffect(() => {
@@ -246,7 +243,7 @@ export default function NotificacionesBell({
   const cantidadNoLeidas = useMemo(() => {
     return notificaciones.filter((n) => {
       if (n.leida) return false;
-      if (!puedeVerTodas && Number(n.idSucursal || 1) !== sedeEfectiva) return false;
+      if (!puedeVerTodas && sedeEfectiva != null && n.idSucursal != null && Number(n.idSucursal) !== sedeEfectiva) return false;
       return true;
     }).length;
   }, [notificaciones, puedeVerTodas, sedeEfectiva]);
@@ -257,10 +254,12 @@ export default function NotificacionesBell({
 
     // Aislamiento estricto: usuarios no multisede SOLO ven su propia sucursal
     if (!puedeVerTodas) {
-      lista = lista.filter((n) => Number(n.idSucursal || 1) === sedeEfectiva);
+      if (sedeEfectiva != null) {
+        lista = lista.filter((n) => n.idSucursal == null || Number(n.idSucursal) === sedeEfectiva);
+      }
     } else if (filtroSucursal !== "TODAS") {
       const numFiltro = Number(filtroSucursal);
-      lista = lista.filter((n) => Number(n.idSucursal || 1) === numFiltro);
+      lista = lista.filter((n) => Number(n.idSucursal) === numFiltro);
     }
 
     // Filtro por categoría
@@ -274,8 +273,8 @@ export default function NotificacionesBell({
 
     if (puedeVerTodas && sedeActivaNum) {
       lista.sort((a, b) => {
-        const sedeA = Number(a.idSucursal || 1);
-        const sedeB = Number(b.idSucursal || 1);
+        const sedeA = a.idSucursal != null ? Number(a.idSucursal) : null;
+        const sedeB = b.idSucursal != null ? Number(b.idSucursal) : null;
         if (sedeA === sedeActivaNum && sedeB !== sedeActivaNum) return -1;
         if (sedeB === sedeActivaNum && sedeA !== sedeActivaNum) return 1;
         return (b.creadoEn || 0) - (a.creadoEn || 0);

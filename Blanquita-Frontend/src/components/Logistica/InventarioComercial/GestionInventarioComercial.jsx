@@ -20,7 +20,7 @@ import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 
 export default function GestionInventarioComercial({ usuario = null }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: false,
   });
@@ -42,7 +42,13 @@ export default function GestionInventarioComercial({ usuario = null }) {
   const [guardandoCarga, setGuardandoCarga] = useState(false);
 
   const cargarDatos = useCallback(async () => {
-    const sidNum = Number(sucursal) || 1;
+    const sidNum = (sucursal && sucursal !== "todas") ? Number(sucursal) : null;
+    if (!sidNum) {
+      setItemsInventario([]);
+      setReporteValorizado(null);
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     try {
       if (pestaña === "inventario") {
@@ -60,10 +66,10 @@ export default function GestionInventarioComercial({ usuario = null }) {
   }, [sucursal, pestaña, fechaCorte]);
 
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar && sucursal) {
       cargarDatos();
     }
-  }, [sucursal, pestaña, fechaCorte, cargandoAlcance, cargarDatos]);
+  }, [listoParaConsultar, sucursal, pestaña, fechaCorte, cargarDatos]);
 
   const handleCargarChofer = async (e) => {
     e.preventDefault();
