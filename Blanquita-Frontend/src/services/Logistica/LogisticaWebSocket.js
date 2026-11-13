@@ -35,9 +35,36 @@ class LogisticaWebSocketClient {
     this.isConnecting = true;
 
     try {
-      const isHttps = window.location.protocol === "https:";
-      const wsProtocol = isHttps ? "wss:" : "ws:";
-      const host = window.location.host;
+      // 1. Resolver protocolo y host de WebSocket conectando al Backend (puerto 8000 en dev) y NUNCA a Astro (4321)
+      let apiBase = "";
+      if (typeof import.meta !== "undefined" && import.meta.env?.PUBLIC_API_URL) {
+        apiBase = import.meta.env.PUBLIC_API_URL;
+      } else if (typeof import.meta !== "undefined" && import.meta.env?.PUBLIC_BACKEND_URL) {
+        apiBase = import.meta.env.PUBLIC_BACKEND_URL;
+      }
+
+      let wsProtocol = "ws:";
+      let wsHost = "localhost:8000";
+
+      if (apiBase) {
+        try {
+          const u = new URL(apiBase);
+          wsProtocol = u.protocol === "https:" ? "wss:" : "ws:";
+          wsHost = u.host;
+        } catch {
+          wsHost = apiBase.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+          wsProtocol = apiBase.toLowerCase().startsWith("https") ? "wss:" : "ws:";
+        }
+      } else if (typeof window !== "undefined") {
+        const hostname = window.location.hostname;
+        if (hostname === "localhost" || hostname === "127.0.0.1") {
+          wsProtocol = "ws:";
+          wsHost = `${hostname}:8000`;
+        } else {
+          wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          wsHost = window.location.host;
+        }
+      }
 
       // Obtener ticket de autenticación efímero para conectar con seguridad sin exponer JWT
       let ticketParam = "";
@@ -53,8 +80,8 @@ class LogisticaWebSocketClient {
         // Fallback a conexión directa si el proxy o cookies autentican
       }
 
-      // URL del WebSocket de logística
-      const wsUrl = `${wsProtocol}//${host}/ws/logistica${ticketParam}`;
+      // URL del WebSocket de logística apuntando al backend (ej. ws://localhost:8000/ws/logistica)
+      const wsUrl = `${wsProtocol}//${wsHost}/ws/logistica${ticketParam}`;
 
       this.socket = new WebSocket(wsUrl);
 

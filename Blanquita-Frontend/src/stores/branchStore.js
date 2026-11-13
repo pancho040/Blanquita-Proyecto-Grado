@@ -12,12 +12,12 @@ export const SUCURSALES_CATALOGO = [
   { id: 2, nombre: "Sucursal Potosí", ciudad: "Potosí" }
 ];
 
-// Estado global reactivo en memoria
+// Estado global reactivo en memoria (null hasta que mi-alcance resuelva, evitando ráfagas 403 a Sucre)
 let estado = {
-  sucursalActiva: "1", // "todas" | "1" | "2"
-  sucursalesPermitidas: [{ id: 1, nombre: "Sucursal Central Sucre", ciudad: "Sucre" }],
+  sucursalActiva: null, // "todas" | "1" | "2" | null
+  sucursalesPermitidas: [],
   puedeVerTodas: false,
-  sucursalAsignada: 1,
+  sucursalAsignada: null,
   inicializado: false
 };
 
@@ -111,7 +111,14 @@ if (typeof window !== "undefined") {
 export function inicializarAlcanceUsuario(usuario) {
   if (!usuario) return;
 
-  const asignada = usuario.IdSucursal != null ? Number(usuario.IdSucursal) : null;
+  const asignada =
+    usuario.IdSucursal != null
+      ? Number(usuario.IdSucursal)
+      : usuario.sucursal_defecto != null
+      ? Number(usuario.sucursal_defecto)
+      : usuario.id_sucursal != null
+      ? Number(usuario.id_sucursal)
+      : null;
 
   // Permiso explícito de ver todas (según endpoint /Usuario/mi-alcance o perfil backend)
   const puedeVerTodas = Boolean(
@@ -142,7 +149,7 @@ export function inicializarAlcanceUsuario(usuario) {
   // Resolver sucursal activa inicial respetando precedencia:
   // 1. URL (?sucursal=) tiene prioridad absoluta.
   // 2. sessionStorage (persiste por pestaña). Si apunta a sede no permitida, se ignora silenciosamente.
-  // 3. Fallback: sede asignada o primera permitida.
+  // 3. Fallback: sede asignada o primera permitida. Jamás asumir '1' si el usuario tiene sede fija Potosí.
   const desdeUrl = obtenerParametroUrl();
   const desdeStorage = obtenerSucursalSessionStorage();
   let activa = "1";
@@ -170,10 +177,12 @@ export function inicializarAlcanceUsuario(usuario) {
       // Ignorar silenciosamente si no es permitida y adoptar sucursal válida
       activa = String(asignada || permitidas[0]?.id || 1);
     }
-  } else if (asignada && permitidas.some((s) => String(s.id) === String(asignada))) {
+  } else if (asignada && (permitidas.length === 0 || permitidas.some((s) => String(s.id) === String(asignada)))) {
     activa = String(asignada);
   } else if (permitidas.length > 0) {
     activa = String(permitidas[0].id);
+  } else if (puedeVerTodas) {
+    activa = "todas";
   }
 
   estado = {
@@ -261,16 +270,16 @@ export function limpiarSesionSucursal() {
     } catch {}
   }
   estado = {
-    sucursalActiva: "1",
-    sucursalesPermitidas: [{ id: 1, nombre: "Sucursal Central Sucre", ciudad: "Sucre" }],
+    sucursalActiva: null,
+    sucursalesPermitidas: [],
     puedeVerTodas: false,
-    sucursalAsignada: 1,
+    sucursalAsignada: null,
     inicializado: false
   };
   notificar();
 }
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && typeof window.document !== "undefined") {
   // Al cargar la app en el navegador, invalidar alcance previo y sincronizar con backend real
   refrescarAlcanceDesdeApi();
 }
@@ -280,10 +289,10 @@ export function getSnapshot() {
 }
 
 const serverSnapshot = {
-  sucursalActiva: "1",
-  sucursalesPermitidas: [{ id: 1, nombre: "Sucursal Central Sucre", ciudad: "Sucre" }],
+  sucursalActiva: null,
+  sucursalesPermitidas: [],
   puedeVerTodas: false,
-  sucursalAsignada: 1,
+  sucursalAsignada: null,
   inicializado: false
 };
 
@@ -308,13 +317,14 @@ export function useBranch(usuarioInicial = null) {
 
   return {
     sucursalActiva: snap.sucursalActiva,
-    sucursalIdNumerico: snap.sucursalActiva === "todas" ? null : Number(snap.sucursalActiva),
+    sucursalIdNumerico: (!snap.inicializado || snap.sucursalActiva === "todas" || snap.sucursalActiva == null) ? null : Number(snap.sucursalActiva),
     sucursalesPermitidas: snap.sucursalesPermitidas || [],
     puedeVerTodas: snap.puedeVerTodas,
     esMultisede: (snap.sucursalesPermitidas?.length || 0) > 1 || snap.puedeVerTodas,
     cambiarSucursal: cambiarSucursalActiva,
     sucursalAsignada: snap.sucursalAsignada,
     inicializado: snap.inicializado,
+    listoParaConsultar: Boolean(snap.inicializado),
     // Alias y compatibilidad para componentes
     sucursales: snap.sucursalesPermitidas || [],
     cargando: !snap.inicializado,
@@ -325,6 +335,7 @@ export function useBranch(usuarioInicial = null) {
 /**
  * Hook Especializado de Página para Pantallas Analíticas u Operativas
  * Exige si se permite o no la opción "Todas" y normaliza el estado automáticamente.
+ * Bloquea consultas a Sucre mientras `mi-alcance` no haya confirmado la sede real.
  */
 export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) {
   if (usuario && !estado.inicializado) {
@@ -332,16 +343,22 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
   }
 
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const listoParaConsultar = Boolean(snap.inicializado);
 
   // Resolver sucursal efectiva para la pantalla
   let sucursalEfectiva = snap.sucursalActiva;
   if (!permiteTodas && sucursalEfectiva === "todas") {
-    sucursalEfectiva = String(snap.sucursalAsignada || (snap.sucursalesPermitidas[0]?.id ?? 1));
+    sucursalEfectiva = String(snap.sucursalAsignada || (snap.sucursalesPermitidas[0]?.id ?? ""));
+  }
+
+  // Si no está inicializado (esperando respuesta de /Usuario/mi-alcance),
+  // bloquear la asignación prematura a "1" para evitar 403 en Potosí
+  if (!listoParaConsultar && !sucursalEfectiva) {
+    sucursalEfectiva = null;
   }
 
   const sucursales = snap.sucursalesPermitidas || [];
   const esMultisede = sucursales.length > 1 || snap.puedeVerTodas;
-  const listoParaConsultar = snap.inicializado;
 
   const setSucursal = (nueva) => {
     if (!permiteTodas && String(nueva).toLowerCase() === "todas") {
@@ -353,11 +370,18 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
 
   const nombreSucursalActual =
     sucursales.find((s) => String(s.id) === String(sucursalEfectiva))?.nombre ||
-    (sucursalEfectiva === "todas" ? "Todas las Sedes (Consolidado)" : (sucursalEfectiva ? `Sucursal ${sucursalEfectiva}` : "Sin sucursal"));
+    (sucursalEfectiva === "todas"
+      ? "Todas las Sedes (Consolidado)"
+      : sucursalEfectiva
+      ? `Sucursal ${sucursalEfectiva}`
+      : "Cargando sucursal...");
 
   return {
-    sucursal: sucursalEfectiva, // "todas" | "1" | "2"
-    sucursalIdNumerico: sucursalEfectiva === "todas" ? null : Number(sucursalEfectiva),
+    sucursal: sucursalEfectiva, // null mientras !listoParaConsultar si no está inicializado
+    sucursalIdNumerico:
+      !listoParaConsultar || sucursalEfectiva === "todas" || sucursalEfectiva == null
+        ? null
+        : Number(sucursalEfectiva),
     setSucursal,
     esMultisede,
     listoParaConsultar,

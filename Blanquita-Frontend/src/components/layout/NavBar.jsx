@@ -358,8 +358,8 @@ export default function NavBar({
           
           {/* Badge de Rol Ejecutivo Unificado */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-white/30 bg-white/15 text-white shadow-2xs backdrop-blur-xs">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <ShieldCheck size={13} className="text-white" />
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <ShieldCheck size={13} className="text-white shrink-0" />
             <span className="truncate max-w-[140px]">{rolTexto}</span>
           </div>
 
@@ -368,6 +368,8 @@ export default function NavBar({
             idRol={idRol}
             esAdmin={esAdmin}
             basePath={basePath}
+            sucursalActiva={sucursalActiva}
+            puedeVerTodas={puedeVerTodas}
           />
 
           {/* Botón de Modo Oscuro Inerte (Listo para activar más adelante) */}

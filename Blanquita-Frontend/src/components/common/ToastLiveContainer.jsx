@@ -15,6 +15,7 @@ import {
   User,
 } from "lucide-react";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useBranch } from "@/stores/branchStore";
 
 // Sonido sutil y elegante de notificación web sintetizado con Web Audio API (Cero dependencias)
 function reproducirChimeNotificacion() {
@@ -44,6 +45,7 @@ function reproducirChimeNotificacion() {
 }
 
 export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = false }) {
+  const { sucursalActiva, sucursalAsignada, puedeVerTodas } = useBranch();
   const [toasts, setToasts] = useState([]);
   const toastsRef = useRef([]);
   toastsRef.current = toasts;
@@ -52,13 +54,42 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const extraerSedeEvento = useCallback((datos = {}) => {
+    const rawSede =
+      datos.id_sucursal ??
+      datos.IdSucursal ??
+      datos.idSucursal ??
+      datos.sucursal_id ??
+      datos.payload?.id_sucursal ??
+      datos.payload?.IdSucursal ??
+      datos.payload?.idSucursal;
+
+    if (rawSede != null && rawSede !== "") {
+      return Number(rawSede) === 2 ? 2 : 1;
+    }
+
+    const textoDesc = `${datos.mensaje || ""} ${datos.detalle || ""} ${datos.titulo || ""} ${datos.nombre_chofer || ""}`.toLowerCase();
+    return textoDesc.includes("potos") ? 2 : 1;
+  }, []);
+
   const agregarToast = useCallback(
     (datosToast) => {
+      const sedeEvento = extraerSedeEvento(datosToast);
+
+      // Aislamiento estricto: usuario de sede fija SOLO ve eventos de su sede
+      if (!puedeVerTodas) {
+        const miSede = Number(sucursalAsignada || 1);
+        if (sedeEvento !== miSede) {
+          return;
+        }
+      }
+
       const id = datosToast.id || `toast-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
       const nuevo = {
         id,
         hora: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         creadoEn: Date.now(),
+        idSucursal: sedeEvento,
         ...datosToast,
       };
 
@@ -84,7 +115,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
         removerToast(id);
       }, 7500);
     },
-    [removerToast]
+    [removerToast, puedeVerTodas, sucursalAsignada, extraerSedeEvento]
   );
 
   // Conexión permanente a WebSocket y escucha de eventos de logística

@@ -19,6 +19,7 @@ import {
   Filter
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useBranch } from "@/stores/branchStore";
 
 const STORAGE_KEY = "blanquita_notificaciones_v2";
 
@@ -100,7 +101,19 @@ const NOTIFICACIONES_SEMILLA = [
   },
 ];
 
-export default function NotificacionesBell({ idRol, esAdmin = false, basePath = "supervisor", sucursalActiva = null }) {
+export default function NotificacionesBell({
+  idRol,
+  esAdmin = false,
+  basePath = "supervisor",
+  sucursalActiva: propSucursalActiva = null,
+  puedeVerTodas: propPuedeVerTodas = null,
+}) {
+  const branch = useBranch();
+  const puedeVerTodas = propPuedeVerTodas !== null ? Boolean(propPuedeVerTodas) : branch.puedeVerTodas;
+  const sucursalActiva = propSucursalActiva !== null ? propSucursalActiva : branch.sucursalActiva;
+  const sucursalAsignada = branch.sucursalAsignada;
+  const sedeEfectiva = Number(sucursalAsignada || 1);
+
   const [abierto, setAbierto] = useState(false);
   const [filtroCategoria, setFiltroCategoria] = useState("TODAS");
   const [filtroSucursal, setFiltroSucursal] = useState("TODAS"); // 'TODAS' | '1' (Sucre) | '2' (Potosí)
@@ -154,6 +167,11 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
       if (!idSede) {
         const textoDesc = `${nuevo.titulo || ""} ${nuevo.detalle || ""} ${nuevo.nombreChofer || ""}`.toLowerCase();
         idSede = textoDesc.includes("potos") ? 2 : 1;
+      }
+
+      // Aislamiento estricto: si el usuario no es multisede, ignorar notificaciones de otra sucursal
+      if (!puedeVerTodas && Number(idSede) !== sedeEfectiva) {
+        return;
       }
 
       const itemFormateado = {
@@ -224,31 +242,37 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
     };
   }, [abierto]);
 
-  // Cálculo de no leídas
+  // Cálculo de no leídas (aislado por sede fija si no es multisede)
   const cantidadNoLeidas = useMemo(() => {
-    return notificaciones.filter((n) => !n.leida).length;
-  }, [notificaciones]);
+    return notificaciones.filter((n) => {
+      if (n.leida) return false;
+      if (!puedeVerTodas && Number(n.idSucursal || 1) !== sedeEfectiva) return false;
+      return true;
+    }).length;
+  }, [notificaciones, puedeVerTodas, sedeEfectiva]);
 
   // Filtro y Priorización por Sucursal y Categoría
   const notificacionesFiltradas = useMemo(() => {
     let lista = [...notificaciones];
+
+    // Aislamiento estricto: usuarios no multisede SOLO ven su propia sucursal
+    if (!puedeVerTodas) {
+      lista = lista.filter((n) => Number(n.idSucursal || 1) === sedeEfectiva);
+    } else if (filtroSucursal !== "TODAS") {
+      const numFiltro = Number(filtroSucursal);
+      lista = lista.filter((n) => Number(n.idSucursal || 1) === numFiltro);
+    }
 
     // Filtro por categoría
     if (filtroCategoria !== "TODAS") {
       lista = lista.filter((n) => n.categoria === filtroCategoria);
     }
 
-    // Filtro explícito de sucursal
-    if (filtroSucursal !== "TODAS") {
-      const numFiltro = Number(filtroSucursal);
-      lista = lista.filter((n) => Number(n.idSucursal || 1) === numFiltro);
-    }
-
-    // Prioridad por sucursal activa en la página
+    // Prioridad por sucursal activa en la vista si es multisede
     const sedeActivaNum =
       sucursalActiva === "2" || sucursalActiva === 2 ? 2 : (sucursalActiva === "1" || sucursalActiva === 1 ? 1 : null);
 
-    if (sedeActivaNum) {
+    if (puedeVerTodas && sedeActivaNum) {
       lista.sort((a, b) => {
         const sedeA = Number(a.idSucursal || 1);
         const sedeB = Number(b.idSucursal || 1);
@@ -259,7 +283,7 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
     }
 
     return lista;
-  }, [notificaciones, filtroCategoria, filtroSucursal, sucursalActiva]);
+  }, [notificaciones, filtroCategoria, filtroSucursal, sucursalActiva, puedeVerTodas, sedeEfectiva]);
 
   // Marcar una como leída
   const marcarComoLeida = (id, e) => {
@@ -297,21 +321,21 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
 
   return (
     <div className="relative" ref={contenedorRef}>
-      {/* Botón de Campana */}
+      {/* Botón de Campana Limpio (Sin doble icono ni parpadeo) */}
       <button
         type="button"
         onClick={() => setAbierto((prev) => !prev)}
         aria-label="Campana de notificaciones de logística"
         aria-expanded={abierto}
         title="Notificaciones en tiempo real"
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-all duration-150 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-white/40"
+        className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 hover:bg-white border border-white/40 transition-all duration-150 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-white/40"
       >
-        <Bell size={18} className={`shrink-0 ${cantidadNoLeidas > 0 ? "animate-wiggle" : ""}`} />
+        <Bell className="w-5 h-5 shrink-0 text-slate-600" />
 
-        {/* Badge Rojo Contador */}
+        {/* Badge numérico estático visible en la esquina superior derecha */}
         {cantidadNoLeidas > 0 && (
           <span
-            className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-extrabold text-white shadow-md border-2 border-[#62C1E5] animate-pulse"
+            className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center pointer-events-none"
             style={{ lineHeight: 1 }}
           >
             {cantidadNoLeidas > 99 ? "99+" : cantidadNoLeidas}
@@ -360,33 +384,35 @@ export default function NotificacionesBell({ idRol, esAdmin = false, basePath = 
 
           {/* Selector de Sucursal y Categorías */}
           <div className="px-3 pt-2 pb-2 space-y-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-            {/* Filtro Sucursal (Todas, Sucre, Potosí) */}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-                <Building2 size={12} className="shrink-0 text-slate-400" />
-                <span>Sede:</span>
-              </span>
-              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
-                {[
-                  { id: "TODAS", label: "Todas" },
-                  { id: "1", label: "Sucre" },
-                  { id: "2", label: "Potosí" },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setFiltroSucursal(s.id)}
-                    className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
-                      filtroSucursal === s.id
-                        ? "bg-[#1C96C5] text-white shadow-2xs"
-                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+            {/* Filtro Sucursal (solo para usuarios multisede) */}
+            {puedeVerTodas && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                  <Building2 size={12} className="shrink-0 text-slate-400" />
+                  <span>Sede:</span>
+                </span>
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                  {[
+                    { id: "TODAS", label: "Todas" },
+                    { id: "1", label: "Sucre" },
+                    { id: "2", label: "Potosí" },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setFiltroSucursal(s.id)}
+                      className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
+                        filtroSucursal === s.id
+                          ? "bg-[#1C96C5] text-white shadow-2xs"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Pestañas de categoría */}
             <div className="flex items-center gap-1.5 overflow-x-auto">
