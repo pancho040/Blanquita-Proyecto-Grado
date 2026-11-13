@@ -36,11 +36,7 @@ const DURACION_BANNER_MS = 5000;
  */
 export const InAppNotificationBanner = () => {
   const insets = useSafeAreaInsets();
-  let notificacionesContext = null;
-  try {
-    // Si se monta dentro de NotificacionesProvider, usamos su manejador de navegación
-    notificacionesContext = useNotificaciones();
-  } catch (_e) {}
+  const notificacionesContext = useNotificaciones();
 
   const [notificacionActual, setNotificacionActual] = useState(null);
 

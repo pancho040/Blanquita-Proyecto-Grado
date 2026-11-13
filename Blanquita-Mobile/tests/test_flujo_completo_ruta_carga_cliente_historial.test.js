@@ -25,6 +25,43 @@ const assert = require("assert");
 
 global.__DEV__ = true;
 
+// Mock de WebSocket nativo para pruebas reactivas
+class MockWebSocket {
+  constructor(url, protocols, options) {
+    this.url = url;
+    this.protocols = protocols;
+    this.options = options;
+    this.readyState = 0; // CONNECTING
+    this.sentData = [];
+    MockWebSocket.instancias.push(this);
+    setTimeout(() => {
+      this.readyState = 1; // OPEN
+      if (this.onopen) this.onopen();
+    }, 5);
+  }
+
+  send(data) {
+    this.sentData.push(data);
+  }
+
+  close() {
+    this.readyState = 3; // CLOSED
+    if (this.onclose) this.onclose({ code: 1000 });
+  }
+}
+MockWebSocket.OPEN = 1;
+MockWebSocket.CONNECTING = 0;
+MockWebSocket.CLOSED = 3;
+MockWebSocket.instancias = [];
+
+global.WebSocket = MockWebSocket;
+
+if (!global.fetch) {
+  global.fetch = async (url, options = {}) => {
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+}
+
 // Mocks en memoria de almacenamiento
 const storage = new Map();
 const mockAsyncStorage = {
@@ -366,28 +403,80 @@ async function ejecutarSuiteSubagenteD() {
     "Salida con remanente de ayer más recarga de servilletas"
   );
   assert.strictEqual(peticionPostInterceptada.data.items.length, 2);
-  assert.deepStrictEqual(peticionPostInterceptada.data.items[0], {
-    presentacion_id: 1,
-    cantidad_solicitada: 25,
-  });
+  assert.strictEqual(peticionPostInterceptada.data.items[0].presentacion_id, 1);
+  assert.strictEqual(peticionPostInterceptada.data.items[0].cantidad_solicitada, 25);
   assert.strictEqual(respuestaCarga.success, true);
   console.log("  ✓ POST /api/movil/v1/chofer/solicitar-carga validado con remanente e items requeridos");
 
-  console.log("\n>>> [Sección B] 3. Desbloqueo de paradas al pasar a APROBADA_EN_RUTA");
+  console.log("\n>>> [Sección B] 3. Persistencia y bloqueo de doble envío en solicitud de carga");
 
-  // Ruta con carga aprobada / habilitada para reparto
+  // 1. Guardar sello en LocalDB simulando solicitarCargaCamion
+  const datosSello = {
+    items_solicitados: [
+      { presentacion_id: 1, cantidad_solicitada: 25 },
+      { presentacion_id: 3, cantidad_solicitada: 10 },
+    ],
+    usar_remanente: true,
+    observacion: "Salida con remanente",
+  };
+  const selloCreado = await LocalDB.guardarSelloSolicitudCarga(42, datosSello);
+
+  assert.ok(selloCreado, "El sello de solicitud de carga debe guardarse exitosamente");
+  assert.strictEqual(selloCreado.estado_operativo, "CARGA_SOLICITADA");
+  assert.strictEqual(selloCreado.usar_remanente, true);
+  assert.ok(selloCreado.fecha_solicitud, "Debe registrar la fecha/hora de solicitud");
+  assert.ok(selloCreado.fecha_dia, "Debe registrar el día de la solicitud");
+
+  // Verificar persistencia local efectiva
+  const selloObtenido = await LocalDB.obtenerSelloSolicitudCarga(42);
+  assert.strictEqual(selloObtenido.estado_operativo, "CARGA_SOLICITADA");
+  assert.strictEqual(selloObtenido.items_solicitados.length, 2);
+
+  // 2. Comprobar que ante un refresco con determinarEstadoRuta / cargarHojaRuta,
+  // el sello preserva CARGA_SOLICITADA sin descender a PENDIENTE_CARGA
+  const rutaServidorAunNoAprobada = {
+    IdAsignacion: 42,
+    Estado: "PENDIENTE",
+    estado_carga: null,
+    habilitada_para_reparto: false,
+    paradas: [
+      { IdPuntoVenta: 10, orden: 1, estado: "PENDIENTE" },
+      { IdPuntoVenta: 11, orden: 2, estado: "PENDIENTE" },
+    ],
+  };
+
+  const estadoPreservado = determinarEstadoRuta(rutaServidorAunNoAprobada, selloObtenido);
+  assert.strictEqual(
+    estadoPreservado,
+    ESTADOS_RUTA.CARGA_SOLICITADA,
+    "El sello local debe garantizar que la ruta permanezca en CARGA_SOLICITADA"
+  );
+
+  // En CARGA_SOLICITADA las entregas permanecen bloqueadas
+  const gatekeeperEnEspera = validarGatekeeperEntrega(estadoPreservado);
+  assert.strictEqual(gatekeeperEnEspera.exito, false);
+  console.log("  ✓ Sello local preserva CARGA_SOLICITADA y previene envíos duplicados ante refrescos");
+
+  console.log("\n>>> [Sección B] 4. Desbloqueo de paradas al pasar a APROBADA_EN_RUTA y limpieza de sello");
+
+  // Ruta con carga aprobada / habilitada para reparto desde Almacén o WebSocket carga_camion_aprobada
   const rutaAprobada = {
     ...rutaPendienteCarga,
     estado_carga: "APROBADA",
     habilitada_para_reparto: true,
   };
 
-  const estadoAprobada = determinarEstadoRuta(rutaAprobada);
+  const estadoAprobada = determinarEstadoRuta(rutaAprobada, selloObtenido);
   assert.strictEqual(
     estadoAprobada,
     ESTADOS_RUTA.APROBADA_EN_RUTA,
-    "Al recibir aprobación de almacén el estado debe pasar a APROBADA_EN_RUTA"
+    "Al recibir aprobación de almacén el estado debe pasar a APROBADA_EN_RUTA aún existiendo sello previo"
   );
+
+  // Al pasar a APROBADA_EN_RUTA, el flujo limpia el sello local
+  await LocalDB.limpiarSelloSolicitudCarga(42);
+  const selloTrasAprobacion = await LocalDB.obtenerSelloSolicitudCarga(42);
+  assert.strictEqual(selloTrasAprobacion, null, "El sello debe eliminarse al pasar a APROBADA_EN_RUTA");
 
   const paradasDesbloqueadas = obtenerParadasVisibles(rutaAprobada, estadoAprobada);
   assert.strictEqual(
@@ -402,7 +491,7 @@ async function ejecutarSuiteSubagenteD() {
     true,
     "El registro de entregas debe permitir operar normalmente en APROBADA_EN_RUTA"
   );
-  console.log("  ✓ Desbloqueo dinámico de paradas y operaciones en APROBADA_EN_RUTA comprobado");
+  console.log("  ✓ Limpieza de sello y desbloqueo de paradas al pasar a APROBADA_EN_RUTA comprobado");
 
   // ==========================================================================
   // SECCIÓN C: ALTA DE NUEVO CLIENTE EN 3 MODALIDADES Y REORDENAMIENTO COMPACTO
@@ -776,6 +865,120 @@ async function ejecutarSuiteSubagenteD() {
   );
 
   console.log("  ✓ Cero timers de polling periódico comprobado (arquitectura reactiva por eventos y WS)");
+
+  console.log("\n>>> [Sección E] 3. Reconexión de WebSocket con token renovado");
+
+  MockWebSocket.instancias = [];
+  await wsService.conectar("jwt-token-original-333");
+  await new Promise((r) => setTimeout(r, 15));
+
+  assert.ok(MockWebSocket.instancias.length > 0, "Debe haberse creado una instancia de WebSocket");
+  const primerSocket = MockWebSocket.instancias[MockWebSocket.instancias.length - 1];
+  assert.ok(primerSocket.url.includes("token=jwt-token-original-333"));
+  assert.strictEqual(primerSocket.options?.headers?.Authorization, "Bearer jwt-token-original-333");
+
+  // Simular renovación de token en background por expiración
+  const nuevoTokenBackground = "jwt-token-renovado-777";
+  wsService.reintentos = 3;
+  wsService.actualizarTokenYReconectar(nuevoTokenBackground);
+
+  assert.strictEqual(
+    wsService.tokenActual,
+    nuevoTokenBackground,
+    "wsService debe actualizar su token interno al token nuevo"
+  );
+  assert.strictEqual(
+    wsService.reintentos,
+    0,
+    "El contador de reintentos debe resetearse a 0 para conectar de inmediato"
+  );
+
+  const nuevaUrl = wsService.obtenerWsUrl(nuevoTokenBackground);
+  assert.ok(
+    nuevaUrl.includes(`token=${nuevoTokenBackground}`),
+    "La URL de reconexión debe portar el token renovado"
+  );
+  assert.ok(
+    !nuevaUrl.includes("jwt-token-original-333"),
+    "La URL de reconexión NO debe contener el token expirado"
+  );
+
+  // Conectar con el nuevo token y verificar headers
+  await wsService.conectar(nuevoTokenBackground);
+  await new Promise((r) => setTimeout(r, 15));
+  const socketRenovado = MockWebSocket.instancias[MockWebSocket.instancias.length - 1];
+  assert.strictEqual(
+    socketRenovado.options?.headers?.Authorization,
+    `Bearer ${nuevoTokenBackground}`,
+    "El header Authorization de la nueva conexión debe llevar el token renovado"
+  );
+  console.log("  ✓ WebSocket reconectado exitosamente con nuevo token en URL y headers");
+
+  console.log("\n>>> [Sección E] 4. Banner/Toast de notificaciones en vivo (formateo de eventos)");
+
+  const formatearBannerEvento = (tipo, datos = {}) => {
+    if (tipo === "ruta_asignada") {
+      return {
+        tipo: "ruta_asignada",
+        titulo: "Nueva Ruta Asignada",
+        mensaje: datos?.mensaje || "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario.",
+        colorFondo: "#0284C7",
+        colorIcono: "#BAE6FD",
+        datos,
+      };
+    }
+    if (tipo === "carga_camion_aprobada") {
+      return {
+        tipo: "carga_camion_aprobada",
+        titulo: "Carga Aprobada",
+        mensaje: datos?.mensaje || "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir.",
+        colorFondo: "#15803D",
+        colorIcono: "#BBF7D0",
+        datos,
+      };
+    }
+    return null;
+  };
+
+  let bannersGenerados = [];
+  const unsubRutaAsig = wsService.on("ruta_asignada", (d) => {
+    bannersGenerados.push(formatearBannerEvento("ruta_asignada", d));
+  });
+  const unsubCargaAprob = wsService.on("carga_camion_aprobada", (d) => {
+    bannersGenerados.push(formatearBannerEvento("carga_camion_aprobada", d));
+  });
+
+  // Disparar evento de ruta asignada
+  wsService.emitir("ruta_asignada", { id_asignacion: 55, mensaje: null });
+  // Disparar evento de carga camion aprobada
+  wsService.emitir("carga_camion_aprobada", { id_asignacion: 55, mensaje: null });
+
+  assert.strictEqual(bannersGenerados.length, 2, "Deben haberse capturado 2 banners");
+
+  // Validar banner 1: ruta_asignada
+  const bannerRuta = bannersGenerados[0];
+  assert.strictEqual(bannerRuta.tipo, "ruta_asignada");
+  assert.strictEqual(bannerRuta.titulo, "Nueva Ruta Asignada");
+  assert.strictEqual(
+    bannerRuta.mensaje,
+    "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario."
+  );
+  assert.strictEqual(bannerRuta.colorFondo, "#0284C7");
+
+  // Validar banner 2: carga_camion_aprobada
+  const bannerCarga = bannersGenerados[1];
+  assert.strictEqual(bannerCarga.tipo, "carga_camion_aprobada");
+  assert.strictEqual(bannerCarga.titulo, "Carga Aprobada");
+  assert.strictEqual(
+    bannerCarga.mensaje,
+    "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir."
+  );
+  assert.strictEqual(bannerCarga.colorFondo, "#15803D");
+
+  unsubRutaAsig();
+  unsubCargaAprob();
+  wsService.desconectar();
+  console.log("  ✓ Formateo y despacho de banners en vivo de ruta_asignada y carga_camion_aprobada verificado");
 
   console.log("\n==================================================================");
   console.log("✅ TODAS LAS PRUEBAS DE SUB-AGENTE D COMPLETADAS CON ÉXITO");

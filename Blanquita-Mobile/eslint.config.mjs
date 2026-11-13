@@ -36,6 +36,7 @@ export default [
         __dirname: "readonly",
         __DEV__: "readonly",
         WebSocket: "readonly",
+        fetch: "readonly",
       },
     },
     rules: {

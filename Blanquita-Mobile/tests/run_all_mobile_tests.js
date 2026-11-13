@@ -13,14 +13,17 @@ const testFiles = [
   "test_componentes_design_system.test.js",
   "calcular_contraste.js",
   "test_fase1_2_componentes_y_frescura.test.js",
+  "test_fase1_3_app_versiones_y_cola.test.js",
   "test_componentes_react_test_renderer.test.js",
   "test_fase2_flujos_chofer.test.js",
+  "test_sync_queue.test.js",
   "test_sync_subida_archivos.test.js",
   "test_pantallas_react_test_renderer.test.js",
   "test_smoke_pantallas_completas.test.js",
   "test_fase3_pantallas_y_cliente.test.js",
   "test_subagente_c_d_sync_entrega_compuesta.test.js",
   "test_token_refresh_persistencia.test.js",
+  "test_subagente_b_websocket_banner.test.js",
   "test_flujo_completo_ruta_carga_cliente_historial.test.js",
 ];
 

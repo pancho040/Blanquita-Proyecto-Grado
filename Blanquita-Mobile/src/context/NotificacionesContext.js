@@ -10,7 +10,7 @@ import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
 import apiClient, { getTokenEnMemoria } from "../api/client";
 
-const NotificacionesContext = createContext(null);
+export const NotificacionesContext = createContext(null);
 
 export function NotificacionesProvider({ children, navigationRef }) {
   const { user, usuario, token } = useAuth();
@@ -374,8 +374,5 @@ export function NotificacionesProvider({ children, navigationRef }) {
 
 export function useNotificaciones() {
   const ctx = useContext(NotificacionesContext);
-  if (!ctx) {
-    throw new Error("useNotificaciones debe usarse dentro de NotificacionesProvider");
-  }
   return ctx;
 }
