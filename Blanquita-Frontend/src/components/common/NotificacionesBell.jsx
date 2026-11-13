@@ -320,23 +320,56 @@ export default function NotificacionesBell({
   };
 
   return (
-    <div className="relative" ref={contenedorRef}>
-      {/* Botón de Campana Limpio (Sin doble icono ni parpadeo) */}
+    <div
+      className="relative"
+      ref={contenedorRef}
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+    >
+      {/* Botón de Campana Blindado contra View Transitions de Astro */}
       <button
         type="button"
         onClick={() => setAbierto((prev) => !prev)}
         aria-label="Campana de notificaciones de logística"
         aria-expanded={abierto}
         title="Notificaciones en tiempo real"
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 hover:bg-white border border-white/40 transition-all duration-150 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-white/40"
+        className="rounded-xl bg-white/90 hover:bg-white border border-white/40 transition-all duration-150 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-white/40"
+        style={{
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "40px",
+          height: "40px",
+          flexShrink: 0,
+        }}
       >
-        <Bell className="w-5 h-5 shrink-0 text-slate-600" />
+        <Bell
+          className="text-slate-600"
+          style={{ width: "20px", height: "20px", flexShrink: 0, display: "block" }}
+        />
 
-        {/* Badge numérico estático visible en la esquina superior derecha */}
+        {/* Badge numérico blindado (solo si noLeidas > 0) */}
         {cantidadNoLeidas > 0 && (
           <span
-            className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center pointer-events-none"
-            style={{ lineHeight: 1 }}
+            style={{
+              position: "absolute",
+              top: "2px",
+              right: "2px",
+              transform: "translate(35%, -35%)",
+              minWidth: "18px",
+              height: "18px",
+              padding: "0 4px",
+              borderRadius: "9999px",
+              backgroundColor: "#dc2626",
+              color: "#ffffff",
+              fontSize: "10px",
+              fontWeight: 700,
+              lineHeight: "18px",
+              textAlign: "center",
+              pointerEvents: "none",
+              zIndex: 20,
+              boxShadow: "0 0 0 2px #ffffff",
+            }}
           >
             {cantidadNoLeidas > 99 ? "99+" : cantidadNoLeidas}
           </span>
