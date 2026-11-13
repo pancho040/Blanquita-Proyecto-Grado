@@ -29,7 +29,13 @@ export const ClientesApi = {
    * - PROGRAMAR_ENTREGA
    * - ENTREGA_INMEDIATA
    *
-   * @param {Object} payload - { datos_cliente, modalidad, dia_semana_programado, items_programados, parada_actual_orden, entrega_con_cobro }
+   * Soporta configuración de:
+   * - frecuencia_visita ('DIARIO' | 'CADA_2_DIAS' | 'SEMANAL' | 'FECHA_ESPECIFICA')
+   * - dias_semana (ej: ['LUNES', 'MIERCOLES', 'VIERNES'])
+   * - pedido_habitual (array de items programados)
+   * - fecha_primera_entrega (fecha puntual en formato YYYY-MM-DD)
+   *
+   * @param {Object} payload - { datos_cliente, modalidad, frecuencia_visita, dias_semana, pedido_habitual, fecha_primera_entrega, dia_semana_programado, items_programados, parada_actual_orden, entrega_con_cobro }
    * @param {string|null} idempotencyKey - UUIDv4 para garantizar no duplicación
    */
   async registrarClienteEnRuta(payload, idempotencyKey = null) {
@@ -38,31 +44,95 @@ export const ClientesApi = {
       headers["X-Idempotency-Key"] = idempotencyKey;
     }
 
+    // Normalizar payload asegurando compatibilidad en raíz y en datos_cliente
+    const frecuenciaVisita =
+      payload.frecuencia_visita ||
+      payload.datos_cliente?.frecuencia_visita ||
+      "SEMANAL";
+
+    const diasSemana = Array.isArray(payload.dias_semana)
+      ? payload.dias_semana
+      : Array.isArray(payload.datos_cliente?.dias_semana)
+      ? payload.datos_cliente.dias_semana
+      : [];
+
+    const pedidoHabitual = Array.isArray(payload.pedido_habitual)
+      ? payload.pedido_habitual
+      : Array.isArray(payload.items_programados)
+      ? payload.items_programados
+      : Array.isArray(payload.datos_cliente?.pedido_habitual)
+      ? payload.datos_cliente.pedido_habitual
+      : [];
+
+    const fechaPrimeraEntrega =
+      payload.fecha_primera_entrega ||
+      payload.datos_cliente?.fecha_primera_entrega ||
+      payload.fecha_especifica ||
+      null;
+
+    const payloadNormalizado = {
+      ...payload,
+      frecuencia_visita: frecuenciaVisita,
+      dias_semana: diasSemana,
+      pedido_habitual: pedidoHabitual,
+      fecha_primera_entrega: fechaPrimeraEntrega,
+      datos_cliente: {
+        ...payload.datos_cliente,
+        frecuencia_visita: frecuenciaVisita,
+        dias_semana: diasSemana,
+        pedido_habitual: pedidoHabitual,
+        fecha_primera_entrega: fechaPrimeraEntrega,
+      },
+    };
+
     try {
-      const response = await apiClient.post("/api/movil/v1/chofer/cliente-en-ruta", payload, { headers });
+      const response = await apiClient.post(
+        "/api/movil/v1/chofer/cliente-en-ruta",
+        payloadNormalizado,
+        { headers }
+      );
       return {
         success: true,
         data: response.data?.datos || response.data,
         codigo: response.data?.codigo || "EXITO",
-        mensaje: response.data?.mensaje || "Cliente en ruta registrado exitosamente",
+        mensaje:
+          response.data?.mensaje || "Cliente en ruta registrado exitosamente",
       };
     } catch (err) {
       // Fallback si el endpoint aún no está expuesto en backend
       if (err.response?.status === 404 || err.status === 404) {
         try {
           const fallbackPayload = {
-            razon_social: payload.datos_cliente?.razon_social || "Nuevo Cliente",
-            nombre_comercial: payload.datos_cliente?.nombre_comercial || payload.datos_cliente?.razon_social,
-            nit_ci: payload.datos_cliente?.ci_nit || payload.datos_cliente?.nit_ci || null,
-            telefono: payload.datos_cliente?.telefono || null,
-            direccion: payload.datos_cliente?.direccion || "Sin dirección",
-            zona: payload.datos_cliente?.zona || null,
-            tipo_negocio: payload.datos_cliente?.tipo_negocio || null,
-            observaciones: payload.datos_cliente?.observaciones || null,
-            latitud: payload.datos_cliente?.latitud || -19.0431,
-            longitud: payload.datos_cliente?.longitud || -65.2592,
+            razon_social:
+              payloadNormalizado.datos_cliente?.razon_social || "Nuevo Cliente",
+            nombre_comercial:
+              payloadNormalizado.datos_cliente?.nombre_comercial ||
+              payloadNormalizado.datos_cliente?.razon_social,
+            nombre_propietario:
+              payloadNormalizado.datos_cliente?.nombre_propietario || null,
+            nit_ci:
+              payloadNormalizado.datos_cliente?.ci_nit ||
+              payloadNormalizado.datos_cliente?.nit_ci ||
+              null,
+            telefono: payloadNormalizado.datos_cliente?.telefono || null,
+            direccion:
+              payloadNormalizado.datos_cliente?.direccion || "Sin dirección",
+            zona: payloadNormalizado.datos_cliente?.zona || null,
+            tipo_negocio: payloadNormalizado.datos_cliente?.tipo_negocio || null,
+            observaciones:
+              payloadNormalizado.datos_cliente?.observaciones || null,
+            latitud: payloadNormalizado.datos_cliente?.latitud || -19.0431,
+            longitud: payloadNormalizado.datos_cliente?.longitud || -65.2592,
+            frecuencia_visita: payloadNormalizado.frecuencia_visita,
+            dias_semana: payloadNormalizado.dias_semana,
+            pedido_habitual: payloadNormalizado.pedido_habitual,
+            fecha_primera_entrega: payloadNormalizado.fecha_primera_entrega,
           };
-          const fallback = await apiClient.post("/api/movil/v1/chofer/clientes", fallbackPayload, { headers });
+          const fallback = await apiClient.post(
+            "/api/movil/v1/chofer/clientes",
+            fallbackPayload,
+            { headers }
+          );
           return {
             success: true,
             data: fallback.data?.datos || fallback.data,
