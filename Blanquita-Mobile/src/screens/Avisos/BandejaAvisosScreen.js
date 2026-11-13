@@ -12,17 +12,14 @@ import { useNotificaciones } from "../../context/NotificacionesContext";
 import { Header } from "../../components/common/Header";
 import {
   BellOff,
-  CheckCircle2,
+  Truck,
+  PackageCheck,
+  AlertCircle,
   XCircle,
-  FileEdit,
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  Info,
-  MapPin,
-  RefreshCw,
-  ClipboardCheck,
+  RotateCw,
+  CheckSquare,
   Flag,
+  CheckCheck,
 } from "lucide-react-native";
 
 export const BandejaAvisosScreen = ({ navigation }) => {
@@ -32,6 +29,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
     cargando,
     refrescarNotificaciones,
     manejarPresionarAviso,
+    marcarTodasComoLeidas,
   } = useNotificaciones();
 
   const obtenerIconoYColorPorTipo = (tipo) => {
@@ -39,7 +37,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
     switch (tipoNorm) {
       case "RUTA_ASIGNADA":
         return {
-          icono: MapPin,
+          icono: Truck,
           color: "#0284C7",
           fondoBadge: "#F0F9FF",
           bordeBadge: "#BAE6FD",
@@ -47,7 +45,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         };
       case "CARGA_CAMION_APROBADA":
         return {
-          icono: CheckCircle2,
+          icono: PackageCheck,
           color: "#15803D",
           fondoBadge: "#F0FDF4",
           bordeBadge: "#86EFAC",
@@ -55,7 +53,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         };
       case "CARGA_CAMION_OBSERVADA":
         return {
-          icono: AlertTriangle,
+          icono: AlertCircle,
           color: "#B45309",
           fondoBadge: "#FFFBEB",
           bordeBadge: "#FDE68A",
@@ -71,7 +69,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         };
       case "RUTA_REORDENADA":
         return {
-          icono: RefreshCw,
+          icono: RotateCw,
           color: "#0E7490",
           fondoBadge: "#F0FDFA",
           bordeBadge: "#99F6E4",
@@ -79,8 +77,8 @@ export const BandejaAvisosScreen = ({ navigation }) => {
         };
       case "OPERACION_REVISADA":
         return {
-          icono: ClipboardCheck,
-          color: "#0E7490",
+          icono: CheckSquare,
+          color: "#0D9488",
           fondoBadge: "#F0FDFA",
           bordeBadge: "#99F6E4",
           etiqueta: "Operación Revisada",
@@ -93,63 +91,47 @@ export const BandejaAvisosScreen = ({ navigation }) => {
           bordeBadge: "#C7D2FE",
           etiqueta: "Ruta Finalizada",
         };
+      case "ABONO_QR_APROBADO":
       case "ABONO_APROBADO":
         return {
-          icono: CheckCircle2,
-          color: "#15803D",
+          icono: CheckSquare,
+          color: "#16A34A",
           fondoBadge: "#F0FDF4",
           bordeBadge: "#86EFAC",
           etiqueta: "Abono QR Aprobado",
         };
+      case "ABONO_QR_RECHAZADO":
       case "ABONO_RECHAZADO":
         return {
           icono: XCircle,
-          color: "#B91C1C",
+          color: "#DC2626",
           fondoBadge: "#FEF2F2",
           bordeBadge: "#FCA5A5",
           etiqueta: "Abono QR Observado",
         };
-      case "AJUSTE_NOTA":
+      case "TELEMETRIA_PING":
         return {
-          icono: FileEdit,
-          color: "#B45309",
-          fondoBadge: "#FFFBEB",
-          bordeBadge: "#FDE68A",
-          etiqueta: "Nota Modificada",
-        };
-      case "STOCK_ACTUALIZADO":
-      case "ALERTA_REVALORIZACION":
-        return {
-          icono: TrendingUp,
-          color: "#0369A1",
-          fondoBadge: "#F0F9FF",
-          bordeBadge: "#BAE6FD",
-          etiqueta: "Revalorización Stock",
-        };
-      case "RECORDATORIO_CIERRE":
-      case "FALTANTE_CIERRE":
-        return {
-          icono: AlertTriangle,
-          color: "#B45309",
-          fondoBadge: "#FFFBEB",
-          bordeBadge: "#FDE68A",
-          etiqueta: "Arqueo / Cierre",
-        };
-      case "CAMBIO_PRECIO":
-        return {
-          icono: Clock,
+          icono: Truck,
           color: "#4338CA",
           fondoBadge: "#EEF2FF",
           bordeBadge: "#C7D2FE",
-          etiqueta: "Precios Actualizados",
+          etiqueta: "Ubicación Solicitada",
+        };
+      case "AVISO_RUTA":
+        return {
+          icono: Truck,
+          color: "#0284C7",
+          fondoBadge: "#F0F9FF",
+          bordeBadge: "#BAE6FD",
+          etiqueta: "Aviso de Ruta",
         };
       default:
         return {
-          icono: Info,
-          color: Colors.primaryDark || "#0369A1",
-          fondoBadge: "#F0F9FF",
-          bordeBadge: "#BAE6FD",
-          etiqueta: tipo || "Aviso Oficial",
+          icono: AlertCircle,
+          color: "#475569",
+          fondoBadge: "#F1F5F9",
+          bordeBadge: "#CBD5E1",
+          etiqueta: "Aviso Operativo",
         };
     }
   };
@@ -208,6 +190,39 @@ export const BandejaAvisosScreen = ({ navigation }) => {
             : "Todos los avisos al día"
         }
       />
+
+      {notificaciones.length > 0 && (
+        <View style={styles.barraAcciones}>
+          <Text style={styles.contadorTexto}>
+            {notificaciones.length} {notificaciones.length === 1 ? "aviso registrado" : "avisos registrados"}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.botonMarcarTodas,
+              conteoNoLeidas === 0 && styles.botonMarcarTodasInactivo,
+            ]}
+            onPress={marcarTodasComoLeidas}
+            disabled={conteoNoLeidas === 0}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Marcar todas como leídas"
+          >
+            <CheckCheck
+              size={15}
+              color={conteoNoLeidas > 0 ? Colors.primaryDark || "#0369A1" : "#94A3B8"}
+            />
+            <Text
+              style={[
+                styles.botonMarcarTodasTexto,
+                conteoNoLeidas === 0 && styles.botonMarcarTodasTextoInactivo,
+              ]}
+            >
+              Marcar todas como leídas
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <FlatList
         data={notificaciones}
         keyExtractor={(item) => String(item.id || item.id_notificacion || Math.random())}
@@ -226,7 +241,7 @@ export const BandejaAvisosScreen = ({ navigation }) => {
             <BellOff size={40} color="#64748B" />
             <Text style={styles.emptyTitle}>Sin avisos pendientes</Text>
             <Text style={styles.emptySubtitle}>
-              Aquí se notificarán aprobaciones/rechazos de cobros QR, ajustes de notas de venta y avisos de revalorización.
+              Aquí se mostrarán las asignaciones de ruta, aprobaciones de carga y confirmaciones operativas asignadas a ti.
             </Text>
           </View>
         }
@@ -239,6 +254,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.backgroundDark,
+  },
+  barraAcciones: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  contadorTexto: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  botonMarcarTodas: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: Colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  botonMarcarTodasInactivo: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+  botonMarcarTodasTexto: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.primaryDark || "#0369A1",
+  },
+  botonMarcarTodasTextoInactivo: {
+    color: "#94A3B8",
   },
   listContent: {
     padding: 16,

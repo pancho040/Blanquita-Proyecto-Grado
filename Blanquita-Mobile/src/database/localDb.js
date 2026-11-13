@@ -391,9 +391,61 @@ export const LocalDB = {
     }
   },
 
+  // -------------------------------------------------------------
+  // NOTIFICACIONES AISLADAS POR USUARIO (SUBAGENTE B)
+  // Clave aislada: @blanquita_notificaciones_{usuarioId}
+  // -------------------------------------------------------------
+  async guardarNotificacionesLocales(usuarioId, notificaciones = []) {
+    try {
+      if (!usuarioId) return false;
+      const clave = `@blanquita_notificaciones_${usuarioId}`;
+      const payload = {
+        usuarioId,
+        items: Array.isArray(notificaciones) ? notificaciones : [],
+        ultimaActualizacion: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(clave, JSON.stringify(payload));
+      return true;
+    } catch (e) {
+      console.error("Error guardando notificaciones locales:", e);
+      return false;
+    }
+  },
+
+  async obtenerNotificacionesLocales(usuarioId) {
+    try {
+      if (!usuarioId) return [];
+      const clave = `@blanquita_notificaciones_${usuarioId}`;
+      const raw = await AsyncStorage.getItem(clave);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed?.items) ? parsed.items : [];
+    } catch (e) {
+      console.error("Error leyendo notificaciones locales:", e);
+      return [];
+    }
+  },
+
+  async limpiarNotificacionesLocales(usuarioId) {
+    try {
+      if (!usuarioId) return false;
+      const clave = `@blanquita_notificaciones_${usuarioId}`;
+      await AsyncStorage.removeItem(clave);
+      return true;
+    } catch (e) {
+      console.error("Error eliminando notificaciones locales:", e);
+      return false;
+    }
+  },
+
   // Limpiar toda la base local (excepto cola de sincronización si tuviera pendientes)
   async limpiarTodo() {
     try {
+      const sesion = await this.obtenerSesion();
+      const uid = sesion?.usuario?.IdUsuario || sesion?.usuario?.id_usuario;
+      if (uid) {
+        await this.limpiarNotificacionesLocales(uid);
+      }
       await this.limpiarSelloSolicitudCarga();
       await this.limpiarSelloCargaAprobada();
       await AsyncStorage.multiRemove([
