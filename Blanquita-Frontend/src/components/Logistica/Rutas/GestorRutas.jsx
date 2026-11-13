@@ -75,7 +75,7 @@ const OPCIONES_DIAS = Object.entries(DIAS_SEMANA).map(([num, nom]) => ({
 }));
 
 export default function GestorRutas({ usuario = null }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });
@@ -220,7 +220,7 @@ export default function GestorRutas({ usuario = null }) {
 
   const cargarDatos = useCallback(async (silencioso = false, forzar = false) => {
     try {
-      const sid = sucursal === "todas" ? null : sucursal;
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       if (!silencioso) setLoading(true);
 
       const [resZ, resR, resPv, resRep, resAsig] = await Promise.allSettled([
@@ -257,12 +257,12 @@ export default function GestorRutas({ usuario = null }) {
 
   const [wsConectado, setWsConectado] = useState(false);
 
-  // Carga reactiva al cambiar sucursal o fecha
+  // Carga reactiva al cambiar sucursal o fecha bloqueada si no está listoParaConsultar
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar) {
       cargarDatos(false, true);
     }
-  }, [sucursal, fechaFiltro, cargandoAlcance, cargarDatos]);
+  }, [sucursal, fechaFiltro, listoParaConsultar, cargarDatos]);
 
   // WebSocket en tiempo real + Escucha de 'blanquita:ws-event'
   useEffect(() => {

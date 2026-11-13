@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   ObtenerChoferesEnVivo,
   ObtenerTrackingAsignacion,
-  ObtenerWsTicketFlota,
   SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
@@ -41,7 +40,7 @@ function obtenerCentroSucursal(sucursalId) {
 }
 
 export default function RastreoChoferesGPS({ usuario = null }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });
@@ -51,12 +50,6 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const markersLayerRef = useRef(null);
   const routePolylineRef = useRef(null);
   const LRef = useRef(null);
-
-  // Referencias para conexión WebSocket
-  const wsRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
-  const reconnectAttemptsRef = useRef(0);
-  const heartbeatIntervalRef = useRef(null);
 
   // Estados de telemetría y datos
   const [choferes, setChoferes] = useState([]);
@@ -156,7 +149,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     try {
       telemetriaEnVueloRef.current = true;
       if (!silencioso) setCargando(true);
-      const sid = sucursal === "todas" ? null : sucursal;
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       const data = await ObtenerChoferesEnVivo(sid);
       setChoferes(data || []);
       setUltimaActualizacion(new Date());
@@ -174,7 +167,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const solicitarUbicacionGPS = async () => {
     try {
       setSolicitandoGps(true);
-      await SolicitarUbicacionActualChoferes(sucursal);
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
+      await SolicitarUbicacionActualChoferes(sid);
       toast.success("Solicitud de señal GPS enviada a los choferes");
       await cargarTelemetria(true);
     } catch (err) {
@@ -184,53 +178,88 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
   };
 
-  // Suscripción al WebSocket de Logística para actualización inmediata sin polling
+  // Suscripción al WebSocket de Logística (puerto 8000 via logisticaSocket) sin reconexiones huérfanas a puerto 4321
   useEffect(() => {
     logisticaSocket.conectar();
-    const desubicar = logisticaSocket.suscribir("ubicacion_chofer_actualizada", (datos) => {
+    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
+
+    const actualizarChoferDesdeWs = (datos) => {
       if (!datos) return;
+      const idChofer = Number(datos.id_chofer || datos.idUsuarioRepartidor || datos.IdUsuarioRepartidor);
+      if (!idChofer) return;
+
       setChoferes((prev) => {
-        const idx = prev.findIndex(
-          (c) => Number(c.IdUsuarioRepartidor) === Number(datos.id_chofer || datos.idUsuarioRepartidor)
-        );
+        const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
         if (idx === -1) return prev;
         const anterior = prev[idx];
-        const copia = [...prev];
-        copia[idx] = {
+
+        let nuevaLat = Number(datos.lat ?? datos.latitud ?? anterior.Latitud);
+        let nuevaLng = Number(datos.lng ?? datos.longitud ?? anterior.Longitud);
+
+        // Filtro de 25 metros de desplazamiento mínimo
+        if (anterior.Latitud && anterior.Longitud && !isNaN(nuevaLat) && !isNaN(nuevaLng)) {
+          const dLat = (nuevaLat - anterior.Latitud) * 111000;
+          const dLng = (nuevaLng - anterior.Longitud) * 111000 * Math.cos((anterior.Latitud * Math.PI) / 180);
+          const distMetros = Math.sqrt(dLat * dLat + dLng * dLng);
+          if (distMetros < 25) {
+            nuevaLat = anterior.Latitud;
+            nuevaLng = anterior.Longitud;
+          }
+        }
+
+        const choferActualizado = {
           ...anterior,
-          Latitud: Number(datos.lat || datos.latitud || anterior.Latitud),
-          Longitud: Number(datos.lng || datos.longitud || anterior.Longitud),
-          Velocidad: datos.velocidad ?? anterior.Velocidad,
-          Bateria: datos.bateria ?? anterior.Bateria,
+          Latitud: nuevaLat,
+          Longitud: nuevaLng,
+          VelocidadKmH: datos.velocidad ?? datos.VelocidadKmH ?? anterior.VelocidadKmH,
+          Velocidad: datos.velocidad ?? datos.Velocidad ?? anterior.Velocidad,
+          NivelBateria: datos.bateria ?? datos.NivelBateria ?? anterior.NivelBateria,
+          Bateria: datos.bateria ?? datos.Bateria ?? anterior.Bateria,
+          FechaHoraPing: datos.timestamp || new Date().toISOString(),
           EnLinea: true,
           conectado: true,
           SegundosDesdeUltimoReporte: 0,
         };
-        return copia;
+
+        const nuevoArr = [...prev];
+        nuevoArr[idx] = choferActualizado;
+        return nuevoArr;
       });
       setUltimaActualizacion(new Date());
+    };
+
+    const unsubUbicacion = logisticaSocket.suscribir("ubicacion_chofer_actualizada", actualizarChoferDesdeWs);
+    const unsubPosicion = logisticaSocket.suscribir("POSICION_CHOFER", actualizarChoferDesdeWs);
+    const unsubSnapshot = logisticaSocket.suscribir("SNAPSHOT_INICIAL", (datos) => {
+      if (datos && Array.isArray(datos.choferes)) {
+        setChoferes(datos.choferes);
+        setUltimaActualizacion(new Date());
+      }
     });
 
     const handleCustomWs = (e) => {
       const { tipo } = e.detail || {};
-      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping") {
+      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping" || tipo === "POSICION_CHOFER") {
         cargarTelemetria(true);
       }
     };
     window.addEventListener("blanquita:ws-event", handleCustomWs);
 
     return () => {
-      desubicar();
+      unsubEstado();
+      unsubUbicacion();
+      unsubPosicion();
+      unsubSnapshot();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
   }, [cargarTelemetria]);
 
-  // Carga inicial y por cambio de sucursal (sin polling constante que agota cuota)
+  // Carga inicial y reactiva bloqueada si no está listoParaConsultar
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar) {
       cargarTelemetria();
     }
-  }, [sucursal, cargandoAlcance, cargarTelemetria]);
+  }, [sucursal, listoParaConsultar, cargarTelemetria]);
 
   // Foco Dinámico del Mapa en Potosí ([-19.5836, -65.7531]) vs Sucre ([-19.0435, -65.2580])
   useEffect(() => {
@@ -260,135 +289,6 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }, 10000);
     return () => clearInterval(timer);
   }, [ultimaActualizacion]);
-
-  // 2. Conexión WebSocket en tiempo real con ticket efímero de un solo uso y Heartbeat (Render)
-  const conectarWebSocket = useCallback(async () => {
-    if (typeof window === "undefined") return;
-
-    try {
-      const dataTicket = await ObtenerWsTicketFlota();
-      const ticket = dataTicket?.ticket;
-      if (!ticket) {
-        setWsConectado(false);
-        return;
-      }
-
-      const host = window.location.host;
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${host}/ws/flota?ticket=${encodeURIComponent(ticket)}`;
-
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
-
-      socket.onopen = () => {
-        setWsConectado(true);
-        reconnectAttemptsRef.current = 0;
-
-        // Heartbeat ping cada 25 segundos para evitar cierre por proxies perimetrales de Render
-        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ tipo: "ping" }));
-          }
-        }, 25000);
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.tipo === "SNAPSHOT_INICIAL") {
-            if (Array.isArray(msg.choferes)) {
-              setChoferes(msg.choferes);
-              setUltimaActualizacion(new Date());
-            }
-          } else if (msg.tipo === "POSICION_CHOFER") {
-            setChoferes((prev) => {
-              const index = prev.findIndex(
-                (c) => Number(c.IdUsuarioRepartidor) === Number(msg.id_chofer)
-              );
-              if (index === -1) return prev;
-              const anterior = prev[index];
-
-              // Filtro de 25 metros de desplazamiento mínimo
-              let nuevaLat = Number(msg.lat);
-              let nuevaLng = Number(msg.lng);
-              if (anterior.Latitud && anterior.Longitud && nuevaLat && nuevaLng) {
-                const dLat = (nuevaLat - anterior.Latitud) * 111000;
-                const dLng = (nuevaLng - anterior.Longitud) * 111000 * Math.cos((anterior.Latitud * Math.PI) / 180);
-                const distMetros = Math.sqrt(dLat * dLat + dLng * dLng);
-                if (distMetros < 25) {
-                  nuevaLat = anterior.Latitud;
-                  nuevaLng = anterior.Longitud;
-                }
-              }
-
-              const choferActualizado = {
-                ...anterior,
-                Latitud: nuevaLat,
-                Longitud: nuevaLng,
-                VelocidadKmH: msg.velocidad,
-                NivelBateria: msg.bateria,
-                FechaHoraPing: msg.timestamp,
-                EnLinea: true,
-                conectado: true,
-              };
-
-              const nuevoArr = [...prev];
-              nuevoArr[index] = choferActualizado;
-              return nuevoArr;
-            });
-            setUltimaActualizacion(new Date());
-          }
-        } catch (err) {
-          // Ignorar mensajes no JSON
-        }
-      };
-
-      socket.onclose = () => {
-        setWsConectado(false);
-        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-
-        // Backoff exponencial para reconexión: min(1000 * 2^attempts, 30000)
-        const attempts = reconnectAttemptsRef.current;
-        const delay = Math.min(1000 * Math.pow(2, attempts), 30000);
-        reconnectAttemptsRef.current = attempts + 1;
-
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          conectarWebSocket();
-        }, delay);
-      };
-
-      socket.onerror = () => {
-        try {
-          socket.close();
-        } catch {}
-      };
-    } catch (err) {
-      setWsConectado(false);
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-      reconnectAttemptsRef.current += 1;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = setTimeout(() => {
-        conectarWebSocket();
-      }, delay);
-    }
-  }, []);
-
-  // Ciclo de vida del WebSocket: conexión única por pantalla y cierre limpio al desmontar
-  useEffect(() => {
-    conectarWebSocket();
-    return () => {
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {}
-        wsRef.current = null;
-      }
-    };
-  }, [conectarWebSocket]);
 
   // Modo ahorro de cuota: sin polling recurrente continuo. Actualización gobernada por WebSocket o botón manual.
 

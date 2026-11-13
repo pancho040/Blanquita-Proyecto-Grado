@@ -71,7 +71,7 @@ const FLOTA_VEHICULOS = [
 ];
 
 export default function TablaAsignaciones({ usuario = null, vistaInicial = "despachos" }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, nombreSucursalActual } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, nombreSucursalActual, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: false,
   });
@@ -201,7 +201,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const cargarAsignaciones = useCallback(async (silencioso = false) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = await ObtenerAsignaciones(fecha, null, sucursal);
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
+      const data = await ObtenerAsignaciones(fecha, null, sid);
       setAsignaciones(Array.isArray(data) ? data : (data?.items || []));
     } catch (err) {
       if (!silencioso) toast.error(err.message || "Error al cargar despachos");
@@ -217,10 +218,11 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   // Precargar catálogos en segundo plano
   const precargarCatalogos = useCallback(async () => {
     try {
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       const [r, rep, pv] = await Promise.all([
-        ObtenerRutas(null, sucursal),
-        ObtenerRepartidores(sucursal),
-        ObtenerTodosPuntosVenta(sucursal)
+        ObtenerRutas(null, sid),
+        ObtenerRepartidores(sid),
+        ObtenerTodosPuntosVenta(sid)
       ]);
       setRutas(Array.isArray(r) ? r : (r?.items || []));
       setRepartidores(Array.isArray(rep) ? rep : (rep?.items || []));
@@ -231,13 +233,13 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }
   }, [sucursal]);
 
-  // Precarga de catálogos y despachos al cambiar sucursal
+  // Precarga de catálogos y despachos al cambiar sucursal bloqueada si no está listoParaConsultar
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar) {
       precargarCatalogos();
       cargarAsignaciones();
     }
-  }, [sucursal, cargandoAlcance, precargarCatalogos, cargarAsignaciones]);
+  }, [sucursal, listoParaConsultar, precargarCatalogos, cargarAsignaciones]);
 
   // WebSocket en tiempo real: Cero Polling Innecesario (Plan Gratuito)
   useEffect(() => {

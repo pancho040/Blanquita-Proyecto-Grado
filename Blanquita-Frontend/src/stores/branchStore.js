@@ -112,10 +112,10 @@ export function inicializarAlcanceUsuario(usuario) {
   if (!usuario) return;
 
   const asignada =
-    usuario.IdSucursal != null
-      ? Number(usuario.IdSucursal)
-      : usuario.sucursal_defecto != null
+    usuario.sucursal_defecto != null
       ? Number(usuario.sucursal_defecto)
+      : usuario.IdSucursal != null
+      ? Number(usuario.IdSucursal)
       : usuario.id_sucursal != null
       ? Number(usuario.id_sucursal)
       : null;
@@ -142,59 +142,68 @@ export function inicializarAlcanceUsuario(usuario) {
       permitidas = [{ id: asignada, nombre: `Sucursal #${asignada}` }];
     }
   } else {
-    // Fallo cerrado: si no tiene sede asignada ni permisos, default a Sucre
-    permitidas = [SUCURSALES_CATALOGO[0]];
+    // Fallo cerrado: si no tiene sede asignada ni permisos, lista vacía
+    permitidas = [];
   }
 
-  // Resolver sucursal activa inicial respetando precedencia:
-  // 1. URL (?sucursal=) tiene prioridad absoluta.
-  // 2. sessionStorage (persiste por pestaña). Si apunta a sede no permitida, se ignora silenciosamente.
-  // 3. Fallback: sede asignada o primera permitida. Jamás asumir '1' si el usuario tiene sede fija Potosí.
-  const desdeUrl = obtenerParametroUrl();
-  const desdeStorage = obtenerSucursalSessionStorage();
-  let activa = "1";
+  // Resolver sucursal activa inicial respetando precedencia y alcance:
+  // Si puede_ver_todas === false: Fijar INMEDIATAMENTE a sucursal_defecto/asignada (ej. "2" Potosí).
+  // Jamás usar "1" como fallback en usuarios de sede fija.
+  let activa = null;
 
-  if (desdeUrl) {
-    if (desdeUrl === "todas") {
-      if (puedeVerTodas) {
+  if (!puedeVerTodas) {
+    const sedeFija = asignada ?? (permitidas[0]?.id != null ? Number(permitidas[0].id) : null);
+    if (sedeFija != null) {
+      activa = String(sedeFija);
+    } else {
+      activa = null;
+    }
+  } else {
+    // Usuario multisede (puede_ver_todas === true):
+    const desdeUrl = obtenerParametroUrl();
+    const desdeStorage = obtenerSucursalSessionStorage();
+
+    if (desdeUrl) {
+      if (desdeUrl === "todas") {
         activa = "todas";
+      } else if (permitidas.some((s) => String(s.id) === String(desdeUrl))) {
+        activa = String(desdeUrl);
       } else {
-        // Intento de forzar 'todas' en sede fija: revertir a su sede
-        activa = String(asignada || permitidas[0]?.id || 1);
+        activa = asignada ? String(asignada) : (permitidas[0]?.id != null ? String(permitidas[0].id) : "todas");
       }
-    } else if (permitidas.some((s) => String(s.id) === String(desdeUrl))) {
-      activa = String(desdeUrl);
+    } else if (desdeStorage) {
+      if (desdeStorage === "todas") {
+        activa = "todas";
+      } else if (permitidas.some((s) => String(s.id) === String(desdeStorage))) {
+        activa = String(desdeStorage);
+      } else {
+        activa = asignada ? String(asignada) : (permitidas[0]?.id != null ? String(permitidas[0].id) : "todas");
+      }
+    } else if (asignada && permitidas.some((s) => String(s.id) === String(asignada))) {
+      activa = String(asignada);
+    } else if (permitidas.length > 0) {
+      activa = String(permitidas[0].id);
     } else {
-      // Intento de forzar sede ajena no autorizada en URL: revertir
-      activa = String(asignada || permitidas[0]?.id || 1);
-    }
-  } else if (desdeStorage) {
-    if (desdeStorage === "todas" && puedeVerTodas) {
       activa = "todas";
-    } else if (desdeStorage !== "todas" && permitidas.some((s) => String(s.id) === String(desdeStorage))) {
-      activa = String(desdeStorage);
-    } else {
-      // Ignorar silenciosamente si no es permitida y adoptar sucursal válida
-      activa = String(asignada || permitidas[0]?.id || 1);
     }
-  } else if (asignada && (permitidas.length === 0 || permitidas.some((s) => String(s.id) === String(asignada)))) {
-    activa = String(asignada);
-  } else if (permitidas.length > 0) {
-    activa = String(permitidas[0].id);
-  } else if (puedeVerTodas) {
-    activa = "todas";
   }
+
+  const inicializado = activa != null;
 
   estado = {
     sucursalActiva: activa,
     sucursalesPermitidas: permitidas,
     puedeVerTodas,
     sucursalAsignada: asignada,
-    inicializado: true
+    inicializado
   };
 
-  guardarSucursalSessionStorage(activa);
-  sincronizarUrl(activa);
+  if (activa != null) {
+    guardarSucursalSessionStorage(activa);
+    sincronizarUrl(activa);
+  } else {
+    guardarSucursalSessionStorage(null);
+  }
   notificar();
 }
 
@@ -250,6 +259,12 @@ export async function refrescarAlcanceDesdeApi() {
       }
       if (data.id_usuario) {
         window.sessionStorage.setItem("blanquita_usuario_id", String(data.id_usuario));
+      }
+      if (data.puede_ver_todas === false) {
+        const sedeDefecto = data.sucursal_defecto ?? data.IdSucursal ?? data.id_sucursal;
+        if (sedeDefecto != null) {
+          guardarSucursalSessionStorage(String(sedeDefecto));
+        }
       }
       inicializarAlcanceUsuario(data);
       return data;
@@ -314,21 +329,22 @@ export function useBranch(usuarioInicial = null) {
   }
 
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const listoParaConsultar = Boolean(snap.inicializado && snap.sucursalActiva != null);
 
   return {
-    sucursalActiva: snap.sucursalActiva,
-    sucursalIdNumerico: (!snap.inicializado || snap.sucursalActiva === "todas" || snap.sucursalActiva == null) ? null : Number(snap.sucursalActiva),
+    sucursalActiva: listoParaConsultar ? snap.sucursalActiva : null,
+    sucursalIdNumerico: (!listoParaConsultar || snap.sucursalActiva === "todas" || snap.sucursalActiva == null) ? null : Number(snap.sucursalActiva),
     sucursalesPermitidas: snap.sucursalesPermitidas || [],
     puedeVerTodas: snap.puedeVerTodas,
     esMultisede: (snap.sucursalesPermitidas?.length || 0) > 1 || snap.puedeVerTodas,
     cambiarSucursal: cambiarSucursalActiva,
     sucursalAsignada: snap.sucursalAsignada,
     inicializado: snap.inicializado,
-    listoParaConsultar: Boolean(snap.inicializado),
+    listoParaConsultar,
     // Alias y compatibilidad para componentes
     sucursales: snap.sucursalesPermitidas || [],
-    cargando: !snap.inicializado,
-    cargandoAlcance: !snap.inicializado
+    cargando: !listoParaConsultar,
+    cargandoAlcance: !listoParaConsultar
   };
 }
 
@@ -343,17 +359,17 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
   }
 
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const listoParaConsultar = Boolean(snap.inicializado);
+  const listoParaConsultar = Boolean(snap.inicializado && snap.sucursalActiva != null);
 
   // Resolver sucursal efectiva para la pantalla
   let sucursalEfectiva = snap.sucursalActiva;
   if (!permiteTodas && sucursalEfectiva === "todas") {
-    sucursalEfectiva = String(snap.sucursalAsignada || (snap.sucursalesPermitidas[0]?.id ?? ""));
+    sucursalEfectiva = snap.sucursalAsignada != null ? String(snap.sucursalAsignada) : (snap.sucursalesPermitidas[0]?.id != null ? String(snap.sucursalesPermitidas[0].id) : null);
   }
 
-  // Si no está inicializado (esperando respuesta de /Usuario/mi-alcance),
-  // bloquear la asignación prematura a "1" para evitar 403 en Potosí
-  if (!listoParaConsultar && !sucursalEfectiva) {
+  // Si no está listoParaConsultar (esperando respuesta de /Usuario/mi-alcance),
+  // bloquear la asignación prematura a cualquier sede para evitar 403 en Potosí
+  if (!listoParaConsultar || !sucursalEfectiva) {
     sucursalEfectiva = null;
   }
 
@@ -377,7 +393,7 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
       : "Cargando sucursal...");
 
   return {
-    sucursal: sucursalEfectiva, // null mientras !listoParaConsultar si no está inicializado
+    sucursal: sucursalEfectiva, // null mientras !listoParaConsultar
     sucursalIdNumerico:
       !listoParaConsultar || sucursalEfectiva === "todas" || sucursalEfectiva == null
         ? null
@@ -390,8 +406,8 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     sucursalAsignada: snap.sucursalAsignada,
     // Propiedades adicionales esperadas por componentes
     sucursales,
-    cargando: !snap.inicializado,
-    cargandoAlcance: !snap.inicializado,
+    cargando: !listoParaConsultar,
+    cargandoAlcance: !listoParaConsultar,
     nombreSucursalActual
   };
 }

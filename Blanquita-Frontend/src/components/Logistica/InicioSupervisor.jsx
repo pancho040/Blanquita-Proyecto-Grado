@@ -35,7 +35,7 @@ import { ObtenerClientesSimple } from "@/services/Logistica/ClienteService";
 import AlertaSolicitudesCargaBanner from "./Reparto/AlertaSolicitudesCargaBanner";
 
 export default function InicioSupervisor({ usuario }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, listoParaConsultar } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });
@@ -60,7 +60,7 @@ export default function InicioSupervisor({ usuario }) {
 
     try {
       const hoyStr = new Date().toISOString().split("T")[0];
-      const sid = sucursal === "todas" ? null : sucursal;
+      const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
 
       const [asigRes, repartRes, zonasRes, rutasRes, clientesRes] = await Promise.all([
         ObtenerAsignaciones(hoyStr, null, sid).catch(() => []),
@@ -95,7 +95,7 @@ export default function InicioSupervisor({ usuario }) {
   }, []);
 
   useEffect(() => {
-    if (!cargandoAlcance) {
+    if (listoParaConsultar) {
       cargarLogistica();
     }
 
@@ -107,7 +107,7 @@ export default function InicioSupervisor({ usuario }) {
     return () => {
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
-  }, [sucursal, cargandoAlcance, cargarLogistica]);
+  }, [sucursal, listoParaConsultar, cargarLogistica]);
 
   const repartidoresEnRuta = repartidores.filter(
     (r) => r.Estado === "EN_RUTA" || r.IdEstadoRepartidor === 2
