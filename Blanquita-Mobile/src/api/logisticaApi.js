@@ -5,6 +5,8 @@ export const ESTADOS_RUTA = Object.freeze({
   SIN_RUTA: "SIN_RUTA",
   PENDIENTE_CARGA: "PENDIENTE_CARGA",
   CARGA_SOLICITADA: "CARGA_SOLICITADA",
+  CARGA_OBSERVADA: "CARGA_OBSERVADA",
+  CARGA_RECHAZADA: "CARGA_RECHAZADA",
   APROBADA_EN_RUTA: "APROBADA_EN_RUTA",
   FINALIZADA: "FINALIZADA",
 });
@@ -236,21 +238,47 @@ export const LogisticaApi = {
 
   // 10. Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
   async solicitarCargaCamion(
-    { id_asignacion, idAsignacion, usar_remanente = false, usarRemanente = false, observacion = "", items = [] } = {},
+    {
+      id_asignacion,
+      idAsignacion,
+      usar_remanente = false,
+      usarRemanente = false,
+      observacion = "",
+      items = [],
+      stock_remanente = [],
+      remanente_actual = [],
+    } = {},
     idempotencyKey = null
   ) {
     const headers = {};
     if (idempotencyKey) {
       headers["X-Idempotency-Key"] = idempotencyKey;
     }
+    const remanenteArray =
+      stock_remanente && stock_remanente.length > 0
+        ? stock_remanente
+        : remanente_actual && remanente_actual.length > 0
+        ? remanente_actual
+        : [];
+
     const payload = {
       id_asignacion: id_asignacion || idAsignacion,
       usar_remanente: Boolean(usar_remanente || usarRemanente),
       observacion: observacion || "",
       items: (items || []).map((it) => ({
         presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
-        cantidad_solicitada: Number(it.cantidad_solicitada || it.cantidad || 0),
+        cantidad_solicitada: Number(it.cantidad_solicitada ?? it.cantidad ?? 0),
         nombre_producto: it.nombre_producto || it.nombre || undefined,
+      })),
+      stock_remanente: remanenteArray.map((it) => ({
+        presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
+        nombre: it.nombre_producto || it.nombre || `Producto #${it.presentacion_id || it.id}`,
+        cantidad_remanente: Number(it.cantidad_remanente ?? it.saldo_camion ?? it.stock_camion ?? it.cantidad ?? 0),
+      })),
+      remanente_actual: remanenteArray.map((it) => ({
+        presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
+        nombre: it.nombre_producto || it.nombre || `Producto #${it.presentacion_id || it.id}`,
+        cantidad_remanente: Number(it.cantidad_remanente ?? it.saldo_camion ?? it.stock_camion ?? it.cantidad ?? 0),
       })),
     };
     try {

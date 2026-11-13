@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   RotateCw,
   AlertCircle,
+  AlertTriangle,
   Gift,
   DollarSign,
   CheckCircle2,
@@ -40,10 +41,14 @@ export const MiInventarioScreen = () => {
     estadoRuta,
     estadoOperativo: estadoOpCtx,
     selloCarga,
+    motivoObservacionCarga,
+    motivoRechazoCarga,
     cargarRutaDelDia,
   } = rutaCtx;
   const estadoOperativo = estadoOpCtx || estadoRuta;
   const esCargaSolicitada = estadoOperativo === 'CARGA_SOLICITADA';
+  const esCargaObservada = estadoOperativo === 'CARGA_OBSERVADA';
+  const esCargaRechazada = estadoOperativo === 'CARGA_RECHAZADA';
 
   const [inventario, setInventario] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -354,7 +359,7 @@ export const MiInventarioScreen = () => {
                     <View style={styles.badgeSolicitudEnviadaInv}>
                       <CheckCircle2 size={16} color="#059669" />
                       <Text style={styles.badgeSolicitudTextoInv}>
-                        ✓ Solicitud enviada — Esperando aprobación en Web
+                        Solicitud enviada — Esperando aprobación en Web
                       </Text>
                     </View>
 
@@ -411,11 +416,55 @@ export const MiInventarioScreen = () => {
                       <Text style={styles.btnActualizarEstadoTexto}>Actualizar estado</Text>
                     </TouchableOpacity>
                   </View>
+                ) : esCargaObservada ? (
+                  <View style={styles.bannerObservadaInv}>
+                    <View style={styles.badgeObservadaInv}>
+                      <AlertTriangle size={16} color="#B45309" />
+                      <Text style={styles.badgeObservadaTextoInv}>
+                        Solicitud Observada por Almacén
+                      </Text>
+                    </View>
+
+                    <Text style={styles.motivoObservadaTextoInv}>
+                      "{motivoObservacionCarga || asignacionActiva?.motivo_observacion || 'La solicitud presenta observaciones en las cantidades.'}"
+                    </Text>
+
+                    <Button
+                      title="Corregir y Reenviar Solicitud de Carga"
+                      icon={Package}
+                      variant="primary"
+                      size="md"
+                      onPress={() => setModalCargaVisible(true)}
+                      style={{ marginTop: 8 }}
+                    />
+                  </View>
+                ) : esCargaRechazada ? (
+                  <View style={styles.bannerRechazadaInv}>
+                    <View style={styles.badgeRechazadaInv}>
+                      <AlertCircle size={16} color="#DC2626" />
+                      <Text style={styles.badgeRechazadaTextoInv}>
+                        Solicitud de Carga Rechazada
+                      </Text>
+                    </View>
+
+                    <Text style={styles.motivoRechazadaTextoInv}>
+                      "{motivoRechazoCarga || asignacionActiva?.motivo_rechazo || 'La solicitud fue rechazada por el supervisor de almacén.'}"
+                    </Text>
+
+                    <Button
+                      title="Nueva Solicitud de Carga"
+                      icon={Package}
+                      variant="primary"
+                      size="md"
+                      onPress={() => setModalCargaVisible(true)}
+                      style={{ marginTop: 8 }}
+                    />
+                  </View>
                 ) : estadoOperativo === 'APROBADA_EN_RUTA' ? (
                   <View style={styles.bannerRutaAprobadaInv}>
                     <ShieldCheck size={16} color="#16A34A" />
                     <Text style={styles.bannerRutaAprobadaTexto}>
-                      ✓ Inventario habilitado para repartos y cobranzas
+                      Inventario habilitado para repartos y cobranzas
                     </Text>
                   </View>
                 ) : (
@@ -440,6 +489,8 @@ export const MiInventarioScreen = () => {
         onClose={() => setModalCargaVisible(false)}
         idAsignacion={asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || 1}
         inventarioRemanente={items}
+        motivoObservacion={motivoObservacionCarga || asignacionActiva?.motivo_observacion}
+        motivoRechazo={motivoRechazoCarga || asignacionActiva?.motivo_rechazo}
         onSolicitudExitosa={() => {
           cargarDatos(true);
         }}
@@ -861,5 +912,55 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     flex: 1,
+  },
+  // Estilos de Carga Observada en Mi Inventario
+  bannerObservadaInv: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    padding: 14,
+    gap: 8,
+  },
+  badgeObservadaInv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  badgeObservadaTextoInv: {
+    color: '#FBBF24',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  motivoObservadaTextoInv: {
+    color: '#FDE68A',
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+  // Estilos de Carga Rechazada en Mi Inventario
+  bannerRechazadaInv: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    padding: 14,
+    gap: 8,
+  },
+  badgeRechazadaInv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  badgeRechazadaTextoInv: {
+    color: '#F87171',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  motivoRechazadaTextoInv: {
+    color: '#FECACA',
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 16,
   },
 });

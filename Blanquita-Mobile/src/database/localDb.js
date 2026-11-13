@@ -334,10 +334,68 @@ export const LocalDB = {
     }
   },
 
+  // -------------------------------------------------------------
+  // SELLO LOCAL DE CARGA APROBADA (SUBAGENTE A - BLINDAJE RUTA APROBADA)
+  // -------------------------------------------------------------
+  async guardarSelloCargaAprobada(idAsignacion, datosAprobacion = {}) {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const clave = `@blanquita_sello_carga_aprobada_${idAsignacion || "activa"}`;
+      const payload = {
+        idAsignacion: idAsignacion || "activa",
+        estado_operativo: "APROBADA_EN_RUTA",
+        fecha_aprobacion: datosAprobacion?.fecha_aprobacion || new Date().toISOString(),
+        fecha_dia: hoy,
+        datos: datosAprobacion || {},
+      };
+      await AsyncStorage.setItem(clave, JSON.stringify(payload));
+      return payload;
+    } catch (e) {
+      console.error("Error guardando sello de carga aprobada local:", e);
+      return null;
+    }
+  },
+
+  async obtenerSelloCargaAprobada(idAsignacion) {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      let clave = `@blanquita_sello_carga_aprobada_${idAsignacion || "activa"}`;
+      let raw = await AsyncStorage.getItem(clave);
+      if (!raw && idAsignacion && idAsignacion !== "activa") {
+        clave = "@blanquita_sello_carga_aprobada_activa";
+        raw = await AsyncStorage.getItem(clave);
+      }
+      if (!raw) return null;
+      const sello = JSON.parse(raw);
+      if (sello.fecha_dia && sello.fecha_dia !== hoy) {
+        await AsyncStorage.removeItem(clave);
+        return null;
+      }
+      return sello;
+    } catch (e) {
+      console.error("Error leyendo sello de carga aprobada local:", e);
+      return null;
+    }
+  },
+
+  async limpiarSelloCargaAprobada(idAsignacion) {
+    try {
+      if (idAsignacion && idAsignacion !== "activa") {
+        await AsyncStorage.removeItem(`@blanquita_sello_carga_aprobada_${idAsignacion}`);
+      }
+      await AsyncStorage.removeItem("@blanquita_sello_carga_aprobada_activa");
+      return true;
+    } catch (e) {
+      console.error("Error eliminando sello de carga aprobada local:", e);
+      return false;
+    }
+  },
+
   // Limpiar toda la base local (excepto cola de sincronización si tuviera pendientes)
   async limpiarTodo() {
     try {
       await this.limpiarSelloSolicitudCarga();
+      await this.limpiarSelloCargaAprobada();
       await AsyncStorage.multiRemove([
         CONFIG.SYNC.CLAVE_STORAGE_SESION,
         CONFIG.SYNC.CLAVE_STORAGE_RUTA,

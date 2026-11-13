@@ -22,6 +22,7 @@ import { SolicitarCargaModal } from '../Inventario/SolicitarCargaModal';
 import {
   RotateCw,
   AlertCircle,
+  AlertTriangle,
   List,
   Map as MapIcon,
   CheckCircle2,
@@ -43,6 +44,8 @@ export const HojaRutaScreen = ({ navigation }) => {
     estadoRuta,
     asignacionActiva,
     selloCarga,
+    motivoObservacionCarga,
+    motivoRechazoCarga,
   } = useRuta();
 
   const [vista, setVista] = useState('mapa'); // 'mapa' | 'lista'
@@ -51,12 +54,15 @@ export const HojaRutaScreen = ({ navigation }) => {
   const [inventarioRemanente, setInventarioRemanente] = useState([]);
   const [totalRemanenteBultos, setTotalRemanenteBultos] = useState(0);
 
-  // Determinar estado efectivo del gatekeeper
+  // Determinar estado efectivo del gatekeeper con protección de ruta aprobada
   const estadoActual = useMemo(() => {
     if (estadoRuta) return estadoRuta;
-    if (hojaRuta?.paradas && hojaRuta.paradas.length > 0) return ESTADOS_RUTA?.APROBADA_EN_RUTA || 'APROBADA_EN_RUTA';
+    if (asignacionActiva?.estado_flujo) return asignacionActiva.estado_flujo;
+    if (hojaRuta?.paradas && hojaRuta.paradas.length > 0) {
+      return ESTADOS_RUTA?.APROBADA_EN_RUTA || 'APROBADA_EN_RUTA';
+    }
     return ESTADOS_RUTA?.SIN_RUTA || 'SIN_RUTA';
-  }, [estadoRuta, hojaRuta]);
+  }, [estadoRuta, asignacionActiva, hojaRuta]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -88,9 +94,13 @@ export const HojaRutaScreen = ({ navigation }) => {
     };
   }, [estadoActual]);
 
+  // Mapeo defensivo de paradas: jamás ocultarlas si la ruta está activa/aprobada
   const paradasList = useMemo(() => {
-    return hojaRuta?.paradas || [];
-  }, [hojaRuta]);
+    if (hojaRuta?.paradas && hojaRuta.paradas.length > 0) {
+      return hojaRuta.paradas;
+    }
+    return asignacionActiva?.paradas || asignacionActiva?.Paradas || [];
+  }, [hojaRuta, asignacionActiva]);
 
   const totalFacturadoRuta = useMemo(() => {
     return paradasList.reduce((sum, p) => sum + Number(p.pedido?.monto_total || 0), 0);
@@ -214,7 +224,7 @@ export const HojaRutaScreen = ({ navigation }) => {
             <View style={styles.badgeSolicitudEnviada}>
               <CheckCircle2 size={18} color="#059669" />
               <Text style={styles.badgeSolicitudTexto}>
-                ✓ Solicitud enviada — Esperando aprobación en Web
+                Solicitud enviada — Esperando aprobación en Web
               </Text>
             </View>
 
@@ -291,6 +301,98 @@ export const HojaRutaScreen = ({ navigation }) => {
                 onPress={onRefresh}
                 loading={refreshing}
                 style={styles.btnActualizarPequeno}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* CASO: ESTADO CARGA_OBSERVADA */}
+      {estadoActual === (ESTADOS_RUTA?.CARGA_OBSERVADA || 'CARGA_OBSERVADA') && (
+        <View style={styles.stateContainerPadding}>
+          <View style={styles.observadaCard}>
+            <View style={styles.badgeObservada}>
+              <AlertTriangle size={18} color="#92400E" />
+              <Text style={styles.badgeObservadaTexto}>
+                Solicitud Observada por Almacén
+              </Text>
+            </View>
+
+            <View style={styles.motivoObservadaBox}>
+              <Text style={styles.motivoObservadaTitulo}>Observación del Supervisor:</Text>
+              <Text style={styles.motivoObservadaTexto}>
+                "{motivoObservacionCarga || asignacionActiva?.motivo_observacion || 'La solicitud presenta observaciones en las cantidades.'}"
+              </Text>
+            </View>
+
+            <Text style={styles.observadaExplicacion}>
+              Tu solicitud requiere corrección antes de ser aprobada. Presiona el botón para ajustar las cantidades y reenviarla.
+            </Text>
+
+            <Button
+              title="Corregir y Reenviar Solicitud de Carga"
+              icon={Package}
+              variant="primary"
+              size="lg"
+              onPress={() => setModalCargaVisible(true)}
+              style={{ marginTop: 14 }}
+            />
+
+            <View style={styles.btnActualizarContainer}>
+              <Button
+                title="Actualizar estado"
+                icon={RotateCw}
+                variant="outline"
+                size="sm"
+                onPress={onRefresh}
+                loading={refreshing}
+                style={[styles.btnActualizarPequeno, { marginTop: 10 }]}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* CASO: ESTADO CARGA_RECHAZADA */}
+      {estadoActual === (ESTADOS_RUTA?.CARGA_RECHAZADA || 'CARGA_RECHAZADA') && (
+        <View style={styles.stateContainerPadding}>
+          <View style={styles.rechazadaCard}>
+            <View style={styles.badgeRechazada}>
+              <AlertCircle size={18} color="#991B1B" />
+              <Text style={styles.badgeRechazadaTexto}>
+                Solicitud de Carga Rechazada
+              </Text>
+            </View>
+
+            <View style={styles.motivoRechazadaBox}>
+              <Text style={styles.motivoRechazadaTitulo}>Motivo del Rechazo:</Text>
+              <Text style={styles.motivoRechazadaTexto}>
+                "{motivoRechazoCarga || asignacionActiva?.motivo_rechazo || 'La solicitud fue rechazada por el supervisor de almacén.'}"
+              </Text>
+            </View>
+
+            <Text style={styles.rechazadaExplicacion}>
+              El supervisor de almacén rechazó tu solicitud anterior. Debes generar una nueva solicitud de carga para iniciar la ruta.
+            </Text>
+
+            <Button
+              title="Nueva Solicitud de Carga"
+              icon={Package}
+              variant="primary"
+              size="lg"
+              onPress={() => setModalCargaVisible(true)}
+              style={{ marginTop: 14 }}
+            />
+
+            <View style={styles.btnActualizarContainer}>
+              <Button
+                title="Actualizar estado"
+                icon={RotateCw}
+                variant="outline"
+                size="sm"
+                onPress={onRefresh}
+                loading={refreshing}
+                style={[styles.btnActualizarPequeno, { marginTop: 10 }]}
               />
             </View>
           </View>
@@ -420,6 +522,8 @@ export const HojaRutaScreen = ({ navigation }) => {
         onClose={() => setModalCargaVisible(false)}
         idAsignacion={asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || 1}
         inventarioRemanente={inventarioRemanente}
+        motivoObservacion={motivoObservacionCarga || asignacionActiva?.motivo_observacion}
+        motivoRechazo={motivoRechazoCarga || asignacionActiva?.motivo_rechazo}
         onSolicitudExitosa={() => {
           onRefresh();
         }}
@@ -772,6 +876,120 @@ const styles = StyleSheet.create({
   },
   btnActualizarPequeno: {
     minWidth: 150,
+  },
+  // Estilos de Solicitud Observada
+  observadaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  badgeObservada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    marginBottom: 12,
+  },
+  badgeObservadaTexto: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400E',
+    flex: 1,
+  },
+  motivoObservadaBox: {
+    backgroundColor: '#FFFBEB',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  motivoObservadaTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  motivoObservadaTexto: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#78350F',
+    fontStyle: 'italic',
+  },
+  observadaExplicacion: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  // Estilos de Solicitud Rechazada
+  rechazadaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  badgeRechazada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    marginBottom: 12,
+  },
+  badgeRechazadaTexto: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+    flex: 1,
+  },
+  motivoRechazadaBox: {
+    backgroundColor: '#FEF2F2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#DC2626',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  motivoRechazadaTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginBottom: 2,
+  },
+  motivoRechazadaTexto: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7F1D1D',
+    fontStyle: 'italic',
+  },
+  rechazadaExplicacion: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 8,
   },
 });
 

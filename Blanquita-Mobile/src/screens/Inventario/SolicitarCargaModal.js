@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Button } from '../../components/common/Button';
@@ -23,6 +22,7 @@ import {
   CheckCircle2,
   X,
   AlertCircle,
+  AlertTriangle,
   Boxes,
 } from 'lucide-react-native';
 
@@ -30,23 +30,90 @@ export const SolicitarCargaModal = ({
   visible,
   onClose,
   idAsignacion,
-  inventarioRemanente = [],
+  inventarioRemanente: propRemanente = [],
+  motivoObservacion: propMotivoObs = null,
+  motivoRechazo: propMotivoRechazo = null,
   onSolicitudExitosa,
 }) => {
   const rutaCtx = useRuta?.() || {};
-  const { solicitarCargaCamion, estadoRuta, estadoOperativo: estadoOpCtx } = rutaCtx;
+  const {
+    solicitarCargaCamion,
+    estadoRuta,
+    estadoOperativo: estadoOpCtx,
+    selloCarga,
+    motivoObservacionCarga,
+    motivoRechazoCarga,
+  } = rutaCtx;
   const estadoOperativo = estadoOpCtx || estadoRuta;
+
+  const motivoObservacionEfectivo = propMotivoObs || motivoObservacionCarga;
+  const motivoRechazoEfectivo = propMotivoRechazo || motivoRechazoCarga;
+  const esObservada = estadoOperativo === 'CARGA_OBSERVADA' || Boolean(motivoObservacionEfectivo);
+  const esRechazada = estadoOperativo === 'CARGA_RECHAZADA' || Boolean(motivoRechazoEfectivo);
 
   const [usarRemanente, setUsarRemanente] = useState(false);
   const [cantidades, setCantidades] = useState({});
   const [observacion, setObservacion] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [remanenteCargado, setRemanenteCargado] = useState(propRemanente || []);
+
+  // Pre-cargar inventario remanente desde API o LocalDB si no viene en props
+  useEffect(() => {
+    let activo = true;
+    async function cargarRemanente() {
+      if (propRemanente && propRemanente.length > 0) {
+        setRemanenteCargado(propRemanente);
+        return;
+      }
+      try {
+        const invApi = await LogisticaApi.obtenerMiInventarioCamion();
+        if (activo && invApi && invApi.items && invApi.items.length > 0) {
+          setRemanenteCargado(invApi.items);
+          return;
+        }
+      } catch (_e) {}
+
+      try {
+        const invLocal = await LocalDB.obtenerInventarioCamion();
+        if (activo && invLocal && invLocal.items && invLocal.items.length > 0) {
+          setRemanenteCargado(invLocal.items);
+        }
+      } catch (_e) {}
+    }
+
+    if (visible) {
+      cargarRemanente();
+    }
+    return () => {
+      activo = false;
+    };
+  }, [visible, propRemanente]);
+
+  // Si está observada o se abre con un sello previo, pre-llenar cantidades e indicar estado
+  useEffect(() => {
+    if (visible && selloCarga) {
+      if (selloCarga.usar_remanente) {
+        setUsarRemanente(true);
+      }
+      if (selloCarga.items_solicitados && selloCarga.items_solicitados.length > 0) {
+        const inicial = {};
+        selloCarga.items_solicitados.forEach((it) => {
+          const id = it.presentacion_id || it.IdPresentacion || it.id;
+          inicial[id] = Number(it.cantidad_solicitada || it.cantidad || 0);
+        });
+        setCantidades(inicial);
+      }
+      if (selloCarga.observacion && !observacion) {
+        setObservacion(selloCarga.observacion);
+      }
+    }
+  }, [visible, selloCarga]);
 
   // Lista de presentaciones disponibles (del remanente o catálogo base si remanente está vacío)
   const itemsDisponibles = useMemo(() => {
-    if (inventarioRemanente && inventarioRemanente.length > 0) {
-      return inventarioRemanente.map((it) => ({
+    if (remanenteCargado && remanenteCargado.length > 0) {
+      return remanenteCargado.map((it) => ({
         presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
         nombre: it.nombre_producto || it.nombre_presentacion || 'Producto',
         remanente: Number(it.cantidad_remanente || it.saldo_camion || it.stock_camion || 0),
@@ -59,7 +126,7 @@ export const SolicitarCargaModal = ({
       { presentacion_id: 2, nombre: 'Higiénico Blanquita Plus Doble Hoja (Fardo x 24)', remanente: 0, codigo: 'HIG-DHO-24' },
       { presentacion_id: 3, nombre: 'Servilleta Blanquita Mesa 100u (Caja x 20)', remanente: 0, codigo: 'SRV-MES-100' },
     ];
-  }, [inventarioRemanente]);
+  }, [remanenteCargado]);
 
   const modificarCantidad = (id, delta) => {
     setCantidades((prev) => {
@@ -84,7 +151,8 @@ export const SolicitarCargaModal = ({
   const handleEnviar = async () => {
     setErrorMsg(null);
 
-    if (estadoOperativo === 'CARGA_SOLICITADA') {
+    // Si ya está solicitada y NO es una corrección de observada ni rechazada, bloquear
+    if (estadoOperativo === 'CARGA_SOLICITADA' && !esObservada && !esRechazada) {
       setErrorMsg('Ya existe una solicitud de carga enviada a Administración pendiente de aprobación.');
       return;
     }
@@ -110,12 +178,21 @@ export const SolicitarCargaModal = ({
           };
         });
 
+      // Desglose completo del stock remanente a bordo
+      const remanenteArray = itemsDisponibles.map((it) => ({
+        presentacion_id: Number(it.presentacion_id),
+        nombre: it.nombre,
+        cantidad_remanente: Number(it.remanente || 0),
+      }));
+
       const payload = {
         id_asignacion: idAsignacion || 1,
         usar_remanente: usarRemanente,
         usarRemanente,
         observacion: observacion.trim(),
         items: itemsPayload,
+        stock_remanente: remanenteArray,
+        remanente_actual: remanenteArray,
       };
 
       let res;
@@ -129,6 +206,7 @@ export const SolicitarCargaModal = ({
           items_solicitados: itemsPayload,
           usar_remanente: usarRemanente,
           observacion: payload.observacion,
+          stock_remanente: remanenteArray,
         });
         res = await LogisticaApi.solicitarCargaCamion(payload);
       }
@@ -137,7 +215,7 @@ export const SolicitarCargaModal = ({
         onClose();
         if (onSolicitudExitosa) onSolicitudExitosa(res.data || payload);
         Alert.alert(
-          '✓ Solicitud de carga enviada a Administración',
+          'Solicitud de carga enviada a Administración',
           'Tu solicitud ha sido remitida con éxito. Espera la confirmación del encargado para iniciar tu ruta de reparto.',
           [{ text: 'Entendido' }]
         );
@@ -165,7 +243,13 @@ export const SolicitarCargaModal = ({
             <View style={styles.headerTitleBox}>
               <Truck size={22} color={Colors.primary} />
               <View>
-                <Text style={styles.titulo}>Solicitar Carga a Almacén</Text>
+                <Text style={styles.titulo}>
+                  {esObservada
+                    ? 'Corregir Solicitud de Carga'
+                    : esRechazada
+                    ? 'Nueva Solicitud de Carga'
+                    : 'Solicitar Carga a Almacén'}
+                </Text>
                 <Text style={styles.subtitulo}>Habilitación de inventario para ruta</Text>
               </View>
             </View>
@@ -181,7 +265,35 @@ export const SolicitarCargaModal = ({
             </View>
           )}
 
-          {estadoOperativo === 'CARGA_SOLICITADA' && (
+          {/* Banner de Observación del Supervisor */}
+          {esObservada && motivoObservacionEfectivo && (
+            <View style={styles.observadaBox}>
+              <AlertTriangle size={18} color="#B45309" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.observadaTitulo}>Solicitud Observada por Almacén:</Text>
+                <Text style={styles.observadaTexto}>"{motivoObservacionEfectivo}"</Text>
+                <Text style={styles.observadaInstruccion}>
+                  Ajusta las cantidades solicitadas o aclara en las observaciones y reenvía.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Banner de Rechazo del Supervisor */}
+          {esRechazada && motivoRechazoEfectivo && (
+            <View style={styles.rechazadaBox}>
+              <AlertCircle size={18} color="#DC2626" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rechazadaTitulo}>Solicitud Previa Rechazada:</Text>
+                <Text style={styles.rechazadaTexto}>"{motivoRechazoEfectivo}"</Text>
+                <Text style={styles.rechazadaInstruccion}>
+                  Genera una nueva solicitud con las cantidades correctas.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {estadoOperativo === 'CARGA_SOLICITADA' && !esObservada && !esRechazada && (
             <View style={styles.alertaYaEnviadaBox}>
               <CheckCircle2 size={16} color="#059669" />
               <Text style={styles.alertaYaEnviadaTexto}>
@@ -321,6 +433,10 @@ export const SolicitarCargaModal = ({
               title={
                 enviando
                   ? 'Enviando...'
+                  : esObservada
+                  ? 'Corregir y Reenviar'
+                  : esRechazada
+                  ? 'Enviar Nueva Solicitud'
                   : estadoOperativo === 'CARGA_SOLICITADA'
                   ? 'Solicitud ya enviada'
                   : 'Enviar Solicitud'
@@ -332,7 +448,7 @@ export const SolicitarCargaModal = ({
               loading={enviando}
               disabled={
                 enviando ||
-                estadoOperativo === 'CARGA_SOLICITADA' ||
+                (estadoOperativo === 'CARGA_SOLICITADA' && !esObservada && !esRechazada) ||
                 (!usarRemanente && totalBultosSolicitados <= 0)
               }
               style={{ flex: 1.5 }}
@@ -343,6 +459,279 @@ export const SolicitarCargaModal = ({
     </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+    padding: 16,
+    paddingBottom: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  headerTitleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  titulo: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  subtitulo: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  scrollBody: {
+    marginVertical: 12,
+    maxHeight: 460,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#991B1B',
+    flex: 1,
+  },
+  observadaBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    gap: 10,
+  },
+  observadaTitulo: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  observadaTexto: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78350F',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  observadaInstruccion: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 4,
+  },
+  rechazadaBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    gap: 10,
+  },
+  rechazadaTitulo: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  rechazadaTexto: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7F1D1D',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  rechazadaInstruccion: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 4,
+  },
+  alertaYaEnviadaBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#059669',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    gap: 8,
+  },
+  alertaYaEnviadaTexto: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
+    flex: 1,
+  },
+  remanenteCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+  },
+  remanenteCardActivo: {
+    borderColor: '#0284C7',
+    backgroundColor: 'rgba(2, 132, 199, 0.05)',
+  },
+  remanenteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  remanenteTitulo: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  remanenteDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkCircleActivo: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  seccionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 8,
+  },
+  seccionTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    textTransform: 'uppercase',
+  },
+  itemRow: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemNombre: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  itemRemanente: {
+    fontSize: 11,
+    color: '#0284C7',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  contadorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  btnStep: {
+    width: 32,
+    height: 34,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnStepDisabled: {
+    opacity: 0.4,
+  },
+  inputCantidadContainer: {
+    marginVertical: 0,
+    width: 44,
+  },
+  inputCantidad: {
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+    paddingHorizontal: 0,
+    height: 34,
+    minHeight: 34,
+  },
+  resumenBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  resumenTexto: {
+    fontSize: 12.5,
+    color: '#334155',
+  },
+  resumenNegrita: {
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  resumenSub: {
+    fontSize: 11,
+    color: '#0284C7',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+});
+
+export default SolicitarCargaModal;
 
 const styles = StyleSheet.create({
   overlay: {

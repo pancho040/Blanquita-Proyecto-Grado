@@ -12,9 +12,9 @@ export { ESTADOS_RUTA };
 
 /**
  * Determina el estado del flujo de ruta del chofer:
- * SIN_RUTA, PENDIENTE_CARGA, CARGA_SOLICITADA, APROBADA_EN_RUTA, FINALIZADA
+ * SIN_RUTA, PENDIENTE_CARGA, CARGA_SOLICITADA, CARGA_OBSERVADA, CARGA_RECHAZADA, APROBADA_EN_RUTA, FINALIZADA
  */
-export function determinarEstadoRuta(ruta, selloLocal = null) {
+export function determinarEstadoRuta(ruta, selloLocal = null, selloAprobado = null) {
   if (!ruta || (!ruta.IdAsignacion && !ruta.IdAsignacionRuta && !ruta.id)) {
     return ESTADOS_RUTA.SIN_RUTA;
   }
@@ -22,6 +22,16 @@ export function determinarEstadoRuta(ruta, selloLocal = null) {
   if (estadoRaw === "FINALIZADA" || estadoRaw === "CERRADA") {
     return ESTADOS_RUTA.FINALIZADA;
   }
+
+  // REGLA FUNDAMENTAL DE BLINDAJE: Si tiene sello de carga aprobada de hoy, devolver siempre APROBADA_EN_RUTA
+  if (
+    selloAprobado &&
+    (selloAprobado.estado_operativo === "APROBADA_EN_RUTA" ||
+      selloAprobado.estado_operativo === ESTADOS_RUTA.APROBADA_EN_RUTA)
+  ) {
+    return ESTADOS_RUTA.APROBADA_EN_RUTA;
+  }
+
   const estadoCarga = String(ruta.estado_carga || ruta.EstadoCarga || "").toUpperCase();
   const habilitada = Boolean(
     ruta.habilitada_para_reparto === true ||
@@ -34,14 +44,45 @@ export function determinarEstadoRuta(ruta, selloLocal = null) {
   if (habilitada) {
     return ESTADOS_RUTA.APROBADA_EN_RUTA;
   }
-  // Si existe sello local para esta asignación y la ruta no está en APROBADA_EN_RUTA ni FINALIZADA
+
+  // Nuevos estados: OBSERVADA y RECHAZADA
   if (
-    selloLocal &&
-    (selloLocal.estado_operativo === "CARGA_SOLICITADA" ||
-      selloLocal.estado_operativo === ESTADOS_RUTA.CARGA_SOLICITADA)
+    estadoCarga === "OBSERVADA" ||
+    estadoRaw === "CARGA_OBSERVADA" ||
+    ruta.estado_flujo === ESTADOS_RUTA.CARGA_OBSERVADA
   ) {
-    return ESTADOS_RUTA.CARGA_SOLICITADA;
+    return ESTADOS_RUTA.CARGA_OBSERVADA;
   }
+  if (
+    estadoCarga === "RECHAZADA" ||
+    estadoRaw === "CARGA_RECHAZADA" ||
+    ruta.estado_flujo === ESTADOS_RUTA.CARGA_RECHAZADA
+  ) {
+    return ESTADOS_RUTA.CARGA_RECHAZADA;
+  }
+
+  // Si existe sello local para esta asignación y la ruta no está en APROBADA_EN_RUTA ni FINALIZADA
+  if (selloLocal) {
+    if (
+      selloLocal.estado_operativo === "CARGA_OBSERVADA" ||
+      selloLocal.estado_operativo === ESTADOS_RUTA.CARGA_OBSERVADA
+    ) {
+      return ESTADOS_RUTA.CARGA_OBSERVADA;
+    }
+    if (
+      selloLocal.estado_operativo === "CARGA_RECHAZADA" ||
+      selloLocal.estado_operativo === ESTADOS_RUTA.CARGA_RECHAZADA
+    ) {
+      return ESTADOS_RUTA.CARGA_RECHAZADA;
+    }
+    if (
+      selloLocal.estado_operativo === "CARGA_SOLICITADA" ||
+      selloLocal.estado_operativo === ESTADOS_RUTA.CARGA_SOLICITADA
+    ) {
+      return ESTADOS_RUTA.CARGA_SOLICITADA;
+    }
+  }
+
   if (ruta.estado_flujo && Object.values(ESTADOS_RUTA).includes(ruta.estado_flujo)) {
     return ruta.estado_flujo;
   }
@@ -65,6 +106,8 @@ export function RutaProvider({ children }) {
   const [asignacionActiva, setAsignacionActiva] = useState(null);
   const [estadoRuta, setEstadoRuta] = useState(ESTADOS_RUTA.SIN_RUTA);
   const [selloCarga, setSelloCarga] = useState(null);
+  const [motivoObservacionCarga, setMotivoObservacionCarga] = useState(null);
+  const [motivoRechazoCarga, setMotivoRechazoCarga] = useState(null);
   const [cargandoRuta, setCargandoRuta] = useState(false);
   const [errorRuta, setErrorRuta] = useState(null);
   const [comprobanteActual, setComprobanteActual] = useState(null);
@@ -99,9 +142,13 @@ export function RutaProvider({ children }) {
       asignacionActiva?.id;
     if (idAsig) {
       await LocalDB.limpiarSelloSolicitudCarga(idAsig);
+      await LocalDB.limpiarSelloCargaAprobada(idAsig);
     }
     await LocalDB.limpiarSelloSolicitudCarga();
+    await LocalDB.limpiarSelloCargaAprobada();
     setSelloCarga(null);
+    setMotivoObservacionCarga(null);
+    setMotivoRechazoCarga(null);
     setAsignacionActiva(null);
     setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
     setRecaudacion({
@@ -141,7 +188,7 @@ export function RutaProvider({ children }) {
     }
   }, [usuario]);
 
-  // Listener de eventos WebSocket en tiempo real (Subagente B)
+  // Listener de eventos WebSocket en tiempo real (Subagente A y B)
   useEffect(() => {
     // 1. Evento: Carga de camión aprobada en Web
     const unsubCargaAprobada = wsService.on("carga_camion_aprobada", async (data) => {
@@ -151,11 +198,19 @@ export function RutaProvider({ children }) {
         asignacionActiva?.IdAsignacionRuta ||
         asignacionActiva?.id ||
         data?.id_asignacion;
+
+      // Sello de Carga Aprobada persistido de inmediato en LocalDB
       if (idAsig) {
+        await LocalDB.guardarSelloCargaAprobada(idAsig, data);
         await LocalDB.limpiarSelloSolicitudCarga(idAsig);
       }
+      await LocalDB.guardarSelloCargaAprobada("activa", data);
       await LocalDB.limpiarSelloSolicitudCarga();
+
       setSelloCarga(null);
+      setMotivoObservacionCarga(null);
+      setMotivoRechazoCarga(null);
+
       setAsignacionActiva((prev) => {
         if (!prev) return prev;
         const actualizada = {
@@ -178,13 +233,97 @@ export function RutaProvider({ children }) {
       }
     });
 
-    // 2. Evento: Administrador finaliza la ruta en Web (Soporte Multi-Ruta)
+    // 2. Evento: Carga de camión observada por supervisor en Web
+    const unsubCargaObservada = wsService.on("carga_camion_observada", async (data) => {
+      console.log("[RutaContext] Evento WebSocket carga_camion_observada recibido:", data);
+      const motivo =
+        data?.motivo ||
+        data?.observacion ||
+        data?.mensaje ||
+        "Carga observada por el supervisor";
+      setMotivoObservacionCarga(motivo);
+      setMotivoRechazoCarga(null);
+      setEstadoRuta(ESTADOS_RUTA.CARGA_OBSERVADA);
+
+      const idAsig =
+        asignacionActiva?.IdAsignacion ||
+        asignacionActiva?.IdAsignacionRuta ||
+        asignacionActiva?.id ||
+        data?.id_asignacion;
+      if (idAsig) {
+        const sello = (await LocalDB.obtenerSelloSolicitudCarga(idAsig)) || {};
+        sello.estado_operativo = ESTADOS_RUTA.CARGA_OBSERVADA;
+        sello.motivo_observacion = motivo;
+        await LocalDB.guardarSelloSolicitudCarga(idAsig, sello);
+        setSelloCarga(sello);
+      }
+      setAsignacionActiva((prev) => {
+        if (!prev) return prev;
+        const actualizada = {
+          ...prev,
+          estado_carga: "OBSERVADA",
+          estado: "CARGA_OBSERVADA",
+          estado_flujo: ESTADOS_RUTA.CARGA_OBSERVADA,
+          motivo_observacion: motivo,
+        };
+        LocalDB.guardarRutaActiva(actualizada);
+        return actualizada;
+      });
+    });
+
+    // 3. Evento: Carga de camión rechazada por supervisor en Web
+    const unsubCargaRechazada = wsService.on("carga_camion_rechazada", async (data) => {
+      console.log("[RutaContext] Evento WebSocket carga_camion_rechazada recibido:", data);
+      const motivo =
+        data?.motivo ||
+        data?.observacion ||
+        data?.mensaje ||
+        "Solicitud de carga rechazada por el supervisor";
+      setMotivoRechazoCarga(motivo);
+      setMotivoObservacionCarga(null);
+      setEstadoRuta(ESTADOS_RUTA.CARGA_RECHAZADA);
+
+      const idAsig =
+        asignacionActiva?.IdAsignacion ||
+        asignacionActiva?.IdAsignacionRuta ||
+        asignacionActiva?.id ||
+        data?.id_asignacion;
+      if (idAsig) {
+        const sello = (await LocalDB.obtenerSelloSolicitudCarga(idAsig)) || {};
+        sello.estado_operativo = ESTADOS_RUTA.CARGA_RECHAZADA;
+        sello.motivo_rechazo = motivo;
+        await LocalDB.guardarSelloSolicitudCarga(idAsig, sello);
+        setSelloCarga(sello);
+      }
+      setAsignacionActiva((prev) => {
+        if (!prev) return prev;
+        const actualizada = {
+          ...prev,
+          estado_carga: "RECHAZADA",
+          estado: "CARGA_RECHAZADA",
+          estado_flujo: ESTADOS_RUTA.CARGA_RECHAZADA,
+          motivo_rechazo: motivo,
+        };
+        LocalDB.guardarRutaActiva(actualizada);
+        return actualizada;
+      });
+    });
+
+    // 4. Evento: Carga de camión resuelta
+    const unsubCargaResuelta = wsService.on("carga_camion_resuelta", async (data) => {
+      console.log("[RutaContext] Evento WebSocket carga_camion_resuelta recibido:", data);
+      if (cargarHojaRutaRef.current) {
+        cargarHojaRutaRef.current();
+      }
+    });
+
+    // 5. Evento: Administrador finaliza la ruta en Web (Soporte Multi-Ruta)
     const unsubRutaFinalizada = wsService.on("ruta_finalizada_admin", async (data) => {
       console.log("[RutaContext] Evento WebSocket ruta_finalizada_admin recibido:", data);
       await limpiarRutaActiva();
     });
 
-    // 3. Evento: Asignación de nueva ruta en el día
+    // 6. Evento: Asignación de nueva ruta en el día
     const unsubRutaAsignada = wsService.on("ruta_asignada", async (data) => {
       console.log("[RutaContext] Evento WebSocket ruta_asignada recibido:", data);
       if (cargarHojaRutaRef.current) {
@@ -194,6 +333,9 @@ export function RutaProvider({ children }) {
 
     return () => {
       if (unsubCargaAprobada) unsubCargaAprobada();
+      if (unsubCargaObservada) unsubCargaObservada();
+      if (unsubCargaRechazada) unsubCargaRechazada();
+      if (unsubCargaResuelta) unsubCargaResuelta();
       if (unsubRutaFinalizada) unsubRutaFinalizada();
       if (unsubRutaAsignada) unsubRutaAsignada();
     };
@@ -213,9 +355,18 @@ export function RutaProvider({ children }) {
       const rutaLocal = await LocalDB.obtenerRutaActiva();
       if (rutaLocal && (rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta || rutaLocal.id)) {
         const idAsig = rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta || rutaLocal.id;
+        const selloAprobado = await LocalDB.obtenerSelloCargaAprobada(idAsig);
         const selloLocal = await LocalDB.obtenerSelloSolicitudCarga(idAsig);
         setSelloCarga(selloLocal);
-        const estadoLocal = determinarEstadoRuta(rutaLocal, selloLocal);
+
+        if (rutaLocal.motivo_observacion) {
+          setMotivoObservacionCarga(rutaLocal.motivo_observacion);
+        }
+        if (rutaLocal.motivo_rechazo) {
+          setMotivoRechazoCarga(rutaLocal.motivo_rechazo);
+        }
+
+        const estadoLocal = determinarEstadoRuta(rutaLocal, selloLocal, selloAprobado);
         if (estadoLocal === ESTADOS_RUTA.FINALIZADA) {
           await limpiarRutaActiva();
         } else {
@@ -252,25 +403,67 @@ export function RutaProvider({ children }) {
 
         if (rutaChofer && (rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta || rutaChofer.id)) {
           const idAsig = rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta || rutaChofer.id;
-          // Si trae paradas del endpoint especializado
-          if (resHoja && resHoja.paradas && (!rutaChofer.paradas || rutaChofer.paradas.length === 0)) {
-            rutaChofer.paradas = resHoja.paradas;
-          }
 
-          // Consultar si existe sello local de solicitud de carga antes de sobreescribir el estado
+          // Mapeo defensivo de paradas
+          const paradasMapeadas =
+            (resHoja && (resHoja.paradas || resHoja.puntos_venta || resHoja.paradas_ruta || resHoja.pedidos)) ||
+            rutaChofer.paradas ||
+            rutaChofer.Paradas ||
+            asignacionActiva?.paradas ||
+            [];
+
+          rutaChofer.paradas = paradasMapeadas;
+
+          // Sello de carga aprobada y de solicitud
+          const selloAprobado = await LocalDB.obtenerSelloCargaAprobada(idAsig);
           const selloLocal = await LocalDB.obtenerSelloSolicitudCarga(idAsig);
           setSelloCarga(selloLocal);
 
-          const nuevoEstado = determinarEstadoRuta(rutaChofer, selloLocal);
+          let nuevoEstado = determinarEstadoRuta(rutaChofer, selloLocal, selloAprobado);
+
+          // REGLA DE PROTECCIÓN DE ASIGNACIÓN APROBADA:
+          // Si en memoria o en LocalDB ya existe una asignación para el día en APROBADA_EN_RUTA (o con sello de carga aprobada),
+          // y una llamada subsecuente a cargarHojaRuta() o API devuelve una asignación diferente o en PENDIENTE_CARGA,
+          // NO permitas que reemplace ni degrade a la asignación aprobada (a menos que la aprobada pase explícitamente a FINALIZADA o CERRADA).
+          const estadoServidorRaw = String(
+            rutaChofer.Estado || rutaChofer.estado || rutaChofer.EstadoAsignacion || ""
+          ).toUpperCase();
+          const estaFinalizadaEnServidor =
+            estadoServidorRaw === "FINALIZADA" || estadoServidorRaw === "CERRADA";
+
+          const estaPreviamenteAprobada = Boolean(
+            selloAprobado ||
+            estadoRuta === ESTADOS_RUTA.APROBADA_EN_RUTA ||
+            asignacionActiva?.estado_flujo === ESTADOS_RUTA.APROBADA_EN_RUTA ||
+            asignacionActiva?.estado_carga === "APROBADA"
+          );
+
+          if (estaPreviamenteAprobada && !estaFinalizadaEnServidor) {
+            nuevoEstado = ESTADOS_RUTA.APROBADA_EN_RUTA;
+            rutaChofer.habilitada_para_reparto = true;
+            rutaChofer.estado_carga = "APROBADA";
+            rutaChofer.estado = "APROBADA_EN_RUTA";
+            rutaChofer.estado_flujo = ESTADOS_RUTA.APROBADA_EN_RUTA;
+            if ((!rutaChofer.paradas || rutaChofer.paradas.length === 0) && asignacionActiva?.paradas?.length > 0) {
+              rutaChofer.paradas = asignacionActiva.paradas;
+            }
+          }
 
           if (nuevoEstado === ESTADOS_RUTA.FINALIZADA) {
+            await LocalDB.limpiarSelloCargaAprobada(idAsig);
             await LocalDB.limpiarSelloSolicitudCarga(idAsig);
             setSelloCarga(null);
+            setMotivoObservacionCarga(null);
+            setMotivoRechazoCarga(null);
             await limpiarRutaActiva();
           } else if (nuevoEstado === ESTADOS_RUTA.APROBADA_EN_RUTA) {
-            // Aprobada por Administración/Almacén: limpiar sello local y desbloquear ruta
+            // Aprobada por Almacén/Web: fijar sello de carga aprobada y limpiar solicitud
+            await LocalDB.guardarSelloCargaAprobada(idAsig);
             await LocalDB.limpiarSelloSolicitudCarga(idAsig);
             setSelloCarga(null);
+            setMotivoObservacionCarga(null);
+            setMotivoRechazoCarga(null);
+
             setAsignacionActiva(rutaChofer);
             setEstadoRuta(nuevoEstado);
             await LocalDB.guardarRutaActiva(rutaChofer);
@@ -278,6 +471,34 @@ export function RutaProvider({ children }) {
             setUltimaSincronizacion(new Date());
 
             iniciarTelemetria(idChofer, idAsig);
+          } else if (nuevoEstado === ESTADOS_RUTA.CARGA_OBSERVADA) {
+            const motivo =
+              rutaChofer.motivo_observacion ||
+              resHoja?.motivo_observacion ||
+              selloLocal?.motivo_observacion ||
+              "Carga observada por el supervisor";
+            setMotivoObservacionCarga(motivo);
+            setMotivoRechazoCarga(null);
+            rutaChofer.motivo_observacion = motivo;
+            setAsignacionActiva(rutaChofer);
+            setEstadoRuta(nuevoEstado);
+            await LocalDB.guardarRutaActiva(rutaChofer);
+            recalcularRecaudacion(rutaChofer);
+            setUltimaSincronizacion(new Date());
+          } else if (nuevoEstado === ESTADOS_RUTA.CARGA_RECHAZADA) {
+            const motivo =
+              rutaChofer.motivo_rechazo ||
+              resHoja?.motivo_rechazo ||
+              selloLocal?.motivo_rechazo ||
+              "Solicitud de carga rechazada por el supervisor";
+            setMotivoRechazoCarga(motivo);
+            setMotivoObservacionCarga(null);
+            rutaChofer.motivo_rechazo = motivo;
+            setAsignacionActiva(rutaChofer);
+            setEstadoRuta(nuevoEstado);
+            await LocalDB.guardarRutaActiva(rutaChofer);
+            recalcularRecaudacion(rutaChofer);
+            setUltimaSincronizacion(new Date());
           } else {
             // Si el sello local existe y el servidor aún no aprobó, mantener CARGA_SOLICITADA
             if (nuevoEstado === ESTADOS_RUTA.CARGA_SOLICITADA) {
@@ -291,8 +512,14 @@ export function RutaProvider({ children }) {
             setUltimaSincronizacion(new Date());
           }
         } else {
-          // Servidor confirma que no tiene ruta asignada para hoy
-          await limpiarRutaActiva();
+          // Servidor no devolvió asignación: si chofer ya tenía ruta aprobada para hoy, no destruirla por error transitorio
+          const idAsigMemoria = asignacionActiva?.IdAsignacion || asignacionActiva?.id;
+          const selloAprobadoMemoria = idAsigMemoria
+            ? await LocalDB.obtenerSelloCargaAprobada(idAsigMemoria)
+            : null;
+          if (!selloAprobadoMemoria && estadoRuta !== ESTADOS_RUTA.APROBADA_EN_RUTA) {
+            await limpiarRutaActiva();
+          }
         }
       } catch (err) {
         console.log("[RutaContext] Aviso actualizando ruta online:", err.message);
@@ -327,12 +554,25 @@ export function RutaProvider({ children }) {
    * Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
    * Permite solicitar stock adicional o confirmar salida con stock remanente
    */
-  const solicitarCargaCamion = async ({ usarRemanente = false, usar_remanente = false, observacion = "", items = [] } = {}) => {
+  const solicitarCargaCamion = async ({
+    usarRemanente = false,
+    usar_remanente = false,
+    observacion = "",
+    items = [],
+    stock_remanente = [],
+    remanente_actual = [],
+  } = {}) => {
     if (!asignacionActiva) {
       return { success: false, error: "No tienes una asignación activa para solicitar carga." };
     }
     const idAsig = asignacionActiva.IdAsignacion || asignacionActiva.IdAsignacionRuta || asignacionActiva.id || 1;
     const flagRemanente = Boolean(usarRemanente || usar_remanente);
+    const remanenteArray =
+      stock_remanente && stock_remanente.length > 0
+        ? stock_remanente
+        : remanente_actual && remanente_actual.length > 0
+        ? remanente_actual
+        : [];
 
     // 1. Guardar sello inmediatamente en LocalDB para persistencia y bloqueo
     const selloData = {
@@ -341,9 +581,13 @@ export function RutaProvider({ children }) {
       items_solicitados: items,
       usar_remanente: flagRemanente,
       observacion: observacion || "",
+      stock_remanente: remanenteArray,
+      remanente_actual: remanenteArray,
     };
     await LocalDB.guardarSelloSolicitudCarga(idAsig, selloData);
     setSelloCarga(selloData);
+    setMotivoObservacionCarga(null);
+    setMotivoRechazoCarga(null);
 
     // 2. Actualizar estado y persistir ruta activa local de forma optimista
     const rutaActualizada = {
@@ -351,6 +595,8 @@ export function RutaProvider({ children }) {
       estado_carga: "SOLICITADA",
       estado_flujo: ESTADOS_RUTA.CARGA_SOLICITADA,
       sello_solicitud: selloData,
+      motivo_observacion: null,
+      motivo_rechazo: null,
     };
     setAsignacionActiva(rutaActualizada);
     setEstadoRuta(ESTADOS_RUTA.CARGA_SOLICITADA);
@@ -364,7 +610,16 @@ export function RutaProvider({ children }) {
       usar_remanente: flagRemanente,
       observacion,
       items,
+      stock_remanente: remanenteArray,
+      remanente_actual: remanenteArray,
     });
+
+    if (res.success || res.codigo === "EXITO") {
+      return { success: true, data: res.data, mensaje: res.mensaje };
+    }
+    // Si la API falla por red, el sello local ya garantiza que el chofer no duplique solicitudes
+    return res;
+  };
 
     if (res.success || res.codigo === "EXITO") {
       return { success: true, data: res.data, mensaje: res.mensaje };
@@ -786,6 +1041,8 @@ export function RutaProvider({ children }) {
         estadoRuta,
         estadoOperativo: estadoRuta,
         selloCarga,
+        motivoObservacionCarga,
+        motivoRechazoCarga,
         ESTADOS_RUTA,
         hojaRuta,
         metricas,
