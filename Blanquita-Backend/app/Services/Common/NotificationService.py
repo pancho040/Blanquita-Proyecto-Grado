@@ -91,31 +91,99 @@ class NotificationService:
 
         return id_notif
 
+    TIPOS_LOGISTICA_CHOFER = (
+        'RUTA_ASIGNADA',
+        'CARGA_APROBADA',
+        'CARGA_OBSERVADA',
+        'CARGA_RECHAZADA',
+        'RUTA_REORDENADA',
+        'OPERACION_REVISADA',
+        'RUTA_FINALIZADA'
+    )
+
+    @staticmethod
+    def limpiar_notificaciones_basura(session: Session) -> int:
+        """
+        Limpia y corrige notificaciones basura en BD que asignaron incorrectamente
+        IdUsuarioDestinatario = NULL a alertas del ámbito logístico de choferes.
+        Asocia el chofer correspondiente si existe en AsignacionRuta por CodigoReferencia.
+        """
+        stmt = text("""
+            UPDATE public."NotificacionInterna" n
+            SET "IdUsuarioDestinatario" = ar."IdUsuarioRepartidor"
+            FROM public."AsignacionRuta" ar
+            WHERE n."IdUsuarioDestinatario" IS NULL
+              AND n."Tipo" IN ('RUTA_ASIGNADA', 'CARGA_APROBADA', 'CARGA_OBSERVADA', 'CARGA_RECHAZADA', 'RUTA_REORDENADA', 'OPERACION_REVISADA', 'RUTA_FINALIZADA')
+              AND n."CodigoReferencia" = ar."IdAsignacionRuta";
+        """)
+        res = session.execute(stmt)
+        return res.rowcount
+
     @staticmethod
     def listar_notificaciones(
         session: Session,
         id_usuario: int,
-        solo_no_leidas: bool = True
+        solo_no_leidas: bool = True,
+        id_rol: Optional[int] = None,
+        sucursal_id: Optional[int] = None,
+        puede_ver_todas: bool = False
     ) -> List[Dict[str, Any]]:
-        condicion = 'WHERE ("IdUsuarioDestinatario" = :uid OR "IdUsuarioDestinatario" IS NULL)'
+        params: Dict[str, Any] = {"uid": id_usuario}
+        es_chofer = id_rol in (6, 7)
+
+        join_clause = ""
+        if es_chofer:
+            # Aislamiento Estricto para Choferes (Rol 6 o 7):
+            # Solo notificaciones dirigidas explícitamente a él y de ámbito logístico.
+            # Excluye totalmente vales de caja chica, rendición de cuentas, cambios de precio o de otros choferes.
+            condicion = """
+                WHERE n."IdUsuarioDestinatario" = :uid
+                  AND n."Tipo" IN ('RUTA_ASIGNADA', 'CARGA_APROBADA', 'CARGA_OBSERVADA', 'CARGA_RECHAZADA', 'RUTA_REORDENADA', 'OPERACION_REVISADA', 'RUTA_FINALIZADA')
+            """
+        else:
+            # Ámbito Web / Supervisores / Administradores:
+            if not puede_ver_todas and sucursal_id:
+                params["suc_id"] = int(sucursal_id)
+                join_clause = 'LEFT JOIN public."Usuario" u ON n."IdUsuarioDestinatario" = u."IdUsuario"'
+                condicion = """
+                    WHERE (
+                        n."IdUsuarioDestinatario" = :uid
+                        OR (
+                            n."IdUsuarioDestinatario" IS NULL
+                            AND (
+                                u."IdSucursal" = :suc_id
+                                OR u."IdSucursal" IS NULL
+                                OR EXISTS (
+                                    SELECT 1 FROM public."AsignacionRuta" ar_sub
+                                    JOIN public."RutaDistribucion" rd_sub ON ar_sub."IdRutaDistribucion" = rd_sub."IdRutaDistribucion"
+                                    WHERE ar_sub."IdAsignacionRuta" = n."CodigoReferencia" AND rd_sub."IdSucursal" = :suc_id
+                                )
+                            )
+                        )
+                    )
+                """
+            else:
+                condicion = 'WHERE (n."IdUsuarioDestinatario" = :uid OR n."IdUsuarioDestinatario" IS NULL)'
+
         if solo_no_leidas:
-            condicion += ' AND "Leido" = false'
+            condicion += ' AND n."Leido" = false'
 
         stmt = text(f"""
             SELECT 
-                "IdNotificacion",
-                "Titulo",
-                "Mensaje",
-                "Tipo",
-                "CodigoReferencia",
-                "Leido",
-                "FechaCreacion"
-            FROM public."NotificacionInterna"
+                n."IdNotificacion",
+                n."Titulo",
+                n."Mensaje",
+                n."Tipo",
+                n."CodigoReferencia",
+                n."Leido",
+                n."FechaCreacion"
+            FROM public."NotificacionInterna" n
+            {join_clause}
             {condicion}
-            ORDER BY "FechaCreacion" DESC
+            ORDER BY n."FechaCreacion" DESC
             LIMIT 50;
         """)
-        rows = session.execute(stmt, {"uid": id_usuario}).fetchall()
+        rows = session.execute(stmt, params).fetchall()
         
         return [
             {

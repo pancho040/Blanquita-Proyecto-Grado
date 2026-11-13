@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import date, datetime
 
@@ -56,6 +56,12 @@ class PuntoVentaRutaItem(BaseModel):
     Latitud: Optional[float] = None
     Longitud: Optional[float] = None
     OrdenVisita: int
+    FrecuenciaVisita: Optional[str] = "SEMANAL"
+    frecuencia_visita: Optional[str] = "SEMANAL"
+    DiasVisita: Optional[str] = "TODOS"
+    dias_visita: Optional[str] = "TODOS"
+    ItemsProgramadosJson: Optional[Any] = None
+    items_programados_json: Optional[Any] = None
 
 class RutaResponse(RutaBase):
     IdRutaDistribucion: int

@@ -206,6 +206,9 @@ class RutaRepository:
                 rpv."IdRutaDistribucion",
                 rpv."IdPuntoVenta",
                 rpv."OrdenVisita",
+                COALESCE(rpv."frecuencia_visita", 'SEMANAL') as "frecuencia_visita",
+                COALESCE(rpv."dias_visita", 'TODOS') as "dias_visita",
+                rpv."items_programados_json" as "items_programados_json",
                 pv."NombrePuntoVenta",
                 c."RazonSocial" as "NombreCliente",
                 pv."Direccion",
@@ -220,6 +223,7 @@ class RutaRepository:
         return self.caller.LlamarFuncion(sql, {"id_ruta": id_ruta})
 
     def GuardarPuntosVentaRuta(self, id_ruta: int, puntos: list[dict]) -> None:
+        import json
         # Eliminar asignaciones previas de la ruta
         self.caller.LlamarFuncion(
             'DELETE FROM "RutaPuntoVenta" WHERE "IdRutaDistribucion" = :id_ruta;',
@@ -227,14 +231,35 @@ class RutaRepository:
         )
         # Insertar nuevas
         for p in puntos:
+            frec = p.get("frecuencia_visita") or p.get("FrecuenciaVisita") or "SEMANAL"
+            dias = p.get("dias_visita") or p.get("DiasVisita") or "TODOS"
+            if isinstance(dias, list):
+                dias = json.dumps(dias)
+            items_prog = p.get("items_programados_json") or p.get("ItemsProgramadosJson") or p.get("items_programados") or []
+            if not isinstance(items_prog, str):
+                items_prog = json.dumps(items_prog)
             self.caller.LlamarFuncion(
                 """
-                INSERT INTO "RutaPuntoVenta" ("IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita")
-                VALUES (:id_ruta, :id_pv, :orden)
+                INSERT INTO "RutaPuntoVenta" (
+                    "IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita",
+                    "frecuencia_visita", "dias_visita", "items_programados_json"
+                )
+                VALUES (:id_ruta, :id_pv, :orden, :frec, :dias, :items::jsonb)
                 ON CONFLICT ("IdRutaDistribucion", "IdPuntoVenta") 
-                DO UPDATE SET "OrdenVisita" = EXCLUDED."OrdenVisita";
+                DO UPDATE SET 
+                    "OrdenVisita" = EXCLUDED."OrdenVisita",
+                    "frecuencia_visita" = EXCLUDED."frecuencia_visita",
+                    "dias_visita" = EXCLUDED."dias_visita",
+                    "items_programados_json" = EXCLUDED."items_programados_json";
                 """,
-                {"id_ruta": id_ruta, "id_pv": p["IdPuntoVenta"], "orden": p["OrdenVisita"]}
+                {
+                    "id_ruta": id_ruta,
+                    "id_pv": p["IdPuntoVenta"],
+                    "orden": p["OrdenVisita"],
+                    "frec": frec,
+                    "dias": str(dias),
+                    "items": str(items_prog)
+                }
             )
 
     # -------------------------------------------------------------
@@ -530,6 +555,7 @@ class RutaRepository:
                 ar."IdAsignacionRuta",
                 ar."FechaAsignacion",
                 ar."Estado" as "EstadoAsignacion",
+                COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA') as "estado_operativo",
                 ar."KilometrajeInicial",
                 ar."KilometrajeFinal",
                 ar."Observacion",
@@ -574,6 +600,11 @@ class RutaRepository:
                 p."NumeroPedido",
                 p."MontoTotal" as "MontoPedido",
                 p."IdEstadoPedido",
+                COALESCE(p."estado_visita", '') as "estado_visita",
+                COALESCE(p."tipo_incidencia", '') as "tipo_incidencia",
+                COALESCE(rpv."frecuencia_visita", 'SEMANAL') as "frecuencia_visita",
+                COALESCE(rpv."dias_visita", 'TODOS') as "dias_visita",
+                rpv."items_programados_json" as "items_programados_json",
                 CASE 
                     WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
                     WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'

@@ -18,6 +18,7 @@ from app.Models.Contabilidad.CuentasCobrarModel import (
 CuentasCobrarRouter = APIRouter(prefix="/cxc", tags=["Contabilidad - Cuentas por Cobrar y Notas de Venta"])
 
 PERMISOS_CXC = [ROL_CONTADOR, ROL_GERENTE_GENERAL]
+PERMISOS_CXC_LECTURA = [ROL_CONTADOR, ROL_GERENTE_GENERAL, ROL_SUPERVISOR]
 PERMISOS_VENTA_Y_REPARTO = [ROL_CONTADOR, ROL_GERENTE_GENERAL, ROL_SUPERVISOR, ROL_AGENTE_REPARTO]
 
 
@@ -36,7 +37,7 @@ def listar_notas_venta(
     offset: int = Query(0),
     page: Optional[int] = Query(None),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_CXC)),
+    usuario: dict = Depends(require_role(PERMISOS_CXC_LECTURA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     if page is not None and page > 0:
@@ -92,7 +93,7 @@ def listar_notas_venta(
 def obtener_nota_venta(
     id_nota: int,
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_CXC)),
+    usuario: dict = Depends(require_role(PERMISOS_CXC_LECTURA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     n = CuentasCobrarService(db).ObtenerNotaVentaDetalle(id_nota)
@@ -391,7 +392,7 @@ def obtener_resumen_cartera(
 @CuentasCobrarRouter.get("/clientes")
 def listar_clientes_cxc(
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_CXC)),
+    usuario: dict = Depends(require_role(PERMISOS_CXC_LECTURA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     where = ""
@@ -407,7 +408,7 @@ def verificar_estado_credito_cliente(
     id_cliente: int,
     nuevo_monto: float = Query(0.0),
     db: Session = Depends(get_db),
-    usuario: dict = Depends(require_role(PERMISOS_CXC)),
+    usuario: dict = Depends(require_role(PERMISOS_CXC_LECTURA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """Consulta si un cliente está bloqueado para venta a crédito por mora o límite de crédito."""

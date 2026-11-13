@@ -61,6 +61,8 @@ class EntregaMovilRequest(BaseModel):
     firma_cliente: Optional[str] = Field(None, description="Firma digital del cliente o receptor", validation_alias=AliasChoices("firma_cliente", "FirmaCliente", "firmaCliente"))
     fecha_dispositivo: Optional[str] = Field(None, validation_alias=AliasChoices("fecha_dispositivo", "FechaDispositivo", "fechaDispositivo"))
     cobro: Optional[BloqueCobroEntregaDTO] = Field(None, validation_alias=AliasChoices("cobro", "Cobro"))
+    estado_visita: Optional[str] = Field(None, description="'ENTREGADO_COMPLETO' | 'PIDIO_MAS' | 'PIDIO_MENOS'", validation_alias=AliasChoices("estado_visita", "estadoVisita", "EstadoVisita"))
+    tipo_incidencia: Optional[str] = Field(None, validation_alias=AliasChoices("tipo_incidencia", "tipoIncidencia", "TipoIncidencia"))
 
 
 class CobroMovilRequest(BaseModel):
@@ -83,6 +85,8 @@ class NoEntregaMovilRequest(BaseModel):
     observacion: Optional[str] = None
     id_comprobante_archivo: Optional[int] = None
     fecha_dispositivo: Optional[str] = None
+    estado_visita: Optional[str] = Field(None, description="'ATRASADO / REPROGRAMADO' | 'NO_ESTABA / CERRADO' | 'RECHAZO_PEDIDO'", validation_alias=AliasChoices("estado_visita", "estadoVisita", "EstadoVisita"))
+    tipo_incidencia: Optional[str] = Field(None, validation_alias=AliasChoices("tipo_incidencia", "tipoIncidencia", "TipoIncidencia"))
 
 
 class ItemStockDevueltoDTO(BaseModel):
@@ -191,6 +195,9 @@ class DatosClienteEnRutaDTO(BaseModel):
     longitud: Optional[float] = Field(None, validation_alias=AliasChoices("longitud", "Longitud"))
     ciudad_destino: Optional[str] = Field("Sucre", validation_alias=AliasChoices("ciudad_destino", "CiudadDestino"))
     observacion: Optional[str] = Field(None, validation_alias=AliasChoices("observacion", "observaciones", "Observacion"))
+    frecuencia_visita: Optional[str] = Field("SEMANAL", description="'DIARIO' | 'CADA_2_DIAS' | 'SEMANAL'", validation_alias=AliasChoices("frecuencia_visita", "frecuenciaVisita", "frecuencia"))
+    dias_visita: Optional[Any] = Field(None, description="Días de visita ej. [1, 3, 5] o 'LUNES,MIERCOLES'", validation_alias=AliasChoices("dias_visita", "diasVisita"))
+    fecha_entrega_programada: Optional[str] = Field(None, validation_alias=AliasChoices("fecha_entrega_programada", "fechaEntregaProgramada", "fecha_programada"))
 
 
 class ItemProgramadoDTO(BaseModel):
@@ -208,6 +215,9 @@ class ClienteEnRutaRequest(BaseModel):
         validation_alias=AliasChoices("modalidad", "Modalidad")
     )
     dia_semana_programado: Optional[int] = Field(None, ge=1, le=7, validation_alias=AliasChoices("dia_semana_programado", "diaSemanaProgramado"))
+    frecuencia_visita: Optional[str] = Field("SEMANAL", description="'DIARIO' | 'CADA_2_DIAS' | 'SEMANAL'", validation_alias=AliasChoices("frecuencia_visita", "frecuenciaVisita", "frecuencia"))
+    dias_visita: Optional[Any] = Field(None, description="Días de visita ej. [1, 3, 5] o 'LUNES,MIERCOLES'", validation_alias=AliasChoices("dias_visita", "diasVisita"))
+    fecha_entrega_programada: Optional[str] = Field(None, validation_alias=AliasChoices("fecha_entrega_programada", "fechaEntregaProgramada", "fecha_programada"))
     items_programados: Optional[List[ItemProgramadoDTO]] = Field(default_factory=list, validation_alias=AliasChoices("items_programados", "itemsProgramados"))
     parada_actual_orden: Optional[int] = Field(0, ge=0, validation_alias=AliasChoices("parada_actual_orden", "paradaActualOrden"))
     entrega_con_cobro: Optional[EntregaMovilRequest] = Field(None, validation_alias=AliasChoices("entrega_con_cobro", "entregaConCobro"))

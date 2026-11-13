@@ -697,11 +697,11 @@ def obtener_hoja_ruta_activa_movil(
     if usuario.get("IdRol") in (ROL_AGENTE_REPARTO, 6, 7) and tracking.get("IdUsuarioRepartidor") != chofer_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
 
-    # Consultar si tiene solicitud de carga de camión pendiente
+    # Consultar solicitud de carga de camión más reciente de la asignación
     sql_sol_pend = text("""
-        SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer"
+        SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer", s."observacion_admin"
         FROM public."solicitud_carga_camion" s
-        WHERE s."id_asignacion_ruta" = :id_asig AND s."estado" = 'PENDIENTE'
+        WHERE s."id_asignacion_ruta" = :id_asig
         ORDER BY s."id_solicitud" DESC LIMIT 1;
     """)
     sol_pend = db.execute(sql_sol_pend, {"id_asig": id_asig}).mappings().fetchone()
@@ -727,18 +727,27 @@ def obtener_hoja_ruta_activa_movil(
         items_solicitados = [dict(it) for it in db.execute(sql_items_sol, {"sid": sol_pend["id_solicitud"]}).mappings().fetchall()]
 
     estado_op = tracking.get("estado_operativo") or "PENDIENTE_CARGA"
-    if sol_pend or estado_op == "CARGA_SOLICITADA":
-        estado_op = "CARGA_SOLICITADA"
+    if sol_pend:
+        st_sol = str(sol_pend["estado"]).strip().upper()
+        if st_sol == "PENDIENTE":
+            estado_op = "CARGA_SOLICITADA"
+        elif st_sol in ("APROBADA", "APROBADO"):
+            estado_op = "APROBADA_EN_RUTA"
+        elif st_sol in ("OBSERVADA", "OBSERVADO", "CARGA_OBSERVADA"):
+            estado_op = "CARGA_OBSERVADA"
+        elif st_sol in ("RECHAZADA", "RECHAZADO", "CARGA_RECHAZADA"):
+            estado_op = "CARGA_RECHAZADA"
 
-    es_pendiente_carga = bool(sol_pend) or (estado_op == "CARGA_SOLICITADA")
+    es_pendiente_carga = (estado_op == "CARGA_SOLICITADA")
 
     tracking["estado_operativo"] = estado_op
     tracking["solicitud_carga_pendiente"] = es_pendiente_carga
     tracking["solicitud_carga_items"] = items_solicitados
     tracking["items_solicitados"] = items_solicitados
-    tracking["habilitada_para_reparto"] = (estado_op == "APROBADA_EN_RUTA")
+    tracking["habilitada_para_reparto"] = (estado_op in ("APROBADA_EN_RUTA", "EN_RUTA"))
     if sol_pend:
         tracking["id_solicitud_carga"] = sol_pend["id_solicitud"]
+        tracking["observacion_admin"] = sol_pend.get("observacion_admin")
 
     # Enriquecer paradas con detalle de productos del pedido
     paradas = tracking.get("Paradas", [])
@@ -761,6 +770,8 @@ def obtener_hoja_ruta_activa_movil(
                 p."NumeroPedido",
                 p."MontoTotal" as "MontoPedido",
                 p."IdEstadoPedido",
+                COALESCE(p."estado_visita", '') as "estado_visita",
+                COALESCE(p."tipo_incidencia", '') as "tipo_incidencia",
                 CASE 
                     WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
                     WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
@@ -799,6 +810,8 @@ def obtener_hoja_ruta_activa_movil(
                     NULL::varchar as "NumeroPedido",
                     0.0 as "MontoPedido",
                     NULL::integer as "IdEstadoPedido",
+                    '' as "estado_visita",
+                    '' as "tipo_incidencia",
                     'Visita Comercial' as "EstadoEntrega",
                     NULL::numeric as "LatitudEntrega",
                     NULL::numeric as "LongitudEntrega",
@@ -1205,6 +1218,26 @@ async def registrar_entrega_movil(
         "Observacion": obs_final
     })
 
+    # Guardar estado de visita e incidencias flexibles en paradas
+    est_visita = getattr(dto, "estado_visita", None)
+    if not est_visita:
+        if dto.tipo_entrega == "PARCIAL":
+            est_visita = "PIDIO_MENOS"
+        else:
+            est_visita = "ENTREGADO_COMPLETO"
+    tipo_inc = getattr(dto, "tipo_incidencia", None) or (dto.observacion if est_visita in ("PIDIO_MAS", "PIDIO_MENOS") else None)
+
+    db.execute(text("""
+        UPDATE public."Pedido"
+        SET "estado_visita" = :est_v,
+            "tipo_incidencia" = :t_inc
+        WHERE "IdPedido" = :pid;
+    """), {
+        "est_v": est_visita,
+        "t_inc": tipo_inc,
+        "pid": dto.id_pedido
+    })
+
     # 7. Procesar bloque de cobro unificado (si fue enviado) en la misma transacción ACID
     datos_cobro_resumen = None
     if dto.cobro:
@@ -1545,18 +1578,37 @@ async def registrar_no_entrega_movil(
 
     _validar_pertenencia_pedido_chofer(db, dto.id_pedido, usuario, alcance)
 
+    est_visita = getattr(dto, "estado_visita", None)
+    motivo_str = str(dto.motivo or "").strip()
+    if not est_visita:
+        m_lower = motivo_str.lower()
+        if "cerrad" in m_lower or "no estab" in m_lower or "ausente" in m_lower:
+            est_visita = "NO_ESTABA / CERRADO"
+        elif "rechaz" in m_lower:
+            est_visita = "RECHAZO_PEDIDO"
+        elif "atrasad" in m_lower or "reprogram" in m_lower or "demor" in m_lower:
+            est_visita = "ATRASADO / REPROGRAMADO"
+        else:
+            est_visita = motivo_str
+
+    tipo_inc = getattr(dto, "tipo_incidencia", None) or motivo_str
+
     obs_no_entrega = f"[NO ENTREGADO - Motivo: {dto.motivo}]: {dto.observacion or ''}".strip()
     db.execute(text("""
         UPDATE public."Pedido"
         SET "IdEstadoPedido" = 4,
             "LatitudEntrega" = :lat,
             "LongitudEntrega" = :lng,
-            "Observacion" = :obs
+            "Observacion" = :obs,
+            "estado_visita" = :est_v,
+            "tipo_incidencia" = :t_inc
         WHERE "IdPedido" = :id_ped;
     """), {
         "lat": dto.latitud,
         "lng": dto.longitud,
         "obs": obs_no_entrega,
+        "est_v": est_visita,
+        "t_inc": tipo_inc,
         "id_ped": dto.id_pedido
     })
 
@@ -2314,6 +2366,8 @@ def obtener_resumen_sincronizacion_movil(
                     p."NumeroPedido",
                     p."MontoTotal" as "MontoPedido",
                     p."IdEstadoPedido",
+                    COALESCE(p."estado_visita", '') as "estado_visita",
+                    COALESCE(p."tipo_incidencia", '') as "tipo_incidencia",
                     CASE 
                         WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
                         WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
@@ -2352,6 +2406,8 @@ def obtener_resumen_sincronizacion_movil(
                         NULL::varchar as "NumeroPedido",
                         0.0 as "MontoPedido",
                         NULL::integer as "IdEstadoPedido",
+                        '' as "estado_visita",
+                        '' as "tipo_incidencia",
                         'Visita Comercial' as "EstadoEntrega",
                         NULL::numeric as "LatitudEntrega",
                         NULL::numeric as "LongitudEntrega",
@@ -2384,11 +2440,11 @@ def obtener_resumen_sincronizacion_movil(
                 items_p = db.execute(sql_det, {"id_ped": id_ped}).mappings().fetchall()
                 p["items"] = [dict(it) for it in items_p]
 
-        # Verificar si existe solicitud de carga pendiente
+        # Verificar solicitud de carga de camión más reciente
         sql_sol_pend = text("""
-            SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer"
+            SELECT s."id_solicitud", s."estado", s."fecha_solicitud", s."observacion_chofer", s."observacion_admin"
             FROM public."solicitud_carga_camion" s
-            WHERE s."id_asignacion_ruta" = :id_asig AND s."estado" = 'PENDIENTE'
+            WHERE s."id_asignacion_ruta" = :id_asig
             ORDER BY s."id_solicitud" DESC LIMIT 1;
         """)
         sol_pend = db.execute(sql_sol_pend, {"id_asig": id_asig}).mappings().fetchone()
@@ -2413,10 +2469,18 @@ def obtener_resumen_sincronizacion_movil(
             """)
             items_solicitados = [dict(it) for it in db.execute(sql_items_sol, {"sid": sol_pend["id_solicitud"]}).mappings().fetchall()]
 
-        if sol_pend or estado_op == "CARGA_SOLICITADA":
-            estado_op = "CARGA_SOLICITADA"
+        if sol_pend:
+            st_sol = str(sol_pend["estado"]).strip().upper()
+            if st_sol == "PENDIENTE":
+                estado_op = "CARGA_SOLICITADA"
+            elif st_sol in ("APROBADA", "APROBADO"):
+                estado_op = "APROBADA_EN_RUTA"
+            elif st_sol in ("OBSERVADA", "OBSERVADO", "CARGA_OBSERVADA"):
+                estado_op = "CARGA_OBSERVADA"
+            elif st_sol in ("RECHAZADA", "RECHAZADO", "CARGA_RECHAZADA"):
+                estado_op = "CARGA_RECHAZADA"
 
-        es_pendiente_carga = bool(sol_pend) or (estado_op == "CARGA_SOLICITADA")
+        es_pendiente_carga = (estado_op == "CARGA_SOLICITADA")
 
         asignacion_activa = {
             "id_asignacion": id_asig,
@@ -2425,11 +2489,12 @@ def obtener_resumen_sincronizacion_movil(
             "fecha": str(asig_row["FechaAsignacion"]),
             "estado": asig_row["Estado"],
             "estado_operativo": estado_op,
-            "habilitada_para_reparto": (estado_op == "APROBADA_EN_RUTA"),
+            "habilitada_para_reparto": (estado_op in ("APROBADA_EN_RUTA", "EN_RUTA")),
             "solicitud_carga_pendiente": es_pendiente_carga,
             "solicitud_carga_items": items_solicitados,
             "items_solicitados": items_solicitados,
             "id_solicitud_carga": sol_pend["id_solicitud"] if sol_pend else None,
+            "observacion_admin": sol_pend.get("observacion_admin") if sol_pend else None,
             "kilometraje_inicial": float(asig_row["KilometrajeInicial"] or 0.0),
             "paradas": paradas,
             "total_paradas": len(paradas)
@@ -2583,6 +2648,33 @@ async def registrar_cliente_en_ruta(
     modalidad = (dto.modalidad or "SOLO_REGISTRO").upper()
     cli_data = dto.datos_cliente
 
+    import json
+    frec_visita = dto.frecuencia_visita or getattr(cli_data, "frecuencia_visita", None) or "SEMANAL"
+    dias_visita_val = dto.dias_visita or getattr(cli_data, "dias_visita", None) or "TODOS"
+    if isinstance(dias_visita_val, list):
+        dias_visita_val = json.dumps(dias_visita_val)
+    elif not isinstance(dias_visita_val, str):
+        dias_visita_val = str(dias_visita_val)
+
+    fecha_prog_str = dto.fecha_entrega_programada or getattr(cli_data, "fecha_entrega_programada", None)
+    fecha_prog_date = None
+    if fecha_prog_str:
+        if isinstance(fecha_prog_str, str):
+            fecha_prog_date = date.fromisoformat(fecha_prog_str[:10])
+        elif isinstance(fecha_prog_str, date):
+            fecha_prog_date = fecha_prog_str
+    elif dto.dia_semana_programado:
+        hoy = date.today()
+        dias_adelante = (int(dto.dia_semana_programado) - hoy.isoweekday()) % 7
+        if dias_adelante <= 0:
+            dias_adelante += 7
+        fecha_prog_date = hoy + timedelta(days=dias_adelante)
+    else:
+        fecha_prog_date = date.today() + timedelta(days=1)
+
+    items_prog_list = [it.model_dump() if hasattr(it, "model_dump") else it for it in (dto.items_programados or [])]
+    items_prog_json = json.dumps(items_prog_list)
+
     # 1. Buscar asignación y ruta activa de hoy para el chofer
     sql_asig = text("""
         SELECT ar."IdAsignacionRuta", ar."IdRutaDistribucion", ar."estado_operativo"
@@ -2610,12 +2702,14 @@ async def registrar_cliente_en_ruta(
             "IdEstadoCliente", "RazonSocial", "NombreComercial", "NombrePropietario", "NitCi",
             "Telefono", "Direccion", "Latitud", "Longitud", "CiudadDestino",
             "LimiteCreditoBs", "DiasCredito", "IdUsuarioRegistro", "Observacion", "IdSucursal",
-            "modalidad_registro", "dia_semana_programado", "id_ruta_sugerida"
+            "modalidad_registro", "dia_semana_programado", "fecha_entrega_programada",
+            "frecuencia_visita", "dias_visita", "items_programados_json", "id_ruta_sugerida"
         ) VALUES (
             1, :razon, :nom_com, :nom_prop, :nit,
             :tel, :dir, :lat, :lng, :ciudad,
             0, 0, :uid, :obs, :sid,
-            :modalidad, :dia_prog, :id_ruta
+            :modalidad, :dia_prog, :fecha_prog,
+            :frec, :dias, :items::jsonb, :id_ruta
         ) RETURNING "IdCliente";
     """)
     cli_row = db.execute(sql_cli, {
@@ -2633,6 +2727,10 @@ async def registrar_cliente_en_ruta(
         "sid": sucursal_id,
         "modalidad": modalidad,
         "dia_prog": dto.dia_semana_programado,
+        "fecha_prog": fecha_prog_date,
+        "frec": frec_visita,
+        "dias": str(dias_visita_val),
+        "items": items_prog_json,
         "id_ruta": id_ruta
     }).fetchone()
     id_cliente = cli_row[0]
@@ -2761,7 +2859,129 @@ async def registrar_cliente_en_ruta(
             idx += 1
 
     elif modalidad == "PROGRAMAR_ENTREGA":
-        pass  # Guardado para la generación por cron
+        if not id_ruta:
+            sql_r_fb = text('SELECT "IdRutaDistribucion" FROM public."RutaDistribucion" WHERE "IdSucursal" = :sid AND "Activa" = true ORDER BY "IdRutaDistribucion" ASC LIMIT 1;')
+            id_ruta = db.execute(sql_r_fb, {"sid": sucursal_id}).scalar()
+
+        if id_ruta:
+            max_ord = db.execute(text("""
+                SELECT COALESCE(MAX("OrdenVisita"), 0) FROM public."RutaPuntoVenta" WHERE "IdRutaDistribucion" = :rid;
+            """), {"rid": id_ruta}).scalar() or 0
+
+            db.execute(text("""
+                INSERT INTO public."RutaPuntoVenta" (
+                    "IdRutaDistribucion", "IdPuntoVenta", "OrdenVisita",
+                    "frecuencia_visita", "dias_visita", "items_programados_json"
+                ) VALUES (
+                    :rid, :pvid, :orden, :frec, :dias, :items::jsonb
+                ) ON CONFLICT ("IdRutaDistribucion", "IdPuntoVenta") DO UPDATE SET
+                    "OrdenVisita" = EXCLUDED."OrdenVisita",
+                    "frecuencia_visita" = EXCLUDED."frecuencia_visita",
+                    "dias_visita" = EXCLUDED."dias_visita",
+                    "items_programados_json" = EXCLUDED."items_programados_json";
+            """), {
+                "rid": id_ruta,
+                "pvid": id_punto_venta,
+                "orden": max_ord + 1,
+                "frec": frec_visita,
+                "dias": str(dias_visita_val),
+                "items": items_prog_json
+            })
+
+            # Invocación inmediata del generador diario de rutas para la fecha programada
+            service = RutaService(db)
+            try:
+                service.repo.EjecutarGeneradorRutasDiarias(fecha_prog_date)
+            except Exception as e_cron:
+                logger.warning(f"[Generador Rutas Diarias] Error: {e_cron}")
+
+            try:
+                service.recalcular_orden_paradas_ruta(id_ruta)
+            except Exception as e_rec:
+                logger.warning(f"[Recalcular Orden Paradas] Error: {e_rec}")
+
+            # Vincular asignación futura si existe
+            asig_futura = db.execute(text("""
+                SELECT "IdAsignacionRuta", "IdUsuarioRepartidor"
+                FROM public."AsignacionRuta"
+                WHERE "IdRutaDistribucion" = :rid AND "FechaAsignacion" = :fec
+                LIMIT 1;
+            """), {"rid": id_ruta, "fec": fecha_prog_date}).fetchone()
+
+            id_asig_futura = asig_futura.IdAsignacionRuta if asig_futura else id_asig
+            id_chofer_futuro = asig_futura.IdUsuarioRepartidor if asig_futura else uid
+
+            if items_prog_list:
+                subtotal = 0.0
+                for it in items_prog_list:
+                    pid = it.get("presentacion_id")
+                    cant = float(it.get("cantidad") or 0.0)
+                    p_unit = db.execute(text("""
+                        SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto"
+                        WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid)
+                        LIMIT 1;
+                    """), {"pid": pid}).scalar() or 0.0
+                    subtotal += float(p_unit) * cant
+
+                num_ped = f"PED-PROG-{int(datetime.now().timestamp())}"
+                ped_row = db.execute(text("""
+                    INSERT INTO public."Pedido" (
+                        "NumeroPedido", "IdCliente", "IdPuntoVenta", "IdUsuarioRepartidor",
+                        "IdEstadoPedido", "IdAsignacionRuta", "FechaPedido", "FechaEntrega",
+                        "EsVentaDirecta", "SubTotal", "Descuento", "MontoTotal",
+                        "LatitudEntrega", "LongitudEntrega", "SincronizadoDesdeMovil",
+                        "Observacion", "estado_visita"
+                    ) VALUES (
+                        :nped, :cid, :pvid, :uid_repartidor,
+                        1, :asig, :fec, :fec,
+                        false, :sub, 0, :sub,
+                        :lat, :lng, true,
+                        'Pedido programado para entrega futura', 'PROGRAMADO'
+                    ) RETURNING "IdPedido";
+                """), {
+                    "nped": num_ped, "cid": id_cliente, "pvid": id_punto_venta, "uid_repartidor": id_chofer_futuro,
+                    "asig": id_asig_futura, "fec": fecha_prog_date, "sub": subtotal,
+                    "lat": cli_data.latitud, "lng": cli_data.longitud
+                }).fetchone()
+                nuevo_id_pedido = ped_row[0]
+
+                for it in items_prog_list:
+                    pid = it.get("presentacion_id")
+                    cant = float(it.get("cantidad") or 0.0)
+                    p_unit = db.execute(text("""
+                        SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto"
+                        WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid)
+                        LIMIT 1;
+                    """), {"pid": pid}).scalar() or 0.0
+                    st = float(p_unit) * cant
+                    db.execute(text("""
+                        INSERT INTO public."DetallePedido" (
+                            "IdPedido", "IdPresentacion", "Cantidad", "PrecioUnitarioAplicado", "Subtotal"
+                        ) VALUES (
+                            :ped, :pid, :cant, :pu, :st
+                        );
+                    """), {"ped": nuevo_id_pedido, "pid": pid, "cant": cant, "pu": p_unit, "st": st})
+
+            filas_reord = db.execute(text("""
+                SELECT 
+                    rpv."OrdenVisita",
+                    pv."IdPuntoVenta",
+                    pv."NombrePuntoVenta",
+                    c."IdCliente",
+                    c."RazonSocial",
+                    COALESCE(rpv."frecuencia_visita", 'SEMANAL') as "frecuencia_visita",
+                    COALESCE(rpv."dias_visita", 'TODOS') as "dias_visita",
+                    rpv."items_programados_json" as "items_programados_json",
+                    pv."Direccion",
+                    pv."Latitud",
+                    pv."Longitud"
+                FROM public."RutaPuntoVenta" rpv
+                JOIN public."PuntoVenta" pv ON rpv."IdPuntoVenta" = pv."IdPuntoVenta"
+                JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                WHERE rpv."IdRutaDistribucion" = :rid
+                ORDER BY rpv."OrdenVisita" ASC;
+            """), {"rid": id_ruta}).mappings().fetchall()
+            ruta_reordenada = [dict(f) for f in filas_reord]
 
     db.commit()
 

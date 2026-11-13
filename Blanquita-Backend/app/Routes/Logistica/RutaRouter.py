@@ -777,7 +777,10 @@ def listar_solicitudes_carga(
     Lista las solicitudes de carga de camión con desglose de stock remanente en camión
     (consulta real a inventario_chofer con cantidad > 0) + stock adicional pedido.
     """
-    suc_efectiva = sucursal_id or id_sucursal or alcance.sucursal_efectiva
+    if not alcance.puede_ver_todas:
+        suc_efectiva = alcance.sucursal_efectiva
+    else:
+        suc_efectiva = id_sucursal or sucursal_id
 
     conds = []
     params = {}
@@ -791,8 +794,18 @@ def listar_solicitudes_carga(
         params["id_asig"] = int(id_asignacion)
 
     if estado:
-        conds.append('s."estado" = :estado')
-        params["estado"] = estado
+        est_norm = str(estado).strip().upper()
+        if est_norm.startswith("APROB"):
+            conds.append("s.\"estado\" IN ('APROBADO', 'APROBADA')")
+        elif est_norm.startswith("OBSERV"):
+            conds.append("s.\"estado\" IN ('OBSERVADO', 'OBSERVADA', 'CARGA_OBSERVADA')")
+        elif est_norm.startswith("RECHAZ"):
+            conds.append("s.\"estado\" IN ('RECHAZADO', 'RECHAZADA', 'CARGA_RECHAZADA')")
+        elif est_norm.startswith("PEND"):
+            conds.append("s.\"estado\" IN ('PENDIENTE', 'CARGA_SOLICITADA')")
+        else:
+            conds.append('s."estado" = :estado')
+            params["estado"] = estado
 
     if fecha:
         conds.append('DATE(s."fecha_solicitud") = :fecha')
@@ -1108,6 +1121,19 @@ async def resolver_carga_camion_web(
                 "admin_id": usuario["IdUsuario"],
                 "sid": sol.id_solicitud
             })
+        else:
+            db.execute(text("""
+                INSERT INTO public.solicitud_carga_camion (
+                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                ) VALUES (
+                    :asig_id, :chofer_id, 'APROBADA', :obs, :admin_id, NOW(), NOW(), NOW()
+                );
+            """), {
+                "asig_id": asig_id,
+                "chofer_id": chofer_id,
+                "obs": obs_texto or "Carga aprobada en Web",
+                "admin_id": usuario["IdUsuario"]
+            })
 
         # Marcar AsignacionRuta activa principal
         db.execute(text("""
@@ -1194,6 +1220,19 @@ async def resolver_carga_camion_web(
                 "admin_id": usuario["IdUsuario"],
                 "sid": sol.id_solicitud
             })
+        else:
+            db.execute(text("""
+                INSERT INTO public.solicitud_carga_camion (
+                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                ) VALUES (
+                    :asig_id, :chofer_id, 'OBSERVADA', :obs, :admin_id, NOW(), NOW(), NOW()
+                );
+            """), {
+                "asig_id": asig_id,
+                "chofer_id": chofer_id,
+                "obs": obs_texto or "Carga observada en Web por supervisión",
+                "admin_id": usuario["IdUsuario"]
+            })
 
         db.execute(text("""
             UPDATE public."AsignacionRuta"
@@ -1279,6 +1318,19 @@ async def resolver_carga_camion_web(
                 "obs": obs_texto or "Carga rechazada en Web por supervisión",
                 "admin_id": usuario["IdUsuario"],
                 "sid": sol.id_solicitud
+            })
+        else:
+            db.execute(text("""
+                INSERT INTO public.solicitud_carga_camion (
+                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                ) VALUES (
+                    :asig_id, :chofer_id, 'RECHAZADA', :obs, :admin_id, NOW(), NOW(), NOW()
+                );
+            """), {
+                "asig_id": asig_id,
+                "chofer_id": chofer_id,
+                "obs": obs_texto or "Carga rechazada en Web por supervisión",
+                "admin_id": usuario["IdUsuario"]
             })
 
         db.execute(text("""

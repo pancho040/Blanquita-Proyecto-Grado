@@ -26,7 +26,7 @@ from sqlalchemy import text
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import get_current_user
 from app.Auth.Limiter import limiter
-from app.Auth.AlcanceSucursal import resolver_alcance_usuario
+from app.Auth.AlcanceSucursal import resolver_alcance_usuario, DependenciaAlcanceSucursal, AlcanceUsuario
 from app.Services.Usuario.Auth import AuthService
 from app.Services.Common.NotificationService import NotificationService
 from app.Services.Movil.PushNotificationService import PushNotificationService
@@ -346,18 +346,28 @@ def obtener_notificaciones(
     request: Request,
     solo_no_leidas: bool = Query(False, description="Filtrar únicamente notificaciones pendientes"),
     usuario_actual: dict = Depends(get_current_user),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene la bandeja de notificaciones internas del usuario autenticado.
+    Obtiene la bandeja de notificaciones internas del usuario autenticado con aislamiento estricto por chofer y sucursal.
     """
     req_id = _obtener_request_id(request)
     uid = usuario_actual["IdUsuario"]
+    id_rol = usuario_actual.get("IdRol")
+
+    try:
+        NotificationService.limpiar_notificaciones_basura(db)
+    except Exception:
+        pass
 
     items = NotificationService.listar_notificaciones(
         session=db,
         id_usuario=uid,
-        solo_no_leidas=solo_no_leidas
+        solo_no_leidas=solo_no_leidas,
+        id_rol=id_rol,
+        sucursal_id=alcance.sucursal_efectiva,
+        puede_ver_todas=alcance.puede_ver_todas
     )
 
     dto_list = [
