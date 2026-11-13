@@ -113,6 +113,95 @@ export function RutaProvider({ children }) {
   const [comprobanteActual, setComprobanteActual] = useState(null);
   const [ultimaSincronizacion, setUltimaSincronizacion] = useState(new Date());
 
+  // Stock e inventario en camión siempre sincronizado (Subagente A)
+  const [inventarioCamion, setInventarioCamion] = useState([]);
+
+  const normalizarItemCamionContext = (item) => {
+    if (!item) return null;
+    const presId = Number(
+      item.presentacion_id ??
+      item.id_presentacion ??
+      item.IdPresentacion ??
+      item.id_producto ??
+      item.id ??
+      0
+    );
+    const nombreProd = String(
+      item.producto_nombre ??
+      item.nombre_presentacion ??
+      item.nombre ??
+      item.NombrePresentacion ??
+      item.descripcion ??
+      (presId > 0 ? `Producto #${presId}` : "Producto")
+    );
+    const stockDisp = Number(
+      item.cantidad_remanente ??
+      item.saldo_camion ??
+      item.saldoCamion ??
+      item.stock_actual ??
+      item.saldo ??
+      item.cantidad ??
+      item.cantidad_disponible ??
+      0
+    );
+    const precioU = Number(
+      item.precio_vigente ??
+      item.precio_salida ??
+      item.precio_unitario ??
+      item.precio ??
+      25
+    );
+    return {
+      ...item,
+      presentacion_id: presId,
+      IdPresentacion: presId,
+      id: presId,
+      producto_nombre: nombreProd,
+      nombre_producto: nombreProd,
+      nombre: nombreProd,
+      cantidad_remanente: stockDisp,
+      saldo_camion: stockDisp,
+      stock_actual: stockDisp,
+      cantidad_disponible: stockDisp,
+      precio_unitario: precioU,
+      precio_vigente: precioU,
+    };
+  };
+
+  const cargarInventarioCamion = async () => {
+    let itemsNormalizados = [];
+    if (isOnline) {
+      try {
+        const resInv = await LogisticaApi.obtenerMiInventarioCamion();
+        const rawItems = Array.isArray(resInv) ? resInv : (resInv?.items || []);
+        if (rawItems && rawItems.length > 0) {
+          itemsNormalizados = rawItems.map(normalizarItemCamionContext);
+          setInventarioCamion(itemsNormalizados);
+          await LocalDB.guardarInventarioCamion({
+            items: itemsNormalizados,
+            total_saldo_camion: itemsNormalizados.reduce((s, it) => s + (it.saldo_camion || 0), 0),
+          });
+          return itemsNormalizados;
+        }
+      } catch (e) {
+        console.log("[RutaContext] Aviso al consultar inventario online:", e.message);
+      }
+    }
+    // Fallback a almacenamiento local
+    try {
+      const invLocal = await LocalDB.obtenerInventarioCamion();
+      const rawItems = Array.isArray(invLocal) ? invLocal : (invLocal?.items || []);
+      if (rawItems && rawItems.length > 0) {
+        itemsNormalizados = rawItems.map(normalizarItemCamionContext);
+        setInventarioCamion(itemsNormalizados);
+        return itemsNormalizados;
+      }
+    } catch (e) {
+      console.log("[RutaContext] Error al leer inventario de LocalDB:", e.message);
+    }
+    return [];
+  };
+
   const cerrarComprobante = () => setComprobanteActual(null);
 
   // Recaudación acumulada del chofer en la jornada (HU-32, HU-34)
@@ -349,6 +438,7 @@ export function RutaProvider({ children }) {
   const cargarHojaRuta = async () => {
     setErrorRuta(null);
     setCargandoRuta(true);
+    cargarInventarioCamion();
 
     // 1. Carga Inmediata Optimista desde caché local
     try {
@@ -683,12 +773,55 @@ export function RutaProvider({ children }) {
       obsOperacion = `[${incidencia}] ${obsOperacion}`.trim();
     }
 
+    // Resolver IDs de relación garantizando id_pedido limpio (PROHIBIDO poner || 1)
+    const idPvNum = Number(idPuntoVenta || detalleEntrega.id_punto_venta || detalleEntrega.idPuntoVenta || 0);
+
+    const rawIdPedido = detalleEntrega.id_pedido ?? detalleEntrega.idPedido ?? null;
+    let idPedidoLimpio = rawIdPedido !== null && rawIdPedido !== undefined && rawIdPedido !== ""
+      ? Number(rawIdPedido)
+      : null;
+    if (isNaN(idPedidoLimpio) || idPedidoLimpio <= 0) {
+      idPedidoLimpio = null;
+    }
+    // Saneamiento específico Potosí (idPuntoVenta >= 50): si viene con 1 falso, transformarlo en null
+    if (idPvNum >= 50 && idPedidoLimpio === 1) {
+      idPedidoLimpio = null;
+    }
+
+    const paradaActual = (asignacionActiva?.paradas || asignacionActiva?.Paradas || []).find(
+      (p) => String(p.IdPuntoVenta ?? p.id) === String(idPuntoVenta)
+    );
+
+    const idClienteLimpio = Number(
+      detalleEntrega.id_cliente ??
+      detalleEntrega.idCliente ??
+      paradaActual?.IdCliente ??
+      paradaActual?.id_cliente ??
+      paradaActual?.cliente?.id ??
+      0
+    ) || null;
+
+    const idAsignacionLimpio = Number(
+      detalleEntrega.id_asignacion ??
+      detalleEntrega.idAsignacion ??
+      paradaActual?.IdAsignacion ??
+      paradaActual?.id_asignacion ??
+      asignacionActiva?.IdAsignacion ??
+      asignacionActiva?.IdAsignacionRuta ??
+      asignacionActiva?.id ??
+      0
+    ) || null;
+
     // Contrato completo unificado con Chat 2 (Subagente D y handoff-sync.md)
     const datosOperacion = {
-      idPuntoVenta,
-      id_punto_venta: idPuntoVenta,
-      id_pedido: detalleEntrega.id_pedido || detalleEntrega.idPedido || asignacionActiva?.IdPedido,
-      idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta,
+      idPuntoVenta: idPvNum,
+      id_punto_venta: idPvNum,
+      idCliente: idClienteLimpio,
+      id_cliente: idClienteLimpio,
+      idAsignacion: idAsignacionLimpio,
+      id_asignacion: idAsignacionLimpio,
+      id_pedido: idPedidoLimpio,
+      idPedido: idPedidoLimpio,
       numeroNota,
       tipo_entrega: detalleEntrega.tipo_entrega || "TOTAL",
       incidencia,
@@ -721,9 +854,29 @@ export function RutaProvider({ children }) {
     // 3. Actualizar estado en la base local (HU-27)
     await LocalDB.actualizarEstadoParada(idPuntoVenta, "ENTREGADO", datosOperacion);
 
-    // Descontar inventario en camión local de forma optimista e inmediata (Subagente D)
+    // Descontar inventario en camión local de forma optimista e inmediata (Subagente D y A)
     if (items.length > 0) {
       await LocalDB.descontarInventarioCamion(items);
+      setInventarioCamion((prev) => {
+        return prev.map((itemCamion) => {
+          const idPresCamion = itemCamion.presentacion_id || itemCamion.IdPresentacion || itemCamion.id;
+          const ent = items.find(
+            (it) => (it.presentacion_id || it.IdPresentacion || it.id) === idPresCamion
+          );
+          if (ent) {
+            const cant = Number(ent.cantidad || ent.Cantidad || 0);
+            const saldo = Math.max(0, Number(itemCamion.saldo_camion || 0) - cant);
+            return {
+              ...itemCamion,
+              saldo_camion: saldo,
+              cantidad_remanente: saldo,
+              cantidad_disponible: saldo,
+              stock_actual: saldo,
+            };
+          }
+          return itemCamion;
+        });
+      });
     }
 
     // 4. Actualizar estado en memoria
@@ -812,23 +965,33 @@ export function RutaProvider({ children }) {
       };
     }
 
-    // Resolver id_pedido de la parada
-    let idPedido = asignacionActiva?.IdPedido || 0;
+    // Resolver id_pedido de la parada sin falsear a 1 (PROHIBIDO poner || 1)
+    const idPvNoEntrega = Number(idPuntoVenta || 0);
+    let idPedido = null;
     const paradasList = asignacionActiva?.paradas || asignacionActiva?.Paradas || [];
     const paradaEncontrada = paradasList.find(
       (p) => String(p.IdPuntoVenta ?? p.id) === String(idPuntoVenta)
     );
     if (paradaEncontrada) {
-      idPedido = paradaEncontrada.IdPedido || paradaEncontrada.pedido?.id || idPedido;
+      const rawPed = paradaEncontrada.IdPedido || paradaEncontrada.pedido?.id || paradaEncontrada.id_pedido;
+      if (rawPed) {
+        idPedido = Number(rawPed);
+      }
+    }
+    if (idPvNoEntrega >= 50 && idPedido === 1) {
+      idPedido = null;
     }
 
     const obsTexto = observacion ? String(observacion).trim() : "";
 
     const datosOperacion = {
       id_pedido: idPedido,
-      idPuntoVenta,
-      id_punto_venta: idPuntoVenta,
-      idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta,
+      idPuntoVenta: idPvNoEntrega,
+      id_punto_venta: idPvNoEntrega,
+      idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || null,
+      id_asignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || null,
+      id_cliente: paradaEncontrada?.IdCliente || paradaEncontrada?.id_cliente || null,
+      idCliente: paradaEncontrada?.IdCliente || paradaEncontrada?.id_cliente || null,
       motivo,
       observacion: obsTexto,
       observaciones: obsTexto,
@@ -1076,7 +1239,7 @@ export function RutaProvider({ children }) {
             saldo_pendiente: Number(p.SaldoDeudor || p.cliente?.saldo_pendiente || 0),
           },
           pedido: {
-            id: p.IdPedido || p.pedido?.id || idx + 1,
+            id: p.IdPedido || p.pedido?.id || p.id_pedido || null,
             monto_total:
               Number(p.MontoPedido || p.pedido?.monto_total || 0) ||
               (p.PedidosPendientes || []).reduce(
@@ -1111,6 +1274,9 @@ export function RutaProvider({ children }) {
         loading: cargandoRuta,
         errorRuta,
         recaudacion,
+        inventarioCamion,
+        inventario: inventarioCamion,
+        cargarInventarioCamion,
         comprobanteActual,
         cerrarComprobante,
         cargarHojaRuta,

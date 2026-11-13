@@ -47,9 +47,69 @@ import {
   Layers,
 } from 'lucide-react-native';
 
+export function normalizarProductoCamion(item) {
+  if (!item) return null;
+  const presentacion_id = Number(
+    item.presentacion_id ??
+    item.id_presentacion ??
+    item.IdPresentacion ??
+    item.id_producto ??
+    item.id ??
+    0
+  );
+  const producto_nombre = String(
+    item.producto_nombre ??
+    item.nombre_presentacion ??
+    item.nombre ??
+    item.NombrePresentacion ??
+    item.descripcion ??
+    (presentacion_id > 0 ? `Producto #${presentacion_id}` : 'Producto')
+  );
+  const saldo_camion = Number(
+    item.cantidad_remanente ??
+    item.saldo_camion ??
+    item.saldoCamion ??
+    item.stock_actual ??
+    item.saldo ??
+    item.cantidad ??
+    item.cantidad_disponible ??
+    0
+  );
+  const precio_unitario = Number(
+    item.precio_vigente ??
+    item.precio_salida ??
+    item.precio_unitario ??
+    item.precio ??
+    25
+  );
+
+  return {
+    ...item,
+    presentacion_id,
+    IdPresentacion: presentacion_id,
+    id: presentacion_id,
+    producto_nombre,
+    nombre_producto: producto_nombre,
+    nombre: producto_nombre,
+    saldo_camion,
+    cantidad_remanente: saldo_camion,
+    stock_actual: saldo_camion,
+    cantidad_disponible: saldo_camion,
+    precio_unitario,
+    precio_vigente: precio_unitario,
+  };
+}
+
 export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const { parada, pedido } = route.params || {};
-  const { registrarEntrega, comprobanteActual, cerrarComprobante } = useRuta();
+  const {
+    registrarEntrega,
+    comprobanteActual,
+    cerrarComprobante,
+    inventarioCamion: inventarioContext,
+    cargarInventarioCamion,
+    asignacionActiva,
+  } = useRuta();
   const { location, getCurrentCoords } = useLocation();
 
   // Stock en camión cargado por el chofer (con fallback a local)
@@ -124,39 +184,68 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   );
   const [comprobanteLocal, setComprobanteLocal] = useState(null);
 
-  // Cargar inventario del camión para verificar saldo
-  useEffect(() => {
-    let activo = true;
-    async function cargarStock() {
-      let itemsCamion = [];
+  // Cargar inventario del camión mapeando defensivamente todas las variantes de nombres de campos
+  const refrescarStockCamion = async () => {
+    let itemsCamion = [];
+    // 1. Usar inventario de contexto si está disponible
+    if (inventarioContext && Array.isArray(inventarioContext) && inventarioContext.length > 0) {
+      itemsCamion = inventarioContext.map(normalizarProductoCamion).filter(Boolean);
+    }
+    // 2. Si está vacío o desactualizado, consultar directamente a la API central
+    if (itemsCamion.length === 0) {
       try {
         const datos = await LogisticaApi.obtenerMiInventarioCamion();
-        if (activo && datos?.items) {
-          itemsCamion = datos.items;
+        const raw = Array.isArray(datos) ? datos : (datos?.items || []);
+        if (raw && raw.length > 0) {
+          itemsCamion = raw.map(normalizarProductoCamion).filter(Boolean);
+          // Persistir en local para consistencia offline
+          LocalDB.guardarInventarioCamion({
+            items: itemsCamion,
+            total_saldo_camion: itemsCamion.reduce((s, it) => s + (it.saldo_camion || 0), 0),
+          });
         }
       } catch (_e) {}
-
-      // Fallback a LocalDB
-      if (itemsCamion.length === 0) {
+    }
+    // 3. Fallback al caché local de inventario en LocalDB
+    if (itemsCamion.length === 0) {
+      try {
         const localInv = await LocalDB.obtenerInventarioCamion();
-        if (activo && localInv?.items) {
-          itemsCamion = localInv.items;
+        const raw = Array.isArray(localInv) ? localInv : (localInv?.items || []);
+        if (raw && raw.length > 0) {
+          itemsCamion = raw.map(normalizarProductoCamion).filter(Boolean);
         }
-      }
+      } catch (_e) {}
+    }
 
-      if (activo && itemsCamion.length > 0) {
-        setInventarioCamion(itemsCamion);
+    if (itemsCamion.length > 0) {
+      setInventarioCamion(itemsCamion);
+      return itemsCamion;
+    }
+    return [];
+  };
 
+  const handleAbrirModalAgregarCamion = async () => {
+    await refrescarStockCamion();
+    setModalAgregarCamionVisible(true);
+  };
+
+  useEffect(() => {
+    let activo = true;
+    async function cargarStockInicial() {
+      const itemsCargados = await refrescarStockCamion();
+      if (!activo) return;
+
+      if (itemsCargados && itemsCargados.length > 0) {
         // Si es un cliente nuevo en ruta, precargar productos del stock en camión con cantidad a entregar en 0
         setItems((prevItems) => {
           if (esNuevoClienteEnRuta || prevItems.length === 0) {
-            return itemsCamion.map((c, idx) => {
-              const saldo = Number(c.saldo_camion ?? c.cantidad_disponible ?? c.cantidad ?? 0);
+            return itemsCargados.map((c, idx) => {
+              const saldo = Number(c.saldo_camion ?? c.cantidad_remanente ?? c.cantidad_disponible ?? c.cantidad ?? 0);
               const precio = Number(c.precio_unitario || c.precio || 25);
               return {
                 id: idx,
                 presentacion_id: c.presentacion_id || c.IdPresentacion || c.id || idx + 1,
-                producto_nombre: c.nombre_producto || c.nombre || `Producto #${idx + 1}`,
+                producto_nombre: c.producto_nombre || c.nombre_producto || c.nombre || `Producto #${idx + 1}`,
                 cantidadPedida: saldo,
                 cantidadYaEntregada: 0,
                 cantidadPendiente: saldo,
@@ -172,7 +261,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
         });
       }
     }
-    cargarStock();
+    cargarStockInicial();
     return () => {
       activo = false;
     };
@@ -215,7 +304,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       (s) => (s.presentacion_id || s.IdPresentacion || s.id) === itemActual.presentacion_id
     );
     const saldoCamion = Number(
-      itemCamion?.saldo_camion ?? itemCamion?.cantidad_disponible ?? itemCamion?.cantidad ?? 9999
+      itemCamion?.saldo_camion ?? itemCamion?.cantidad_remanente ?? itemCamion?.cantidad_disponible ?? itemCamion?.cantidad ?? 9999
     );
 
     const cantidadFinal = Math.min(num, saldoCamion);
@@ -245,7 +334,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       (s) => (s.presentacion_id || s.IdPresentacion || s.id) === itemActual.presentacion_id
     );
     const saldoCamion = Number(
-      itemCamion?.saldo_camion ?? itemCamion?.cantidad_disponible ?? itemCamion?.cantidad ?? 9999
+      itemCamion?.saldo_camion ?? itemCamion?.cantidad_remanente ?? itemCamion?.cantidad_disponible ?? itemCamion?.cantidad ?? 9999
     );
 
     const actual = itemActual.cantidadAEntregar || 0;
@@ -286,10 +375,10 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   // Agregar producto desde el inventario del camión
   const handleAgregarProductoDelCamion = (prodCamion) => {
     const presId = prodCamion.presentacion_id || prodCamion.IdPresentacion || prodCamion.id;
-    const nombreProd = prodCamion.nombre_producto || prodCamion.nombre || `Producto #${presId}`;
+    const nombreProd = prodCamion.producto_nombre || prodCamion.nombre_producto || prodCamion.nombre || `Producto #${presId}`;
     const precioProd = Number(prodCamion.precio_unitario || prodCamion.precio || 25);
     const saldo = Number(
-      prodCamion.saldo_camion ?? prodCamion.cantidad_disponible ?? prodCamion.cantidad ?? 0
+      prodCamion.saldo_camion ?? prodCamion.cantidad_remanente ?? prodCamion.cantidad_disponible ?? prodCamion.cantidad ?? 0
     );
 
     if (saldo <= 0) {
@@ -561,8 +650,44 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       obsCompuesta = `[${situacionVisita}] ${obsCompuesta}`.trim();
     }
 
+    const idPvFinal = Number(parada?.idPuntoVenta || parada?.id_punto_venta || parada?.IdPuntoVenta || parada?.id || 0);
+    const idCliFinal = Number(
+      parada?.idCliente ||
+      parada?.id_cliente ||
+      parada?.IdCliente ||
+      parada?.cliente?.id ||
+      parada?.cliente_id ||
+      0
+    ) || null;
+    const idAsigFinal = Number(
+      parada?.idAsignacion ||
+      parada?.id_asignacion ||
+      parada?.IdAsignacion ||
+      asignacionActiva?.IdAsignacion ||
+      asignacionActiva?.IdAsignacionRuta ||
+      asignacionActiva?.id ||
+      0
+    ) || null;
+
+    // id_pedido: PROHIBIDO poner || 1. Si no hay pedido real, null.
+    // Si idPuntoVenta >= 50 e id_pedido === 1 (Potosí sin pedido previo), sanear a null.
+    const rawIdPed = pedido?.id || pedido?.IdPedido || parada?.id_pedido || parada?.IdPedido || parada?.pedido?.id || null;
+    let idPedFinal = (rawIdPed !== null && rawIdPed !== undefined && rawIdPed !== "") ? Number(rawIdPed) : null;
+    if (isNaN(idPedFinal) || idPedFinal <= 0) {
+      idPedFinal = null;
+    }
+    if (idPvFinal >= 50 && idPedFinal === 1) {
+      idPedFinal = null;
+    }
+
     const payloadEntregaCompuesta = {
-      id_pedido: pedido?.id || pedido?.IdPedido || parada?.IdPedido,
+      id_pedido: idPedFinal,
+      id_punto_venta: idPvFinal > 0 ? idPvFinal : undefined,
+      idPuntoVenta: idPvFinal > 0 ? idPvFinal : undefined,
+      id_cliente: idCliFinal,
+      idCliente: idCliFinal,
+      id_asignacion: idAsigFinal,
+      idAsignacion: idAsigFinal,
       latitud: location?.latitude || -19.0435,
       longitud: location?.longitude || -65.2580,
       tipo_entrega: tipoEntregaFinal,
@@ -666,7 +791,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return;
     }
 
-    const resultado = await registrarEntrega(parada.id || parada.IdPuntoVenta, payloadEntregaCompuesta);
+    const resultado = await registrarEntrega(idPvFinal || parada?.id || parada?.IdPuntoVenta, payloadEntregaCompuesta);
     setLoading(false);
 
     if (resultado.success || resultado.exito) {
@@ -696,7 +821,16 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   // Productos disponibles en el camión con stock > 0
   const productosDisponiblesCamion = useMemo(() => {
     return inventarioCamion.filter((c) => {
-      const saldo = Number(c.saldo_camion ?? c.cantidad_disponible ?? c.cantidad ?? 0);
+      const saldo = Number(
+        c.cantidad_remanente ??
+        c.saldo_camion ??
+        c.saldoCamion ??
+        c.stock_actual ??
+        c.saldo ??
+        c.cantidad ??
+        c.cantidad_disponible ??
+        0
+      );
       return saldo > 0;
     });
   }, [inventarioCamion]);
@@ -901,7 +1035,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
             {/* BOTÓN DESTACADO: "+ Agregar otro producto del camión" */}
             <TouchableOpacity
               style={styles.btnAgregarProductoCamion}
-              onPress={() => setModalAgregarCamionVisible(true)}
+              onPress={handleAbrirModalAgregarCamion}
               activeOpacity={0.8}
             >
               <PlusCircle size={20} color="#0F172A" style={{ marginRight: 8 }} />
@@ -1325,19 +1459,30 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
               ) : (
                 productosDisponiblesCamion.map((prod) => {
                   const presId = prod.presentacion_id || prod.IdPresentacion || prod.id;
-                  const nombre = prod.nombre_producto || prod.nombre || `Presentación #${presId}`;
-                  const saldo = Number(prod.saldo_camion ?? prod.cantidad_disponible ?? prod.cantidad ?? 0);
+                  const nombre = prod.producto_nombre || prod.nombre_producto || prod.nombre || `Presentación #${presId}`;
+                  const stockTotal = Number(
+                    prod.saldo_camion ??
+                    prod.cantidad_remanente ??
+                    prod.stock_actual ??
+                    prod.cantidad_disponible ??
+                    prod.cantidad ??
+                    0
+                  );
                   const precio = Number(prod.precio_unitario || prod.precio || 25);
-                  const yaEnLista = items.some(
+                  const itemEnLista = items.find(
                     (it) => (it.presentacion_id || it.IdPresentacion || it.id) === presId
                   );
+                  const cantidadYaEnEntrega = Number(itemEnLista?.cantidadAEntregar || 0);
+                  const saldoRestanteReal = Math.max(0, stockTotal - cantidadYaEnEntrega);
+                  const yaEnLista = Boolean(itemEnLista);
+                  const sinSaldoRestante = saldoRestanteReal <= 0;
 
                   return (
                     <View key={presId} style={styles.modalProductoFila}>
                       <View style={styles.modalProductoInfo}>
                         <Text style={styles.modalProductoNombre}>{nombre}</Text>
                         <Text style={styles.modalProductoMeta}>
-                          Stock: <Text style={styles.modalProductoMetaBold}>{saldo} bultos</Text> | Bs. {precio.toFixed(2)} c/u
+                          Disponible: <Text style={styles.modalProductoMetaBold}>{saldoRestanteReal} bultos</Text> (de {stockTotal} en camión) | Bs. {precio.toFixed(2)} c/u
                         </Text>
                       </View>
 
@@ -1345,13 +1490,15 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
                         style={[
                           styles.modalBtnSumar,
                           yaEnLista && styles.modalBtnSumarExistente,
+                          sinSaldoRestante && styles.modalBtnDeshabilitado,
                         ]}
+                        disabled={sinSaldoRestante}
                         onPress={() => handleAgregarProductoDelCamion(prod)}
                         activeOpacity={0.8}
                       >
                         <Plus size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
                         <Text style={styles.modalBtnSumarTexto}>
-                          {yaEnLista ? '+1 Sumar' : '+ Agregar'}
+                          {sinSaldoRestante ? 'Agotado' : (yaEnLista ? '+1 Sumar' : '+ Agregar')}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2051,6 +2198,10 @@ const styles = StyleSheet.create({
   },
   modalBtnSumarExistente: {
     backgroundColor: '#0F172A',
+  },
+  modalBtnDeshabilitado: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.65,
   },
   modalBtnSumarTexto: {
     fontSize: 12.5,

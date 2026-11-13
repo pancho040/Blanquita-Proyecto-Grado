@@ -51,11 +51,37 @@ export function sanitizarPayloadParaLog(obj) {
 export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
   const p = { ...payloadOriginal };
 
-  // 1. id_pedido como Number entero
-  const idPedido = parseInt(
-    p.id_pedido ?? p.idPedido ?? p.IdPedido ?? p.pedido_id ?? 0,
+  // Resolver IDs de relación
+  const idPuntoVenta = parseInt(
+    p.id_punto_venta ?? p.idPuntoVenta ?? p.IdPuntoVenta ?? 0,
     10
   );
+  const idCliente = parseInt(
+    p.id_cliente ?? p.idCliente ?? p.IdCliente ?? 0,
+    10
+  );
+  const idAsignacion = parseInt(
+    p.id_asignacion ?? p.idAsignacion ?? p.IdAsignacion ?? p.IdAsignacionRuta ?? 0,
+    10
+  );
+
+  // 1. id_pedido como Number entero o null (PROHIBIDO forzar || 1)
+  const rawIdPedido = p.id_pedido ?? p.idPedido ?? p.IdPedido ?? p.pedido_id ?? null;
+  let idPedido = rawIdPedido !== null && rawIdPedido !== undefined && rawIdPedido !== ""
+    ? parseInt(rawIdPedido, 10)
+    : null;
+
+  if (isNaN(idPedido) || idPedido <= 0) {
+    idPedido = null;
+  }
+
+  // Saneamiento de cola Potosí:
+  // Si un ítem viene atascado en la cola con id_punto_venta >= 50 (puntos de venta de Potosí)
+  // e id_pedido === 1, sanea automáticamente a null para que el backend genere el pedido limpio sin 404/400.
+  if (idPuntoVenta >= 50 && idPedido === 1) {
+    console.log(`[SyncService] Saneando id_pedido: 1 falso en cola offline para punto de venta Potosí (${idPuntoVenta}) -> null`);
+    idPedido = null;
+  }
 
   // 2. latitud y longitud como números
   const latitud = typeof p.latitud === "number" ? p.latitud : parseFloat(p.latitud) || -19.0435;
@@ -207,8 +233,14 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
   if (p.id_comprobante_archivo) {
     payloadFinal.id_comprobante_archivo = p.id_comprobante_archivo;
   }
-  if (p.id_punto_venta || p.idPuntoVenta) {
-    payloadFinal.id_punto_venta = p.id_punto_venta || p.idPuntoVenta;
+  if (idPuntoVenta > 0 || p.id_punto_venta || p.idPuntoVenta) {
+    payloadFinal.id_punto_venta = idPuntoVenta > 0 ? idPuntoVenta : (p.id_punto_venta || p.idPuntoVenta);
+  }
+  if (idCliente > 0 || p.id_cliente || p.idCliente) {
+    payloadFinal.id_cliente = idCliente > 0 ? idCliente : (p.id_cliente || p.idCliente);
+  }
+  if (idAsignacion > 0 || p.id_asignacion || p.idAsignacion) {
+    payloadFinal.id_asignacion = idAsignacion > 0 ? idAsignacion : (p.id_asignacion || p.idAsignacion);
   }
 
   return payloadFinal;
@@ -648,13 +680,25 @@ class SyncService {
             }
 
             case "NO_ENTREGA": {
+              const idPvNoEntrega = Number(item.payload?.idPuntoVenta || item.payload?.id_punto_venta || 0);
+              let idPedNoEntrega = item.payload?.id_pedido ?? item.payload?.IdPedido ?? null;
+              if (idPedNoEntrega !== null && idPedNoEntrega !== undefined && idPedNoEntrega !== "") {
+                idPedNoEntrega = parseInt(idPedNoEntrega, 10);
+                if (isNaN(idPedNoEntrega) || idPedNoEntrega <= 0 || (idPvNoEntrega >= 50 && idPedNoEntrega === 1)) {
+                  idPedNoEntrega = null;
+                }
+              } else {
+                idPedNoEntrega = null;
+              }
               const payloadNoEntrega = {
-                id_pedido: item.payload?.id_pedido || item.payload?.IdPedido || 0,
+                id_pedido: idPedNoEntrega,
                 motivo: item.payload?.motivo || "LOCAL_CERRADO",
                 observacion: item.payload?.observacion || item.payload?.observaciones || null,
                 latitud: item.gps?.latitud || item.payload?.latitud || -19.0435,
                 longitud: item.gps?.longitud || item.payload?.longitud || -65.2580,
-                id_punto_venta: item.payload?.idPuntoVenta || item.payload?.id_punto_venta,
+                id_punto_venta: idPvNoEntrega > 0 ? idPvNoEntrega : undefined,
+                id_cliente: item.payload?.id_cliente || item.payload?.idCliente || undefined,
+                id_asignacion: item.payload?.id_asignacion || item.payload?.idAsignacion || undefined,
               };
               const resNoEntrega = await LogisticaApi.registrarNoEntrega(payloadNoEntrega, idempotencyKey);
               if (!resNoEntrega.success) {

@@ -63,6 +63,10 @@ export const LogisticaApi = {
     }
   },
 
+  async obtenerMiInventario() {
+    return this.obtenerMiInventarioCamion();
+  },
+
   // 3. Registrar entrega de producto (Total o Parcial) con Firma, Idempotencia y Alerta de Revalorización
   async registrarEntrega(payload, idempotencyKey = null) {
     const headers = {};
@@ -70,7 +74,7 @@ export const LogisticaApi = {
       headers["X-Idempotency-Key"] = idempotencyKey;
     }
     try {
-      // Intentar primero endpoint especializado Fase 2
+      // Endpoint especializado Fase 2 (EXCLUSIVO: Prohibido fallback obsoleto a telemetría)
       const response = await apiClient.post("/api/movil/v1/chofer/entregar", payload, { headers });
       return {
         success: true,
@@ -79,17 +83,12 @@ export const LogisticaApi = {
         codigo: response.data?.codigo || "EXITO",
       };
     } catch (err) {
-      // Fallback a endpoint telemetria si existiera
-      if (err.response?.status === 404 || err.status === 404) {
-        try {
-          const fallback = await apiClient.post("/logistica/telemetria/entrega", payload, { headers });
-          return { success: true, data: fallback.data };
-        } catch (fErr) {
-          return procesarErrorApi(fErr);
-        }
-      }
       return procesarErrorApi(err);
     }
+  },
+
+  async registrarEntregaConCobro(payload, idempotencyKey = null) {
+    return this.registrarEntrega(payload, idempotencyKey);
   },
 
   // 4. Registrar cobro simple o mixto (Efectivo, QR, Transferencia, Crédito) con Idempotencia
