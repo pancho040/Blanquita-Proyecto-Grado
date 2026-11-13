@@ -12,6 +12,38 @@
  *  - cobro_qr_registrado
  */
 
+let promesaTicketModulo = null;
+
+async function obtenerWsTicketCompartido() {
+  if (promesaTicketModulo) return promesaTicketModulo;
+
+  promesaTicketModulo = (async () => {
+    const reintentos = [1000, 2000, 4000];
+    for (let intento = 0; intento <= reintentos.length; intento++) {
+      try {
+        const res = await fetch("/api/logistica/flota/ws-ticket", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.ticket) {
+            return data.ticket;
+          }
+        }
+        if (res.status === 401 || res.status === 403) {
+          return null;
+        }
+      } catch (err) {
+        if (intento === reintentos.length) break;
+        await new Promise((r) => setTimeout(r, reintentos[intento]));
+      }
+    }
+    return null;
+  })().finally(() => {
+    promesaTicketModulo = null;
+  });
+
+  return promesaTicketModulo;
+}
+
 class LogisticaWebSocketClient {
   constructor() {
     this.socket = null;
@@ -27,10 +59,10 @@ class LogisticaWebSocketClient {
 
   async conectar() {
     if (typeof window === "undefined") return;
-    if (this.isConnecting) return;
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
+    if (this.isConnecting) return;
 
     this.isConnecting = true;
 
@@ -66,18 +98,13 @@ class LogisticaWebSocketClient {
         }
       }
 
-      // Obtener ticket de autenticación efímero para conectar con seguridad sin exponer JWT
-      let ticketParam = "";
-      try {
-        const res = await fetch("/api/logistica/flota/ws-ticket", { method: "POST" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.ticket) {
-            ticketParam = `?ticket=${encodeURIComponent(data.ticket)}`;
-          }
-        }
-      } catch {
-        // Fallback a conexión directa si el proxy o cookies autentican
+      // Obtener ticket de autenticación efímero deduplicado con backoff
+      const ticket = await obtenerWsTicketCompartido();
+      const ticketParam = ticket ? `?ticket=${encodeURIComponent(ticket)}` : "";
+
+      // Si otro flujo ya conectó mientras esperábamos el ticket, abortar
+      if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+        return;
       }
 
       // URL del WebSocket de logística apuntando al backend (ej. ws://localhost:8000/ws/logistica)
@@ -134,8 +161,9 @@ class LogisticaWebSocketClient {
       };
     } catch {
       this.estaConectado = false;
-      this.isConnecting = false;
       this._notificarCambioEstado(false);
+    } finally {
+      this.isConnecting = false;
     }
   }
 

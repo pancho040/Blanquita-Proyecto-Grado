@@ -208,3 +208,11 @@ export function invalidarCache(prefijo = null) {
     } catch {}
   }
 }
+
+// Limpiar peticiones en vuelo que el navegador cancelará por el swap de documento en View Transitions
+if (typeof document !== "undefined") {
+  document.addEventListener("astro:before-swap", () => {
+    pendingRequests.clear();
+  });
+}
+
