@@ -51,6 +51,10 @@ import EntregaChoferMovil from "../Reparto/EntregaChoferMovil";
 import CierreTurnoChoferComponent from "../Reparto/CierreTurnoChofer";
 import InventarioCamionTab from "../Reparto/InventarioCamionTab";
 import HistorialRepartoTab from "../Reparto/HistorialRepartoTab";
+import EditorParadasDinamicoModal from "../Rutas/EditorParadasDinamicoModal";
+import ModalReasignarParadas from "../Rutas/ModalReasignarParadas";
+import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
+import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { SkeletonTable } from "@/components/common/LoadingStates";
@@ -134,7 +138,58 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [modalChoferesAbierto, setModalChoferesAbierto] = useState(false);
   const [hojaRutaAsignacion, setHojaRutaAsignacion] = useState(null);
 
-  // Cargar asignaciones (memorizada para auto-polling)
+  // Modales para Nuevos Requerimientos (Editor 1..N, Reasignar Paradas, Solicitud de Carga)
+  const [modalEditorParadas, setModalEditorParadas] = useState(false);
+  const [asignacionParaEditarParadas, setAsignacionParaEditarParadas] = useState(null);
+  const [modalReasignarParadas, setModalReasignarParadas] = useState(false);
+  const [asignacionParaReasignar, setAsignacionParaReasignar] = useState(null);
+  const [modalSolicitudCarga, setModalSolicitudCarga] = useState(false);
+  const [asignacionParaCarga, setAsignacionParaCarga] = useState(null);
+  const [wsConectado, setWsConectado] = useState(false);
+
+  // Plantillas automáticas de chofer por ruta (localStorage)
+  const [plantillasAutomaticas, setPlantillasAutomaticas] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const guardado = localStorage.getItem("blanquita_rutas_plantilla_auto");
+        return guardado ? JSON.parse(guardado) : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+
+  const toggleAsignacionAutomatica = (idRuta, idChofer) => {
+    const copia = { ...plantillasAutomaticas };
+    if (copia[idRuta] === idChofer) {
+      delete copia[idRuta];
+      toast.info("Asignación automática deshabilitada para esta ruta");
+    } else {
+      copia[idRuta] = idChofer;
+      toast.success("Plantilla guardada: este chofer se asignará automáticamente a esta ruta");
+    }
+    setPlantillasAutomaticas(copia);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("blanquita_rutas_plantilla_auto", JSON.stringify(copia));
+    }
+  };
+
+  const cambiarChoferManualmente = async (asignacion, nuevoChoferId) => {
+    if (!asignacion || !nuevoChoferId) return;
+    try {
+      await ActualizarAsignacion(asignacion.IdAsignacionRuta, {
+        IdUsuarioRepartidor: Number(nuevoChoferId)
+      });
+      const repObj = repartidores.find((r) => Number(r.IdUsuario) === Number(nuevoChoferId));
+      toast.success(`Chofer cambiado a: ${repObj?.NombreCompleto || "Nuevo repartidor"}`);
+      cargarAsignaciones(true);
+    } catch (err) {
+      toast.error(err.message || "Error al cambiar chofer");
+    }
+  };
+
+  // Cargar asignaciones (memorizada para actualización)
   const cargarAsignaciones = useCallback(async (silencioso = false) => {
     try {
       if (!silencioso) setLoading(true);
@@ -176,21 +231,36 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }
   }, [sucursal, cargandoAlcance, precargarCatalogos, cargarAsignaciones]);
 
-  // Auto-polling silencioso
+  // WebSocket en tiempo real: Cero Polling Innecesario (Plan Gratuito)
   useEffect(() => {
-    if (cargandoAlcance) return;
-    const intervalo = setInterval(() => {
-      cargarAsignaciones(true);
-    }, 30000);
+    logisticaSocket.conectar();
+    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
 
-    const handleFocus = () => cargarAsignaciones(true);
-    window.addEventListener("focus", handleFocus);
+    const unsubCarga = logisticaSocket.suscribir("solicitud_carga_recibida", (datos) => {
+      toast.info("Nueva solicitud de carga de camión recibida de chofer");
+      cargarAsignaciones(true);
+    });
+
+    const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", () => {
+      cargarAsignaciones(true);
+    });
+
+    const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", () => {
+      cargarAsignaciones(true);
+    });
+
+    const unsubFin = logisticaSocket.suscribir("ruta_finalizada_admin", () => {
+      cargarAsignaciones(true);
+    });
 
     return () => {
-      clearInterval(intervalo);
-      window.removeEventListener("focus", handleFocus);
+      unsubEstado();
+      unsubCarga();
+      unsubOp();
+      unsubReorden();
+      unsubFin();
     };
-  }, [cargandoAlcance, cargarAsignaciones]);
+  }, [cargarAsignaciones]);
 
   // Apertura instantánea sin esperar peticiones
   const abrirModalProgramar = () => {
@@ -395,6 +465,26 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           )
         }
       >
+        <div className="flex items-center gap-1.5">
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
+            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+            <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => cargarAsignaciones(false)}
+            disabled={loading}
+            className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
+            title="Actualizar despachos manualmente"
+          >
+            <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
+            <span>Actualizar</span>
+          </Button>
+        </div>
+
         <a
           href="/supervisor/rutas/rastreo"
           className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
@@ -730,9 +820,34 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="font-medium text-slate-800 flex items-center gap-1.5">
-                            <UserCheck className="h-4 w-4 text-[#1C96C5]" />
-                            <span>{a.NombreRepartidor}</span>
+                          <div className="space-y-1">
+                            {/* Selector manual de chofer */}
+                            <div className="flex items-center gap-1.5">
+                              <UserCheck className="h-4 w-4 text-[#1C96C5] shrink-0" />
+                              <select
+                                value={a.IdUsuarioRepartidor}
+                                onChange={(e) => cambiarChoferManualmente(a, e.target.value)}
+                                className="h-7 text-xs border border-slate-200 rounded bg-white font-medium text-slate-800 max-w-[170px] truncate"
+                                title="Cambiar chofer manualmente para este despacho"
+                              >
+                                {repartidores.map((r) => (
+                                  <option key={r.IdUsuario} value={r.IdUsuario}>
+                                    {r.NombreCompleto}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Switch Asignación Automática a este chofer */}
+                            <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={plantillasAutomaticas[a.IdRutaDistribucion] === a.IdUsuarioRepartidor}
+                                onChange={() => toggleAsignacionAutomatica(a.IdRutaDistribucion, a.IdUsuarioRepartidor)}
+                                className="rounded text-[#1C96C5] focus:ring-0 h-3 w-3"
+                              />
+                              <span className="truncate">Auto-asignar a este chofer</span>
+                            </label>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-center">
@@ -767,6 +882,51 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                                 <PlayCircle className="h-4 w-4" />
                               </Button>
                             )}
+
+                            {/* Bandeja de Solicitud de Carga */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setAsignacionParaCarga(a);
+                                setModalSolicitudCarga(true);
+                              }}
+                              className="h-8 px-2 text-xs text-sky-800 border-sky-300 hover:bg-sky-50 gap-1 rounded font-medium"
+                              title="Revisar solicitud de carga de camión y stock remanente"
+                            >
+                              <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
+                              <span>Carga</span>
+                            </Button>
+
+                            {/* Reasignar paradas pendientes a otro chofer */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setAsignacionParaReasignar(a);
+                                setModalReasignarParadas(true);
+                              }}
+                              className="h-8 px-2 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 gap-1 rounded font-medium"
+                              title="Reasignar paradas pendientes a otro chofer"
+                            >
+                              <Users className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Reasignar</span>
+                            </Button>
+
+                            {/* Editor dinámico de paradas 1..N */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setAsignacionParaEditarParadas(a);
+                                setModalEditorParadas(true);
+                              }}
+                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
+                              title="Editar orden secuencial 1..N, agregar o mover paradas"
+                            >
+                              <Route className="h-3.5 w-3.5 text-slate-600" />
+                              <span>Paradas 1..N</span>
+                            </Button>
 
                             {/* Consultar Stock Físico en Camión */}
                             <Button
@@ -1181,6 +1341,39 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           </DialogContent>
         </Dialog>
       )}
+
+      {/* MODAL EDITOR DINÁMICO DE PARADAS 1..N */}
+      <EditorParadasDinamicoModal
+        abierto={modalEditorParadas}
+        onOpenChange={setModalEditorParadas}
+        asignacion={asignacionParaEditarParadas}
+        todosPuntosVenta={todosPV}
+        sucursal={sucursal}
+        alGuardar={() => {
+          cargarAsignaciones(true);
+        }}
+      />
+
+      {/* MODAL REASIGNAR PARADAS PENDIENTES */}
+      <ModalReasignarParadas
+        abierto={modalReasignarParadas}
+        onOpenChange={setModalReasignarParadas}
+        asignacion={asignacionParaReasignar}
+        repartidores={repartidores}
+        alCompletar={() => {
+          cargarAsignaciones(true);
+        }}
+      />
+
+      {/* MODAL BANDEJA SOLICITUD DE CARGA DE CAMIÓN */}
+      <BandejaSolicitudCargaModal
+        abierto={modalSolicitudCarga}
+        onOpenChange={setModalSolicitudCarga}
+        asignacion={asignacionParaCarga}
+        alAprobar={() => {
+          cargarAsignaciones(true);
+        }}
+      />
     </div>
   );
 }

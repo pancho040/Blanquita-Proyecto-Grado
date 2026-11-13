@@ -259,3 +259,85 @@ export async function CerrarYLiquidarRuta(idAsignacion, datos) {
   invalidarCache("/api/logistica");
   return await response.json();
 }
+
+// -------------------------------------------------------------
+// Solicitud de Carga, Aprobación y Telemetría Bajo Demanda
+// -------------------------------------------------------------
+export async function AprobarCargaCamion(idAsignacion, datos = {}) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/aprobar-carga`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function SolicitarUbicacionActualChoferes(idSucursal = null) {
+  let url = "/api/logistica/telemetria/solicitar-ubicacion-actual";
+  if (idSucursal && idSucursal !== "todas") {
+    url += `?id_sucursal=${idSucursal}`;
+  }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica/telemetria");
+  return await response.json();
+}
+
+export async function ReasignarParadasPendientes(idAsignacionOrigen, idChoferDestino, idsParadas = []) {
+  const response = await fetch(`/api/logistica/asignaciones/reasignar-paradas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id_asignacion_origen: idAsignacionOrigen,
+      id_chofer_destino: idChoferDestino,
+      paradas_pendientes: idsParadas,
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function RevisarOperacionRuta(idOperacion, estado, observacion = "") {
+  const response = await fetch(`/api/logistica/operaciones/${idOperacion}/revisar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      estado: estado, // 'APROBADO' | 'OBSERVADO' | 'RECHAZADO'
+      observacion: observacion,
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+export async function FinalizarRutaAdmin(idAsignacion, observacionGeneral = "") {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/finalizar-admin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      observacion_general: observacionGeneral,
+    }),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+

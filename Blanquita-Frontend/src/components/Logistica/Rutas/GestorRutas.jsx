@@ -29,7 +29,10 @@ import {
   Navigation,
   Search,
   Store,
-  Radio
+  Radio,
+  Lock,
+  RotateCcw,
+  ShieldCheck
 } from "lucide-react";
 import MapaRuta from "./MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
@@ -37,6 +40,7 @@ import MapaSelectorUbicacion from "../Common/MapaSelectorUbicacion";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
+import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 
 const DIAS_SEMANA = {
   1: "Lunes",
@@ -159,6 +163,8 @@ export default function GestorRutas({ usuario = null }) {
     }
   }, [sucursal, seleccionarRuta]);
 
+  const [wsConectado, setWsConectado] = useState(false);
+
   // Carga reactiva al cambiar sucursal
   useEffect(() => {
     if (!cargandoAlcance) {
@@ -166,21 +172,29 @@ export default function GestorRutas({ usuario = null }) {
     }
   }, [sucursal, cargandoAlcance, cargarDatos]);
 
-  // Auto-actualización silenciosa
+  // WebSocket en tiempo real: Cero Polling innecesario para optimización en plan gratuito
   useEffect(() => {
-    if (cargandoAlcance) return;
-    const intervalo = setInterval(() => {
+    logisticaSocket.conectar();
+    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
+
+    const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", () => {
       cargarDatos(true);
-    }, 45000);
+    });
+
+    const unsubCarga = logisticaSocket.suscribir("solicitud_carga_recibida", () => {
+      cargarDatos(true);
+    });
 
     const handleFocus = () => cargarDatos(true);
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      clearInterval(intervalo);
+      unsubEstado();
+      unsubReorden();
+      unsubCarga();
       window.removeEventListener("focus", handleFocus);
     };
-  }, [cargandoAlcance, cargarDatos]);
+  }, [cargarDatos]);
 
   // Opciones para BuscadorSelect de Zonas
   const opcionesZonas = useMemo(() => {
@@ -298,6 +312,19 @@ export default function GestorRutas({ usuario = null }) {
   };
 
   const eliminarParada = (index) => {
+    const objetivo = puntosRuta[index];
+    const esEjecutada = Boolean(
+      objetivo.esEjecutada ||
+      objetivo.Entregado ||
+      objetivo.Cobrado ||
+      objetivo.Estado === "Entregado" ||
+      objetivo.Estado === "Cobrado"
+    );
+    if (esEjecutada) {
+      toast.error("Parada ya ejecutada hoy: no se puede eliminar");
+      return;
+    }
+
     const filtrado = puntosRuta.filter((_, idx) => idx !== index);
     filtrado.forEach((item, idx) => {
       item.OrdenVisita = idx + 1;
@@ -341,6 +368,26 @@ export default function GestorRutas({ usuario = null }) {
           />
         }
       >
+        <div className="flex items-center gap-1.5">
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
+            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+            <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => cargarDatos(false, true)}
+            disabled={loading}
+            className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
+            title="Actualizar catálogo de rutas y zonas"
+          >
+            <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
+            <span>Actualizar</span>
+          </Button>
+        </div>
+
         <a
           href="/supervisor/rutas/rastreo"
           className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
@@ -604,35 +651,47 @@ export default function GestorRutas({ usuario = null }) {
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={idx === 0}
-                                  onClick={() => moverParada(idx, -1)}
-                                  className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
-                                  title="Subir parada"
-                                >
-                                  <ArrowUp className="h-3.5 w-3.5 text-slate-700" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={idx === puntosRuta.length - 1}
-                                  onClick={() => moverParada(idx, 1)}
-                                  className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
-                                  title="Bajar parada"
-                                >
-                                  <ArrowDown className="h-3.5 w-3.5 text-slate-700" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => eliminarParada(idx)}
-                                  className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded"
-                                  title="Quitar parada"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                {Boolean(p.esEjecutada || p.Entregado || p.Cobrado || p.Estado === "Entregado" || p.Estado === "Cobrado") ? (
+                                  <div
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-medium"
+                                    title="Parada ya ejecutada hoy: no se puede eliminar ni mover"
+                                  >
+                                    <Lock className="h-3.5 w-3.5 text-amber-600" />
+                                    <span>Parada ya ejecutada hoy</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={idx === 0}
+                                      onClick={() => moverParada(idx, -1)}
+                                      className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
+                                      title="Subir parada"
+                                    >
+                                      <ArrowUp className="h-3.5 w-3.5 text-slate-700" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={idx === puntosRuta.length - 1}
+                                      onClick={() => moverParada(idx, 1)}
+                                      className="h-7 w-7 p-0 hover:bg-slate-100 rounded"
+                                      title="Bajar parada"
+                                    >
+                                      <ArrowDown className="h-3.5 w-3.5 text-slate-700" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => eliminarParada(idx)}
+                                      className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded"
+                                      title="Quitar parada"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))

@@ -1,11 +1,51 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { LogisticaApi } from "../api/logisticaApi";
+import { LogisticaApi, ESTADOS_RUTA } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
 import { runSyncIfConnected, iniciarAutoSync } from "../services/autoSync";
+import { wsService } from "../services/wsService";
 import { useNetwork } from "./NetworkContext";
 import { useLocation } from "./LocationContext";
 import { useAuth } from "./AuthContext";
+
+export { ESTADOS_RUTA };
+
+/**
+ * Determina el estado del flujo de ruta del chofer:
+ * SIN_RUTA, PENDIENTE_CARGA, CARGA_SOLICITADA, APROBADA_EN_RUTA, FINALIZADA
+ */
+export function determinarEstadoRuta(ruta) {
+  if (!ruta || (!ruta.IdAsignacion && !ruta.IdAsignacionRuta && !ruta.id)) {
+    return ESTADOS_RUTA.SIN_RUTA;
+  }
+  const estadoRaw = String(ruta.Estado || ruta.estado || ruta.EstadoAsignacion || "").toUpperCase();
+  if (estadoRaw === "FINALIZADA" || estadoRaw === "CERRADA") {
+    return ESTADOS_RUTA.FINALIZADA;
+  }
+  if (ruta.estado_flujo && Object.values(ESTADOS_RUTA).includes(ruta.estado_flujo)) {
+    return ruta.estado_flujo;
+  }
+  const estadoCarga = String(ruta.estado_carga || ruta.EstadoCarga || "").toUpperCase();
+  if (
+    estadoCarga === "SOLICITADA" ||
+    estadoCarga === "PENDIENTE_APROBACION" ||
+    estadoRaw === "CARGA_SOLICITADA"
+  ) {
+    return ESTADOS_RUTA.CARGA_SOLICITADA;
+  }
+  const habilitada = Boolean(
+    ruta.habilitada_para_reparto === true ||
+    ruta.HabilitadaParaReparto === true ||
+    estadoCarga === "APROBADA" ||
+    estadoRaw === "APROBADA_EN_RUTA" ||
+    estadoRaw === "EN_RUTA" ||
+    estadoRaw === "EN_CURSO"
+  );
+  if (habilitada) {
+    return ESTADOS_RUTA.APROBADA_EN_RUTA;
+  }
+  return ESTADOS_RUTA.PENDIENTE_CARGA;
+}
 
 const RutaContext = createContext(null);
 
@@ -15,6 +55,7 @@ export function RutaProvider({ children }) {
   const { usuario } = useAuth();
 
   const [asignacionActiva, setAsignacionActiva] = useState(null);
+  const [estadoRuta, setEstadoRuta] = useState(ESTADOS_RUTA.SIN_RUTA);
   const [cargandoRuta, setCargandoRuta] = useState(false);
   const [errorRuta, setErrorRuta] = useState(null);
   const [comprobanteActual, setComprobanteActual] = useState(null);
@@ -38,6 +79,27 @@ export function RutaProvider({ children }) {
 
   const cargarHojaRutaRef = useRef(null);
 
+  /**
+   * Limpia la ruta activa localmente y restaura el estado a SIN_RUTA.
+   * Permite recibir una nueva asignación de ruta en el mismo día (Soporte Multi-Ruta).
+   */
+  const limpiarRutaActiva = async () => {
+    setAsignacionActiva(null);
+    setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
+    setRecaudacion({
+      efectivo: 0,
+      transferencias: 0,
+      totalCobrado: 0,
+      cantidadCobros: 0,
+    });
+    try {
+      await LocalDB.guardarRutaActiva(null);
+    } catch (_e) {}
+    if (detenerTelemetriaRef.current) {
+      detenerTelemetriaRef.current();
+    }
+  };
+
   // Auto-sincronización Offline-First en background
   useEffect(() => {
     const unsub = iniciarAutoSync(() => {
@@ -57,12 +119,57 @@ export function RutaProvider({ children }) {
         cargarHojaRutaRef.current();
       }
     } else {
-      setAsignacionActiva(null);
-      if (detenerTelemetriaRef.current) {
-        detenerTelemetriaRef.current();
-      }
+      limpiarRutaActiva();
     }
   }, [usuario]);
+
+  // Listener de eventos WebSocket en tiempo real (Subagente B)
+  useEffect(() => {
+    // 1. Evento: Carga de camión aprobada en Web
+    const unsubCargaAprobada = wsService.on("carga_camion_aprobada", async (data) => {
+      console.log("[RutaContext] Evento WebSocket carga_camion_aprobada recibido:", data);
+      setAsignacionActiva((prev) => {
+        if (!prev) return prev;
+        const actualizada = {
+          ...prev,
+          habilitada_para_reparto: true,
+          estado_carga: "APROBADA",
+          estado: "APROBADA_EN_RUTA",
+          estado_flujo: ESTADOS_RUTA.APROBADA_EN_RUTA,
+        };
+        LocalDB.guardarRutaActiva(actualizada);
+        return actualizada;
+      });
+      setEstadoRuta(ESTADOS_RUTA.APROBADA_EN_RUTA);
+      if (usuario && asignacionActiva) {
+        iniciarTelemetria(usuario.IdUsuario || usuario.id, asignacionActiva.IdAsignacion || asignacionActiva.IdAsignacionRuta);
+      }
+      // Refrescar para sincronizar paradas y stock oficial
+      if (cargarHojaRutaRef.current) {
+        cargarHojaRutaRef.current();
+      }
+    });
+
+    // 2. Evento: Administrador finaliza la ruta en Web (Soporte Multi-Ruta)
+    const unsubRutaFinalizada = wsService.on("ruta_finalizada_admin", async (data) => {
+      console.log("[RutaContext] Evento WebSocket ruta_finalizada_admin recibido:", data);
+      await limpiarRutaActiva();
+    });
+
+    // 3. Evento: Asignación de nueva ruta en el día
+    const unsubRutaAsignada = wsService.on("ruta_asignada", async (data) => {
+      console.log("[RutaContext] Evento WebSocket ruta_asignada recibido:", data);
+      if (cargarHojaRutaRef.current) {
+        cargarHojaRutaRef.current();
+      }
+    });
+
+    return () => {
+      if (unsubCargaAprobada) unsubCargaAprobada();
+      if (unsubRutaFinalizada) unsubRutaFinalizada();
+      if (unsubRutaAsignada) unsubRutaAsignada();
+    };
+  }, [usuario, asignacionActiva]);
 
   /**
    * Carga la Hoja de Ruta Diaria (HU-30: Visualizar lista de rutas y pedidos)
@@ -71,40 +178,68 @@ export function RutaProvider({ children }) {
    */
   const cargarHojaRuta = async () => {
     setErrorRuta(null);
+    setCargandoRuta(true);
 
-    // 1. Carga Inmediata Optimista (0ms de espera: recupera de caché local o plantilla de Sucre)
+    // 1. Carga Inmediata Optimista desde caché local
     try {
       const rutaLocal = await LocalDB.obtenerRutaActiva();
-      const rutaInicial = rutaLocal || generarRutaPorDefecto();
-      setAsignacionActiva(rutaInicial);
-      recalcularRecaudacion(rutaInicial);
-      setCargandoRuta(false);
-
-      if (rutaInicial && usuario) {
-        iniciarTelemetria(usuario.IdUsuario, rutaInicial.IdAsignacion);
+      if (rutaLocal && (rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta || rutaLocal.id)) {
+        const estadoLocal = determinarEstadoRuta(rutaLocal);
+        if (estadoLocal === ESTADOS_RUTA.FINALIZADA) {
+          await limpiarRutaActiva();
+        } else {
+          setAsignacionActiva(rutaLocal);
+          setEstadoRuta(estadoLocal);
+          recalcularRecaudacion(rutaLocal);
+          if (estadoLocal === ESTADOS_RUTA.APROBADA_EN_RUTA && usuario) {
+            iniciarTelemetria(usuario.IdUsuario || usuario.id, rutaLocal.IdAsignacion || rutaLocal.IdAsignacionRuta);
+          }
+        }
+      } else {
+        setAsignacionActiva(null);
+        setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
       }
     } catch (_e) {
-      const defaultRuta = generarRutaPorDefecto();
-      setAsignacionActiva(defaultRuta);
-      recalcularRecaudacion(defaultRuta);
+      setAsignacionActiva(null);
+      setEstadoRuta(ESTADOS_RUTA.SIN_RUTA);
+    } finally {
       setCargandoRuta(false);
     }
 
-    // 2. Sincronización en segundo plano con la nube sin bloquear la pantalla al chofer
+    // 2. Sincronización en segundo plano con la nube
     if (isOnline && usuario) {
       try {
-        // Consultar exclusivamente el endpoint especializado de chofer (Subagente A: evita 403 de asignaciones web)
-        const rutaChofer = await LogisticaApi.obtenerRutaActivaChofer(usuario.IdUsuario);
-        if (rutaChofer && rutaChofer.paradas && rutaChofer.paradas.length > 0) {
-          setAsignacionActiva(rutaChofer);
-          await LocalDB.guardarRutaActiva(rutaChofer);
-          recalcularRecaudacion(rutaChofer);
-          setUltimaSincronizacion(new Date());
-        } else if (rutaChofer) {
-          setAsignacionActiva(rutaChofer);
-          await LocalDB.guardarRutaActiva(rutaChofer);
-          recalcularRecaudacion(rutaChofer);
-          setUltimaSincronizacion(new Date());
+        const idChofer = usuario.IdUsuario || usuario.id;
+        const resHoja = await LogisticaApi.obtenerHojaRutaActiva();
+        let rutaChofer = resHoja && resHoja.asignacion ? resHoja.asignacion : null;
+
+        if (!rutaChofer) {
+          rutaChofer = await LogisticaApi.obtenerRutaActivaChofer(idChofer);
+        }
+
+        if (rutaChofer && (rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta || rutaChofer.id)) {
+          // Si trae paradas del endpoint especializado
+          if (resHoja && resHoja.paradas && (!rutaChofer.paradas || rutaChofer.paradas.length === 0)) {
+            rutaChofer.paradas = resHoja.paradas;
+          }
+          const nuevoEstado = determinarEstadoRuta(rutaChofer);
+
+          if (nuevoEstado === ESTADOS_RUTA.FINALIZADA) {
+            await limpiarRutaActiva();
+          } else {
+            setAsignacionActiva(rutaChofer);
+            setEstadoRuta(nuevoEstado);
+            await LocalDB.guardarRutaActiva(rutaChofer);
+            recalcularRecaudacion(rutaChofer);
+            setUltimaSincronizacion(new Date());
+
+            if (nuevoEstado === ESTADOS_RUTA.APROBADA_EN_RUTA) {
+              iniciarTelemetria(idChofer, rutaChofer.IdAsignacion || rutaChofer.IdAsignacionRuta);
+            }
+          }
+        } else {
+          // Servidor confirma que no tiene ruta asignada para hoy
+          await limpiarRutaActiva();
         }
       } catch (err) {
         console.log("[RutaContext] Aviso actualizando ruta online:", err.message);
@@ -136,10 +271,50 @@ export function RutaProvider({ children }) {
   };
 
   /**
+   * Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
+   * Permite solicitar stock adicional o confirmar salida con stock remanente
+   */
+  const solicitarCargaCamion = async ({ usarRemanente = false, observacion = "", items = [] } = {}) => {
+    if (!asignacionActiva) {
+      return { success: false, error: "No tienes una asignación activa para solicitar carga." };
+    }
+    const idAsig = asignacionActiva.IdAsignacion || asignacionActiva.IdAsignacionRuta || asignacionActiva.id || 1;
+    const res = await LogisticaApi.solicitarCargaCamion({
+      id_asignacion: idAsig,
+      usar_remanente: usarRemanente,
+      observacion,
+      items,
+    });
+
+    if (res.success || res.codigo === "EXITO") {
+      const rutaActualizada = {
+        ...asignacionActiva,
+        estado_carga: "SOLICITADA",
+        estado_flujo: ESTADOS_RUTA.CARGA_SOLICITADA,
+      };
+      setAsignacionActiva(rutaActualizada);
+      setEstadoRuta(ESTADOS_RUTA.CARGA_SOLICITADA);
+      try {
+        await LocalDB.guardarRutaActiva(rutaActualizada);
+      } catch (_e) {}
+      return { success: true, data: res.data, mensaje: res.mensaje };
+    }
+    return res;
+  };
+
+  /**
    * HU-31: Registrar Entrega de Pedidos y Emitir Notas
    * HU-33: Captura de Geolocalización GPS Obligatoria
    */
   const registrarEntrega = async (idPuntoVenta, detalleEntrega) => {
+    // Gatekeeper: Bloquear entregas si no está en APROBADA_EN_RUTA
+    if (estadoRuta !== ESTADOS_RUTA.APROBADA_EN_RUTA) {
+      return {
+        exito: false,
+        success: false,
+        error: "Ruta no habilitada: debe estar en estado APROBADA_EN_RUTA para registrar entregas.",
+      };
+    }
     // 1. Capturar GPS obligatoriamente
     let gps = null;
     try {
@@ -270,6 +445,15 @@ export function RutaProvider({ children }) {
    * Registrar motivo cuando un cliente no pudo ser atendido
    */
   const registrarNoEntrega = async (idPuntoVenta, motivo) => {
+    // Gatekeeper: Bloquear si no está en APROBADA_EN_RUTA
+    if (estadoRuta !== ESTADOS_RUTA.APROBADA_EN_RUTA) {
+      return {
+        exito: false,
+        success: false,
+        error: "Ruta no habilitada: debe estar en estado APROBADA_EN_RUTA para registrar no-entregas.",
+      };
+    }
+
     const gps = await obtenerUbicacionActual();
 
     const datosOperacion = {
@@ -305,6 +489,15 @@ export function RutaProvider({ children }) {
    * HU-33: Captura de Geolocalización GPS Obligatoria
    */
   const registrarCobro = async (idPuntoVenta, detalleCobro) => {
+    // Gatekeeper: Bloquear si no está en APROBADA_EN_RUTA
+    if (estadoRuta !== ESTADOS_RUTA.APROBADA_EN_RUTA) {
+      return {
+        exito: false,
+        success: false,
+        error: "Ruta no habilitada: debe estar en estado APROBADA_EN_RUTA para registrar cobros.",
+      };
+    }
+
     // 1. GPS obligatorio
     const gps = await obtenerUbicacionActual();
 
@@ -442,166 +635,29 @@ export function RutaProvider({ children }) {
   };
 
   /**
-   * HU-34: Cerrar Ruta Diaria / Liquidación
+   * Prohibición de Cerrar/Liquidar Ruta en Móvil (Subagente B)
+   * El cierre de ruta y liquidación lo realiza Administración exclusivamente en Web
    */
-  const cerrarRutaDiaria = async (datosLiquidacion) => {
-    const gps = await obtenerUbicacionActual();
-
-    const paradas = asignacionActiva?.paradas || [];
-    const visitadas = paradas.filter((p) => p.Estado === "ENTREGADO").length;
-    const noVisitadas = paradas.filter((p) => p.Estado !== "ENTREGADO").length;
-
-    const payloadCierre = {
-      idAsignacion: asignacionActiva?.IdAsignacion,
-      totalClientesPlanificados: paradas.length,
-      totalClientesVisitados: visitadas,
-      totalClientesNoVisitados: noVisitadas,
-      efectivoRecaudado: recaudacion.efectivo,
-      transferenciasRecaudadas: recaudacion.transferencias,
-      totalRecaudado: recaudacion.totalCobrado,
-      efectivoEntregadoEnMano: Number(datosLiquidacion.efectivoFisicoEntregado || recaudacion.efectivo),
-      discrepanciaCaja: Number(datosLiquidacion.efectivoFisicoEntregado || recaudacion.efectivo) - recaudacion.efectivo,
-      observaciones: datosLiquidacion.observaciones || "Ruta cerrada desde móvil",
-      fechaHoraCierre: new Date().toISOString(),
-      gpsCierre: gps,
-      estadoRuta: "CERRADA",
+  const cerrarRutaDiaria = async () => {
+    return {
+      exito: false,
+      success: false,
+      mensaje: "El cierre de ruta lo realiza Administración una vez revisadas tus entregas y cobros.",
     };
-
-    // Guardar liquidación en local
-    await LocalDB.guardarLiquidacionLocal(payloadCierre);
-
-    // Marcar ruta como cerrada en estado
-    setAsignacionActiva((prev) => ({
-      ...prev,
-      Estado: "CERRADA",
-      cierre: payloadCierre,
-    }));
-
-    detenerTelemetria();
-
-    // Encolar cierre para contabilidad central (HU-34)
-    await SyncQueue.encolarOperacion("CIERRE_RUTA", payloadCierre, gps);
-    await refrescarPendientes();
-
-    if (isOnline) {
-      LogisticaApi.cerrarYLiquidarRuta(asignacionActiva?.IdAsignacion, payloadCierre).catch(() => {});
-    }
-
-    return { exito: true, liquidacion: payloadCierre };
   };
 
-  // Helper para generar datos de demostración en Sucre
-  function generarRutaPorDefecto() {
-    return {
-      IdAsignacion: 7,
-      Fecha: new Date().toISOString().split("T")[0],
-      Estado: "EN_CURSO",
-      NombreRuta: "Ruta 1 - Casco Histórico y Central",
-      NombreZona: "Zona Central Sucre",
-      Vehiculo: {
-        Placa: "2458-BLQ",
-        Modelo: "Camión Isuzu NPR",
-        CapacidadMaximaFardos: 180,
-      },
-      cargaProductos: [
-        { IdProducto: 1, Nombre: "Higiénico Blanquita Clásico 40m (Fardo x 40)", CantidadAsignada: 90, Entregados: 0, StockCamion: 90 },
-        { IdProducto: 2, Nombre: "Higiénico Blanquita Plus Doble Hoja (Fardo x 24)", CantidadAsignada: 50, Entregados: 0, StockCamion: 50 },
-        { IdProducto: 3, Nombre: "Servilleta Blanquita Mesa 100u (Caja x 20)", CantidadAsignada: 40, Entregados: 0, StockCamion: 40 },
-      ],
-      paradas: [
-        {
-          IdPuntoVenta: 1,
-          OrdenVisita: 1,
-          NombreCliente: "Supermercado SAS",
-          NombrePuntoVenta: "SAS Supermercado Central",
-          Telefono: "72891234",
-          Direccion: "Calle España #142",
-          Referencia: "Frente a Plaza Principal",
-          Latitud: -19.0483,
-          Longitud: -65.2598,
-          Estado: "PENDIENTE",
-          SaldoDeudor: 0.0,
-          PedidosPendientes: [
-            { IdProducto: 1, Cantidad: 20, Nombre: "Higiénico Clásico 40m", PrecioUnitario: 24.5 },
-          ],
-        },
-        {
-          IdPuntoVenta: 8,
-          OrdenVisita: 2,
-          NombreCliente: "Supermercado Pompeya",
-          NombrePuntoVenta: "Pompeya Sucursal Calvo",
-          Telefono: "71158942",
-          Direccion: "Calle Calvo #215",
-          Referencia: "A media cuadra de Plaza 25 de Mayo",
-          Latitud: -19.0495,
-          Longitud: -65.2580,
-          Estado: "PENDIENTE",
-          SaldoDeudor: 0.0,
-          PedidosPendientes: [
-            { IdProducto: 2, Cantidad: 10, Nombre: "Higiénico Doble Hoja", PrecioUnitario: 45.0 },
-          ],
-        },
-        {
-          IdPuntoVenta: 7,
-          OrdenVisita: 3,
-          NombreCliente: "Farmacia San Agustín",
-          NombrePuntoVenta: "San Agustín Central",
-          Telefono: "73409121",
-          Direccion: "Calle Estudiante #78",
-          Referencia: "Cerca de la Facultad de Medicina",
-          Latitud: -19.0470,
-          Longitud: -65.2605,
-          Estado: "PENDIENTE",
-          SaldoDeudor: 120.0,
-          PedidosPendientes: [
-            { IdProducto: 1, Cantidad: 17, Nombre: "Higiénico Clásico 40m", PrecioUnitario: 20.0 },
-          ],
-        },
-        {
-          IdPuntoVenta: 6,
-          OrdenVisita: 4,
-          NombreCliente: "Mercamax S.R.L.",
-          NombrePuntoVenta: "Mercamax Hernando Siles",
-          Telefono: "74512099",
-          Direccion: "Av. Hernando Siles #610",
-          Referencia: "Sector comercial Mercado Campesino",
-          Latitud: -19.0450,
-          Longitud: -65.2575,
-          Estado: "PENDIENTE",
-          SaldoDeudor: 0.0,
-          PedidosPendientes: [
-            { IdProducto: 2, Cantidad: 5, Nombre: "Papel Higiénico Institucional", PrecioUnitario: 85.0 },
-          ],
-        },
-        {
-          IdPuntoVenta: 13,
-          OrdenVisita: 5,
-          NombreCliente: "Gobierno Municipal Sucre",
-          NombrePuntoVenta: "Desarrollo Productivo",
-          Telefono: "60303650",
-          Direccion: "Calle Avaroa #282",
-          Referencia: "Oficinas centrales planta baja",
-          Latitud: -19.0475,
-          Longitud: -65.2568,
-          Estado: "PENDIENTE",
-          SaldoDeudor: 0.0,
-          PedidosPendientes: [
-            { IdProducto: 3, Cantidad: 20, Nombre: "Servilleta Mesa 100u", PrecioUnitario: 14.0 },
-          ],
-        },
-      ],
-    };
-  }
-
   const paradasList = asignacionActiva?.paradas || asignacionActiva?.Paradas || [];
-  const entregadosCount = paradasList.filter((p) => (p.Estado || p.estado) === "ENTREGADO").length;
-  const pendientesCount = Math.max(0, paradasList.length - entregadosCount);
+  // Gatekeeper: Solo desbloquear paradas si la ruta está formalmente APROBADA_EN_RUTA
+  const paradasVisibles = estadoRuta === ESTADOS_RUTA.APROBADA_EN_RUTA ? paradasList : [];
+
+  const entregadosCount = paradasVisibles.filter((p) => (p.Estado || p.estado) === "ENTREGADO").length;
+  const pendientesCount = Math.max(0, paradasVisibles.length - entregadosCount);
 
   const metricas = {
-    total_paradas: paradasList.length,
+    total_paradas: paradasVisibles.length,
     entregados: entregadosCount,
     pendientes: pendientesCount,
-    porcentaje: paradasList.length > 0 ? Math.round((entregadosCount / paradasList.length) * 100) : 0,
+    porcentaje: paradasVisibles.length > 0 ? Math.round((entregadosCount / paradasVisibles.length) * 100) : 0,
     total_efectivo: recaudacion.efectivo || 0,
     total_qr: recaudacion.transferencias || 0,
     total_recaudado: (recaudacion.efectivo || 0) + (recaudacion.transferencias || 0),
@@ -610,12 +666,14 @@ export function RutaProvider({ children }) {
   const hojaRuta = asignacionActiva
     ? {
         id: asignacionActiva.IdAsignacionRuta || asignacionActiva.IdAsignacion || 1,
-        estado: asignacionActiva.Estado || asignacionActiva.EstadoAsignacion || "EN_CURSO",
+        estado: estadoRuta,
+        estado_flujo: estadoRuta,
+        habilitada_para_reparto: estadoRuta === ESTADOS_RUTA.APROBADA_EN_RUTA,
         vehiculo: {
           placa: asignacionActiva.Vehiculo?.Placa || "2458-BLQ",
           modelo: asignacionActiva.Vehiculo?.Modelo || "Camión Isuzu NPR",
         },
-        paradas: paradasList.map((p, idx) => ({
+        paradas: paradasVisibles.map((p, idx) => ({
           id: p.IdPuntoVenta || p.id || idx + 1,
           secuencia: p.OrdenVisita || p.orden || idx + 1,
           estado: (p.Estado || p.estado || "PENDIENTE").toUpperCase(),
@@ -654,6 +712,8 @@ export function RutaProvider({ children }) {
     <RutaContext.Provider
       value={{
         asignacionActiva,
+        estadoRuta,
+        ESTADOS_RUTA,
         hojaRuta,
         metricas,
         cargandoRuta,
@@ -664,6 +724,8 @@ export function RutaProvider({ children }) {
         cerrarComprobante,
         cargarHojaRuta,
         cargarRutaDelDia: cargarHojaRuta,
+        solicitarCargaCamion,
+        limpiarRutaActiva,
         registrarEntrega,
         registrarNoEntrega,
         registrarCobro,

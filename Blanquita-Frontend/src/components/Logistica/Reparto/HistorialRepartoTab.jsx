@@ -31,8 +31,11 @@ import {
 } from "@/services/Contabilidad/cuentasCobrarService";
 import {
   ObtenerRepartidores,
-  ObtenerAsignaciones
+  ObtenerAsignaciones,
+  RevisarOperacionRuta,
+  FinalizarRutaAdmin
 } from "@/services/Logistica/RutaService";
+import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 
 export default function HistorialRepartoTab({
   usuario = null,
@@ -55,8 +58,19 @@ export default function HistorialRepartoTab({
     choferPreseleccionado ? String(choferPreseleccionado) : "TODOS"
   );
   const [filtroFormaPago, setFiltroFormaPago] = useState("TODOS"); // 'TODOS' | 'Efectivo' | 'QR' | 'Credito'
+  const [filtroTipoOperacion, setFiltroTipoOperacion] = useState("TODOS"); // 'TODOS' | 'ENTREGA' | 'COBRO'
+  const [filtroEstadoRevision, setFiltroEstadoRevision] = useState("TODOS"); // 'TODOS' | 'PENDIENTE' | 'APROBADO' | 'OBSERVADO' | 'RECHAZADO'
   const [filtroEstadoCobro, setFiltroEstadoCobro] = useState("TODOS"); // 'TODOS' | 'Aprobado' | 'Pendiente'
   const [busqueda, setBusqueda] = useState("");
+
+  // Modales de revisión y cierre admin
+  const [modalObservarAbierto, setModalObservarAbierto] = useState(false);
+  const [operacionParaObservar, setOperacionParaObservar] = useState(null);
+  const [textoObservacion, setTextoObservacion] = useState("");
+  const [modalFinalizarRutaAbierto, setModalFinalizarRutaAbierto] = useState(false);
+  const [observacionFinalizar, setObservacionFinalizar] = useState("");
+  const [finalizandoRuta, setFinalizandoRuta] = useState(false);
+  const [wsConectado, setWsConectado] = useState(false);
 
   // Datos de notas de venta
   const [notas, setNotas] = useState([]);
@@ -213,30 +227,26 @@ export default function HistorialRepartoTab({
     }
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 
-  // Polling automático cada 60 s pausado cuando document.visibilityState === "hidden"
+  // WebSocket en tiempo real: Cero Polling innecesario para optimización en plan gratuito
   useEffect(() => {
-    const INTERVALO_MS = 60000;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
+    logisticaSocket.conectar();
+    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
+
+    const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", () => {
       consultarNotas(false);
       if (seccionActiva === "cierres") {
         consultarTurnos();
       }
-    }, INTERVALO_MS);
+    });
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        consultarNotas(false);
-        if (seccionActiva === "cierres") {
-          consultarTurnos();
-        }
-      }
-    };
+    const unsubRev = logisticaSocket.suscribir("operacion_revisada", () => {
+      consultarNotas(false);
+    });
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubEstado();
+      unsubOp();
+      unsubRev();
     };
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 
@@ -257,7 +267,18 @@ export default function HistorialRepartoTab({
         }
       }
 
-      // Filtro por Forma de Pago
+      // Filtro por Tipo de Operación (ENTREGA vs COBRO)
+      if (filtroTipoOperacion !== "TODOS") {
+        const tipoOp = (n.Tipo || n.tipo || (Number(n.TotalNeto || 0) > 0 ? "COBRO" : "ENTREGA")).toUpperCase();
+        if (filtroTipoOperacion === "ENTREGA" && !tipoOp.includes("ENTREGA")) return false;
+        if (filtroTipoOperacion === "COBRO" && !tipoOp.includes("COBRO")) return false;
+      }
+
+      // Filtro por Estado de Revisión (PENDIENTE, APROBADO, OBSERVADO, RECHAZADO)
+      if (filtroEstadoRevision !== "TODOS") {
+        const rev = (n.EstadoRevision || n.estado_revision || n.estado_revision_web || "PENDIENTE").toUpperCase();
+        if (rev !== filtroEstadoRevision) return false;
+      }
       if (filtroFormaPago !== "TODOS") {
         const metodo = (n.MetodoPago || n.metodo_pago || "").toLowerCase();
         if (filtroFormaPago === "Efectivo" && !metodo.includes("efectivo")) return false;
@@ -376,6 +397,67 @@ export default function HistorialRepartoTab({
     }, 150);
   };
 
+  const operacionesPendientesCount = useMemo(() => {
+    return notas.filter(
+      (n) => (n.EstadoRevision || n.estado_revision || n.estado_revision_web || "PENDIENTE").toUpperCase() === "PENDIENTE"
+    ).length;
+  }, [notas]);
+
+  const handleAprobarOperacion = async (nota) => {
+    const id = nota.IdNotaVenta || nota.id_nota_venta || nota.id || nota.IdOperacion || nota.id_operacion;
+    try {
+      await RevisarOperacionRuta(id, "APROBADO", "Aprobado por administración");
+      toast.success(`Operación aprobada con éxito`);
+      consultarNotas(true);
+    } catch (err) {
+      toast.error(err.message || "Error al aprobar operación");
+    }
+  };
+
+  const abrirModalObservar = (nota) => {
+    setOperacionParaObservar(nota);
+    setTextoObservacion("");
+    setModalObservarAbierto(true);
+  };
+
+  const handleConfirmarObservacion = async () => {
+    if (!operacionParaObservar) return;
+    const id = operacionParaObservar.IdNotaVenta || operacionParaObservar.id_nota_venta || operacionParaObservar.id || operacionParaObservar.IdOperacion || operacionParaObservar.id_operacion;
+    if (!textoObservacion.trim()) {
+      toast.error("Debes ingresar el motivo de la observación");
+      return;
+    }
+    try {
+      await RevisarOperacionRuta(id, "OBSERVADO", textoObservacion);
+      toast.info(`Operación marcada como OBSERVADA`);
+      setModalObservarAbierto(false);
+      consultarNotas(true);
+    } catch (err) {
+      toast.error(err.message || "Error al registrar observación");
+    }
+  };
+
+  const handleFinalizarRutaAdmin = async () => {
+    if (operacionesPendientesCount > 0) {
+      toast.error(`No se puede finalizar la ruta: restan ${operacionesPendientesCount} operaciones en PENDIENTE de revisión`);
+      return;
+    }
+    try {
+      setFinalizandoRuta(true);
+      const idAsig = asignacionesTurno[0]?.IdAsignacionRuta || 1;
+      await FinalizarRutaAdmin(idAsig, observacionFinalizar || "Ruta del día finalizada y auditada conforme por Administración");
+      toast.success("¡Ruta del día finalizada y aprobada por Administración!");
+      setModalFinalizarRutaAbierto(false);
+      consultarNotas(true);
+      consultarTurnos();
+      if (alActualizar) alActualizar();
+    } catch (err) {
+      toast.error(err.message || "Error al finalizar ruta");
+    } finally {
+      setFinalizandoRuta(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* ============================================================== */}
@@ -439,7 +521,7 @@ export default function HistorialRepartoTab({
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -456,6 +538,32 @@ export default function HistorialRepartoTab({
                 />
                 <span>Actualizar</span>
               </button>
+
+              {/* Botón Finalizar / Aprobar Ruta del Día (Cierre Exclusivo Admin) */}
+              <button
+                type="button"
+                onClick={() => setModalFinalizarRutaAbierto(true)}
+                disabled={operacionesPendientesCount > 0}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all border ${
+                  operacionesPendientesCount === 0
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-sm cursor-pointer"
+                    : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                }`}
+                title={
+                  operacionesPendientesCount > 0
+                    ? `Bloqueado: restan ${operacionesPendientesCount} operaciones en PENDIENTE de revisión`
+                    : "Todas las operaciones auditadas: Habilitado para finalizar ruta del día"
+                }
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Finalizar / Aprobar Ruta del Día</span>
+                {operacionesPendientesCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-mono rounded">
+                    {operacionesPendientesCount} pendientes
+                  </span>
+                )}
+              </button>
+
               <span className="text-[11px] text-slate-500 font-mono hidden sm:inline" title="Última sincronización con el servidor">
                 ({textoRelativo})
               </span>
@@ -501,6 +609,36 @@ export default function HistorialRepartoTab({
               <option value="Efectivo">Solo Efectivo</option>
               <option value="QR">Solo QR / Bancario</option>
               <option value="Credito">Solo Crédito / Saldo</option>
+            </select>
+          </div>
+
+          {/* Filtro Tipo Operación */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-semibold text-slate-600">Tipo Operación:</label>
+            <select
+              value={filtroTipoOperacion}
+              onChange={(e) => setFiltroTipoOperacion(e.target.value)}
+              className="h-8 px-2 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+            >
+              <option value="TODOS">Todos (Entregas y Cobros)</option>
+              <option value="ENTREGA">Solo Entregas</option>
+              <option value="COBRO">Solo Cobros</option>
+            </select>
+          </div>
+
+          {/* Filtro Estado Revisión */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-semibold text-slate-600">Estado Revisión Admin:</label>
+            <select
+              value={filtroEstadoRevision}
+              onChange={(e) => setFiltroEstadoRevision(e.target.value)}
+              className="h-8 px-2 bg-white border border-slate-300 rounded text-xs text-slate-800 focus:border-slate-900 focus:outline-none"
+            >
+              <option value="TODOS">Todos los estados</option>
+              <option value="PENDIENTE">PENDIENTE</option>
+              <option value="APROBADO">APROBADO</option>
+              <option value="OBSERVADO">OBSERVADO</option>
+              <option value="RECHAZADO">RECHAZADO</option>
             </select>
           </div>
 
@@ -657,6 +795,7 @@ export default function HistorialRepartoTab({
                     <th className="px-3 py-2 text-center">Estado Cobro</th>
                     <th className="px-3 py-2 text-center">Firma Cliente</th>
                     <th className="px-3 py-2 text-center">Fecha / Hora</th>
+                    <th className="px-3 py-2 text-center">Auditoría Admin</th>
                     <th className="px-3 py-2 text-center">Acciones</th>
                   </tr>
                 </thead>
@@ -785,7 +924,57 @@ export default function HistorialRepartoTab({
                           {formatearFechaHora(n.FechaVenta || n.created_at || n.FechaEmision)}
                         </td>
 
-                        {/* 9. Acciones */}
+                        {/* 9. Auditoría Admin (Aprobar / Observar) */}
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {(() => {
+                            const rev = (n.EstadoRevision || n.estado_revision || n.estado_revision_web || "PENDIENTE").toUpperCase();
+                            return (
+                              <div className="flex items-center justify-center gap-1.5">
+                                {rev === "APROBADO" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-300">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    <span>Aprobado</span>
+                                  </span>
+                                ) : rev === "OBSERVADO" ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 cursor-pointer"
+                                    onClick={() => abrirModalObservar(n)}
+                                    title={n.ObservacionRevision || "Operación observada"}
+                                  >
+                                    <AlertCircle className="h-3 w-3 text-amber-600" />
+                                    <span>Observado</span>
+                                  </span>
+                                ) : rev === "RECHAZADO" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-300">
+                                    <X className="h-3 w-3" />
+                                    <span>Rechazado</span>
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAprobarOperacion(n)}
+                                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-semibold transition-colors cursor-pointer"
+                                      title="Aprobar entrega/cobro en auditoría"
+                                    >
+                                      Aprobar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => abrirModalObservar(n)}
+                                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-medium transition-colors cursor-pointer"
+                                      title="Ingresar observación a esta entrega"
+                                    >
+                                      Observar
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+
+                        {/* 10. Acciones */}
                         <td className="px-3 py-2 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">
                             {/* Ver detalle */}
@@ -1237,6 +1426,120 @@ export default function HistorialRepartoTab({
                   {notaImprimir.FirmaNombre || "Firma y Aclaración de C.I."}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 6. MODAL PARA REGISTRAR OBSERVACIÓN DE REVISIÓN */}
+      {/* ============================================================== */}
+      {modalObservarAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-4 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <span>Observar Operación de Ruta</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalObservarAbierto(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-slate-600">
+                Operación: <strong>{operacionParaObservar?.NumeroNota || operacionParaObservar?.NumeroNotaVenta || "NV"}</strong> • Cliente: <strong>{operacionParaObservar?.RazonSocial || operacionParaObservar?.ClienteNombre || "Comercio"}</strong>
+              </p>
+              <label className="block font-semibold text-slate-700">
+                Motivo / Detalle de la Observación:
+              </label>
+              <textarea
+                value={textoObservacion}
+                onChange={(e) => setTextoObservacion(e.target.value)}
+                placeholder="Ej: El recibo físico adjunto no coincide con el monto o falta aclaración de firma..."
+                rows={3}
+                className="w-full p-2 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setModalObservarAbierto(false)}
+                className="px-3 py-1.5 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarObservacion}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold"
+              >
+                Guardar Observación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 7. MODAL DE CIERRE / FINALIZACIÓN OFICIAL DE RUTA (ADMIN) */}
+      {/* ============================================================== */}
+      {modalFinalizarRutaAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full p-4 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span>Finalizar y Aprobar Ruta del Día</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalFinalizarRutaAbierto(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs text-slate-600">
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800">
+                ✓ <strong>0 operaciones en PENDIENTE.</strong> Todas las entregas y cobros de la jornada han sido revisados y validados.
+              </div>
+              <label className="block font-semibold text-slate-700">
+                Observación General de Cierre de Jornada (Opcional):
+              </label>
+              <textarea
+                value={observacionFinalizar}
+                onChange={(e) => setObservacionFinalizar(e.target.value)}
+                placeholder="Ej: Ruta 101 auditada satisfactoriamente con arqueo físico y bancario completo..."
+                rows={3}
+                className="w-full p-2 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-slate-800"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setModalFinalizarRutaAbierto(false)}
+                className="px-3 py-1.5 border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleFinalizarRutaAdmin}
+                disabled={finalizandoRuta}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1.5"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>{finalizandoRuta ? "Finalizando..." : "Confirmar Cierre y Aprobar Ruta"}</span>
+              </button>
             </div>
           </div>
         </div>

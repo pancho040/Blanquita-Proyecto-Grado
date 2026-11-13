@@ -1,6 +1,14 @@
 /* global FormData */
 import apiClient, { parsearDetalleErrorServidor } from "./client";
 
+export const ESTADOS_RUTA = Object.freeze({
+  SIN_RUTA: "SIN_RUTA",
+  PENDIENTE_CARGA: "PENDIENTE_CARGA",
+  CARGA_SOLICITADA: "CARGA_SOLICITADA",
+  APROBADA_EN_RUTA: "APROBADA_EN_RUTA",
+  FINALIZADA: "FINALIZADA",
+});
+
 function procesarErrorApi(err) {
   const status = err.status || err.response?.status;
   const serverData = err.serverDetail || err.response?.data;
@@ -226,6 +234,48 @@ export const LogisticaApi = {
     }
   },
 
+  // 10. Solicitar Carga de Inventario a Almacén/Web (Subagente B - Gatekeeper de Ruta)
+  async solicitarCargaCamion({ id_asignacion, usar_remanente = false, observacion = "", items = [] } = {}, idempotencyKey = null) {
+    const headers = {};
+    if (idempotencyKey) {
+      headers["X-Idempotency-Key"] = idempotencyKey;
+    }
+    const payload = {
+      id_asignacion,
+      usar_remanente: Boolean(usar_remanente),
+      observacion: observacion || "",
+      items: (items || []).map((it) => ({
+        presentacion_id: it.presentacion_id || it.IdPresentacion || it.id,
+        cantidad_solicitada: Number(it.cantidad_solicitada || it.cantidad || 0),
+      })),
+    };
+    try {
+      const response = await apiClient.post("/api/movil/v1/chofer/solicitar-carga", payload, { headers });
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        codigo: response.data?.codigo || "EXITO",
+        mensaje: response.data?.mensaje || "Solicitud de carga enviada a Almacén con éxito.",
+      };
+    } catch (err) {
+      return procesarErrorApi(err);
+    }
+  },
+
+  // 11. Obtener Resumen de Sincronización para Chofer (Subagente B)
+  async obtenerResumenSincronizacion() {
+    try {
+      const response = await apiClient.get("/api/movil/v1/chofer/resumen-sincronizacion");
+      return {
+        success: true,
+        data: response.data?.datos || response.data,
+        codigo: response.data?.codigo || "EXITO",
+      };
+    } catch (err) {
+      return procesarErrorApi(err);
+    }
+  },
+
   // Métodos de retrocompatibilidad
   async obtenerRutaActivaChofer(idChofer) {
     const res = await this.obtenerHojaRutaActiva();
@@ -286,4 +336,5 @@ export const LogisticaApi = {
   },
 };
 
+export const logisticaApi = LogisticaApi;
 export default LogisticaApi;

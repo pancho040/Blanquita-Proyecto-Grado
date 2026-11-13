@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import {
   ObtenerChoferesEnVivo,
   ObtenerTrackingAsignacion,
-  ObtenerWsTicketFlota
+  ObtenerWsTicketFlota,
+  SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
+import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -157,33 +159,60 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
   }, [sucursal]);
 
+  const [solicitandoGps, setSolicitandoGps] = useState(false);
+
+  // Solicitar ubicación GPS bajo demanda (cero consumo de cuota continuo en plan gratuito)
+  const solicitarUbicacionGPS = async () => {
+    try {
+      setSolicitandoGps(true);
+      await SolicitarUbicacionActualChoferes(sucursal);
+      toast.success("Solicitud de señal GPS enviada a los choferes");
+      await cargarTelemetria(true);
+    } catch (err) {
+      toast.error(err.message || "Error al solicitar ubicación actual");
+    } finally {
+      setSolicitandoGps(false);
+    }
+  };
+
+  // Suscripción al WebSocket de Logística para actualización inmediata sin polling
+  useEffect(() => {
+    logisticaSocket.conectar();
+    const desubicar = logisticaSocket.suscribir("ubicacion_chofer_actualizada", (datos) => {
+      if (!datos) return;
+      setChoferes((prev) => {
+        const idx = prev.findIndex(
+          (c) => Number(c.IdUsuarioRepartidor) === Number(datos.id_chofer || datos.idUsuarioRepartidor)
+        );
+        if (idx === -1) return prev;
+        const anterior = prev[idx];
+        const copia = [...prev];
+        copia[idx] = {
+          ...anterior,
+          Latitud: Number(datos.lat || datos.latitud || anterior.Latitud),
+          Longitud: Number(datos.lng || datos.longitud || anterior.Longitud),
+          Velocidad: datos.velocidad ?? anterior.Velocidad,
+          Bateria: datos.bateria ?? anterior.Bateria,
+          EnLinea: true,
+          conectado: true,
+          SegundosDesdeUltimoReporte: 0,
+        };
+        return copia;
+      });
+      setUltimaActualizacion(new Date());
+    });
+
+    return () => {
+      desubicar();
+    };
+  }, []);
+
+  // Carga inicial y por cambio de sucursal (sin polling constante que agota cuota)
   useEffect(() => {
     if (!cargandoAlcance) {
       cargarTelemetria();
     }
   }, [sucursal, cargandoAlcance, cargarTelemetria]);
-
-  // Polling automático cada 60s: pausa si pestaña oculta, no solapa y limpia al desmontar
-  useEffect(() => {
-    const INTERVALO_MS = 60000;
-    const interval = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      if (telemetriaEnVueloRef.current) return;
-      cargarTelemetria(true);
-    }, INTERVALO_MS);
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible" && !telemetriaEnVueloRef.current) {
-        cargarTelemetria(true);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [cargarTelemetria]);
 
   // Cálculo reactivo de tiempo relativo desde la última actualización
   useEffect(() => {
@@ -332,14 +361,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     };
   }, [conectarWebSocket]);
 
-  // Fallback a Polling lento (45s) sólo si el WebSocket está desconectado
-  useEffect(() => {
-    if (wsConectado || cargandoAlcance) return;
-    const interval = setInterval(() => {
-      cargarTelemetria(true);
-    }, 45000);
-    return () => clearInterval(interval);
-  }, [wsConectado, cargandoAlcance, cargarTelemetria]);
+  // Modo ahorro de cuota: sin polling recurrente continuo. Actualización gobernada por WebSocket o botón manual.
 
   // 3. Cargar detalle de la ruta si se selecciona un chofer
   useEffect(() => {
@@ -574,10 +596,22 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         }
       >
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
-            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
-            <span>{wsConectado ? "WebSocket En Vivo" : "Polling Fallback"}</span>
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
+            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+            <span>{wsConectado ? "WebSocket Activo" : "Conexión Manual"}</span>
           </div>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={solicitarUbicacionGPS}
+            disabled={solicitandoGps || cargando}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-8 rounded gap-1.5 shadow-none"
+            title="Solicita reporte GPS inmediato al móvil de todos los repartidores"
+          >
+            <Navigation className={`h-3.5 w-3.5 ${solicitandoGps ? "animate-spin" : ""}`} />
+            <span>{solicitandoGps ? "Solicitando señal..." : "Ver ubicación actual de choferes"}</span>
+          </Button>
 
           <Button
             type="button"
@@ -586,7 +620,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             onClick={() => cargarTelemetria()}
             disabled={cargando}
             className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200"
-            title="Forzar actualización REST inmediata"
+            title="Refrescar telemetría manualmente"
           >
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
             <span>Actualizar</span>
@@ -641,6 +675,10 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                 const esSeleccionado = choferSeleccionado?.IdUsuarioRepartidor === ch.IdUsuarioRepartidor;
                 const porcentaje = ch.TotalParadas > 0 ? Math.round((ch.ParadasCompletadas / ch.TotalParadas) * 100) : 0;
 
+                const segReporte = ch.SegundosDesdeUltimoReporte ?? 0;
+                const tieneSenal = ch.EnLinea || ch.conectado || segReporte < 180;
+                const minReporte = Math.max(1, Math.floor(segReporte / 60));
+
                 return (
                   <div
                     key={ch.IdUsuarioRepartidor}
@@ -653,15 +691,27 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-semibold text-slate-900 text-xs block">
-                          {ch.NombreRepartidor}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-900 text-xs block">
+                            {ch.NombreRepartidor}
+                          </span>
+                        </div>
                         <span className="text-xs text-slate-500 font-medium block mt-0.5">
                           {ch.NombreRuta || "Sin Ruta Asignada"} • {ch.NombreZona || "Sucre"}
                         </span>
                       </div>
 
-                      <StatusBadge status={ch.EstadoMovimiento || "Activo"} />
+                      {tieneSenal ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>En línea ahora</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={`Último ping hace ${segReporte} segundos`}>
+                          <Clock className="h-2.5 w-2.5 text-slate-400" />
+                          <span>Última ubic. hace {minReporte} min</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* SENSORES Y TELEMETRÍA */}

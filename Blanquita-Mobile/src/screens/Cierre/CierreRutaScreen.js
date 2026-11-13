@@ -25,10 +25,13 @@ import {
   FileCheck2,
   Package,
   Truck,
+  ShieldCheck,
+  Lock,
+  Info,
 } from 'lucide-react-native';
 
 export const CierreRutaScreen = ({ navigation }) => {
-  const { metricas, asignacionActiva } = useRuta();
+  const { metricas, asignacionActiva, estadoRuta } = useRuta();
   const { isOnline } = useNetwork();
 
   // Estado de la cola offline
@@ -105,92 +108,12 @@ export const CierreRutaScreen = ({ navigation }) => {
     };
   }, []);
 
-  const handleCerrarTurno = async () => {
-    // Regla 5.1: Conexión activa obligatoria
-    if (!isOnline) {
-      Alert.alert(
-        'Sin Conexión a Red',
-        'El cierre definitivo de turno exige conexión a internet para conciliar arqueo y cuadre físico de inventario.'
-      );
-      return;
-    }
-
-    // Regla 5.2: Cola de sincronización completamente vacía
-    const pendientes = await SyncQueue.contarPendientes();
-    if (pendientes > 0) {
-      Alert.alert(
-        'Operaciones Pendientes en Cola',
-        `Tienes ${pendientes} operaciones en cola sin sincronizar. Vaya a la pantalla de Sincronización y despáchelas antes del cierre de turno.`
-      );
-      return;
-    }
-
-    // Regla 5.3: Firma táctil de conformidad obligatoria
-    if (!firmaChofer) {
-      Alert.alert(
-        'Firma de Conformidad Requerida',
-        'Debe estampar su firma digital táctil obligatoria para certificar la liquidación y cuadre del camión.'
-      );
-      return;
-    }
-
-    setLoading(true);
-
-    const stockDevuelto = [];
-    const mermasDeclaradas = [];
-
-    inventarioCamion.forEach((it) => {
-      const pid = it.presentacion_id;
-      const cantDev = parseFloat(devoluciones[pid]) || 0;
-      const cantMer = parseFloat(mermas[pid]) || 0;
-
-      if (cantDev > 0) {
-        stockDevuelto.push({
-          presentacion_id: pid,
-          cantidad_devuelta: cantDev,
-        });
-      }
-      if (cantMer > 0) {
-        mermasDeclaradas.push({
-          presentacion_id: pid,
-          cantidad_merma: cantMer,
-          motivo: motivosMerma[pid] || 'Merma declarada por chofer',
-          imputable_chofer: false,
-        });
-      }
-    });
-
-    const payload = {
-      id_asignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || 1,
-      monto_efectivo_entregado: parseFloat(efectivoEntregado) || 0,
-      monto_qr_reportado: parseFloat(qrReportado) || 0,
-      monto_transferencia_reportada: parseFloat(transfReportada) || 0,
-      monto_credito_reportado: parseFloat(creditoReportado) || 0,
-      stock_devuelto: stockDevuelto,
-      mermas_declaradas: mermasDeclaradas,
-      firma_chofer: firmaChofer,
-      observaciones: observaciones.trim() || 'Cierre de turno móvil conciliado',
-      sobrante_permanece_en_camion: sobranteEnCamion,
-      valor_sobrante_revalorizado: valorSobranteReval,
-    };
-
-    const res = await LogisticaApi.registrarCierreTurno(payload);
-    setLoading(false);
-
-    if (res.success) {
-      Alert.alert(
-        'Cierre de Turno Conciliado',
-        `Turno liquidado exitosamente. Se generó la Rendición #${res.data?.id_rendicion || ''}.`,
-        [
-          {
-            text: 'Aceptar',
-            onPress: () => navigation.navigate('HojaRutaTab'),
-          },
-        ]
-      );
-    } else {
-      Alert.alert('Error en Cierre', res.error || 'No se pudo registrar el cierre de turno.');
-    }
+  const handleCerrarTurno = () => {
+    // Prohibición de Cerrar/Liquidar Ruta en Móvil (Subagente B)
+    Alert.alert(
+      'Cierre a cargo de Administración',
+      'El cierre de ruta lo realiza Administración una vez revisadas tus entregas y cobros.'
+    );
   };
 
   return (
@@ -201,6 +124,22 @@ export const CierreRutaScreen = ({ navigation }) => {
         scrollEnabled={scrollEnabled}
         contentContainerStyle={styles.content}
       >
+        {/* AVISO DESTACADO DE GOBERNANZA: CIERRE EXCLUSIVO POR ADMINISTRACIÓN (Subagente B) */}
+        <View style={styles.avisoAdminBox}>
+          <View style={styles.avisoAdminIconCircle}>
+            <ShieldCheck size={26} color="#0284C7" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.avisoAdminTitulo}>Cierre y Liquidación Centralizada</Text>
+            <Text style={styles.avisoAdminTexto}>
+              El cierre de ruta lo realiza Administración una vez revisadas tus entregas y cobros.
+            </Text>
+            <Text style={styles.avisoAdminSubtexto}>
+              Esta pantalla es tu arqueo de control para conciliar valores en ventanilla y verificar que no existan discrepancias antes de entregar caja.
+            </Text>
+          </View>
+        </View>
+
         {/* Validación de Condiciones de Cierre (Regla 5) */}
         {(!isOnline || pendientesCola > 0) && (
           <View style={styles.bloqueoAlertaBox}>
@@ -377,16 +316,23 @@ export const CierreRutaScreen = ({ navigation }) => {
           />
         </Card>
 
-        {/* Botón de Cierre */}
-        <View style={styles.submitContainer}>
+        {/* Tarjeta de Control: Cierre Reservado a Administración (Subagente B) */}
+        <View style={styles.cierreAdminCard}>
+          <View style={styles.cierreAdminHeader}>
+            <Lock size={20} color="#0284C7" />
+            <Text style={styles.cierreAdminTitulo}>Cierre Exclusivo por Administración</Text>
+          </View>
+          <Text style={styles.cierreAdminDesc}>
+            El cierre de ruta lo realiza Administración una vez revisadas tus entregas y cobros. Entrega tus valores y comprobantes en ventanilla de tesorería para que el encargado finalice formalmente tu turno en Web.
+          </Text>
           <Button
-            title="Liquidación y Cierre de Turno"
-            icon={CheckCircle2}
-            variant="primary"
+            title="Cierre a cargo de Administración"
+            icon={Lock}
+            variant="outline"
             size="large"
-            loading={loading}
-            disabled={!isOnline || pendientesCola > 0}
+            disabled
             onPress={handleCerrarTurno}
+            style={styles.btnCierreDeshabilitado}
           />
         </View>
       </ScrollView>
@@ -587,6 +533,72 @@ const styles = StyleSheet.create({
   submitContainer: {
     marginTop: 8,
     marginBottom: 32,
+  },
+  avisoAdminBox: {
+    flexDirection: 'row',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  avisoAdminIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avisoAdminTitulo: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  avisoAdminTexto: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  avisoAdminSubtexto: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  cierreAdminCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 32,
+    gap: 10,
+  },
+  cierreAdminHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cierreAdminTitulo: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  cierreAdminDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  btnCierreDeshabilitado: {
+    marginTop: 4,
+    opacity: 0.7,
   },
 });
 

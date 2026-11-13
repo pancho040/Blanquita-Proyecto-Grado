@@ -26,14 +26,21 @@ import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { logisticaApi } from '../../api/logisticaApi';
 import { LocalDB } from '../../database/localDb';
 import { useAuth } from '../../context/AuthContext';
+import { useRuta } from '../../context/RutaContext';
+import { Button } from '../../components/common/Button';
+import { SolicitarCargaModal } from './SolicitarCargaModal';
 
 export const MiInventarioScreen = () => {
   const { user } = useAuth();
+  const rutaCtx = useRuta?.() || {};
+  const { asignacionActiva } = rutaCtx;
+
   const [inventario, setInventario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [error, setError] = useState(null);
   const [esCache, setEsCache] = useState(false);
+  const [modalCargaVisible, setModalCargaVisible] = useState(false);
 
   const cargarDatos = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -330,11 +337,32 @@ export const MiInventarioScreen = () => {
                     </Text>
                   </View>
                 </View>
+
+                {/* Botón de acceso a Solicitud de Carga */}
+                <Button
+                  title="Solicitar Carga / Stock a Almacén"
+                  icon={Package}
+                  variant="outline"
+                  size="md"
+                  onPress={() => setModalCargaVisible(true)}
+                  style={{ marginTop: 4 }}
+                />
               </View>
             ) : null
           }
         />
       )}
+
+      {/* Modal de Solicitud de Carga */}
+      <SolicitarCargaModal
+        visible={modalCargaVisible}
+        onClose={() => setModalCargaVisible(false)}
+        idAsignacion={asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta || 1}
+        inventarioRemanente={items}
+        onSolicitudExitosa={() => {
+          cargarDatos(true);
+        }}
+      />
     </SafeAreaView>
   );
 };
