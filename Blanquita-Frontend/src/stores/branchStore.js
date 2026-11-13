@@ -5,7 +5,7 @@
  * y aplica principio de fallo cerrado y restauración automática en sede fija.
  */
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useEffect } from "react";
 
 export const SUCURSALES_CATALOGO = [
   { id: 1, nombre: "Sucursal Central Sucre", ciudad: "Sucre" },
@@ -18,12 +18,38 @@ let estado = {
   sucursalesPermitidas: [],
   puedeVerTodas: false,
   sucursalAsignada: null,
-  inicializado: false
+  inicializado: false,
+  alcanceConfirmado: false,
+  errorAlcance: false
 };
 
-const suscriptores = new Set();
+let alcanceConfirmado = false;
+let usuarioKeyConfirmado = null;
+let promesaAlcance = null;
 
-function notificar() {
+function sonEstadosIguales(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.sucursalActiva !== b.sucursalActiva) return false;
+  if (a.puedeVerTodas !== b.puedeVerTodas) return false;
+  if (a.sucursalAsignada !== b.sucursalAsignada) return false;
+  if (a.inicializado !== b.inicializado) return false;
+  if (Boolean(a.alcanceConfirmado) !== Boolean(b.alcanceConfirmado)) return false;
+  if (Boolean(a.errorAlcance) !== Boolean(b.errorAlcance)) return false;
+  const pA = a.sucursalesPermitidas || [];
+  const pB = b.sucursalesPermitidas || [];
+  if (pA.length !== pB.length) return false;
+  for (let i = 0; i < pA.length; i++) {
+    if (pA[i]?.id !== pB[i]?.id) return false;
+  }
+  return true;
+}
+
+const suscriptores = new Set();
+let notificando = false;
+let pendienteNotificar = false;
+
+function ejecutarNotificaciones() {
   suscriptores.forEach((callback) => {
     try {
       callback();
@@ -31,6 +57,27 @@ function notificar() {
       console.error("[BranchStore] Error al notificar suscriptor:", e);
     }
   });
+}
+
+function notificar() {
+  if (notificando) {
+    pendienteNotificar = true;
+    return;
+  }
+  notificando = true;
+  try {
+    ejecutarNotificaciones();
+  } finally {
+    notificando = false;
+    if (pendienteNotificar) {
+      pendienteNotificar = false;
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(ejecutarNotificaciones);
+      } else {
+        setTimeout(ejecutarNotificaciones, 0);
+      }
+    }
+  }
 }
 
 const SESSION_STORAGE_KEY = "blanquita_sucursal_activa";
@@ -104,13 +151,77 @@ if (typeof window !== "undefined") {
   });
 }
 
+function extraerUsuarioKey(u) {
+  if (!u) return null;
+  const key = u.AuthUserId ?? u.auth_user_id ?? u.IdUsuario ?? u.id_usuario ?? u.id ?? null;
+  return key != null ? String(key) : null;
+}
+
 /**
  * Inicializa el alcance del store a partir de los datos del usuario autenticado.
- * Aplica fallo cerrado: no confía en IsAdmin, solo en usuario_sucursal_permiso o IdSucursal asignado.
+ * Aplica fallo cerrado: no degrada el estado si el usuario recibido carece de alcance completo.
  */
 export function inicializarAlcanceUsuario(usuario) {
   if (!usuario) return;
 
+  const keyEntrante = extraerUsuarioKey(usuario);
+
+  const tienePermisoExplicitamente =
+    usuario.puede_ver_todas !== undefined ||
+    usuario.puedeVerTodas !== undefined ||
+    (Array.isArray(usuario.PermisosSucursal) && usuario.PermisosSucursal.length > 0) ||
+    (Array.isArray(usuario.permisos_sucursales) && usuario.permisos_sucursales.length > 0);
+
+  const tieneListaPermitidas =
+    Array.isArray(usuario.sucursales_permitidas) ||
+    Array.isArray(usuario.sucursalesPermitidas);
+
+  const traeAlcanceCompleto = tienePermisoExplicitamente && tieneListaPermitidas;
+
+  // 1. Si no trae alcance completo y ya está confirmado para este usuario => NO-OP
+  if (!traeAlcanceCompleto && alcanceConfirmado && usuarioKeyConfirmado && keyEntrante && keyEntrante === usuarioKeyConfirmado) {
+    return;
+  }
+
+  // 2. Si el usuario cambió respecto al confirmado previamente:
+  if (usuarioKeyConfirmado && keyEntrante && keyEntrante !== usuarioKeyConfirmado) {
+    alcanceConfirmado = false;
+    usuarioKeyConfirmado = null;
+    if (!traeAlcanceCompleto) {
+      limpiarSesionSucursal();
+      refrescarAlcanceDesdeApi({ forzar: true }).catch(() => {});
+      return;
+    }
+  }
+
+  if (!traeAlcanceCompleto) {
+    // Caso SSR/JWT: Es solo una pista preliminar.
+    // NUNCA establece puedeVerTodas=false de forma definitiva, NUNCA marca inicializado=true,
+    // NUNCA fuerza sucursalActiva='1', y NUNCA degrada un estado previo.
+    const asignadaPista =
+      usuario.sucursal_defecto != null
+        ? Number(usuario.sucursal_defecto)
+        : usuario.IdSucursal != null
+        ? Number(usuario.IdSucursal)
+        : usuario.id_sucursal != null
+        ? Number(usuario.id_sucursal)
+        : null;
+
+    if (asignadaPista != null && estado.sucursalAsignada == null) {
+      const nuevoEstado = { ...estado, sucursalAsignada: asignadaPista };
+      if (!sonEstadosIguales(estado, nuevoEstado)) {
+        estado = nuevoEstado;
+        notificar();
+      }
+    }
+
+    if (!alcanceConfirmado && !promesaAlcance) {
+      refrescarAlcanceDesdeApi().catch(() => {});
+    }
+    return;
+  }
+
+  // 4. Procesar alcance verificado y completo (mi-alcance o perfil simulado con permisos)
   const asignada =
     usuario.sucursal_defecto != null
       ? Number(usuario.sucursal_defecto)
@@ -120,17 +231,17 @@ export function inicializarAlcanceUsuario(usuario) {
       ? Number(usuario.id_sucursal)
       : null;
 
-  // Permiso explícito de ver todas (según endpoint /Usuario/mi-alcance o perfil backend)
   const puedeVerTodas = Boolean(
     usuario.puede_ver_todas ??
+    usuario.puedeVerTodas ??
     (usuario.PermisosSucursal?.some((p) => p.puede_ver_todas) ||
      usuario.permisos_sucursales?.some((p) => p.puede_ver_todas))
   );
 
+  const listaPermitidasCruda = usuario.sucursales_permitidas || usuario.sucursalesPermitidas;
   let permitidas = [];
-  if (Array.isArray(usuario.sucursales_permitidas) && usuario.sucursales_permitidas.length > 0) {
-    // Si viene array de IDs o de objetos
-    permitidas = usuario.sucursales_permitidas.map((item) => {
+  if (Array.isArray(listaPermitidasCruda) && listaPermitidasCruda.length > 0) {
+    permitidas = listaPermitidasCruda.map((item) => {
       if (typeof item === "object") return item;
       return SUCURSALES_CATALOGO.find((c) => c.id === Number(item)) || { id: Number(item), nombre: `Sucursal #${item}` };
     });
@@ -142,15 +253,10 @@ export function inicializarAlcanceUsuario(usuario) {
       permitidas = [{ id: asignada, nombre: `Sucursal #${asignada}` }];
     }
   } else {
-    // Fallo cerrado: si no tiene sede asignada ni permisos, lista vacía
     permitidas = [];
   }
 
-  // Resolver sucursal activa inicial respetando precedencia y alcance:
-  // Si puede_ver_todas === false: Fijar INMEDIATAMENTE a sucursal_defecto/asignada (ej. "2" Potosí).
-  // Jamás usar "1" como fallback en usuarios de sede fija.
   let activa = null;
-
   if (!puedeVerTodas) {
     const sedeFija = asignada ?? (permitidas[0]?.id != null ? Number(permitidas[0].id) : null);
     if (sedeFija != null) {
@@ -159,7 +265,6 @@ export function inicializarAlcanceUsuario(usuario) {
       activa = null;
     }
   } else {
-    // Usuario multisede (puede_ver_todas === true):
     const desdeUrl = obtenerParametroUrl();
     const desdeStorage = obtenerSucursalSessionStorage();
 
@@ -188,15 +293,25 @@ export function inicializarAlcanceUsuario(usuario) {
     }
   }
 
-  const inicializado = activa != null;
+  alcanceConfirmado = true;
+  usuarioKeyConfirmado = keyEntrante;
+  const inicializado = activa != null || puedeVerTodas || asignada != null;
 
-  estado = {
+  const nuevoEstado = {
     sucursalActiva: activa,
     sucursalesPermitidas: permitidas,
     puedeVerTodas,
     sucursalAsignada: asignada,
-    inicializado
+    inicializado,
+    alcanceConfirmado: true,
+    errorAlcance: false
   };
+
+  if (sonEstadosIguales(estado, nuevoEstado)) {
+    return;
+  }
+
+  estado = nuevoEstado;
 
   if (activa != null) {
     guardarSucursalSessionStorage(activa);
@@ -213,13 +328,14 @@ export function inicializarAlcanceUsuario(usuario) {
 export function cambiarSucursalActiva(nuevaSucursal) {
   const str = String(nuevaSucursal).trim().toLowerCase();
 
+  let nuevaActiva = estado.sucursalActiva;
   if (str === "todas") {
     if (!estado.puedeVerTodas) {
       console.warn("[BranchStore] Intento no autorizado de seleccionar 'Todas las sucursales'");
       sincronizarUrl(estado.sucursalActiva);
       return;
     }
-    estado = { ...estado, sucursalActiva: "todas" };
+    nuevaActiva = "todas";
   } else {
     const num = Number(str);
     const permitida = estado.sucursalesPermitidas.some((s) => s.id === num);
@@ -228,75 +344,165 @@ export function cambiarSucursalActiva(nuevaSucursal) {
       sincronizarUrl(estado.sucursalActiva);
       return;
     }
-    estado = { ...estado, sucursalActiva: String(num) };
+    nuevaActiva = String(num);
   }
+
+  if (nuevaActiva === estado.sucursalActiva) {
+    return;
+  }
+
+  const nuevoEstado = { ...estado, sucursalActiva: nuevaActiva };
+  if (sonEstadosIguales(estado, nuevoEstado)) {
+    return;
+  }
+  estado = nuevoEstado;
 
   guardarSucursalSessionStorage(estado.sucursalActiva);
   sincronizarUrl(estado.sucursalActiva);
   notificar();
 }
 
-let cargandoAlcanceApi = false;
+/**
+ * Reintenta la obtención del alcance si previamente ocurrió un fallo de red.
+ */
+export function reintentarAlcance() {
+  if (estado.errorAlcance) {
+    estado = { ...estado, errorAlcance: false };
+    notificar();
+  }
+  return refrescarAlcanceDesdeApi({ forzar: true });
+}
 
 /**
- * Invalida el alcance en caché y vuelve a pedir /Usuario/mi-alcance al backend.
- * Detecta además si el usuario cambió respecto a la sesión anterior para limpiar sessionStorage.
+ * Invalida el alcance en caché y vuelve a pedir /Usuario/mi-alcance al backend con
+ * promesa compartida (request coalescing) y reintentos ante errores de red o cancelación.
  */
-export async function refrescarAlcanceDesdeApi() {
-  if (typeof window === "undefined" || !window.location || !window.location.host || cargandoAlcanceApi) return null;
-  cargandoAlcanceApi = true;
-  try {
-    const res = await fetch("/api/Usuario/mi-alcance", {
-      credentials: "same-origin",
-      headers: { "Cache-Control": "no-cache, no-store" }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const usuarioPrevioId = window.sessionStorage.getItem("blanquita_usuario_id");
-      if (usuarioPrevioId && String(usuarioPrevioId) !== String(data.id_usuario)) {
-        // Cambio de usuario detectado: limpiar sucursal de la sesión anterior
-        window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      }
-      if (data.id_usuario) {
-        window.sessionStorage.setItem("blanquita_usuario_id", String(data.id_usuario));
-      }
-      if (data.puede_ver_todas === false) {
-        const sedeDefecto = data.sucursal_defecto ?? data.IdSucursal ?? data.id_sucursal;
-        if (sedeDefecto != null) {
-          guardarSucursalSessionStorage(String(sedeDefecto));
-        }
-      }
-      inicializarAlcanceUsuario(data);
-      return data;
-    }
-  } catch (err) {
-    console.warn("[BranchStore] No se pudo refrescar alcance desde /Usuario/mi-alcance:", err);
-  } finally {
-    cargandoAlcanceApi = false;
+export function refrescarAlcanceDesdeApi({ forzar = false } = {}) {
+  if (typeof window === "undefined" || !window.location || !window.location.host) {
+    return Promise.resolve(null);
   }
-  return null;
+
+  if (promesaAlcance) {
+    return promesaAlcance;
+  }
+
+  if (alcanceConfirmado && !forzar && !estado.errorAlcance) {
+    return Promise.resolve(estado);
+  }
+
+  promesaAlcance = (async () => {
+    const delays = globalThis.__BRANCH_STORE_RETRY_DELAYS || [400, 1000, 2000];
+    let ultimoError = null;
+
+    for (let intento = 0; intento <= delays.length; intento++) {
+      try {
+        const res = await fetch("/api/Usuario/mi-alcance", {
+          credentials: "same-origin",
+          headers: { "Cache-Control": "no-cache, no-store" }
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          if (res.status === 403) {
+            estado = { ...estado, errorAlcance: true };
+            notificar();
+          }
+          return null;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          const keyActual = extraerUsuarioKey(data);
+          const usuarioPrevioId = window.sessionStorage?.getItem("blanquita_usuario_id");
+          if (usuarioPrevioId && keyActual && String(usuarioPrevioId) !== String(keyActual)) {
+            window.sessionStorage?.removeItem(SESSION_STORAGE_KEY);
+          }
+          if (keyActual) {
+            window.sessionStorage?.setItem("blanquita_usuario_id", String(keyActual));
+          }
+          if (data.puede_ver_todas === false) {
+            const sedeDefecto = data.sucursal_defecto ?? data.IdSucursal ?? data.id_sucursal;
+            if (sedeDefecto != null) {
+              guardarSucursalSessionStorage(String(sedeDefecto));
+            }
+          }
+          inicializarAlcanceUsuario(data);
+          return data;
+        } else if (res.status >= 500) {
+          throw new Error(`HTTP ${res.status}`);
+        } else {
+          estado = { ...estado, errorAlcance: true };
+          notificar();
+          return null;
+        }
+      } catch (err) {
+        ultimoError = err;
+        const esErrorReintentable =
+          err?.name === "AbortError" ||
+          err?.name === "TypeError" ||
+          err instanceof TypeError ||
+          String(err?.message || "").includes("HTTP 5") ||
+          String(err?.message || "").toLowerCase().includes("network") ||
+          String(err?.message || "").toLowerCase().includes("fetch");
+
+        if (!esErrorReintentable || intento === delays.length) {
+          break;
+        }
+
+        const delay = delays[intento];
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    console.warn("[BranchStore] No se pudo refrescar alcance tras reintentos:", ultimoError);
+    // NO tocar inicializado si ya estaba en true
+    estado = { ...estado, errorAlcance: true };
+    notificar();
+    return null;
+  })().finally(() => {
+    promesaAlcance = null;
+  });
+
+  return promesaAlcance;
 }
 
 export function limpiarSesionSucursal() {
+  alcanceConfirmado = false;
+  usuarioKeyConfirmado = null;
   if (typeof window !== "undefined") {
     try {
       window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
       window.sessionStorage.removeItem("blanquita_usuario_id");
     } catch {}
   }
-  estado = {
+  const nuevoEstado = {
     sucursalActiva: null,
     sucursalesPermitidas: [],
     puedeVerTodas: false,
     sucursalAsignada: null,
-    inicializado: false
+    inicializado: false,
+    alcanceConfirmado: false,
+    errorAlcance: false
   };
+  if (sonEstadosIguales(estado, nuevoEstado)) return;
+  estado = nuevoEstado;
   notificar();
+}
+
+// Revalidación única y reactiva en navegación Astro
+if (typeof document !== "undefined") {
+  if (!globalThis.__branchStoreAstroListeners) {
+    globalThis.__branchStoreAstroListeners = true;
+    document.addEventListener("astro:page-load", () => {
+      if (!alcanceConfirmado && !promesaAlcance) {
+        refrescarAlcanceDesdeApi().catch(() => {});
+      }
+    });
+  }
 }
 
 if (typeof window !== "undefined" && typeof window.document !== "undefined") {
   // Al cargar la app en el navegador, invalidar alcance previo y sincronizar con backend real
-  refrescarAlcanceDesdeApi();
+  refrescarAlcanceDesdeApi().catch(() => {});
 }
 
 export function getSnapshot() {
@@ -308,7 +514,9 @@ const serverSnapshot = {
   sucursalesPermitidas: [],
   puedeVerTodas: false,
   sucursalAsignada: null,
-  inicializado: false
+  inicializado: false,
+  alcanceConfirmado: false,
+  errorAlcance: false
 };
 
 export function getServerSnapshot() {
@@ -324,12 +532,24 @@ export function subscribe(callback) {
  * Hook de consumo general del store de sucursales.
  */
 export function useBranch(usuarioInicial = null) {
-  if (usuarioInicial && !estado.inicializado) {
-    inicializarAlcanceUsuario(usuarioInicial);
-  }
+  useEffect(() => {
+    if (usuarioInicial) {
+      inicializarAlcanceUsuario(usuarioInicial);
+    }
+  }, [
+    usuarioInicial?.AuthUserId,
+    usuarioInicial?.auth_user_id,
+    usuarioInicial?.IdUsuario,
+    usuarioInicial?.id_usuario
+  ]);
 
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const listoParaConsultar = Boolean(snap.inicializado && snap.sucursalActiva != null);
+  const listoParaConsultar = Boolean(
+    snap.inicializado &&
+    snap.sucursalActiva != null &&
+    !snap.errorAlcance &&
+    snap.alcanceConfirmado
+  );
 
   return {
     sucursalActiva: listoParaConsultar ? snap.sucursalActiva : null,
@@ -340,6 +560,10 @@ export function useBranch(usuarioInicial = null) {
     cambiarSucursal: cambiarSucursalActiva,
     sucursalAsignada: snap.sucursalAsignada,
     inicializado: snap.inicializado,
+    alcanceConfirmado: Boolean(snap.alcanceConfirmado),
+    errorAlcance: Boolean(snap.errorAlcance),
+    reintentar: reintentarAlcance,
+    reintentarAlcance,
     listoParaConsultar,
     // Alias y compatibilidad para componentes
     sucursales: snap.sucursalesPermitidas || [],
@@ -354,12 +578,24 @@ export function useBranch(usuarioInicial = null) {
  * Bloquea consultas a Sucre mientras `mi-alcance` no haya confirmado la sede real.
  */
 export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) {
-  if (usuario && !estado.inicializado) {
-    inicializarAlcanceUsuario(usuario);
-  }
+  useEffect(() => {
+    if (usuario) {
+      inicializarAlcanceUsuario(usuario);
+    }
+  }, [
+    usuario?.AuthUserId,
+    usuario?.auth_user_id,
+    usuario?.IdUsuario,
+    usuario?.id_usuario
+  ]);
 
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const listoParaConsultar = Boolean(snap.inicializado && snap.sucursalActiva != null);
+  const listoParaConsultar = Boolean(
+    snap.inicializado &&
+    snap.sucursalActiva != null &&
+    !snap.errorAlcance &&
+    snap.alcanceConfirmado
+  );
 
   // Resolver sucursal efectiva para la pantalla
   let sucursalEfectiva = snap.sucursalActiva;
@@ -404,6 +640,10 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     puedeVerTodas: snap.puedeVerTodas && permiteTodas,
     sucursalesPermitidas: sucursales,
     sucursalAsignada: snap.sucursalAsignada,
+    alcanceConfirmado: Boolean(snap.alcanceConfirmado),
+    errorAlcance: Boolean(snap.errorAlcance),
+    reintentar: reintentarAlcance,
+    reintentarAlcance,
     // Propiedades adicionales esperadas por componentes
     sucursales,
     cargando: !listoParaConsultar,

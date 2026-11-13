@@ -3,4 +3,4 @@
  * Provee listoParaConsultar, sucursal, sucursalIdNumerico y bloqueo cerrado de consultas a Sucre
  * para usuarios con sede fija Potosí.
  */
-export { usePaginaSucursal, useBranch } from "@/stores/branchStore";
+export { usePaginaSucursal, useBranch, reintentarAlcance } from "@/stores/branchStore";
