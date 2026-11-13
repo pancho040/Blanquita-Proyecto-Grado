@@ -61,13 +61,25 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
   const latitud = typeof p.latitud === "number" ? p.latitud : parseFloat(p.latitud) || -19.0435;
   const longitud = typeof p.longitud === "number" ? p.longitud : parseFloat(p.longitud) || -65.2580;
 
-  // 3. tipo_entrega: "TOTAL" o "PARCIAL"
-  const tipoEntrega = String(p.tipo_entrega || "TOTAL").toUpperCase() === "PARCIAL" ? "PARCIAL" : "TOTAL";
+  // 3. tipo_entrega e incidencia
+  // Si viene "PIDIO_MAS", "PIDIO_MENOS", "PARCIAL", etc. o incidencia especial, normalizamos
+  // para que el backend tome los items_entregados enviados exactamente.
+  const tipoOriginal = String(p.tipo_entrega || "TOTAL").toUpperCase();
+  const incidencia = p.incidencia || p.tipo_situacion || (tipoOriginal !== "TOTAL" && tipoOriginal !== "PARCIAL" ? tipoOriginal : null);
+  const esParcialOModificado =
+    tipoOriginal === "PARCIAL" ||
+    tipoOriginal === "PIDIO_MAS" ||
+    tipoOriginal === "PIDIO_MENOS" ||
+    Boolean(incidencia && incidencia !== "NORMAL");
+  const tipoEntrega = esParcialOModificado ? "PARCIAL" : "TOTAL";
 
-  // 4. Strings limpios
+  // 4. Strings limpios y anotación de incidencia
   const recibidoPor = String(p.recibido_por || p.recibidoPor || "Cliente").trim();
   const ciReceptor = String(p.ci_receptor || p.ciReceptor || "").trim();
-  const observacion = String(p.observacion || p.observaciones || "").trim();
+  let observacion = String(p.observacion || p.observaciones || "").trim();
+  if (incidencia && !observacion.includes(`[${incidencia}]`)) {
+    observacion = `[${incidencia}] ${observacion}`.trim();
+  }
 
   // 5. Items entregados normalizados según contrato
   const rawItems = Array.isArray(p.items_entregados)
@@ -176,6 +188,7 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
     latitud,
     longitud,
     tipo_entrega: tipoEntrega,
+    incidencia: incidencia || null,
     recibido_por: recibidoPor,
     ci_receptor: ciReceptor,
     observacion,
@@ -635,7 +648,15 @@ class SyncService {
             }
 
             case "NO_ENTREGA": {
-              const resNoEntrega = await LogisticaApi.registrarNoEntrega(item.payload, idempotencyKey);
+              const payloadNoEntrega = {
+                id_pedido: item.payload?.id_pedido || item.payload?.IdPedido || 0,
+                motivo: item.payload?.motivo || "LOCAL_CERRADO",
+                observacion: item.payload?.observacion || item.payload?.observaciones || null,
+                latitud: item.gps?.latitud || item.payload?.latitud || -19.0435,
+                longitud: item.gps?.longitud || item.payload?.longitud || -65.2580,
+                id_punto_venta: item.payload?.idPuntoVenta || item.payload?.id_punto_venta,
+              };
+              const resNoEntrega = await LogisticaApi.registrarNoEntrega(payloadNoEntrega, idempotencyKey);
               if (!resNoEntrega.success) {
                 const err = new Error(resNoEntrega.error);
                 err.status = resNoEntrega.status;

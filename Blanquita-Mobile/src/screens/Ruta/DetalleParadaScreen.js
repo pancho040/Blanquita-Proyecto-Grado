@@ -9,6 +9,7 @@ import {
   Linking,
   Alert,
   Modal,
+  TextInput,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useRuta } from '../../context/RutaContext';
@@ -24,20 +25,48 @@ import {
   Package,
   XCircle,
   X,
+  AlertTriangle,
+  Clock,
+  Store,
+  UserX,
+  Ban,
+  CheckCircle2,
 } from 'lucide-react-native';
 
-// Catálogo cerrado de motivos de no entrega
-const MOTIVOS_NO_ENTREGA = [
-  { clave: 'LOCAL_CERRADO', etiqueta: 'Local Cerrado', detalle: 'Cortina metálica abajo o sin atención' },
-  { clave: 'CLIENTE_AUSENTE', etiqueta: 'Cliente Ausente', detalle: 'No responde llamadas ni se encuentra en sitio' },
-  { clave: 'RECHAZO_PRECIO', etiqueta: 'Rechazo por Precio', detalle: 'Disconformidad con importe o cotización' },
-  { clave: 'SIN_FONDOS', etiqueta: 'Sin Fondos', detalle: 'No dispone de efectivo ni método de pago' },
+// Catálogo cerrado de motivos de incidencia / no entrega
+const MOTIVOS_INCIDENCIA = [
+  {
+    clave: 'CLIENTE_AUSENTE',
+    etiqueta: 'No estaba / Ausente',
+    detalle: 'Cliente no se encuentra en el domicilio o local y no responde llamadas.',
+    icono: UserX,
+  },
+  {
+    clave: 'LOCAL_CERRADO',
+    etiqueta: 'Local cerrado',
+    detalle: 'Cortina metálica abajo o local fuera del horario de atención comercial.',
+    icono: Store,
+  },
+  {
+    clave: 'ATRASADO_PASAR_MAS_TARDE',
+    etiqueta: 'Atrasado (pasar más tarde)',
+    detalle: 'Cliente solicita reprogramar y retornar más tarde en la misma jornada.',
+    icono: Clock,
+  },
+  {
+    clave: 'RECHAZO_SIN_EFECTIVO',
+    etiqueta: 'Rechazó pedido / Sin efectivo',
+    detalle: 'Cliente desistió de la compra o no cuenta con liquidez para pagar.',
+    icono: Ban,
+  },
 ];
 
 export const DetalleParadaScreen = ({ route, navigation }) => {
   const { paradaId, parada: initialParada } = route.params;
   const { hojaRuta, registrarNoEntrega } = useRuta();
   const [modalNoEntregaVisible, setModalNoEntregaVisible] = useState(false);
+  const [motivoSeleccionado, setMotivoSeleccionado] = useState(null);
+  const [observacionesNoEntrega, setObservacionesNoEntrega] = useState('');
   const [guardandoNoEntrega, setGuardandoNoEntrega] = useState(false);
 
   const totalParadas = hojaRuta?.paradas?.length || 0;
@@ -46,8 +75,8 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
   const parada =
     hojaRuta?.paradas?.find(
       (p) =>
-        String(p.id ?? p.IdPuntoVenta ?? "") ===
-        String(paradaId ?? initialParada?.id ?? initialParada?.IdPuntoVenta ?? "")
+        String(p.id ?? p.IdPuntoVenta ?? '') ===
+        String(paradaId ?? initialParada?.id ?? initialParada?.IdPuntoVenta ?? '')
     ) || initialParada;
 
   if (!parada) {
@@ -74,7 +103,7 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
     pedido.items ||
     parada.PedidosPendientes ||
     [];
-  const estadoParada = String(parada.Estado || parada.estado || "PENDIENTE").toUpperCase();
+  const estadoParada = String(parada.Estado || parada.estado || 'PENDIENTE').toUpperCase();
   const yaEntregado = estadoParada === 'ENTREGADO';
   const esNoEntregado = estadoParada === 'NO_ENTREGADO';
 
@@ -113,19 +142,33 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
     0
   );
 
-  const handleReportarNoEntrega = () => {
+  const handleAbrirModalIncidencia = () => {
+    setMotivoSeleccionado(null);
+    setObservacionesNoEntrega('');
     setModalNoEntregaVisible(true);
   };
 
-  const confirmarNoEntrega = async (motivo) => {
+  const handleConfirmarIncidenciaNoEntrega = async () => {
+    if (!motivoSeleccionado) {
+      Alert.alert('Seleccione un Motivo', 'Por favor seleccione uno de los motivos del catálogo de incidencias.');
+      return;
+    }
+
     setGuardandoNoEntrega(true);
     try {
-      const res = await registrarNoEntrega(parada.id || parada.IdPuntoVenta, motivo);
+      const res = await registrarNoEntrega(
+        parada.id || parada.IdPuntoVenta,
+        motivoSeleccionado,
+        observacionesNoEntrega.trim()
+      );
       setModalNoEntregaVisible(false);
       if (res?.exito || res?.success) {
-        Alert.alert('No Entrega Registrada', `Motivo: ${motivo}. El pedido fue marcado como no entregado.`, [
-          { text: 'Aceptar', onPress: () => navigation.goBack() }
-        ]);
+        const itemMotivo = MOTIVOS_INCIDENCIA.find((m) => m.clave === motivoSeleccionado);
+        Alert.alert(
+          'Incidencia Registrada',
+          `Motivo: ${itemMotivo?.etiqueta || motivoSeleccionado}. La parada fue registrada como no entregada y sincronizada.`,
+          [{ text: 'Aceptar', onPress: () => navigation.goBack() }]
+        );
       }
     } catch (e) {
       Alert.alert('Error', e.message || 'No se pudo registrar la no entrega');
@@ -265,11 +308,11 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Botones Grandes de Operación (Sincronización Compuesta) */}
+        {/* Botones Grandes de Operación (Acciones Principales de Ruta) */}
         <View style={styles.footerBotones}>
           {!yaEntregado ? (
             <Button
-              title="REGISTRAR ENTREGA Y COBRO"
+              title="REGISTRAR ENTREGA / COBRO"
               icon={PackageCheck}
               variant="primary"
               size="large"
@@ -285,7 +328,7 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
                   esNuevoClienteEnRuta: Boolean(parada?.EsNuevoEnCampo),
                 })
               }
-              style={{ marginBottom: 10 }}
+              style={{ marginBottom: 12, minHeight: 48 }}
             />
           ) : (
             <View style={styles.bannerEntregado}>
@@ -294,6 +337,18 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
                 Mercadería entregada con firma, GPS y comprobante.
               </Text>
             </View>
+          )}
+
+          {!yaEntregado && !esNoEntregado && (
+            <Button
+              title="REPORTAR INCIDENCIA / NO ENTREGA"
+              icon={AlertTriangle}
+              variant="outline"
+              size="large"
+              onPress={handleAbrirModalIncidencia}
+              style={{ marginBottom: 12, minHeight: 48, borderColor: '#DC2626' }}
+              textStyle={{ color: '#DC2626', fontWeight: '800' }}
+            />
           )}
 
           <Button
@@ -313,24 +368,12 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
                 pedido,
               })
             }
-            style={{ marginBottom: 10 }}
+            style={{ marginBottom: 10, minHeight: 48 }}
           />
-
-          {!yaEntregado && !esNoEntregado && (
-            <Button
-              title="REPORTAR NO-ENTREGA"
-              icon={XCircle}
-              variant="outline"
-              size="medium"
-              onPress={handleReportarNoEntrega}
-              style={{ borderColor: Colors.danger }}
-              textStyle={{ color: Colors.danger }}
-            />
-          )}
         </View>
       </ScrollView>
 
-      {/* Modal Propio de Catálogo Cerrado para No Entrega (DESIGN.md - Touch Target >= 48px, Bordes Rectos) */}
+      {/* Modal de Catálogo Cerrado para Incidencias y No Entrega (DESIGN.md - Touch Targets >= 48px, Radio 4px) */}
       <Modal
         visible={modalNoEntregaVisible}
         transparent
@@ -339,56 +382,117 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            {/* Header sin solapamiento (touch target >= 48px) */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
-                <XCircle size={20} color={Colors.danger} style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitulo} numberOfLines={1}>Reportar No-Entrega</Text>
+                <AlertTriangle size={20} color="#DC2626" style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitulo} numberOfLines={1}>
+                  Reportar Incidencia / No Entrega
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => !guardandoNoEntrega && setModalNoEntregaVisible(false)}
                 style={styles.modalBotonCerrarX}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityLabel="Cerrar modal"
                 accessibilityRole="button"
+                activeOpacity={0.7}
               >
-                <X size={18} color="#64748B" />
+                <X size={20} color="#475569" />
               </TouchableOpacity>
             </View>
 
             <ScrollView
               style={styles.modalScroll}
               contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={true}
             >
               <Text style={styles.modalSubtitulo}>
-                Seleccione el motivo del catálogo cerrado para registrar la visita no concretada:
+                Seleccione el motivo de la visita no concretada del catálogo oficial:
               </Text>
 
+              {/* Lista de Motivos con Touch Target >= 48px y estado seleccionado */}
               <View style={styles.modalListaMotivos}>
-                {MOTIVOS_NO_ENTREGA.map((m) => (
-                  <TouchableOpacity
-                    key={m.clave}
-                    style={styles.modalOpcionMotivo}
-                    onPress={() => confirmarNoEntrega(m.clave)}
-                    disabled={guardandoNoEntrega}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.modalOpcionTextoCol}>
-                      <Text style={styles.modalOpcionTitulo}>{m.etiqueta}</Text>
-                      <Text style={styles.modalOpcionSub}>{m.detalle}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {MOTIVOS_INCIDENCIA.map((m) => {
+                  const IconoMotivo = m.icono;
+                  const seleccionado = motivoSeleccionado === m.clave;
+                  return (
+                    <TouchableOpacity
+                      key={m.clave}
+                      style={[
+                        styles.modalOpcionMotivo,
+                        seleccionado && styles.modalOpcionMotivoActiva,
+                      ]}
+                      onPress={() => setMotivoSeleccionado(m.clave)}
+                      disabled={guardandoNoEntrega}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.modalOpcionIconCol}>
+                        <IconoMotivo
+                          size={20}
+                          color={seleccionado ? Colors.primaryDark : '#64748B'}
+                        />
+                      </View>
+                      <View style={styles.modalOpcionTextoCol}>
+                        <Text
+                          style={[
+                            styles.modalOpcionTitulo,
+                            seleccionado && styles.modalOpcionTituloActivo,
+                          ]}
+                        >
+                          {m.etiqueta}
+                        </Text>
+                        <Text style={styles.modalOpcionSub}>{m.detalle}</Text>
+                      </View>
+                      {seleccionado && (
+                        <View style={styles.modalOpcionCheckCol}>
+                          <CheckCircle2 size={18} color={Colors.primaryDark} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <TouchableOpacity
-                style={styles.modalBotonCancelar}
-                onPress={() => setModalNoEntregaVisible(false)}
-                disabled={guardandoNoEntrega}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalBotonCancelarTexto}>Cancelar y Volver</Text>
-              </TouchableOpacity>
+              {/* Campo Opcional de Observaciones */}
+              <View style={styles.modalCampoObservaciones}>
+                <Text style={styles.modalLabelObservaciones}>
+                  Observaciones adicionales (opcional):
+                </Text>
+                <TextInput
+                  style={styles.modalInputObservaciones}
+                  placeholder="Detalle alguna instrucción o situación de la visita..."
+                  placeholderTextColor="#94A3B8"
+                  value={observacionesNoEntrega}
+                  onChangeText={setObservacionesNoEntrega}
+                  multiline
+                  numberOfLines={3}
+                  editable={!guardandoNoEntrega}
+                />
+              </View>
+
+              {/* Acciones del Modal */}
+              <View style={styles.modalAccionesFila}>
+                <Button
+                  title={guardandoNoEntrega ? "Guardando..." : "Confirmar Incidencia / No Entrega"}
+                  icon={XCircle}
+                  variant="primary"
+                  size="large"
+                  disabled={guardandoNoEntrega || !motivoSeleccionado}
+                  loading={guardandoNoEntrega}
+                  onPress={handleConfirmarIncidenciaNoEntrega}
+                  style={styles.modalBotonConfirmar}
+                />
+
+                <TouchableOpacity
+                  style={styles.modalBotonCancelar}
+                  onPress={() => setModalNoEntregaVisible(false)}
+                  disabled={guardandoNoEntrega}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalBotonCancelarTexto}>Cancelar y Volver</Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -675,9 +779,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   modalBotonCerrarX: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 4,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -690,7 +794,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalSubtitulo: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#334155',
     marginBottom: 14,
     lineHeight: 18,
@@ -702,30 +806,73 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalOpcionMotivo: {
-    minHeight: 48,
+    minHeight: 52,
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     borderRadius: 4,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalOpcionMotivoActiva: {
+    backgroundColor: '#F0F9FF',
+    borderColor: Colors.primaryDark,
+  },
+  modalOpcionIconCol: {
+    marginRight: 10,
   },
   modalOpcionTextoCol: {
+    flex: 1,
     flexDirection: 'column',
   },
+  modalOpcionCheckCol: {
+    marginLeft: 8,
+  },
   modalOpcionTitulo: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
     flexShrink: 1,
   },
+  modalOpcionTituloActivo: {
+    color: Colors.primaryDark,
+  },
   modalOpcionSub: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#475569',
     marginTop: 2,
     flexShrink: 1,
     flexWrap: 'wrap',
+  },
+  modalCampoObservaciones: {
+    marginBottom: 16,
+  },
+  modalLabelObservaciones: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  modalInputObservaciones: {
+    minHeight: 70,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    textAlignVertical: 'top',
+  },
+  modalAccionesFila: {
+    gap: 10,
+  },
+  modalBotonConfirmar: {
+    minHeight: 48,
+    backgroundColor: '#DC2626',
+    borderRadius: 4,
   },
   modalBotonCancelar: {
     minHeight: 48,

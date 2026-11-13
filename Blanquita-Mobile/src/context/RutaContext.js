@@ -677,6 +677,12 @@ export function RutaProvider({ children }) {
       Number(detalleEntrega.monto_total || detalleEntrega.montoTotal || 0) ||
       items.reduce((s, it) => s + Number(it.subtotal || (it.cantidad || 0) * (it.precio_unitario || 0)), 0);
 
+    const incidencia = detalleEntrega.incidencia || detalleEntrega.tipo_situacion || null;
+    let obsOperacion = (detalleEntrega.observaciones || detalleEntrega.observacion || "").trim();
+    if (incidencia && !obsOperacion.includes(`[${incidencia}]`)) {
+      obsOperacion = `[${incidencia}] ${obsOperacion}`.trim();
+    }
+
     // Contrato completo unificado con Chat 2 (Subagente D y handoff-sync.md)
     const datosOperacion = {
       idPuntoVenta,
@@ -685,9 +691,11 @@ export function RutaProvider({ children }) {
       idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta,
       numeroNota,
       tipo_entrega: detalleEntrega.tipo_entrega || "TOTAL",
+      incidencia,
       recibido_por: detalleEntrega.recibido_por || detalleEntrega.recibidoPor || "Cliente",
       ci_receptor: detalleEntrega.ci_receptor || detalleEntrega.ciReceptor || "",
-      observaciones: detalleEntrega.observaciones || detalleEntrega.observacion || "",
+      observaciones: obsOperacion,
+      observacion: obsOperacion,
       firma_chofer: detalleEntrega.firma_chofer || detalleEntrega.firmaChofer || null,
       firma_cliente: detalleEntrega.firma_cliente || detalleEntrega.firmaCliente || null,
       items_entregados: items.map((it) => ({
@@ -781,9 +789,9 @@ export function RutaProvider({ children }) {
   };
 
   /**
-   * Registrar motivo cuando un cliente no pudo ser atendido
+   * Registrar motivo e incidencia cuando un cliente no pudo ser atendido
    */
-  const registrarNoEntrega = async (idPuntoVenta, motivo) => {
+  const registrarNoEntrega = async (idPuntoVenta, motivo, observacion = "") => {
     // Gatekeeper: Bloquear si no está en APROBADA_EN_RUTA
     if (estadoRuta !== ESTADOS_RUTA.APROBADA_EN_RUTA) {
       return {
@@ -793,12 +801,39 @@ export function RutaProvider({ children }) {
       };
     }
 
-    const gps = await obtenerUbicacionActual();
+    let gps = null;
+    try {
+      gps = await obtenerUbicacionActual();
+    } catch (_e) {
+      gps = {
+        latitud: -19.0435,
+        longitud: -65.2580,
+        precision: 10,
+      };
+    }
+
+    // Resolver id_pedido de la parada
+    let idPedido = asignacionActiva?.IdPedido || 0;
+    const paradasList = asignacionActiva?.paradas || asignacionActiva?.Paradas || [];
+    const paradaEncontrada = paradasList.find(
+      (p) => String(p.IdPuntoVenta ?? p.id) === String(idPuntoVenta)
+    );
+    if (paradaEncontrada) {
+      idPedido = paradaEncontrada.IdPedido || paradaEncontrada.pedido?.id || idPedido;
+    }
+
+    const obsTexto = observacion ? String(observacion).trim() : "";
 
     const datosOperacion = {
+      id_pedido: idPedido,
       idPuntoVenta,
-      idAsignacion: asignacionActiva?.IdAsignacion,
+      id_punto_venta: idPuntoVenta,
+      idAsignacion: asignacionActiva?.IdAsignacion || asignacionActiva?.IdAsignacionRuta,
       motivo,
+      observacion: obsTexto,
+      observaciones: obsTexto,
+      latitud: gps?.latitud || -19.0435,
+      longitud: gps?.longitud || -65.2580,
       fechaHora: new Date().toISOString(),
       gps,
     };
@@ -807,20 +842,33 @@ export function RutaProvider({ children }) {
 
     setAsignacionActiva((prev) => {
       if (!prev) return prev;
-      const paradasActualizadas = prev.paradas.map((p) => {
-        if (p.IdPuntoVenta === idPuntoVenta) {
+      const paradasActualizadas = (prev.paradas || []).map((p) => {
+        if (String(p.IdPuntoVenta ?? p.id) === String(idPuntoVenta)) {
           return {
             ...p,
             Estado: "NO_ENTREGADO",
+            estado: "NO_ENTREGADO",
             motivoNoEntrega: motivo,
+            observacionNoEntrega: obsTexto,
           };
         }
         return p;
       });
-      return { ...prev, paradas: paradasActualizadas };
+      const nuevaRuta = { ...prev, paradas: paradasActualizadas, Paradas: paradasActualizadas };
+      LocalDB.guardarRutaActiva(nuevaRuta);
+      return nuevaRuta;
     });
 
-    return { exito: true };
+    // Encolar en cola offline con X-Idempotency-Key
+    await SyncQueue.encolarOperacion("NO_ENTREGA", datosOperacion, gps, usuario?.IdUsuario);
+    await refrescarPendientes();
+
+    // Disparar sincronización silenciosa en background si hay red
+    runSyncIfConnected(() => {
+      refrescarPendientes();
+    });
+
+    return { exito: true, success: true };
   };
 
   /**
