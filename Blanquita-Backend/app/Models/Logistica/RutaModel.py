@@ -23,9 +23,14 @@ class RutaBase(BaseModel):
     IdZonaDistribucion: int
     NombreRuta: str
     DiaSemana: Optional[int] = None # 1=Lunes, 7=Domingo
+    dia_semana: Optional[int] = None
     Descripcion: Optional[str] = None
     Activa: bool = True
     IdSucursal: Optional[int] = 1
+    EsAsignacionAutomatica: bool = False
+    es_asignacion_automatica: Optional[bool] = None
+    IdChoferPorDefecto: Optional[int] = None
+    id_chofer_por_defecto: Optional[int] = None
 
 class RutaCrear(RutaBase):
     pass
@@ -34,9 +39,14 @@ class RutaActualizar(BaseModel):
     IdZonaDistribucion: Optional[int] = None
     NombreRuta: Optional[str] = None
     DiaSemana: Optional[int] = None
+    dia_semana: Optional[int] = None
     Descripcion: Optional[str] = None
     Activa: Optional[bool] = None
     IdSucursal: Optional[int] = None
+    EsAsignacionAutomatica: Optional[bool] = None
+    es_asignacion_automatica: Optional[bool] = None
+    IdChoferPorDefecto: Optional[int] = None
+    id_chofer_por_defecto: Optional[int] = None
 
 class PuntoVentaRutaItem(BaseModel):
     IdPuntoVenta: int
@@ -65,11 +75,19 @@ class AsignacionRutaCrear(BaseModel):
     FechaAsignacion: date
     KilometrajeInicial: Optional[float] = None
     Observacion: Optional[str] = None
+    EstadoOperativo: Optional[str] = "PENDIENTE_CARGA"
+    estado_operativo: Optional[str] = None
 
 class AsignacionRutaActualizar(BaseModel):
     Estado: Optional[str] = None # 'Pendiente', 'En Ruta', 'Finalizada', 'Cancelada'
+    EstadoOperativo: Optional[str] = None # 'PENDIENTE_CARGA', 'CARGA_SOLICITADA', 'APROBADA_EN_RUTA', 'FINALIZADA', 'OBSERVADA'
+    estado_operativo: Optional[str] = None
     KilometrajeFinal: Optional[float] = None
     Observacion: Optional[str] = None
+    ObservacionCierreAdmin: Optional[str] = None
+    observacion_cierre_admin: Optional[str] = None
+    CerradoPorId: Optional[int] = None
+    cerrado_por_id: Optional[int] = None
 
 class AsignacionRutaResponse(BaseModel):
     IdAsignacionRuta: int
@@ -80,9 +98,15 @@ class AsignacionRutaResponse(BaseModel):
     NombreRepartidor: str
     FechaAsignacion: date
     Estado: str
+    EstadoOperativo: Optional[str] = "PENDIENTE_CARGA"
+    estado_operativo: Optional[str] = "PENDIENTE_CARGA"
     KilometrajeInicial: Optional[float] = None
     KilometrajeFinal: Optional[float] = None
     Observacion: Optional[str] = None
+    ObservacionCierreAdmin: Optional[str] = None
+    observacion_cierre_admin: Optional[str] = None
+    CerradoPorId: Optional[int] = None
+    cerrado_por_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -142,4 +166,92 @@ class ChoferTrackingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# -------------------------------------------------------------
+# SOLICITUD DE CARGA DE CAMIÓN
+# -------------------------------------------------------------
+class ItemSolicitudCarga(BaseModel):
+    IdPresentacion: Optional[int] = None
+    presentacion_id: Optional[int] = None
+    StockRemanente: float = 0.0
+    stock_remanente: Optional[float] = None
+    StockAdicionalSolicitado: Optional[float] = None
+    stock_adicional_solicitado: Optional[float] = None
+    StockAdicionalAprobado: Optional[float] = None
+    stock_adicional_aprobado: Optional[float] = None
+    Observacion: Optional[str] = None
+    observacion: Optional[str] = None
+
+class SolicitudCargaCrear(BaseModel):
+    IdAsignacionRuta: Optional[int] = None
+    id_asignacion: Optional[int] = None
+    IdChofer: Optional[int] = None
+    id_chofer: Optional[int] = None
+    UsarRemanente: bool = True
+    usar_remanente: Optional[bool] = None
+    ObservacionChofer: Optional[str] = None
+    observacion: Optional[str] = None
+    Items: List[ItemSolicitudCarga] = []
+    items: Optional[List[dict | ItemSolicitudCarga]] = None
+
+class SolicitudCargaRevision(BaseModel):
+    Estado: Optional[str] = "APROBADO" # 'APROBADO', 'RECHAZADO'
+    estado: Optional[str] = None
+    ObservacionAdmin: Optional[str] = None
+    observacion: Optional[str] = None
+    ItemsAprobados: Optional[List[dict]] = None
+    items_aprobados: Optional[List[dict]] = None
+
+class SolicitudCargaResponse(BaseModel):
+    IdSolicitud: int
+    IdAsignacionRuta: int
+    IdChofer: int
+    Estado: str
+    ObservacionChofer: Optional[str] = None
+    ObservacionAdmin: Optional[str] = None
+    IdAdminRevision: Optional[int] = None
+    FechaSolicitud: datetime
+    FechaRevision: Optional[datetime] = None
+    Detalles: List[dict] = []
+
+    class Config:
+        from_attributes = True
+
+# -------------------------------------------------------------
+# REORDENAMIENTO COMPACTO 1..N
+# -------------------------------------------------------------
+class InsertarParadaOrdenRequest(BaseModel):
+    IdRuta: int
+    IdPuntoVenta: int
+    Posicion: Optional[int] = None # Si es None o > max, va al final
+
+class QuitarParadaRequest(BaseModel):
+    IdRuta: int
+    IdPuntoVenta: int
+
+class MoverParadaRutaRequest(BaseModel):
+    IdPuntoVenta: int
+    IdRutaOrigen: int
+    IdRutaDestino: int
+    PosicionDestino: Optional[int] = None
+
+# -------------------------------------------------------------
+# AUDITORÍA / REVISIÓN WEB
+# -------------------------------------------------------------
+class RevisionWebOperacionRequest(BaseModel):
+    EstadoRevisionWeb: str # 'PENDIENTE', 'APROBADO', 'OBSERVADO', 'RECHAZADO'
+    ObservacionRevision: Optional[str] = None
+
+# Alias y DTOs complementarios
+ItemAprobarCargaDTO = ItemSolicitudCarga
+AprobarCargaRequest = SolicitudCargaRevision
+RevisionOperacionRequest = RevisionWebOperacionRequest
+
+class FinalizarAdminRequest(BaseModel):
+    IdAsignacionRuta: int
+    ObservacionCierre: Optional[str] = None
+
+class ReasignarPendientesRequest(BaseModel):
+    IdRutaDestino: int
+    FechaNueva: Optional[date] = None
 

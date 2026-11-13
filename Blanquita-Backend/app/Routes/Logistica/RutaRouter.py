@@ -16,7 +16,10 @@ from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
 from app.Models.Logistica.RutaModel import (
     ZonaCrear, ZonaResponse, RutaCrear, RutaActualizar, RutaResponse,
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
-    RepartidorCrear, TelemetriaPing
+    RepartidorCrear, TelemetriaPing, InsertarParadaOrdenRequest, QuitarParadaRequest,
+    MoverParadaRutaRequest, SolicitudCargaCrear, SolicitudCargaRevision,
+    RevisionWebOperacionRequest, ItemAprobarCargaDTO, AprobarCargaRequest,
+    RevisionOperacionRequest, FinalizarAdminRequest, ReasignarPendientesRequest
 )
 
 RutaRouter = APIRouter(prefix="/logistica", tags=["Logística - Rutas y Asignaciones"])
@@ -232,8 +235,26 @@ def generar_ticket_websocket_flota(
 
 
 async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] = None):
-    """Lógica central de conexión WebSocket para telemetría de flota."""
+    """Lógica central de conexión WebSocket para telemetría de flota y eventos operativos de logística."""
     ticket_data = flota_ws_manager.validar_y_consumir_ticket(ticket)
+    if not ticket_data and ticket:
+        try:
+            from app.Auth.Jwt import verificar_token
+            payload = verificar_token(ticket)
+            if payload:
+                uid = payload.get("id_usuario") or payload.get("sub") or payload.get("IdUsuario")
+                rol = payload.get("id_rol") or payload.get("rol")
+                suc = payload.get("id_sucursal") or payload.get("IdSucursal")
+                ticket_data = {
+                    "usuario_id": int(uid) if uid else None,
+                    "id_chofer": int(uid) if uid else None,
+                    "rol": rol,
+                    "tipo_cliente": "movil" if rol == ROL_AGENTE_REPARTO else "web",
+                    "sucursales_permitidas": [int(suc)] if suc else None
+                }
+        except Exception:
+            pass
+
     if not ticket_data:
         # Código 4401: Ticket inválido o expirado
         await websocket.close(code=4401, reason="Ticket invalido o expirado")
@@ -243,7 +264,7 @@ async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] =
     snapshot = []
     try:
         with SessionLocal() as db_session:
-            suc_filtro = ticket_data["sucursales_permitidas"][0] if ticket_data["sucursales_permitidas"] else None
+            suc_filtro = ticket_data.get("sucursales_permitidas")[0] if ticket_data.get("sucursales_permitidas") else None
             snapshot = RutaService(db_session).ObtenerChoferesEnVivo(suc_filtro)
     except Exception as e:
         logger.warning(f"[WS-Flota] Error al cargar snapshot inicial: {e}")
@@ -254,6 +275,28 @@ async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] =
             data = await websocket.receive_text()
             if data == "ping" or '"ping"' in data.lower():
                 await flota_ws_manager.responder_pong(websocket)
+            else:
+                try:
+                    import json
+                    msg_json = json.loads(data)
+                    tipo_msg = msg_json.get("tipo")
+                    if tipo_msg in ("reporte_ubicacion_actual", "POSICION_CHOFER"):
+                        uid_reporte = msg_json.get("id_chofer") or ticket_data.get("usuario_id")
+                        if uid_reporte and msg_json.get("lat") and msg_json.get("lng"):
+                            with SessionLocal() as db_session:
+                                dto_ping = TelemetriaPing(
+                                    IdUsuarioRepartidor=int(uid_reporte),
+                                    IdAsignacionRuta=msg_json.get("id_asignacion"),
+                                    Latitud=float(msg_json["lat"]),
+                                    Longitud=float(msg_json["lng"]),
+                                    Velocidad=float(msg_json.get("velocidad", 0.0)),
+                                    Bateria=int(msg_json.get("bateria", 100)),
+                                    EstadoMovimiento=msg_json.get("estado_movimiento", "En Ruta")
+                                )
+                                RutaService(db_session).RegistrarTelemetriaPing(dto_ping)
+                            await flota_ws_manager.broadcast_ubicacion(msg_json)
+                except Exception as parse_err:
+                    logger.debug(f"[WS receive] No JSON o formato desconocido: {parse_err}")
     except WebSocketDisconnect:
         flota_ws_manager.desconectar(websocket)
     except Exception as ex:
@@ -262,6 +305,8 @@ async def websocket_flota_endpoint(websocket: WebSocket, ticket: Optional[str] =
 
 
 @RutaRouter.websocket("/flota/ws")
+@RutaRouter.websocket("/ws")
+@RutaRouter.websocket("/ws/logistica")
 async def websocket_flota(websocket: WebSocket, ticket: Optional[str] = None):
     await websocket_flota_endpoint(websocket, ticket)
 
@@ -384,3 +429,677 @@ def cerrar_y_liquidar_ruta(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación de ruta no encontrada")
     alcance.validar_recurso(row[0], nombre_recurso="asignación de ruta", responder_404=True)
     return RutaService(db).CerrarYLiquidarRuta(id_asignacion, datos, usuario["IdUsuario"])
+
+# -------------------------------------------------------------
+# MOTOR DE REORDENAMIENTO 1..N Y GENERADOR DIARIO (SUB-AGENTE A)
+# -------------------------------------------------------------
+@RutaRouter.post("/rutas/{id_ruta}/paradas/reordenar", response_model=list[dict])
+def recalcular_orden_paradas(
+    id_ruta: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Recalcula el orden secuencial compacto 1..N sin huecos de las paradas de la ruta.
+    """
+    return RutaService(db).recalcular_orden_paradas_ruta(id_ruta)
+
+@RutaRouter.post("/rutas/paradas/insertar", response_model=list[dict])
+def insertar_parada_orden(
+    dto: InsertarParadaOrdenRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role([ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR, 6, 7]))
+):
+    """
+    Inserta una nueva parada manual o por ENTREGA_INMEDIATA.
+    Desplaza las paradas siguientes en +1 y compacta en orden 1..N.
+    """
+    return RutaService(db).insertar_parada_en_orden(dto)
+
+@RutaRouter.post("/rutas/paradas/quitar", response_model=list[dict])
+def quitar_parada_ruta(
+    dto: QuitarParadaRequest,
+    fecha: Optional[date] = Query(None, description="Fecha de operación (default hoy)"),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Quita una parada PENDIENTE y compacta 1..N.
+    Regla inquebrantable: Lanza HTTP 400 si ya tiene entrega o cobro hoy.
+    """
+    return RutaService(db).quitar_parada_ruta(dto, fecha)
+
+@RutaRouter.post("/rutas/paradas/mover", response_model=dict)
+def mover_parada_ruta(
+    dto: MoverParadaRutaRequest,
+    fecha: Optional[date] = Query(None, description="Fecha de operación (default hoy)"),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Mueve un cliente PENDIENTE a otra ruta del mismo día o de otro día de la semana.
+    Lanza HTTP 400 si ya fue operada hoy en origen. Recalcula 1..N en origen y destino.
+    """
+    return RutaService(db).mover_cliente_de_ruta(dto, fecha)
+
+@RutaRouter.post("/rutas/generar-diarias", response_model=dict)
+def generar_rutas_diarias(
+    fecha: Optional[date] = Query(None, description="Fecha a generar (default hoy)"),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Invoca la función fn_generar_rutas_diarias para calcular las rutas y asignaciones automáticas del día.
+    """
+    return RutaService(db).GenerarRutasDiarias(fecha)
+
+# -------------------------------------------------------------
+# SOLICITUDES DE CARGA DE CAMIÓN
+# -------------------------------------------------------------
+@RutaRouter.post("/solicitudes-carga", response_model=dict)
+def crear_solicitud_carga(
+    dto: SolicitudCargaCrear,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(get_current_user)
+):
+    """
+    El chofer solicita carga de camión registrando stock remanente + stock adicional solicitado.
+    """
+    if not dto.IdChofer and not dto.id_chofer:
+        dto.IdChofer = usuario.get("IdUsuario")
+        dto.id_chofer = usuario.get("IdUsuario")
+    return RutaService(db).CrearSolicitudCarga(dto)
+
+@RutaRouter.get("/solicitudes-carga", response_model=list[dict])
+def listar_solicitudes_carga(
+    id_asignacion: Optional[int] = Query(None),
+    estado: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(get_current_user)
+):
+    """
+    Lista las solicitudes de carga registradas.
+    """
+    return RutaService(db).ListarSolicitudesCarga(id_asignacion, estado)
+
+@RutaRouter.get("/solicitudes-carga/{id_solicitud}", response_model=dict)
+def obtener_solicitud_carga(
+    id_solicitud: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(get_current_user)
+):
+    return RutaService(db).ObtenerSolicitudCargaPorId(id_solicitud)
+
+@RutaRouter.put("/solicitudes-carga/{id_solicitud}/revisar", response_model=dict)
+def revisar_solicitud_carga(
+    id_solicitud: int,
+    dto: SolicitudCargaRevision,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Supervisor o Administrador aprueba o rechaza la carga del camión.
+    """
+    return RutaService(db).RevisarSolicitudCarga(id_solicitud, dto, usuario["IdUsuario"])
+
+# -------------------------------------------------------------
+# AUDITORÍA / REVISIÓN WEB
+# -------------------------------------------------------------
+@RutaRouter.put("/entregas/{id_pedido}/revisar-web", response_model=dict)
+def revisar_entrega_web(
+    id_pedido: int,
+    dto: RevisionWebOperacionRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Auditoría Web para aprobar, observar o rechazar una entrega física.
+    """
+    return RutaService(db).RevisarEntregaWeb(id_pedido, dto, usuario["IdUsuario"])
+
+@RutaRouter.put("/pagos/{id_pago_pedido}/revisar-web", response_model=dict)
+def revisar_pago_web(
+    id_pago_pedido: int,
+    dto: RevisionWebOperacionRequest,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA))
+):
+    """
+    Auditoría Web para aprobar, observar o rechazar un pago o cobro de ruta.
+    """
+    return RutaService(db).RevisarPagoWeb(id_pago_pedido, dto, usuario["IdUsuario"])
+
+
+# -------------------------------------------------------------
+# APROBACIÓN DE CARGA EN WEB
+# -------------------------------------------------------------
+@RutaRouter.post("/asignaciones/{id_asignacion}/aprobar-carga", response_model=dict)
+@RutaRouter.post("/asignaciones/{id}/aprobar-carga", response_model=dict)
+async def aprobar_carga_camion_web(
+    id_asignacion: Optional[int] = None,
+    id: Optional[int] = None,
+    dto: Optional[AprobarCargaRequest] = None,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Aprobación de Carga en Web:
+    Suma el stock aprobado a inventario_chofer, pasa estado_operativo a APROBADA_EN_RUTA
+    y emite evento WebSocket carga_camion_aprobada al chofer.
+    """
+    asig_id = id_asignacion or id
+    if not asig_id:
+        raise HTTPException(status_code=400, detail="ID de asignación no provisto")
+
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_asig, {"asig_id": asig_id}).fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
+
+    alcance.validar_recurso(asig.IdSucursal, nombre_recurso="asignación de ruta", responder_404=True)
+    chofer_id = asig.IdUsuarioRepartidor
+    sucursal_id = asig.IdSucursal
+
+    # Buscar solicitud_carga_camion pendiente si existe
+    sql_sol = text("""
+        SELECT id_solicitud, estado
+        FROM public.solicitud_carga_camion
+        WHERE id_asignacion_ruta = :asig_id AND estado = 'PENDIENTE'
+        ORDER BY id_solicitud DESC LIMIT 1;
+    """)
+    sol = db.execute(sql_sol, {"asig_id": asig_id}).fetchone()
+
+    items_a_aprobar = []
+    if dto and dto.items:
+        items_a_aprobar = dto.items
+    elif sol:
+        sql_det = text("""
+            SELECT id_presentacion, stock_adicional_solicitado
+            FROM public.detalle_solicitud_carga_camion
+            WHERE id_solicitud = :sid;
+        """)
+        rows_det = db.execute(sql_det, {"sid": sol.id_solicitud}).fetchall()
+        for r in rows_det:
+            items_a_aprobar.append(ItemAprobarCargaDTO(
+                presentacion_id=r.id_presentacion,
+                cantidad_aprobada=float(r.stock_adicional_solicitado)
+            ))
+
+    # Sumar stock aprobado a inventario_chofer
+    for item in items_a_aprobar:
+        cant = float(item.cantidad_aprobada)
+        pid = item.presentacion_id
+
+        existe = db.execute(text("""
+            SELECT id, cantidad_cargada
+            FROM public.inventario_chofer
+            WHERE chofer_id = :uid AND presentacion_id = :pid
+            ORDER BY id DESC LIMIT 1;
+        """), {"uid": chofer_id, "pid": pid}).fetchone()
+
+        if existe:
+            db.execute(text("""
+                UPDATE public.inventario_chofer
+                SET cantidad_cargada = cantidad_cargada + :cant,
+                    fecha_carga = NOW()
+                WHERE id = :id_inv;
+            """), {"cant": cant, "id_inv": existe.id})
+        else:
+            db.execute(text("""
+                INSERT INTO public.inventario_chofer (
+                    chofer_id, sucursal_id, presentacion_id, cantidad_cargada,
+                    cantidad_vendida, cantidad_remanente, precio_vigente_carga, fecha_carga
+                ) VALUES (
+                    :uid, :sid, :pid, :cant,
+                    0, 0, (SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto" WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid) LIMIT 1), NOW()
+                );
+            """), {"uid": chofer_id, "sid": sucursal_id, "pid": pid, "cant": cant})
+
+        if sol:
+            db.execute(text("""
+                UPDATE public.detalle_solicitud_carga_camion
+                SET stock_adicional_aprobado = :cant
+                WHERE id_solicitud = :sid AND id_presentacion = :pid;
+            """), {"cant": cant, "sid": sol.id_solicitud, "pid": pid})
+
+    if sol:
+        db.execute(text("""
+            UPDATE public.solicitud_carga_camion
+            SET estado = 'APROBADO',
+                observacion_admin = :obs,
+                id_admin_revision = :admin_id,
+                fecha_revision = NOW()
+            WHERE id_solicitud = :sid;
+        """), {
+            "obs": dto.observacion if dto else "Carga aprobada en Web",
+            "admin_id": usuario["IdUsuario"],
+            "sid": sol.id_solicitud
+        })
+
+    # Pasa estado_operativo a APROBADA_EN_RUTA y Estado a 'En Ruta'
+    db.execute(text("""
+        UPDATE public."AsignacionRuta"
+        SET "estado_operativo" = 'APROBADA_EN_RUTA',
+            "Estado" = 'En Ruta'
+        WHERE "IdAsignacionRuta" = :asig_id;
+    """), {"asig_id": asig_id})
+
+    db.commit()
+
+    # Emitir evento WebSocket carga_camion_aprobada al chofer
+    evento_ws = {
+        "tipo": "carga_camion_aprobada",
+        "id_asignacion": asig_id,
+        "estado_operativo": "APROBADA_EN_RUTA",
+        "habilitada_para_reparto": True,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    try:
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+        except RuntimeError:
+            asyncio.run(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+    except Exception as e:
+        logger.debug(f"[WS carga_camion_aprobada] Error: {e}")
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": "Carga de camión aprobada exitosamente",
+        "datos": {
+            "id_asignacion": asig_id,
+            "estado_operativo": "APROBADA_EN_RUTA",
+            "habilitada_para_reparto": True
+        }
+    }
+
+
+# -------------------------------------------------------------
+# APROBACIÓN 1 A 1 DE HISTORIAL (ENTREGA O COBRO)
+# -------------------------------------------------------------
+@RutaRouter.patch("/operaciones-ruta/{tipo}/{id_operacion}/revisar", response_model=dict)
+@RutaRouter.patch("/operaciones-ruta/{tipo}/{id}/revisar", response_model=dict)
+async def revisar_operacion_ruta_1a1(
+    tipo: str,
+    dto: RevisionOperacionRequest,
+    id_operacion: Optional[int] = None,
+    id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Aprobación 1 a 1 de Historial:
+    Permite al encargado Web marcar cada entrega o cobro como APROBADO, OBSERVADO o RECHAZADO
+    con comentario/observación, y emite WebSocket operacion_revisada al chofer.
+    """
+    op_id = id_operacion or id
+    if not op_id:
+        raise HTTPException(status_code=400, detail="ID de operación no provisto")
+
+    tipo_norm = str(tipo or "").strip().lower()
+    if tipo_norm not in ("entrega", "cobro"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tipo de operación inválido: '{tipo}'. Debe ser 'entrega' o 'cobro'."
+        )
+
+    estado_norm = str(dto.estado or "").strip().upper()
+    if estado_norm not in ("APROBADO", "OBSERVADO", "RECHAZADO"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Estado de revisión inválido: '{dto.estado}'. Debe ser 'APROBADO', 'OBSERVADO' o 'RECHAZADO'."
+        )
+
+    chofer_id = None
+    admin_id = usuario["IdUsuario"]
+
+    if tipo_norm == "entrega":
+        sql_ped = text("""
+            SELECT p."IdPedido", p."IdUsuarioRepartidor", r."IdSucursal"
+            FROM public."Pedido" p
+            LEFT JOIN public."AsignacionRuta" ar ON p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+            LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+            WHERE p."IdPedido" = :op_id;
+        """)
+        ped = db.execute(sql_ped, {"op_id": op_id}).fetchone()
+        if not ped:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido / entrega no encontrada")
+        chofer_id = ped.IdUsuarioRepartidor
+
+        db.execute(text("""
+            UPDATE public."Pedido"
+            SET "estado_revision_web" = :est,
+                "observacion_revision" = :obs,
+                "revisado_por_id" = :adm,
+                "fecha_revision" = NOW()
+            WHERE "IdPedido" = :op_id;
+        """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+
+    elif tipo_norm == "cobro":
+        sql_pago = text("""
+            SELECT pp."IdPagoPedido", p."IdUsuarioRepartidor", r."IdSucursal"
+            FROM public."PagoPedido" pp
+            JOIN public."Pedido" p ON pp."IdPedido" = p."IdPedido"
+            LEFT JOIN public."AsignacionRuta" ar ON p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+            LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+            WHERE pp."IdPagoPedido" = :op_id;
+        """)
+        pago = db.execute(sql_pago, {"op_id": op_id}).fetchone()
+        if pago:
+            chofer_id = pago.IdUsuarioRepartidor
+            db.execute(text("""
+                UPDATE public."PagoPedido"
+                SET "estado_revision_web" = :est,
+                    "observacion_revision" = :obs,
+                    "revisado_por_id" = :adm,
+                    "fecha_revision" = NOW()
+                WHERE "IdPagoPedido" = :op_id;
+            """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+        else:
+            sql_ab = text("""
+                SELECT a."IdAbonoCuentaCobrar", a."IdUsuario"
+                FROM public."AbonoCuentaCobrar" a
+                WHERE a."IdAbonoCuentaCobrar" = :op_id;
+            """)
+            ab = db.execute(sql_ab, {"op_id": op_id}).fetchone()
+            if not ab:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cobro / pago no encontrado")
+            chofer_id = ab.IdUsuario
+            db.execute(text("""
+                UPDATE public."AbonoCuentaCobrar"
+                SET "EstadoAprobacion" = :est,
+                    "Observacion" = COALESCE("Observacion", '') || ' [' || :obs || ']',
+                    "AprobadoPor" = :adm,
+                    "FechaAprobacion" = NOW()
+                WHERE "IdAbonoCuentaCobrar" = :op_id;
+            """), {"est": estado_norm, "obs": dto.observacion or "", "adm": admin_id, "op_id": op_id})
+
+    db.commit()
+
+    # Emitir WebSocket operacion_revisada al chofer
+    if chofer_id:
+        evento_ws = {
+            "tipo": "operacion_revisada",
+            "tipo_operacion": tipo_norm,
+            "id_operacion": op_id,
+            "estado_revision_web": estado_norm,
+            "observacion_revision": dto.observacion or "",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+            except RuntimeError:
+                asyncio.run(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+        except Exception as e:
+            logger.debug(f"[WS operacion_revisada] Error: {e}")
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Operación {tipo_norm} marcada como {estado_norm}",
+        "datos": {
+            "tipo": tipo_norm,
+            "id": op_id,
+            "estado_revision_web": estado_norm,
+            "observacion": dto.observacion
+        }
+    }
+
+
+# -------------------------------------------------------------
+# CIERRE Y LIQUIDACIÓN EXCLUSIVO DE ADMIN
+# -------------------------------------------------------------
+@RutaRouter.post("/asignaciones/{id_asignacion}/finalizar-admin", response_model=dict)
+@RutaRouter.post("/asignaciones/{id}/finalizar-admin", response_model=dict)
+def finalizar_ruta_admin(
+    id_asignacion: Optional[int] = None,
+    id: Optional[int] = None,
+    dto: Optional[FinalizarAdminRequest] = None,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(get_current_user),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Cierre y Liquidación Exclusivo de Admin:
+    - Bloquea con 403 a usuarios con rol Chofer.
+    - Valida que 0 operaciones de la ruta estén en PENDIENTE de revisión.
+    - Al finalizar, pasa estado_operativo a FINALIZADA y libera al chofer.
+    """
+    # 1. Bloqueo 403 a usuarios con rol Chofer
+    if usuario.get("IdRol") == ROL_AGENTE_REPARTO:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: El cierre y finalización de ruta es exclusivo del administrador."
+        )
+
+    if usuario.get("IdRol") not in PERMISOS_LOGISTICA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permisos insuficientes para finalizar ruta"
+        )
+
+    asig_id = id_asignacion or id
+    if not asig_id:
+        raise HTTPException(status_code=400, detail="ID de asignación no provisto")
+
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal", ar."estado_operativo"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_asig, {"asig_id": asig_id}).fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación de ruta no encontrada")
+
+    alcance.validar_recurso(asig.IdSucursal, nombre_recurso="asignación de ruta", responder_404=True)
+
+    # 2. Validar que 0 operaciones de la ruta estén en PENDIENTE de revisión
+    sql_pend_entregas = text("""
+        SELECT COUNT(*)
+        FROM public."Pedido"
+        WHERE "IdAsignacionRuta" = :asig_id
+          AND COALESCE("estado_revision_web", 'PENDIENTE') = 'PENDIENTE';
+    """)
+    pend_entregas = db.execute(sql_pend_entregas, {"asig_id": asig_id}).scalar() or 0
+
+    sql_pend_cobros = text("""
+        SELECT COUNT(*)
+        FROM public."PagoPedido" pp
+        JOIN public."Pedido" p ON pp."IdPedido" = p."IdPedido"
+        WHERE p."IdAsignacionRuta" = :asig_id
+          AND COALESCE(pp."estado_revision_web", 'PENDIENTE') = 'PENDIENTE';
+    """)
+    pend_cobros = db.execute(sql_pend_cobros, {"asig_id": asig_id}).scalar() or 0
+
+    total_pendientes = pend_entregas + pend_cobros
+    if total_pendientes > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede finalizar la ruta: quedan {total_pendientes} operaciones pendientes de revisión ({pend_entregas} entregas, {pend_cobros} cobros)."
+        )
+
+    # 3. Guardar observacion_cierre_admin y pasar a FINALIZADA
+    obs = dto.observacion_cierre_admin if dto else None
+    km_final = dto.kilometraje_final if dto else None
+
+    db.execute(text("""
+        UPDATE public."AsignacionRuta"
+        SET "estado_operativo" = 'FINALIZADA',
+            "Estado" = 'Finalizada',
+            "observacion_cierre_admin" = :obs,
+            "cerrado_por_id" = :adm,
+            "KilometrajeFinal" = COALESCE(:km, "KilometrajeFinal")
+        WHERE "IdAsignacionRuta" = :asig_id;
+    """), {
+        "obs": obs,
+        "adm": usuario["IdUsuario"],
+        "km": km_final,
+        "asig_id": asig_id
+    })
+
+    db.commit()
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": "Ruta finalizada exitosamente por administración. Chofer liberado para nueva asignación.",
+        "datos": {
+            "id_asignacion": asig_id,
+            "estado_operativo": "FINALIZADA",
+            "observacion_cierre_admin": obs
+        }
+    }
+
+
+@RutaRouter.post("/asignaciones/{id_asignacion}/reasignar-pendientes", response_model=dict)
+@RutaRouter.post("/asignaciones/{id}/reasignar-pendientes", response_model=dict)
+def reasignar_paradas_pendientes(
+    id_asignacion: Optional[int] = None,
+    id: Optional[int] = None,
+    dto: ReasignarPendientesRequest = None,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Reasigna las paradas/pedidos pendientes de una asignación que fue finalizada o abandonada
+    hacia otro chofer o nueva asignación.
+    """
+    asig_id = id_asignacion or id
+    if not asig_id or not dto:
+        raise HTTPException(status_code=400, detail="Parámetros incompletos")
+
+    sql_ped_pend = text("""
+        SELECT "IdPedido"
+        FROM public."Pedido"
+        WHERE "IdAsignacionRuta" = :asig_id
+          AND "IdEstadoPedido" != 4;
+    """)
+    pedidos_pend = [r[0] for r in db.execute(sql_ped_pend, {"asig_id": asig_id}).fetchall()]
+
+    if not pedidos_pend:
+        return {
+            "codigo": "EXITO",
+            "mensaje": "No hay pedidos pendientes para reasignar en esta asignación",
+            "paradas_reasignadas": 0
+        }
+
+    for pid in pedidos_pend:
+        db.execute(text("""
+            UPDATE public."Pedido"
+            SET "IdUsuarioRepartidor" = :nuevo_chofer,
+                "IdAsignacionRuta" = COALESCE(:nueva_asig, "IdAsignacionRuta"),
+                "Observacion" = COALESCE("Observacion", '') || ' [Reasignado desde asig #' || :asig_id || ']'
+            WHERE "IdPedido" = :pid;
+        """), {
+            "nuevo_chofer": dto.nuevo_id_chofer,
+            "nueva_asig": dto.nueva_id_asignacion,
+            "asig_id": asig_id,
+            "pid": pid
+        })
+
+    db.commit()
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Se reasignaron exitosamente {len(pedidos_pend)} pedidos pendientes al chofer #{dto.nuevo_id_chofer}",
+        "datos": {
+            "id_asignacion_origen": asig_id,
+            "nuevo_id_chofer": dto.nuevo_id_chofer,
+            "nueva_id_asignacion": dto.nueva_id_asignacion,
+            "pedidos_reasignados": len(pedidos_pend)
+        }
+    }
+
+
+# -------------------------------------------------------------
+# UBICACIÓN BAJO DEMANDA (TELEMETRÍA)
+# -------------------------------------------------------------
+@RutaRouter.post("/telemetria/solicitar-ubicacion-actual", response_model=dict)
+async def solicitar_ubicacion_actual_flota(
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Emite WebSocket solicitar_ubicacion_actual a todos los choferes conectados
+    para que reporten su GPS en ese instante y retorna la lista de choferes
+    indicando cuáles tienen ubicación en vivo y cuáles muestran su 'Última ubicación conocida' desde BD.
+    """
+    evento_solicitud = {
+        "tipo": "solicitar_ubicacion_actual",
+        "solicitado_por": usuario["IdUsuario"],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    await flota_ws_manager.emitir_a_todos_los_choferes(evento_solicitud)
+
+    choferes_ws_activos = flota_ws_manager.obtener_choferes_conectados()
+
+    filtro_suc = alcance.sucursal_efectiva
+    sql_choferes = text("""
+        SELECT 
+            u."IdUsuario",
+            u."PrimerNombre" || ' ' || u."ApellidoPaterno" AS "NombreCompleto",
+            u."Celular",
+            u."IdSucursal",
+            t."IdAsignacionRuta",
+            r."NombreRuta",
+            t."Latitud",
+            t."Longitud",
+            t."Velocidad",
+            t."Bateria",
+            t."EstadoMovimiento",
+            t."UltimaActualizacion"
+        FROM public."Usuario" u
+        LEFT JOIN public."TrackingChofer" t ON u."IdUsuario" = t."IdUsuarioRepartidor"
+        LEFT JOIN public."AsignacionRuta" ar ON t."IdAsignacionRuta" = ar."IdAsignacionRuta"
+        LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE u."IdRol" = :rol_chofer
+          AND u."IdEstadoUsuario" = 1
+          AND (:suc_filtro IS NULL OR u."IdSucursal" = :suc_filtro)
+        ORDER BY u."ApellidoPaterno" ASC;
+    """)
+    filas = db.execute(sql_choferes, {
+        "rol_chofer": ROL_AGENTE_REPARTO,
+        "suc_filtro": filtro_suc
+    }).mappings().fetchall()
+
+    lista_resultado = []
+    for f in filas:
+        uid = f["IdUsuario"]
+        en_vivo = uid in choferes_ws_activos
+        lista_resultado.append({
+            "id_chofer": uid,
+            "nombre_chofer": f["NombreCompleto"],
+            "celular": f["Celular"],
+            "id_asignacion_ruta": f["IdAsignacionRuta"],
+            "nombre_ruta": f["NombreRuta"],
+            "ubicacion_en_vivo": en_vivo,
+            "origen_dato": "EN_VIVO" if en_vivo else "Última ubicación conocida",
+            "latitud": float(f["Latitud"]) if f["Latitud"] is not None else None,
+            "longitud": float(f["Longitud"]) if f["Longitud"] is not None else None,
+            "velocidad": float(f["Velocidad"] or 0.0),
+            "bateria": f["Bateria"],
+            "estado_movimiento": "En Vivo" if en_vivo else (f["EstadoMovimiento"] or "Sin Señal"),
+            "ultima_actualizacion": f["UltimaActualizacion"].isoformat() if f["UltimaActualizacion"] else None
+        })
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": "Solicitud de ubicación actual emitida a la flota",
+        "total_choferes": len(lista_resultado),
+        "choferes_en_vivo_count": sum(1 for c in lista_resultado if c["ubicacion_en_vivo"]),
+        "choferes": lista_resultado
+    }
+
+
