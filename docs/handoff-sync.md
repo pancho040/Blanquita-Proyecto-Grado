@@ -285,3 +285,159 @@ Para garantizar consistencia transaccional absoluta en escenarios de conectivida
 
 5. **Estado de Sesión Expirada Diferenciado (401 `TOKEN_EXPIRADO` vs `TOKEN_INVALIDO`):**
    - Mantener la diferenciación estricta en el cuerpo JSON (`codigo: "TOKEN_EXPIRADO"` para access token vencido renovable vía refresh token, vs `codigo: "TOKEN_INVALIDO"` cuando el refresh token expiró o fue revocado). Esto asegura que la app móvil no cierre intempestivamente la jornada del chofer y le permita seguir operando de forma autónoma offline.
+
+---
+
+## 5. CONTRATO DE CICLO DE RUTA, CARGA DE CAMIÓN, HISTORIAL DE APROBACIONES Y WEBSOCKET (PLAN GRATUITO)
+
+### 5.1 Solicitar Carga de Camión
+- **Endpoint:** `POST /api/movil/v1/chofer/solicitar-carga`
+- **Request Body:**
+```json
+{
+  "id_asignacion": 12,
+  "usar_remanente": true,
+  "observacion": "Carga inicial de mañana con stock remanente verificado",
+  "items": [
+    {
+      "presentacion_id": 1,
+      "cantidad_solicitada": 50.0
+    },
+    {
+      "presentacion_id": 2,
+      "cantidad_solicitada": 30.0
+    }
+  ]
+}
+```
+- **Response Exitosa (HTTP 200):**
+```json
+{
+  "codigo": "EXITO",
+  "mensaje": "Solicitud de carga registrada exitosamente",
+  "datos": {
+    "id_solicitud": 45,
+    "estado_operativo": "CARGA_SOLICITADA",
+    "habilitada_para_reparto": false
+  }
+}
+```
+
+---
+
+### 5.2 Resumen de Sincronización Manual (Ahorro Plan Gratuito)
+- **Endpoint:** `GET /api/movil/v1/chofer/resumen-sincronizacion`
+- **Descripción:** Endpoint único para el botón manual "Actualizar" del móvil, minimizando llamadas recurrentes y consumo de cuota en planes gratuitos.
+- **Response Exitosa (HTTP 200):**
+```json
+{
+  "codigo": "EXITO",
+  "mensaje": "Resumen de sincronización obtenido exitosamente",
+  "datos": {
+    "asignacion_activa": {
+      "id_asignacion": 12,
+      "estado_operativo": "APROBADA_EN_RUTA",
+      "habilitada_para_reparto": true,
+      "paradas": [
+        {
+          "id_parada": 101,
+          "orden": 1,
+          "id_pedido": 501,
+          "cliente": "Abarrotes Don Pepe",
+          "estado": "ENTREGADO"
+        },
+        {
+          "id_parada": 102,
+          "orden": 2,
+          "id_pedido": 502,
+          "cliente": "Farmacia Central",
+          "estado": "PENDIENTE"
+        }
+      ]
+    },
+    "inventario_camion": [
+      {
+        "presentacion_id": 1,
+        "nombre_producto": "Papel Higiénico Blanquita Clásico",
+        "cantidad_disponible": 40.0
+      }
+    ],
+    "historial_operaciones_hoy": [
+      {
+        "id_operacion": 88,
+        "tipo": "ENTREGA",
+        "cliente": "Abarrotes Don Pepe",
+        "monto": 250.0,
+        "estado_revision_web": "APROBADO",
+        "observacion_revision": "Validado en sistema",
+        "fecha": "2026-11-12T10:30:00"
+      }
+    ]
+  }
+}
+```
+*Valores posibles para `estado_operativo`:* `"SIN_RUTA" | "PENDIENTE_CARGA" | "CARGA_SOLICITADA" | "APROBADA_EN_RUTA" | "FINALIZADA"`.
+*Valores posibles para `estado_revision_web`:* `"PENDIENTE" | "APROBADO" | "OBSERVADO" | "RECHAZADO"`.
+
+---
+
+### 5.3 Registro de Cliente en Ruta (Venta Inmediata o Programada)
+- **Endpoint:** `POST /api/movil/v1/chofer/cliente-en-ruta`
+- **Request Body:**
+```json
+{
+  "datos_cliente": {
+    "razon_social": "Tienda Doña Rosa",
+    "ci_nit": "6789123",
+    "telefono": "71234567",
+    "direccion": "Av. Las Américas #120",
+    "latitud": -19.042,
+    "longitud": -65.259
+  },
+  "modalidad": "ENTREGA_INMEDIATA",
+  "dia_semana_programado": null,
+  "items_programados": null,
+  "parada_actual_orden": 2,
+  "entrega_con_cobro": {
+    "latitud": -19.042,
+    "longitud": -65.259,
+    "tipo_entrega": "TOTAL",
+    "recibido_por": "Doña Rosa",
+    "ci_receptor": "6789123",
+    "items_entregados": [
+      {
+        "presentacion_id": 1,
+        "cantidad": 5.0
+      }
+    ],
+    "cobro": {
+      "monto_total": 125.0,
+      "pagos": [
+        {
+          "metodo": "EFECTIVO",
+          "monto": 125.0
+        }
+      ]
+    }
+  }
+}
+```
+- **Modalidades soportadas:** `"SOLO_REGISTRO" | "PROGRAMAR_ENTREGA" | "ENTREGA_INMEDIATA"`.
+- **Comportamiento en `ENTREGA_INMEDIATA`:** Inserta la nueva parada en `parada_actual_orden + 1`, desplaza las paradas siguientes en `+1`, ejecuta la entrega con cobro en transacción ACID y devuelve la ruta reordenada compactamente de `1..N`.
+
+---
+
+### 5.4 Eventos WebSocket (`/ws/logistica`)
+Canal bidireccional en tiempo real para optimización de cuota y sincronización instantánea:
+- **Hacia Móvil (Chofer):**
+  - `ruta_asignada`: Notifica nueva ruta programada o asignada.
+  - `carga_camion_aprobada`: Habilita al chofer a iniciar reparto (`habilitada_para_reparto: true`).
+  - `ruta_reordenada`: Avisa cambio en la secuencia de paradas de la jornada.
+  - `operacion_revisada`: Informa al chofer si una entrega o cobro fue aprobado u observado por Web.
+  - `ruta_finalizada_admin`: Notifica el cierre oficial de la jornada por parte del supervisor.
+  - `solicitar_ubicacion_actual`: Demanda emisión puntual del GPS actual del chofer.
+- **Hacia Web (Panel de Control y Supervisor):**
+  - `solicitud_carga_recibida`: Alerta de nueva petición de stock enviada por chofer.
+  - `operacion_ruta_registrada`: Notifica entrega o cobro realizado en tiempo real.
+  - `ubicacion_chofer_actualizada`: Envía coordenadas GPS reportadas bajo demanda.
+
