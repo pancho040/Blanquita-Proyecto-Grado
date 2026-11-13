@@ -76,7 +76,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
     }
   }, []);
 
-  // Agregar notificación instantánea y emitir alerta/banner
+  // Agregar notificación instantánea recibida por WebSocket y refrescar estado operativo
   const registrarAvisoPush = useCallback(
     async (titulo, mensaje, tipo, metadata = {}) => {
       const nuevaNotif = {
@@ -93,10 +93,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
       setNotificaciones((prev) => [nuevaNotif, ...prev]);
       setConteoNoLeidas((c) => c + 1);
 
-      // Banner / Alerta accesible en pantalla
-      Alert.alert(titulo, mensaje);
-
-      // Refresco de datos operativos sin requerir recarga manual
+      // Refresco de datos operativos en LocalDB sin requerir recarga manual
       await refrescarEstadoLocalDesdeWS(tipo);
     },
     [refrescarEstadoLocalDesdeWS]
@@ -142,13 +139,24 @@ export function NotificacionesProvider({ children, navigationRef }) {
         }
 
         const idChofer = usuario?.IdUsuario || usuario?.id_usuario || user?.IdUsuario;
+        const idAsignacionVal =
+          data?.id_asignacion ||
+          data?.IdAsignacion ||
+          data?.id_asignacion_ruta ||
+          data?.IdAsignacionRuta ||
+          null;
+
         const payload = {
-          IdUsuarioRepartidor: idChofer,
-          IdAsignacion: data?.id_asignacion || null,
-          Latitud: gpsData.latitud,
-          Longitud: gpsData.longitud,
-          PrecisionMts: gpsData.precision,
-          VelocidadKmh: gpsData.velocidad,
+          IdUsuarioRepartidor: Number(idChofer),
+          IdAsignacionRuta: idAsignacionVal ? Number(idAsignacionVal) : null,
+          IdAsignacion: idAsignacionVal ? Number(idAsignacionVal) : null,
+          Latitud: Number(gpsData.latitud),
+          Longitud: Number(gpsData.longitud),
+          PrecisionMts: Number(gpsData.precision || 10),
+          Velocidad: Number(gpsData.velocidad || 0),
+          VelocidadKmh: Number(gpsData.velocidad || 0),
+          Bateria: 100,
+          EstadoMovimiento: "En Ruta",
           FechaHora: new Date().toISOString(),
         };
 
@@ -216,7 +224,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
     };
   }, [sesionActiva, sincronizarNotificaciones]);
 
-  // 4. Conexión WebSocket y gestión de eventos en tiempo real
+  // 4. Conexión WebSocket y sincronización reactiva al cambiar o renovar token
   useEffect(() => {
     if (!sesionActiva) {
       wsService.desconectar();
@@ -225,7 +233,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
 
     const tokenActual = token || getTokenEnMemoria();
     if (tokenActual) {
-      wsService.conectar(tokenActual);
+      wsService.actualizarTokenYReconectar(tokenActual);
     }
 
     // Suscripción a eventos requeridos
@@ -233,7 +241,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
       wsService.on("ruta_asignada", (d) => {
         registrarAvisoPush(
           "Nueva Ruta Asignada",
-          d?.mensaje || "Se te ha asignado una nueva hoja de ruta.",
+          d?.mensaje || "📍 Te asignaron una nueva ruta para hoy. Solicita tu carga de inventario.",
           "ruta_asignada",
           d
         );
@@ -242,7 +250,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
       wsService.on("carga_camion_aprobada", (d) => {
         registrarAvisoPush(
           "Carga Aprobada",
-          d?.mensaje || "La carga de tu camión ha sido verificada y aprobada.",
+          d?.mensaje || "✅ ¡Carga de inventario aprobada! Tu ruta ya está habilitada para repartir.",
           "carga_camion_aprobada",
           d
         );
@@ -251,16 +259,26 @@ export function NotificacionesProvider({ children, navigationRef }) {
       wsService.on("ruta_reordenada", (d) => {
         registrarAvisoPush(
           "Ruta Reordenada",
-          d?.mensaje || "El orden de entrega de las paradas ha sido actualizado.",
+          d?.mensaje || "🔄 Administración actualizó el orden de paradas de tu ruta.",
           "ruta_reordenada",
           d
         );
       }),
 
       wsService.on("operacion_revisada", (d) => {
+        const esObservado =
+          d?.estado === "OBSERVADO" ||
+          d?.estado === "observado" ||
+          Boolean(d?.observado) ||
+          Boolean(d?.es_observado);
+
+        const txt = d?.mensaje || (esObservado
+          ? "📋 Tu entrega/cobro fue observado por Administración."
+          : "📋 Tu entrega/cobro fue revisado por Administración.");
+
         registrarAvisoPush(
-          "Operación Revisada",
-          d?.mensaje || "Una entrega o cobro fue revisada por supervisión.",
+          esObservado ? "Operación Observada" : "Operación Revisada",
+          txt,
           "operacion_revisada",
           d
         );
@@ -269,7 +287,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
       wsService.on("ruta_finalizada_admin", (d) => {
         registrarAvisoPush(
           "Ruta Finalizada",
-          d?.mensaje || "Tu ruta de reparto ha sido cerrada por el administrador.",
+          d?.mensaje || "🏁 Administración dio por finalizada y aprobada tu ruta.",
           "ruta_finalizada_admin",
           d
         );
@@ -292,7 +310,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
    */
   const manejarPresionarAviso = async (notificacion, navigation) => {
     try {
-      if (!notificacion.leido) {
+      if (notificacion?.id && !notificacion.leido) {
         await NotificacionesApi.marcarComoLeida(notificacion.id).catch(() => {});
         setNotificaciones((prev) =>
           prev.map((n) => (n.id === notificacion.id ? { ...n, leido: true } : n))
@@ -303,7 +321,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
       const nav = navigation || navigationRef?.current;
       if (!nav) return;
 
-      const tipoUpper = (notificacion.tipo || "").toUpperCase();
+      const tipoUpper = (notificacion?.tipo || "").toUpperCase();
       switch (tipoUpper) {
         case "RUTA_ASIGNADA":
         case "RECORDATORIO_CIERRE":
@@ -316,7 +334,7 @@ export function NotificacionesProvider({ children, navigationRef }) {
         case "CAMBIO_PRECIO":
         case "STOCK_ACTUALIZADO":
         case "OPERACION_REVISADA":
-          if (notificacion.codigo_referencia) {
+          if (notificacion?.codigo_referencia) {
             nav.navigate("DetalleParada", { paradaId: notificacion.codigo_referencia });
           } else {
             nav.navigate("HojaRutaTab");

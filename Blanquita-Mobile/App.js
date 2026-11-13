@@ -9,6 +9,7 @@ import { RutaProvider } from './src/context/RutaContext';
 import { NotificacionesProvider } from './src/context/NotificacionesContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ActualizacionRequeridaModal } from './src/components/common/ActualizacionRequeridaModal';
+import { InAppNotificationBanner } from './src/components/common/InAppNotificationBanner';
 import { Colors } from './src/constants/Colors';
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
                 <RutaProvider>
                   <AppNavigator />
                   <ActualizacionRequeridaModal />
+                  <InAppNotificationBanner />
                 </RutaProvider>
               </NotificacionesProvider>
             </AuthProvider>
