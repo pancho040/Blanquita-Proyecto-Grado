@@ -706,6 +706,22 @@ class RutaRepository:
             """
             paradas = self.caller.LlamarFuncion(sql_puntos_zona, {"id_ruta": asig["IdRutaDistribucion"]})
 
+        # Sanitizar paradas: asegurar que IdPedido corresponda efectivamente a ese punto de venta
+        for p in paradas:
+            p_id = p.get("IdPedido")
+            pv_id = p.get("IdPuntoVenta")
+            if p_id and pv_id:
+                chk = self.caller.LlamarUnRegistro(
+                    'SELECT "IdPedido" FROM "Pedido" WHERE "IdPedido" = :pid AND "IdPuntoVenta" = :pvid LIMIT 1;',
+                    {"pid": p_id, "pvid": pv_id}
+                )
+                if not chk:
+                    p["IdPedido"] = None
+                    p["NumeroPedido"] = None
+                    p["MontoPedido"] = 0.0
+                    p["IdEstadoPedido"] = None
+                    p["EstadoEntrega"] = "Visita Comercial"
+
         asig["Paradas"] = paradas
         asig["TotalParadas"] = len(paradas)
         asig["ParadasEntregadas"] = sum(1 for p in paradas if p.get("EstadoEntrega") == "Entregado")
@@ -716,6 +732,16 @@ class RutaRepository:
     # Operaciones en campo y cierre de ruta
     # -------------------------------------------------------------
     def RegistrarEntregaParada(self, datos: dict) -> dict:
+        id_ped = datos.get("IdPedido") or datos.get("id_pedido") or datos.get("idPedido")
+        lat = datos.get("LatitudEntrega") if datos.get("LatitudEntrega") is not None else datos.get("latitud")
+        lng = datos.get("LongitudEntrega") if datos.get("LongitudEntrega") is not None else datos.get("longitud")
+        obs = datos.get("Observacion") if datos.get("Observacion") is not None else datos.get("observacion")
+        params = {
+            "IdPedido": id_ped,
+            "LatitudEntrega": lat,
+            "LongitudEntrega": lng,
+            "Observacion": obs
+        }
         sql = """
             UPDATE "Pedido"
             SET "IdEstadoPedido" = 3,
@@ -726,7 +752,7 @@ class RutaRepository:
             WHERE "IdPedido" = :IdPedido
             RETURNING "IdPedido", "NumeroPedido", "IdEstadoPedido", "FechaEntrega", "LatitudEntrega", "LongitudEntrega";
         """
-        return self.caller.LlamarUnRegistro(sql, datos)
+        return self.caller.LlamarUnRegistro(sql, params)
 
     def RegistrarCobroParada(self, datos: dict) -> dict:
         sql = """

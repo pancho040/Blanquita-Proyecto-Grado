@@ -491,9 +491,84 @@ def registrar_entrega_parada(
     usuario: dict = Depends(require_role([ROL_AGENTE_REPARTO, ROL_SUPERVISOR, ROL_GERENTE_GENERAL]))
 ):
     """
-    Registra la entrega de un pedido con georreferenciación GPS obligatoria .
+    Registra la entrega de un pedido con georreferenciación GPS obligatoria.
+    Acepta id_pedido (snake_case), IdPedido (PascalCase), id_punto_venta / idPuntoVenta para no fallar con 400.
     """
-    return RutaService(db).RegistrarEntregaParada(datos)
+    datos_normalizados = dict(datos or {})
+    id_ped = (
+        datos_normalizados.get("IdPedido")
+        or datos_normalizados.get("id_pedido")
+        or datos_normalizados.get("idPedido")
+    )
+    id_pv = (
+        datos_normalizados.get("idPuntoVenta")
+        or datos_normalizados.get("id_punto_venta")
+        or datos_normalizados.get("IdPuntoVenta")
+    )
+
+    if not id_ped and id_pv:
+        row_ped = db.execute(text("""
+            SELECT p."IdPedido"
+            FROM public."Pedido" p
+            WHERE p."IdPuntoVenta" = :pvid
+              AND p."IdEstadoPedido" IN (1, 2)
+            ORDER BY (DATE(p."FechaPedido") = CURRENT_DATE) DESC, p."IdPedido" DESC
+            LIMIT 1;
+        """), {"pvid": id_pv}).fetchone()
+        if not row_ped:
+            row_ped = db.execute(text("""
+                SELECT p."IdPedido"
+                FROM public."Pedido" p
+                WHERE p."IdPuntoVenta" = :pvid
+                ORDER BY p."IdPedido" DESC
+                LIMIT 1;
+            """), {"pvid": id_pv}).fetchone()
+        if row_ped:
+            id_ped = row_ped[0]
+        else:
+            row_pv = db.execute(text("""
+                SELECT pv."IdCliente", c."IdSucursal"
+                FROM public."PuntoVenta" pv
+                JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+                WHERE pv."IdPuntoVenta" = :pvid;
+            """), {"pvid": id_pv}).fetchone()
+            if row_pv:
+                id_cli = row_pv[0]
+                uid = usuario.get("IdUsuario")
+                num_ped = f"PED-TEL-{int(datetime.now().timestamp())}"
+                new_ped = db.execute(text("""
+                    INSERT INTO public."Pedido" (
+                        "NumeroPedido", "IdCliente", "IdPuntoVenta", "IdUsuarioRepartidor",
+                        "IdEstadoPedido", "FechaPedido", "FechaEntrega",
+                        "EsVentaDirecta", "SubTotal", "Descuento", "MontoTotal",
+                        "LatitudEntrega", "LongitudEntrega", "SincronizadoDesdeMovil"
+                    ) VALUES (
+                        :nped, :cid, :pvid, :uid,
+                        1, NOW(), NOW(),
+                        true, 0.0, 0.0, 0.0,
+                        :lat, :lng, true
+                    ) RETURNING "IdPedido";
+                """), {
+                    "nped": num_ped, "cid": id_cli, "pvid": id_pv, "uid": uid,
+                    "lat": datos_normalizados.get("LatitudEntrega") or datos_normalizados.get("latitud") or 0.0,
+                    "lng": datos_normalizados.get("LongitudEntrega") or datos_normalizados.get("longitud") or 0.0
+                }).fetchone()
+                db.commit()
+                if new_ped:
+                    id_ped = new_ped[0]
+
+    if id_ped:
+        datos_normalizados["IdPedido"] = int(id_ped)
+        datos_normalizados["id_pedido"] = int(id_ped)
+
+    if "latitud" in datos_normalizados and "LatitudEntrega" not in datos_normalizados:
+        datos_normalizados["LatitudEntrega"] = datos_normalizados["latitud"]
+    if "longitud" in datos_normalizados and "LongitudEntrega" not in datos_normalizados:
+        datos_normalizados["LongitudEntrega"] = datos_normalizados["longitud"]
+    if "observacion" in datos_normalizados and "Observacion" not in datos_normalizados:
+        datos_normalizados["Observacion"] = datos_normalizados["observacion"]
+
+    return RutaService(db).RegistrarEntregaParada(datos_normalizados)
 
 @RutaRouter.post("/telemetria/cobro", response_model=dict)
 def registrar_cobro_parada(
