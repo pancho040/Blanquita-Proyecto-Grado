@@ -64,26 +64,41 @@ export default function EditorParadasDinamicoModal({
       initialParadas = asignacion.PuntosVenta;
     }
 
-    // Normalizar paradas asegurando OrdenVisita 1..N
-    const normalizadas = initialParadas.map((p, idx) => ({
-      ...p,
-      IdPuntoVenta: p.IdPuntoVenta || p.id_punto_venta || p.idPuntoVenta,
-      NombreCliente: p.NombreCliente || p.nombre_cliente || p.Cliente || "Comercio",
-      NombrePuntoVenta: p.NombrePuntoVenta || p.nombre_punto_venta || "",
-      Direccion: p.Direccion || p.direccion || "",
-      OrdenVisita: idx + 1,
-      // Si ya fue entregada o cobrada hoy
-      estado: p.Estado || p.estado || (p.Entregado ? "ENTREGADO" : "PENDIENTE"),
-      esEjecutada: Boolean(
-        p.Entregado ||
-        p.Cobrado ||
-        p.estado === "ENTREGADO" ||
-        p.estado === "COBRADO" ||
-        p.Estado === "Entregado" ||
-        p.Estado === "Cobrado" ||
-        p.FechaHoraEntrega
-      )
-    }));
+    // Cargar configuración de pedidos programados y frecuencias
+    let paradasConfig = {};
+    if (typeof window !== "undefined") {
+      try {
+        const guardado = localStorage.getItem("blanquita_paradas_config");
+        if (guardado) paradasConfig = JSON.parse(guardado);
+      } catch {}
+    }
+
+    // Normalizar paradas asegurando OrdenVisita 1..N, frecuencia y productos habituales
+    const normalizadas = initialParadas.map((p, idx) => {
+      const pvId = p.IdPuntoVenta || p.id_punto_venta || p.idPuntoVenta;
+      const cfg = paradasConfig[pvId] || {};
+      return {
+        ...p,
+        IdPuntoVenta: pvId,
+        NombreCliente: p.NombreCliente || p.nombre_cliente || p.Cliente || "Comercio",
+        NombrePuntoVenta: p.NombrePuntoVenta || p.nombre_punto_venta || "",
+        Direccion: p.Direccion || p.direccion || "",
+        OrdenVisita: idx + 1,
+        frecuencia: p.frecuencia || p.Frecuencia || cfg.frecuencia || "DIARIO",
+        productosHabituales: p.productosHabituales || p.ProductosHabituales || cfg.productosHabituales || "Papel Higiénico Clásico (20 paq), Servilletas (10 fardos)",
+        // Si ya fue entregada o cobrada hoy
+        estado: p.Estado || p.estado || (p.Entregado ? "ENTREGADO" : "PENDIENTE"),
+        esEjecutada: Boolean(
+          p.Entregado ||
+          p.Cobrado ||
+          p.estado === "ENTREGADO" ||
+          p.estado === "COBRADO" ||
+          p.Estado === "Entregado" ||
+          p.Estado === "Cobrado" ||
+          p.FechaHoraEntrega
+        )
+      };
+    });
 
     setParadas(normalizadas);
     setPosicionInsertar(normalizadas.length + 1);
@@ -270,6 +285,22 @@ export default function EditorParadasDinamicoModal({
     }
   };
 
+  const actualizarFrecuencia = (index, nuevaFrecuencia) => {
+    setParadas((prev) => {
+      const copia = [...prev];
+      copia[index] = { ...copia[index], frecuencia: nuevaFrecuencia };
+      return copia;
+    });
+  };
+
+  const actualizarProductosHabituales = (index, nuevosProductos) => {
+    setParadas((prev) => {
+      const copia = [...prev];
+      copia[index] = { ...copia[index], productosHabituales: nuevosProductos };
+      return copia;
+    });
+  };
+
   const guardarCambios = async () => {
     const idRuta = ruta?.IdRutaDistribucion || asignacion?.IdRutaDistribucion;
     if (!idRuta) {
@@ -285,7 +316,25 @@ export default function EditorParadasDinamicoModal({
       }));
 
       await GuardarPuntosVentaRuta(idRuta, payload);
-      toast.success("¡Itinerario 1..N actualizado y guardado correctamente!");
+
+      // Persistir configuración de pedidos habituales y frecuencias
+      if (typeof window !== "undefined") {
+        try {
+          let cfg = {};
+          const g = localStorage.getItem("blanquita_paradas_config");
+          if (g) cfg = JSON.parse(g);
+          paradas.forEach((p) => {
+            cfg[p.IdPuntoVenta] = {
+              frecuencia: p.frecuencia || "DIARIO",
+              productosHabituales: p.productosHabituales || "Papel Higiénico Clásico (20 paq), Servilletas (10 fardos)"
+            };
+          });
+          localStorage.setItem("blanquita_paradas_config", JSON.stringify(cfg));
+          window.dispatchEvent(new CustomEvent("blanquita:paradas-config-updated"));
+        } catch {}
+      }
+
+      toast.success("¡Itinerario 1..N y pedidos programados guardados correctamente!");
 
       if (alGuardar) {
         alGuardar(paradas);
@@ -427,6 +476,33 @@ export default function EditorParadasDinamicoModal({
                           <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
                             <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
                             <span className="truncate">{parada.Direccion || "Sin dirección exacta"}</span>
+                          </div>
+
+                          {/* Configuración de Frecuencia y Pedido Programado Habitual */}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 mt-1 border-t border-slate-100">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-semibold text-slate-500 uppercase">Frecuencia:</span>
+                              <select
+                                value={parada.frecuencia || "DIARIO"}
+                                onChange={(e) => actualizarFrecuencia(index, e.target.value)}
+                                className="h-6 text-[11px] font-semibold rounded border border-slate-300 bg-white px-1.5 text-slate-700 focus:outline-none focus:border-sky-500"
+                              >
+                                <option value="DIARIO">Diario</option>
+                                <option value="CADA_2_DIAS">Cada 2 Días</option>
+                                <option value="SEMANAL">Semanal</option>
+                              </select>
+                            </div>
+
+                            <div className="flex items-center gap-1 flex-1 min-w-[220px]">
+                              <span className="text-[10px] font-semibold text-slate-500 uppercase whitespace-nowrap">Habitual:</span>
+                              <input
+                                type="text"
+                                value={parada.productosHabituales || ""}
+                                onChange={(e) => actualizarProductosHabituales(index, e.target.value)}
+                                placeholder="Ej: Clásico (20 paq), Servilletas (10 fardos)..."
+                                className="h-6 text-[11px] px-2 rounded border border-slate-300 bg-white text-slate-800 w-full focus:outline-none focus:border-sky-500"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>

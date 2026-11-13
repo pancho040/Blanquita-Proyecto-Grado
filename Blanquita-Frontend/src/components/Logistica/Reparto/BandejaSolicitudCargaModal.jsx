@@ -20,6 +20,7 @@ import {
   Building2
 } from "lucide-react";
 import { ResolverSolicitudCarga, AprobarCargaCamion } from "@/services/Logistica/RutaService";
+import { ObtenerInventarioChofer } from "@/services/Logistica/InventarioComercialService";
 
 export default function BandejaSolicitudCargaModal({
   abierto,
@@ -69,13 +70,17 @@ export default function BandejaSolicitudCargaModal({
     let remanenteBase = [];
 
     if (solicitud?.detalles && Array.isArray(solicitud.detalles)) {
-      itemsBase = solicitud.detalles.map((d) => ({
-        presentacion_id: d.id_presentacion || d.presentacion_id,
-        nombre_producto: d.nombre_producto || `Presentación #${d.id_presentacion || d.presentacion_id}`,
-        cantidad_solicitada: Number(d.stock_adicional_solicitado ?? d.cantidad_solicitada ?? 0),
-        cantidad_aprobada: Number(d.stock_adicional_aprobado ?? d.stock_adicional_solicitado ?? d.cantidad_solicitada ?? 0),
-        unidad: d.unidad || "u"
-      }));
+      itemsBase = solicitud.detalles.map((d) => {
+        const cantSol = Number(d.stock_adicional_solicitado ?? d.cantidad_solicitada ?? 0);
+        const cantAprobadaRaw = Number(d.stock_adicional_aprobado ?? 0);
+        return {
+          presentacion_id: d.id_presentacion || d.presentacion_id,
+          nombre_producto: d.nombre_producto || `Presentación #${d.id_presentacion || d.presentacion_id}`,
+          cantidad_solicitada: cantSol,
+          cantidad_aprobada: cantAprobadaRaw > 0 ? cantAprobadaRaw : cantSol,
+          unidad: d.unidad || "u"
+        };
+      });
 
       remanenteBase = solicitud.detalles
         .filter((d) => Number(d.stock_remanente || 0) > 0)
@@ -86,19 +91,25 @@ export default function BandejaSolicitudCargaModal({
           unidad: d.unidad || "u"
         }));
     } else if (solicitud?.items && Array.isArray(solicitud.items)) {
-      itemsBase = solicitud.items.map((it) => ({
-        presentacion_id: it.presentacion_id || it.id_presentacion,
-        nombre_producto: it.nombre_producto || `Presentación #${it.presentacion_id || it.id_presentacion}`,
-        cantidad_solicitada: Number(it.cantidad_solicitada ?? it.cantidad ?? 0),
-        cantidad_aprobada: Number(it.cantidad_aprobada ?? it.cantidad_solicitada ?? it.cantidad ?? 0),
-        unidad: it.unidad || "u"
-      }));
-      remanenteBase = (solicitud.stock_remanente || solicitud.remanente || []).map((r) => ({
-        presentacion_id: r.presentacion_id,
-        nombre_producto: r.nombre_producto || `Presentación #${r.presentacion_id}`,
-        cantidad_remanente: Number(r.cantidad_remanente || 0),
-        unidad: r.unidad || "u"
-      }));
+      itemsBase = solicitud.items.map((it) => {
+        const cantSol = Number(it.cantidad_solicitada ?? it.cantidad ?? 0);
+        const cantAprobadaRaw = Number(it.cantidad_aprobada ?? 0);
+        return {
+          presentacion_id: it.presentacion_id || it.id_presentacion,
+          nombre_producto: it.nombre_producto || `Presentación #${it.presentacion_id || it.id_presentacion}`,
+          cantidad_solicitada: cantSol,
+          cantidad_aprobada: cantAprobadaRaw > 0 ? cantAprobadaRaw : cantSol,
+          unidad: it.unidad || "u"
+        };
+      });
+      remanenteBase = (solicitud.stock_remanente || solicitud.remanente || [])
+        .filter((r) => Number(r.cantidad_remanente ?? r.cantidad_actual ?? r.cantidad ?? 0) > 0)
+        .map((r) => ({
+          presentacion_id: r.presentacion_id,
+          nombre_producto: r.nombre_producto || `Presentación #${r.presentacion_id}`,
+          cantidad_remanente: Number(r.cantidad_remanente ?? r.cantidad_actual ?? r.cantidad ?? 0),
+          unidad: r.unidad || "u"
+        }));
     } else {
       // Catálogo estándar si no hay detalle explícito
       itemsBase = [
@@ -125,20 +136,7 @@ export default function BandejaSolicitudCargaModal({
         }
       ];
 
-      remanenteBase = [
-        {
-          presentacion_id: 1,
-          nombre_producto: "Papel Higiénico Blanquita Clásico 4 rollos",
-          cantidad_remanente: 8.0,
-          unidad: "paquetes"
-        },
-        {
-          presentacion_id: 2,
-          nombre_producto: "Papel Higiénico Blanquita Doble Hoja 4 rollos",
-          cantidad_remanente: 4.0,
-          unidad: "paquetes"
-        }
-      ];
+      remanenteBase = [];
     }
 
     setItemsEditables(itemsBase);
@@ -146,6 +144,33 @@ export default function BandejaSolicitudCargaModal({
     setObservacionAprobacion(solicitud?.observacion_admin || "Carga física y stock de camión verificados por supervisor");
     setModoAccion(null);
     setMotivoAccion("");
+
+    // Si stock_remanente viniera vacío, consultar inventario real a bordo del camión del chofer
+    const idChoferParaRemanente =
+      solicitud?.id_chofer ||
+      solicitud?.chofer_id ||
+      solicitud?.IdUsuarioRepartidor ||
+      asignacion?.IdUsuarioRepartidor;
+
+    if (idChoferParaRemanente && remanenteBase.length === 0) {
+      ObtenerInventarioChofer(idChoferParaRemanente)
+        .then((inventarioReal) => {
+          if (Array.isArray(inventarioReal) && inventarioReal.length > 0) {
+            const remanentesReales = inventarioReal
+              .filter((stk) => Number(stk.cantidad_remanente ?? stk.cantidad_actual ?? stk.cantidad ?? 0) > 0)
+              .map((stk) => ({
+                presentacion_id: stk.presentacion_id || stk.id_presentacion,
+                nombre_producto: stk.nombre_producto || stk.producto || `Presentación #${stk.presentacion_id || stk.id_presentacion}`,
+                cantidad_remanente: Number(stk.cantidad_remanente ?? stk.cantidad_actual ?? stk.cantidad ?? 0),
+                unidad: stk.unidad || "u"
+              }));
+            if (remanentesReales.length > 0) {
+              setStockRemanente(remanentesReales);
+            }
+          }
+        })
+        .catch(() => {});
+    }
   }, [abierto, solicitud, asignacion]);
 
   const handleActualizarCantidadAprobada = (index, nuevaCantidad) => {
@@ -180,6 +205,15 @@ export default function BandejaSolicitudCargaModal({
       });
 
       toast.success("Stock de camión aprobado y ruta habilitada para reparto en app móvil");
+      
+      // Sincronizar inmediatamente todas las pestañas y vistas
+      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
+        detail: { tipo: "carga_camion_aprobada", idAsignacion }
+      }));
+      window.dispatchEvent(new CustomEvent("blanquita:carga-actualizada", {
+        detail: { idAsignacion, decision: "APROBADA" }
+      }));
+
       if (alAprobar) alAprobar(idAsignacion);
       if (alResolver) alResolver(idAsignacion, "APROBADA");
       onOpenChange(false);
@@ -209,6 +243,15 @@ export default function BandejaSolicitudCargaModal({
       });
 
       toast.info("Solicitud observada. Notificación enviada al chofer");
+
+      // Sincronizar inmediatamente todas las pestañas y vistas
+      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
+        detail: { tipo: "carga_camion_observada", idAsignacion }
+      }));
+      window.dispatchEvent(new CustomEvent("blanquita:carga-actualizada", {
+        detail: { idAsignacion, decision: "OBSERVADA" }
+      }));
+
       if (alResolver) alResolver(idAsignacion, "OBSERVADA");
       onOpenChange(false);
     } catch (err) {
@@ -238,6 +281,15 @@ export default function BandejaSolicitudCargaModal({
       });
 
       toast.error("Solicitud de carga rechazada. La ruta no fue habilitada");
+
+      // Sincronizar inmediatamente todas las pestañas y vistas
+      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
+        detail: { tipo: "carga_camion_rechazada", idAsignacion }
+      }));
+      window.dispatchEvent(new CustomEvent("blanquita:carga-actualizada", {
+        detail: { idAsignacion, decision: "RECHAZADA" }
+      }));
+
       if (alResolver) alResolver(idAsignacion, "RECHAZADA");
       onOpenChange(false);
     } catch (err) {

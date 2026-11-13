@@ -179,11 +179,44 @@ export default function GestorRutas({ usuario = null }) {
     setRutaSeleccionada(r);
     try {
       const detalle = await ObtenerRutaDetalle(r.IdRutaDistribucion);
-      setPuntosRuta(detalle.PuntosVenta || []);
+      const puntos = detalle.PuntosVenta || [];
+
+      // Enriquecer paradas con pedidos programados y frecuencias
+      let paradasConfig = {};
+      if (typeof window !== "undefined") {
+        try {
+          const g = localStorage.getItem("blanquita_paradas_config");
+          if (g) paradasConfig = JSON.parse(g);
+        } catch {}
+      }
+
+      const enriquecidos = puntos.map((p, idx) => {
+        const pvId = p.IdPuntoVenta || p.id_punto_venta;
+        const cfg = paradasConfig[pvId] || {};
+        return {
+          ...p,
+          frecuencia: p.frecuencia || p.Frecuencia || cfg.frecuencia || "DIARIO",
+          productosHabituales: p.productosHabituales || p.ProductosHabituales || cfg.productosHabituales || "Papel Higiénico Clásico (20 paq), Servilletas (10 fardos)",
+          OrdenVisita: p.OrdenVisita || idx + 1
+        };
+      });
+
+      setPuntosRuta(enriquecidos);
     } catch {
       setPuntosRuta([]);
     }
   }, []);
+
+  // Escuchar actualizaciones de configuración de paradas para refrescar reactivamente
+  useEffect(() => {
+    const handleConfigUpdate = () => {
+      if (rutaSeleccionadaRef.current) {
+        seleccionarRuta(rutaSeleccionadaRef.current);
+      }
+    };
+    window.addEventListener("blanquita:paradas-config-updated", handleConfigUpdate);
+    return () => window.removeEventListener("blanquita:paradas-config-updated", handleConfigUpdate);
+  }, [seleccionarRuta]);
 
   const cargarDatos = useCallback(async (silencioso = false, forzar = false) => {
     try {
@@ -528,7 +561,7 @@ export default function GestorRutas({ usuario = null }) {
         </Button>
       </PageHeader>
 
-      {/* BARRA SUPERIOR DE SELECTOR DE FECHA (RUTAS DE HOY VS HISTÓRICAS) */}
+      {/* BARRA SUPERIOR DE SELECTOR DE FECHA (RUTAS DE HOY, FUTURAS Y PROGRAMADAS) */}
       <div className="bg-white border border-slate-200 rounded p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
@@ -551,7 +584,7 @@ export default function GestorRutas({ usuario = null }) {
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              Rutas de Hoy
+              Hoy
             </button>
             <button
               type="button"
@@ -560,18 +593,72 @@ export default function GestorRutas({ usuario = null }) {
                 m.setDate(m.getDate() + 1);
                 setFechaFiltro(m.toISOString().split("T")[0]);
               }}
-              className="px-3 py-1 rounded font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              className={`px-3 py-1 rounded font-medium transition-colors ${
+                (() => {
+                  const m = new Date();
+                  m.setDate(m.getDate() + 1);
+                  return fechaFiltro === m.toISOString().split("T")[0];
+                })()
+                  ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              Mañana
+              Mañana (+1d)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = new Date();
+                m.setDate(m.getDate() + 2);
+                setFechaFiltro(m.toISOString().split("T")[0]);
+              }}
+              className={`px-3 py-1 rounded font-medium transition-colors ${
+                (() => {
+                  const m = new Date();
+                  m.setDate(m.getDate() + 2);
+                  return fechaFiltro === m.toISOString().split("T")[0];
+                })()
+                  ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Pasado (+2d)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = new Date();
+                m.setDate(m.getDate() + 7);
+                setFechaFiltro(m.toISOString().split("T")[0]);
+              }}
+              className={`px-3 py-1 rounded font-medium transition-colors ${
+                (() => {
+                  const m = new Date();
+                  m.setDate(m.getDate() + 7);
+                  return fechaFiltro === m.toISOString().split("T")[0];
+                })()
+                  ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Próx. Semana (+7d)
             </button>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span>Fecha activa: <strong className="text-slate-800 font-mono">{fechaFiltro}</strong></span>
-          {fechaFiltro !== hoyStr && (
-            <Badge variant="outline" className="text-amber-800 bg-amber-50 border-amber-300 text-[10px]">
-              Modo Histórico
+          {fechaFiltro === hoyStr ? (
+            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+              Hoy (Reparto en Vivo)
+            </Badge>
+          ) : fechaFiltro > hoyStr ? (
+            <Badge className="bg-sky-100 text-[#1C96C5] border-sky-300 text-[10px] font-semibold">
+              Rutas Futuras & Pedidos Programados
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-slate-600 bg-slate-100 border-slate-300 text-[10px]">
+              Historial Pasado
             </Badge>
           )}
         </div>
@@ -850,6 +937,18 @@ export default function GestorRutas({ usuario = null }) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setSubTabRuta("pedidos_futuros")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                        subTabRuta === "pedidos_futuros"
+                          ? "bg-white text-slate-900 border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
+                      <span>Pedidos Programados ({fechaFiltro})</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setSubTabRuta("historial")}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                         subTabRuta === "historial"
@@ -921,10 +1020,18 @@ export default function GestorRutas({ usuario = null }) {
                                   #{idx + 1}
                                 </span>
                                 <div>
-                                  <p className="font-bold text-xs text-slate-900">{p.NombreCliente}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold text-xs text-slate-900">{p.NombreCliente}</p>
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-300 text-slate-600 bg-slate-50">
+                                      {p.frecuencia || "DIARIO"}
+                                    </Badge>
+                                  </div>
                                   <p className="text-xs text-slate-700">{p.Direccion || "Sin dirección"}</p>
-                                  <span className="text-[11px] text-slate-500">
+                                  <span className="text-[11px] text-slate-500 block">
                                     Punto: {p.NombrePuntoVenta}
+                                  </span>
+                                  <span className="text-[11px] text-[#1C96C5] font-medium block">
+                                    Pedido Programado: <strong className="text-slate-700 font-normal">{p.productosHabituales || "Papel Higiénico Clásico (20 paq)"}</strong>
                                   </span>
                                 </div>
                               </div>
@@ -979,7 +1086,121 @@ export default function GestorRutas({ usuario = null }) {
                     </div>
                   )}
 
-                  {/* TAB 3: HISTORIAL Y EJECUCIÓN DE LA RUTA */}
+                  {/* TAB 3: PEDIDOS PROGRAMADOS Y RUTAS FUTURAS */}
+                  {subTabRuta === "pedidos_futuros" && (
+                    <div className="space-y-4">
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Boxes className="h-4 w-4 text-[#1C96C5]" />
+                              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                                Proyección de Pedidos Programados para el {fechaFiltro}
+                              </h4>
+                              <Badge className="bg-sky-100 text-[#1C96C5] border-sky-300 text-[10px]">
+                                {fechaFiltro > hoyStr ? "Fecha Futura" : fechaFiltro === hoyStr ? "Fecha Actual" : "Histórico"}
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Listado y cubicaje estimado de mercadería que demandarán los clientes en esta ruta según su frecuencia de visita habitual.
+                            </p>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setRutaParaAsignar(rutaSeleccionada);
+                              setModalAsignarRuta(true);
+                            }}
+                            className="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded gap-1.5 shadow-none"
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>Programar Despacho para {fechaFiltro}</span>
+                          </Button>
+                        </div>
+
+                        {/* KPIs de la ruta futura */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                          <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Clientes en Secuencia</span>
+                            <span className="text-base font-extrabold text-slate-900 font-mono block mt-0.5">
+                              {puntosRuta.length} comercios
+                            </span>
+                          </div>
+
+                          <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Frecuencias en Ruta</span>
+                            <span className="text-xs font-medium text-slate-700 block mt-1">
+                              {puntosRuta.filter((p) => p.frecuencia === "DIARIO").length} Diario • {puntosRuta.filter((p) => p.frecuencia === "CADA_2_DIAS").length} Cada 2 días • {puntosRuta.filter((p) => p.frecuencia === "SEMANAL").length} Semanal
+                            </span>
+                          </div>
+
+                          <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/70">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Estado de Despacho</span>
+                            <span className="text-xs font-semibold text-slate-800 block mt-1">
+                              {asignaciones.some((a) => a.IdRutaDistribucion === rutaSeleccionada?.IdRutaDistribucion)
+                                ? "Salida ya programada en sistema"
+                                : "Pendiente de programar para esta fecha"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lista de comercios con pedidos programados */}
+                      <div className="space-y-2">
+                        {puntosRuta.length === 0 ? (
+                          <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-white text-xs text-slate-400">
+                            No hay paradas configuradas en esta ruta.
+                          </div>
+                        ) : (
+                          puntosRuta.map((p, idx) => (
+                            <div
+                              key={p.IdPuntoVenta}
+                              className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs hover:border-slate-300 transition-all"
+                            >
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div className="w-7 h-7 rounded-lg bg-sky-50 text-[#1C96C5] border border-sky-200 font-bold text-xs flex items-center justify-center shrink-0">
+                                  #{p.OrdenVisita || idx + 1}
+                                </div>
+                                <div className="min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-xs text-slate-900 truncate">
+                                      {p.NombreCliente}
+                                    </span>
+                                    {p.NombrePuntoVenta && (
+                                      <span className="text-[11px] text-slate-500 truncate">
+                                        • {p.NombrePuntoVenta}
+                                      </span>
+                                    )}
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-sky-300 text-sky-800 bg-sky-50">
+                                      {p.frecuencia === "DIARIO" ? "Diario" : p.frecuencia === "CADA_2_DIAS" ? "Cada 2 Días" : "Semanal"}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
+                                    <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                    <span className="truncate">{p.Direccion || "Sin dirección exacta"}</span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-700 pt-0.5">
+                                    <span className="font-semibold text-slate-800">Pedido Programado: </span>
+                                    <span className="font-mono text-[#1C96C5] font-semibold">{p.productosHabituales || "Papel Higiénico Clásico (20 paq)"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                                <Badge className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[10px] py-1 px-2">
+                                  <CheckCircle2 className="h-3 w-3 mr-1 inline" />
+                                  Visita Programada
+                                </Badge>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: HISTORIAL Y EJECUCIÓN DE LA RUTA */}
                   {subTabRuta === "historial" && (() => {
                     const asigRuta = asignaciones.find((a) => a.IdRutaDistribucion === rutaSeleccionada.IdRutaDistribucion);
 

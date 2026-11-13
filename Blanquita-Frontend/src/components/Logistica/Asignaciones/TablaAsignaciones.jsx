@@ -40,7 +40,8 @@ import {
   Radio,
   Receipt,
   Boxes,
-  History
+  History,
+  ShieldCheck
 } from "lucide-react";
 import MapaRuta from "../Rutas/MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
@@ -55,6 +56,7 @@ import EditorParadasDinamicoModal from "../Rutas/EditorParadasDinamicoModal";
 import ModalReasignarParadas from "../Rutas/ModalReasignarParadas";
 import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
 import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
+import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
@@ -69,7 +71,7 @@ const FLOTA_VEHICULOS = [
 ];
 
 export default function TablaAsignaciones({ usuario = null, vistaInicial = "despachos" }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance, nombreSucursalActual } = usePaginaSucursal({
     usuario,
     permiteTodas: false,
   });
@@ -147,6 +149,11 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [modalSolicitudCarga, setModalSolicitudCarga] = useState(false);
   const [asignacionParaCarga, setAsignacionParaCarga] = useState(null);
   const [wsConectado, setWsConectado] = useState(false);
+
+  // Modal Centralizado por Chofer (Expediente de Ruta)
+  const [modalExpedienteChofer, setModalExpedienteChofer] = useState(false);
+  const [choferParaExpediente, setChoferParaExpediente] = useState(null);
+  const [asignacionParaExpediente, setAsignacionParaExpediente] = useState(null);
 
   // Plantillas automáticas de chofer por ruta (localStorage)
   const [plantillasAutomaticas, setPlantillasAutomaticas] = useState(() => {
@@ -796,7 +803,11 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                 onChange={(e) => setFiltroZona(e.target.value)}
                 className="w-full h-9 text-xs rounded border border-slate-200 bg-white px-2.5 text-slate-700 font-medium"
               >
-                <option value="TODAS">Todas las Zonas de Sucre</option>
+                <option value="TODAS">
+                  {nombreSucursalActual && !nombreSucursalActual.toLowerCase().includes("todas")
+                    ? `Todas las Zonas de ${nombreSucursalActual}`
+                    : "Todas las Zonas"}
+                </option>
                 {zonasUnicas.map((z) => (
                   <option key={z} value={z}>{z}</option>
                 ))}
@@ -928,6 +939,24 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                         </td>
                         <td className="px-4 py-3.5 text-center">
                           <div className="inline-flex items-center gap-1.5">
+                            {/* Botón Destacado Centralizado: Gestionar Chofer / Expediente de Ruta */}
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setChoferParaExpediente({
+                                  IdUsuario: a.IdUsuarioRepartidor,
+                                  NombreCompleto: a.NombreRepartidor
+                                });
+                                setAsignacionParaExpediente(a);
+                                setModalExpedienteChofer(true);
+                              }}
+                              className="h-8 px-2.5 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold gap-1.5 rounded shadow-xs"
+                              title={`Gestionar Chofer / Expediente de Ruta para ${a.NombreRepartidor}`}
+                            >
+                              <UserCheck className="h-3.5 w-3.5" />
+                              <span className="font-semibold">Gestionar Chofer / Expediente</span>
+                            </Button>
+
                             {/* Botón rápido cambiar a En Ruta si está pendiente */}
                             {a.Estado === "Pendiente" && (
                               <Button
@@ -1434,7 +1463,29 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         alAprobar={() => {
           cargarAsignaciones(true);
         }}
+        alResolver={() => {
+          cargarAsignaciones(true);
+        }}
       />
+
+      {/* MODAL CENTRALIZADO: EXPEDIENTE DE RUTA Y CONTROL DEL CHOFER */}
+      {modalExpedienteChofer && (
+        <ExpedienteChoferModal
+          abierto={modalExpedienteChofer}
+          onOpenChange={setModalExpedienteChofer}
+          chofer={choferParaExpediente}
+          asignacion={asignacionParaExpediente}
+          fecha={fecha}
+          usuario={usuario}
+          alActualizar={() => {
+            cargarAsignaciones(true);
+          }}
+          onAbrirEditorParadas={(asig) => {
+            setAsignacionParaEditarParadas(asig);
+            setModalEditorParadas(true);
+          }}
+        />
+      )}
     </div>
   );
 }

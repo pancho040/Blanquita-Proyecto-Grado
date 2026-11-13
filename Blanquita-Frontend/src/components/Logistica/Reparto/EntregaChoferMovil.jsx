@@ -20,6 +20,7 @@ import { ListarInventarioChofer } from "@/services/Logistica/InventarioComercial
 import { SubirArchivoComprobante } from "@/services/Logistica/EnvioService";
 import { ObtenerPrecios } from "@/services/Logistica/PrecioService";
 import { ObtenerRepartidores } from "@/services/Logistica/RutaService";
+import ExpedienteChoferModal from "./ExpedienteChoferModal";
 
 export default function EntregaChoferMovil({ 
   usuario, 
@@ -68,6 +69,7 @@ export default function EntregaChoferMovil({
   const [ciReceptor, setCiReceptor] = useState("");
 
   const [procesando, setProcesando] = useState(false);
+  const [modalExpedienteAbierto, setModalExpedienteAbierto] = useState(false);
 
   // Carga inicial de datos maestros
   useEffect(() => {
@@ -357,17 +359,32 @@ export default function EntregaChoferMovil({
           </div>
         </div>
 
-        {onCerrar && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onCerrar}
-            className="h-8 px-2.5 text-xs rounded border-slate-200 text-slate-600 hover:text-slate-900"
-          >
-            <X className="w-3.5 h-3.5 mr-1" /> Cerrar
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!esChofer && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setModalExpedienteAbierto(true)}
+              className="h-8 px-3 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold gap-1.5 rounded shadow-xs"
+              title="Abrir Expediente Integral del Chofer (Carga, Paradas, Auditoría 1 a 1 y Liquidación)"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Gestionar Chofer / Expediente de Ruta</span>
+            </Button>
+          )}
+
+          {onCerrar && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCerrar}
+              className="h-8 px-2.5 text-xs rounded border-slate-200 text-slate-600 hover:text-slate-900"
+            >
+              <X className="w-3.5 h-3.5 mr-1" /> Cerrar
+            </Button>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded p-4 space-y-4">
@@ -701,6 +718,21 @@ export default function EntregaChoferMovil({
           )}
         </Button>
       </form>
+
+      {/* Modal Centralizado Expediente de Ruta del Chofer */}
+      {modalExpedienteAbierto && (
+        <ExpedienteChoferModal
+          abierto={modalExpedienteAbierto}
+          onOpenChange={setModalExpedienteAbierto}
+          chofer={repartidores.find((r) => Number(r.IdUsuario) === Number(choferId)) || { IdUsuario: choferId, NombreCompleto: choferActualNombre }}
+          asignacion={asignacionPreseleccionada}
+          fecha={new Date().toISOString().split("T")[0]}
+          usuario={usuario}
+          alActualizar={() => {
+            if (choferId) cargarInventarioChofer(choferId);
+          }}
+        />
+      )}
     </div>
   );
 }
