@@ -13,6 +13,7 @@ import { useBranch } from "@/stores/branchStore";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import NotificacionesBell from "@/components/common/NotificacionesBell";
 import ToastLiveContainer from "@/components/common/ToastLiveContainer";
+import HostModalAprobarCarga from "@/components/Logistica/Reparto/HostModalAprobarCarga";
 import {
   Sheet,
   SheetTrigger,
@@ -408,6 +409,8 @@ export default function NavBar({
 
       {/* Contenedor Global de Toasts en Tiempo Real vía WebSocket */}
       <ToastLiveContainer basePath={basePath} esAdmin={esAdmin} />
+      {/* Host Global de Modal de Aprobación de Carga (sin redirección de página) */}
+      <HostModalAprobarCarga />
     </header>
   );
 }

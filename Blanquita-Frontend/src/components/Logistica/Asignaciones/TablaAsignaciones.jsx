@@ -58,6 +58,7 @@ import ModalReasignarParadas from "../Rutas/ModalReasignarParadas";
 import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
 import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
 import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
+import { obtenerFechaHoyBolivia, sumarDiasBolivia } from "@/utils/fechas";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
@@ -89,7 +90,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
   const esVistaChofer = vistaInicial === "entregas" || vistaInicial === "cierre" || usuario?.IdRol === 6;
 
-  const hoyStr = new Date().toISOString().split("T")[0];
+  const hoyStr = obtenerFechaHoyBolivia();
   const [fecha, setFecha] = useState(hoyStr);
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -306,9 +307,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   };
 
   const ajustarFechaRapida = (diasOffset) => {
-    const d = new Date();
-    d.setDate(d.getDate() + diasOffset);
-    const str = d.toISOString().split("T")[0];
+    const str = sumarDiasBolivia(diasOffset, fecha);
     setFecha(str);
     setFormAsignacion((prev) => ({ ...prev, FechaAsignacion: str }));
   };

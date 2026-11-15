@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { useBranch } from "@/stores/branchStore";
+import { abrirAprobarCarga } from "@/stores/aprobacionCargaStore";
 
 // Sonido sutil y elegante de notificación web sintetizado con Web Audio API (Cero dependencias)
 function reproducirChimeNotificacion() {
@@ -353,14 +354,32 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
                 {toast.accionUrl && (
                   <div className="mt-2.5 flex items-center justify-end gap-2">
-                    <a
-                      href={toast.accionUrl}
-                      onClick={() => removerToast(toast.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer ${buttonClasses}`}
-                    >
-                      <span>{toast.accionTexto || "Ver"}</span>
-                      <ExternalLink size={12} />
-                    </a>
+                    {toast.tipo === "solicitud_carga" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          removerToast(toast.id);
+                          abrirAprobarCarga({
+                            idSolicitud: toast.payload?.id_solicitud || toast.payload?.id,
+                            idAsignacion: toast.payload?.id_asignacion || toast.payload?.IdAsignacionRuta,
+                            solicitud: toast.payload?.solicitud || toast.payload,
+                          });
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer ${buttonClasses}`}
+                      >
+                        <span>{toast.accionTexto || "Ver y Aprobar Stock"}</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    ) : (
+                      <a
+                        href={toast.accionUrl}
+                        onClick={() => removerToast(toast.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer ${buttonClasses}`}
+                      >
+                        <span>{toast.accionTexto || "Ver"}</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

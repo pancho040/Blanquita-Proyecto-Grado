@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useBranch } from "@/stores/branchStore";
+import { abrirAprobarCarga } from "@/stores/aprobacionCargaStore";
 
 const STORAGE_KEY = "blanquita_notificaciones_v2";
 
@@ -557,17 +558,37 @@ export default function NotificacionesBell({
                       {/* Botón de acción rápida directa */}
                       {notif.accionUrl && (
                         <div className="mt-2 flex items-center justify-between gap-2">
-                          <a
-                            href={notif.accionUrl}
-                            onClick={(e) => {
-                              marcarComoLeida(notif.id, e);
-                              setAbierto(false);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-[#20A7DB] hover:bg-[#1C96C5] shadow-2xs transition-colors cursor-pointer"
-                          >
-                            <span>{notif.accionTexto || "Ver y Gestionar"}</span>
-                            <ExternalLink size={12} className="shrink-0" />
-                          </a>
+                          {notif.tipo === "solicitud_carga" || notif.categoria === "CARGA" ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                marcarComoLeida(notif.id, e);
+                                setAbierto(false);
+                                abrirAprobarCarga({
+                                  idSolicitud: notif.payload?.id_solicitud || notif.id_solicitud || notif.idSolicitud,
+                                  idAsignacion: notif.payload?.id_asignacion || notif.id_asignacion || notif.idAsignacion,
+                                  solicitud: notif.payload?.solicitud || notif.solicitud,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-[#20A7DB] hover:bg-[#1C96C5] shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <span>{notif.accionTexto || "Ver y Aprobar Stock"}</span>
+                              <ExternalLink size={12} className="shrink-0" />
+                            </button>
+                          ) : (
+                            <a
+                              href={notif.accionUrl}
+                              onClick={(e) => {
+                                marcarComoLeida(notif.id, e);
+                                setAbierto(false);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-[#20A7DB] hover:bg-[#1C96C5] shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <span>{notif.accionTexto || "Ver y Gestionar"}</span>
+                              <ExternalLink size={12} className="shrink-0" />
+                            </a>
+                          )}
 
                           <div className="flex items-center gap-1">
                             {noLeida && (

@@ -191,10 +191,18 @@ export default function BandejaSolicitudCargaModal({
 
     try {
       setResolviendo(true);
-      const itemsPayload = itemsEditables.map((item) => ({
-        presentacion_id: Number(item.presentacion_id),
-        cantidad_aprobada: Number(item.cantidad_aprobada)
-      }));
+      const itemsPayload = itemsEditables
+        .map((item) => ({
+          presentacion_id: Number(item.presentacion_id),
+          cantidad_aprobada: Number(item.cantidad_aprobada)
+        }))
+        .filter((item) => item.cantidad_aprobada > 0);
+
+      if (itemsPayload.length === 0) {
+        toast.error("Debes aprobar al menos un producto con cantidad mayor a 0");
+        setResolviendo(false);
+        return;
+      }
 
       await ResolverSolicitudCarga(idAsignacion, {
         decision: "APROBADA",
