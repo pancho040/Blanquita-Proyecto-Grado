@@ -51,7 +51,15 @@ import { FileSpreadsheet } from "lucide-react";
 import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionCuentasCobrar({ usuario }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const {
+    sucursal,
+    setSucursal,
+    sucursalesPermitidas,
+    sucursales,
+    nombreSucursalActual,
+    esMultisede,
+    cargando: cargandoAlcance,
+  } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });

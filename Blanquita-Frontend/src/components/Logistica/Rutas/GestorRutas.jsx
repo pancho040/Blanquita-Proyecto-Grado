@@ -47,7 +47,8 @@ import {
   Boxes,
   FileText,
   CheckCircle2,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Users
 } from "lucide-react";
 import MapaRuta from "./MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";

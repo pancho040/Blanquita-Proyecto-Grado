@@ -18,6 +18,7 @@ import StatusBadge from "@/components/common/StatusBadge";
 import ModalLiquidacionRuta from "./ModalLiquidacionRuta";
 import ModalDetalleParadasGPS from "./ModalDetalleParadasGPS";
 import ModalSimuladorGPS from "./ModalSimuladorGPS";
+import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
 import {
   Search,
   RefreshCw,
@@ -857,34 +858,40 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       </div>
 
       {/* MODALES */}
-      <ModalLiquidacionRuta
-        idAsignacion={idAsignacionParaModal}
-        abierto={modalLiquidacionAbierto}
-        onCerrar={() => setModalLiquidacionAbierto(false)}
-        onLiquidacionExitosa={() => {
-          cargarTelemetria();
-        }}
-      />
-
-      <ModalDetalleParadasGPS
-        idAsignacion={idAsignacionParaModal}
-        abierto={modalParadasAbierto}
-        onCerrar={() => setModalParadasAbierto(false)}
-        onActualizacion={() => {
-          cargarTelemetria();
-        }}
-      />
-
-      {import.meta.env?.DEV && (
-        <ModalSimuladorGPS
-          repartidores={choferes}
-          repartidorSeleccionado={choferSeleccionado}
-          abierto={modalSimuladorAbierto}
-          onCerrar={() => setModalSimuladorAbierto(false)}
-          onPingEmitido={() => {
+      <PanelErrorBoundary titulo="Liquidación de Ruta" onClose={() => setModalLiquidacionAbierto(false)}>
+        <ModalLiquidacionRuta
+          idAsignacion={idAsignacionParaModal}
+          abierto={modalLiquidacionAbierto}
+          onCerrar={() => setModalLiquidacionAbierto(false)}
+          onLiquidacionExitosa={() => {
             cargarTelemetria();
           }}
         />
+      </PanelErrorBoundary>
+
+      <PanelErrorBoundary titulo="Detalle de Paradas GPS" onClose={() => setModalParadasAbierto(false)}>
+        <ModalDetalleParadasGPS
+          idAsignacion={idAsignacionParaModal}
+          abierto={modalParadasAbierto}
+          onCerrar={() => setModalParadasAbierto(false)}
+          onActualizacion={() => {
+            cargarTelemetria();
+          }}
+        />
+      </PanelErrorBoundary>
+
+      {import.meta.env?.DEV && (
+        <PanelErrorBoundary titulo="Simulador GPS" onClose={() => setModalSimuladorAbierto(false)}>
+          <ModalSimuladorGPS
+            repartidores={choferes}
+            repartidorSeleccionado={choferSeleccionado}
+            abierto={modalSimuladorAbierto}
+            onCerrar={() => setModalSimuladorAbierto(false)}
+            onPingEmitido={() => {
+              cargarTelemetria();
+            }}
+          />
+        </PanelErrorBoundary>
       )}
     </div>
   );

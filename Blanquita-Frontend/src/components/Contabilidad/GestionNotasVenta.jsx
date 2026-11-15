@@ -19,7 +19,8 @@ import {
   ChevronRight,
   Printer,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Building
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,15 @@ import { FileSpreadsheet } from "lucide-react";
 import { cache, invalidateContabilidad } from "@/lib/cacheService";
 
 export default function GestionNotasVenta({ usuario }) {
-  const { sucursal, setSucursal, sucursalesPermitidas, esMultisede, cargando: cargandoAlcance } = usePaginaSucursal({
+  const {
+    sucursal,
+    setSucursal,
+    sucursalesPermitidas,
+    sucursales,
+    nombreSucursalActual,
+    esMultisede,
+    cargando: cargandoAlcance,
+  } = usePaginaSucursal({
     usuario,
     permiteTodas: true,
   });

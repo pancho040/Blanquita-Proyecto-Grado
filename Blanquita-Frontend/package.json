@@ -9,7 +9,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "lint:undef": "eslint \"src/**/*.{js,jsx}\""
   },
   "dependencies": {
     "@astrojs/node": "^11.0.2",
@@ -42,5 +43,10 @@
   },
   "volta": {
     "node": "22.12.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1"
   }
 }

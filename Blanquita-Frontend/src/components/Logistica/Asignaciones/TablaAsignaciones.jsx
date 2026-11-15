@@ -60,6 +60,7 @@ import ModalStockCamion from "./ModalStockCamion";
 import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
 import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
 import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
+import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
 import { obtenerFechaHoyBolivia, sumarDiasBolivia } from "@/utils/fechas";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { usePaginacion } from "@/hooks/usePaginacion";
@@ -1375,58 +1376,66 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       />
 
       {/* MODAL BANDEJA SOLICITUD DE CARGA DE CAMIÓN */}
-      <BandejaSolicitudCargaModal
-        abierto={modalSolicitudCarga}
-        onOpenChange={setModalSolicitudCarga}
-        asignacion={asignacionParaCarga}
-        alAprobar={() => {
-          cargarAsignaciones(true);
-        }}
-        alResolver={() => {
-          cargarAsignaciones(true);
-        }}
-      />
+      <PanelErrorBoundary titulo="Bandeja Solicitud Carga" onClose={() => setModalSolicitudCarga(false)}>
+        <BandejaSolicitudCargaModal
+          abierto={modalSolicitudCarga}
+          onOpenChange={setModalSolicitudCarga}
+          asignacion={asignacionParaCarga}
+          alAprobar={() => {
+            cargarAsignaciones(true);
+          }}
+          alResolver={() => {
+            cargarAsignaciones(true);
+          }}
+        />
+      </PanelErrorBoundary>
 
       {/* MODAL CENTRALIZADO: EXPEDIENTE DE RUTA Y CONTROL DEL CHOFER */}
       {modalExpedienteChofer && (
-        <ExpedienteChoferModal
-          abierto={modalExpedienteChofer}
-          onOpenChange={setModalExpedienteChofer}
-          chofer={choferParaExpediente}
-          asignacion={asignacionParaExpediente}
-          fecha={fecha}
-          usuario={usuario}
-          alActualizar={() => {
-            cargarAsignaciones(true);
-          }}
-          onAbrirEditorParadas={(asig) => {
-            setAsignacionParaEditarParadas(asig);
-            setModalEditorParadas(true);
-          }}
-        />
+        <PanelErrorBoundary titulo="Expediente Chofer" onClose={() => setModalExpedienteChofer(false)}>
+          <ExpedienteChoferModal
+            abierto={modalExpedienteChofer}
+            onOpenChange={setModalExpedienteChofer}
+            chofer={choferParaExpediente}
+            asignacion={asignacionParaExpediente}
+            fecha={fecha}
+            usuario={usuario}
+            alActualizar={() => {
+              cargarAsignaciones(true);
+            }}
+            onAbrirEditorParadas={(asig) => {
+              setAsignacionParaEditarParadas(asig);
+              setModalEditorParadas(true);
+            }}
+          />
+        </PanelErrorBoundary>
       )}
       {/* MODAL REASIGNAR RUTA COMPLETA A OTRO CHOFER */}
       {modalReasignarRuta && (
-        <ModalReasignarRuta
-          abierto={modalReasignarRuta}
-          onOpenChange={setModalReasignarRuta}
-          asignacion={asignacionParaReasignarRuta}
-          repartidores={repartidores}
-          alReasignar={() => {
-            recargarAsignacionesSilencioso();
-          }}
-        />
+        <PanelErrorBoundary titulo="Reasignar Ruta" onClose={() => setModalReasignarRuta(false)}>
+          <ModalReasignarRuta
+            abierto={modalReasignarRuta}
+            onOpenChange={setModalReasignarRuta}
+            asignacion={asignacionParaReasignarRuta}
+            repartidores={repartidores}
+            alReasignar={() => {
+              recargarAsignacionesSilencioso();
+            }}
+          />
+        </PanelErrorBoundary>
       )}
 
       {/* MODAL STOCK CAMIÓN DEL CHOFER */}
       {modalStockCamion && (
-        <ModalStockCamion
-          abierto={modalStockCamion}
-          onOpenChange={setModalStockCamion}
-          idChofer={choferStockData?.idChofer}
-          nombreChofer={choferStockData?.nombreChofer}
-          asignacion={choferStockData?.asignacion}
-        />
+        <PanelErrorBoundary titulo="Stock Camión" onClose={() => setModalStockCamion(false)}>
+          <ModalStockCamion
+            abierto={modalStockCamion}
+            onOpenChange={setModalStockCamion}
+            idChofer={choferStockData?.idChofer}
+            nombreChofer={choferStockData?.nombreChofer}
+            asignacion={choferStockData?.asignacion}
+          />
+        </PanelErrorBoundary>
       )}
     </div>
   );

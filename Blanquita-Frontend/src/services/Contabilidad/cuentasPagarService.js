@@ -1,4 +1,5 @@
 import { manejarErrorBackend } from "@/utils/validators";
+import { fetchConCache } from "@/lib/api-cache";
 
 // ==========================================
 // PROVEEDORES CONTABLES

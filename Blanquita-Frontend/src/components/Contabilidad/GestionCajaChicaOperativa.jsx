@@ -677,7 +677,7 @@ export default function GestionCajaChicaOperativa({ usuario, modo = "operativo" 
                     onChange={(e) => setFormNueva({ ...formNueva, IdSucursal: Number(e.target.value) })}
                     className="w-full h-8 px-2.5 rounded border border-slate-300 bg-white text-xs font-medium text-slate-700"
                   >
-                    {(sucursales || sucursalesPermitidas || []).filter((s) => s.id !== "todas").map((s) => (
+                    {(sucursales || []).filter((s) => s.id !== "todas").map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.nombre}
                       </option>

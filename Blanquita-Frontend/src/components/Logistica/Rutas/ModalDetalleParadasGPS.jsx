@@ -118,74 +118,7 @@ export default function ModalDetalleParadasGPS({
               </div>
             </div>
 
-            {/* FORMULARIO RÁPIDO DE COBRO */}
-            {paradaParaCobro && (
-              <form
-                onSubmit={handleRegistrarCobro}
-                className="bg-sky-50 border border-sky-200 rounded p-3.5 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Registrar Cobro para: {paradaParaCobro.NombrePuntoVenta}</span>
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => setParadaParaCobro(null)}
-                    className="text-xs text-sky-800 hover:text-sky-950 underline font-medium"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs font-medium text-slate-800">Monto a Cobrar (Bs.)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0.1"
-                      value={montoCobro}
-                      onChange={(e) => setMontoCobro(e.target.value)}
-                      placeholder="Ej. 150.00"
-                      required
-                      className="mt-1 h-8 text-xs font-mono font-bold rounded"
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="text-xs font-medium text-slate-800">Método de Pago</Label>
-                    <select
-                      value={metodoCobro}
-                      onChange={(e) => setMetodoCobro(e.target.value)}
-                      className="mt-1 w-full h-8 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-[#1C96C5] focus:outline-none"
-                    >
-                      <option value="1">Efectivo Contado</option>
-                      <option value="2">Transferencia Bancaria</option>
-                      <option value="3">QR Banco Unión / Simple</option>
-                      <option value="4">Cheque</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button
-                      type="submit"
-                      disabled={procesandoAccion}
-                      className="w-full bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 h-8 text-xs font-semibold rounded"
-                    >
-                      {procesandoAccion ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                      <span>Confirmar Cobro con GPS</span>
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* LISTA SECUENCIAL DE PARADAS */}
+            {/* LISTA SECUENCIAL DE PARADAS (Solo Lectura) */}
             <div className="space-y-2.5">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                 Itinerario Secuencial de Visita y Estado GPS
