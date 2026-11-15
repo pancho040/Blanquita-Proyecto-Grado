@@ -177,10 +177,17 @@ export async function ObtenerWsTicketFlota() {
   return await response.json();
 }
 
-export async function ObtenerChoferesEnVivo(idSucursal = null) {
+export async function ObtenerChoferesEnVivo(idSucursal = null, fecha = null) {
   let url = "/api/logistica/telemetria/en-vivo";
+  const params = [];
   if (idSucursal && idSucursal !== "todas") {
-    url += `?id_sucursal=${idSucursal}`;
+    params.push(`id_sucursal=${idSucursal}`);
+  }
+  if (fecha) {
+    params.push(`fecha=${encodeURIComponent(fecha)}`);
+  }
+  if (params.length > 0) {
+    url += `?${params.join("&")}`;
   }
   const response = await fetchConCache(url, {}, 3000);
   if (!response.ok) {

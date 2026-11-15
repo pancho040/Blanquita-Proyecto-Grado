@@ -10,6 +10,7 @@ import {
   ObtenerTrackingAsignacion,
   SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
+import { obtenerFechaHoyBolivia, esHoyBolivia } from "@/utils/fechas";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   // Estados de telemetría y datos
   const [choferes, setChoferes] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [fechaFiltro, setFechaFiltro] = useState(obtenerFechaHoyBolivia());
+  const esHoy = esHoyBolivia(fechaFiltro);
   const [busqueda, setBusqueda] = useState("");
   const [choferSeleccionado, setChoferSeleccionado] = useState(null);
   const [detalleAsignacion, setDetalleAsignacion] = useState(null);
@@ -150,7 +153,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       telemetriaEnVueloRef.current = true;
       if (!silencioso) setCargando(true);
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
-      const data = await ObtenerChoferesEnVivo(sid);
+      const data = await ObtenerChoferesEnVivo(sid, fechaFiltro);
       setChoferes(data || []);
       setUltimaActualizacion(new Date());
     } catch (err) {
@@ -159,12 +162,16 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       telemetriaEnVueloRef.current = false;
       if (!silencioso) setCargando(false);
     }
-  }, [sucursal]);
+  }, [sucursal, fechaFiltro]);
 
   const [solicitandoGps, setSolicitandoGps] = useState(false);
 
   // Solicitar ubicación GPS bajo demanda (cero consumo de cuota continuo en plan gratuito)
   const solicitarUbicacionGPS = async () => {
+    if (!esHoy) {
+      toast.info("La solicitud de señal GPS en vivo solo aplica a la jornada de hoy.");
+      return;
+    }
     try {
       setSolicitandoGps(true);
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
@@ -178,8 +185,12 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
   };
 
-  // Suscripción al WebSocket de Logística (puerto 8000 via logisticaSocket) sin reconexiones huérfanas a puerto 4321
+  // Suscripción al WebSocket de Logística (solo para el día en curso; días pasados son solo lectura)
   useEffect(() => {
+    if (!esHoy) {
+      setWsConectado(false);
+      return;
+    }
     logisticaSocket.conectar();
     const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
 
@@ -252,7 +263,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       unsubSnapshot();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
-  }, [cargarTelemetria]);
+  }, [cargarTelemetria, esHoy]);
 
   // Carga inicial y reactiva bloqueada si no está listoParaConsultar
   useEffect(() => {
@@ -515,13 +526,36 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         title="Rastreo Satelital en Vivo"
         subtitle="Monitoreo en tiempo real de unidades de reparto, velocidad y avance de paradas"
         branchFilter={
-          <BranchFilter
-            sucursal={sucursal}
-            onChange={setSucursal}
-            sucursales={sucursalesPermitidas}
-            esMultisede={esMultisede}
-            permiteTodas={true}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <BranchFilter
+              sucursal={sucursal}
+              onChange={setSucursal}
+              sucursales={sucursalesPermitidas}
+              esMultisede={esMultisede}
+              permiteTodas={true}
+            />
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded shadow-sm text-xs">
+              <label htmlFor="filtro-fecha-rastreo" className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Fecha:
+              </label>
+              <input
+                id="filtro-fecha-rastreo"
+                type="date"
+                value={fechaFiltro}
+                onChange={(e) => setFechaFiltro(e.target.value || obtenerFechaHoyBolivia())}
+                className="text-xs bg-transparent border-none text-slate-800 font-medium focus:outline-none cursor-pointer"
+              />
+              {esHoy ? (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 animate-pulse">
+                  En Vivo
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">
+                  Histórico
+                </span>
+              )}
+            </div>
+          </div>
         }
       >
         <div className="flex items-center gap-2">

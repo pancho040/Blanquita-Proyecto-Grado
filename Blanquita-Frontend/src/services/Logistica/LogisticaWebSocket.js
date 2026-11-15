@@ -10,14 +10,33 @@
  *  - operacion_revisada
  *  - ruta_finalizada_admin
  *  - cobro_qr_registrado
+ *
+ * Implementa Singleton Inmune a Evaluaciones Múltiples de Vite (?t=...) y a
+ * contextos de iframe generados durante la transición de ClientRouter de Astro.
  */
 
-let promesaTicketModulo = null;
+const WS_CLIENT_KEY = Symbol.for("blanquita.logisticaSocket");
+const WS_TICKET_KEY = Symbol.for("blanquita.wsTicketPromise");
+const g = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {});
+
+/**
+ * Detecta si el código se ejecuta dentro de un iframe temporal (como el creado
+ * por Astro ClientRouter en prepareForClientOnlyComponents en modo DEV).
+ */
+function esContextoIframe() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
 
 async function obtenerWsTicketCompartido() {
-  if (promesaTicketModulo) return promesaTicketModulo;
+  if (esContextoIframe()) return null;
+  if (g[WS_TICKET_KEY]) return g[WS_TICKET_KEY];
 
-  promesaTicketModulo = (async () => {
+  g[WS_TICKET_KEY] = (async () => {
     const reintentos = [1000, 2000, 4000];
     for (let intento = 0; intento <= reintentos.length; intento++) {
       try {
@@ -38,10 +57,10 @@ async function obtenerWsTicketCompartido() {
     }
     return null;
   })().finally(() => {
-    promesaTicketModulo = null;
+    g[WS_TICKET_KEY] = null;
   });
 
-  return promesaTicketModulo;
+  return g[WS_TICKET_KEY];
 }
 
 class LogisticaWebSocketClient {
@@ -55,10 +74,13 @@ class LogisticaWebSocketClient {
     this.estaConectado = false;
     this.isConnecting = false;
     this.estadoListeners = new Set();
+    this._ticketActual = null;
   }
 
   async conectar() {
     if (typeof window === "undefined") return;
+    if (esContextoIframe()) return;
+
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -157,7 +179,6 @@ class LogisticaWebSocketClient {
 
       this.socket.onerror = () => {
         this.isConnecting = false;
-        // En caso de fallo de conexión inmediata, onclose gestionará la reconexión
       };
     } catch {
       this.estaConectado = false;
@@ -273,4 +294,18 @@ class LogisticaWebSocketClient {
   }
 }
 
-export const logisticaSocket = new LogisticaWebSocketClient();
+// Reconexión automática al volver a la pestaña si el socket cayó mientras estaba oculta
+if (typeof document !== "undefined" && !g.__logisticaWsVisibilityListener && !esContextoIframe()) {
+  g.__logisticaWsVisibilityListener = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      const sock = g[WS_CLIENT_KEY];
+      if (sock && (!sock.socket || (sock.socket.readyState !== WebSocket.OPEN && sock.socket.readyState !== WebSocket.CONNECTING))) {
+        sock.conectar();
+      }
+    }
+  });
+}
+
+// Singleton global persistente entre módulos re-evaluados por Vite
+export const logisticaSocket = (g[WS_CLIENT_KEY] ??= new LogisticaWebSocketClient());

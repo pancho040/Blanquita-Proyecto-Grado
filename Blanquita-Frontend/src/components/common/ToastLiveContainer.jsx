@@ -116,6 +116,12 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     [removerToast, puedeVerTodas, sucursalAsignada, extraerSedeEvento]
   );
 
+  // Referencia estable para evitar recrear la suscripción de WebSocket ante cambios en filtros de sede
+  const agregarToastRef = useRef(agregarToast);
+  useEffect(() => {
+    agregarToastRef.current = agregarToast;
+  }, [agregarToast]);
+
   // Conexión permanente a WebSocket y escucha de eventos de logística
   useEffect(() => {
     // Conecta automáticamente al montar
@@ -124,7 +130,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     // 1. Solicitud de Carga de Camión
     const unsubCarga1 = logisticaSocket.suscribir("solicitud_carga_recibida", (datos = {}) => {
       const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
-      agregarToast({
+      agregarToastRef.current({
         tipo: "solicitud_carga",
         titulo: "Solicitud de Carga de Camión",
         nombreChofer: chofer,
@@ -139,7 +145,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
     const unsubCarga2 = logisticaSocket.suscribir("solicitud_carga_creada", (datos = {}) => {
       const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
-      agregarToast({
+      agregarToastRef.current({
         tipo: "solicitud_carga",
         titulo: "Solicitud de Carga de Camión",
         nombreChofer: chofer,
@@ -156,7 +162,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", (datos = {}) => {
       const chofer = datos.nombre_chofer || datos.chofer || "Chofer en ruta";
       const esCobro = datos.tipo_operacion === "COBRO" || datos.monto;
-      agregarToast({
+      agregarToastRef.current({
         tipo: esCobro ? "cobro_ruta" : "entrega_ruta",
         titulo: esCobro ? "Cobro Registrado en Ruta" : "Entrega Registrada en Ruta",
         nombreChofer: chofer,
@@ -174,7 +180,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       // Notificar solo si hay cambios significativos o estado de alerta
       if (datos.alerta || datos.estado_movimiento === "Detenido con Alarma") {
         const chofer = datos.nombre_chofer || `Chofer #${datos.id_chofer || datos.IdUsuarioRepartidor || ""}`;
-        agregarToast({
+        agregarToastRef.current({
           tipo: "alerta_ubicacion",
           titulo: "Alerta de Chofer en Ruta",
           nombreChofer: chofer,
@@ -190,7 +196,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
     // 4. Ruta Reordenada
     const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", (datos = {}) => {
-      agregarToast({
+      agregarToastRef.current({
         tipo: "ruta_reordenada",
         titulo: "Secuencia de Ruta Reordenada",
         nombreChofer: datos.nombre_chofer || "Supervisor de Logística",
@@ -205,7 +211,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
     // 5. Carga de Camión Aprobada
     const unsubCargaAprobada = logisticaSocket.suscribir("carga_camion_aprobada", (datos = {}) => {
-      agregarToast({
+      agregarToastRef.current({
         tipo: "carga_aprobada",
         titulo: "Carga de Camión Aprobada",
         nombreChofer: datos.nombre_chofer || "Administración",
@@ -220,7 +226,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
     // 6. Ruta Finalizada por Admin
     const unsubRutaFin = logisticaSocket.suscribir("ruta_finalizada_admin", (datos = {}) => {
-      agregarToast({
+      agregarToastRef.current({
         tipo: "ruta_finalizada",
         titulo: "Ruta Finalizada y Chofer Liberado",
         nombreChofer: datos.nombre_chofer || "Supervisión",
@@ -235,7 +241,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
     // 7. Cobro QR Registrado
     const unsubQr = logisticaSocket.suscribir("cobro_qr_registrado", (datos = {}) => {
-      agregarToast({
+      agregarToastRef.current({
         tipo: "cobro_qr",
         titulo: "Nuevo Pago QR Pendiente",
         nombreChofer: datos.nombre_chofer || "Reparto / Clientes",
@@ -251,7 +257,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     // 8. Soporte para eventos lanzados desde ventanas o pruebas locales
     const handleTrigger = (e) => {
       if (e?.detail) {
-        agregarToast(e.detail);
+        agregarToastRef.current(e.detail);
       }
     };
     window.addEventListener("blanquita:trigger-toast", handleTrigger);
@@ -267,7 +273,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       unsubQr();
       window.removeEventListener("blanquita:trigger-toast", handleTrigger);
     };
-  }, [agregarToast, esAdmin]);
+  }, [esAdmin]);
 
   if (toasts.length === 0) return null;
 

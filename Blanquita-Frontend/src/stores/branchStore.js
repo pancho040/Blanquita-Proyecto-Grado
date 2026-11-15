@@ -3,6 +3,9 @@
  * Compatible con Astro 7 (islas independientes) y React 19 usando useSyncExternalStore.
  * Sincroniza bidireccionalmente con la URL (?sucursal=), previene estados inconsistentes
  * y aplica principio de fallo cerrado y restauración automática en sede fija.
+ *
+ * Implementa Singleton Inmune a Evaluaciones Múltiples de Vite (?t=...) y a
+ * contextos de iframe generados durante la transición de ClientRouter de Astro.
  */
 
 import { useSyncExternalStore, useEffect } from "react";
@@ -12,20 +15,41 @@ export const SUCURSALES_CATALOGO = [
   { id: 2, nombre: "Sucursal Potosí", ciudad: "Potosí" }
 ];
 
-// Estado global reactivo en memoria (null hasta que mi-alcance resuelva, evitando ráfagas 403 a Sucre)
-let estado = {
-  sucursalActiva: null, // "todas" | "1" | "2" | null
-  sucursalesPermitidas: [],
-  puedeVerTodas: false,
-  sucursalAsignada: null,
-  inicializado: false,
-  alcanceConfirmado: false,
-  errorAlcance: false
-};
+const STORE_KEY = Symbol.for("blanquita.branchStore");
+const g = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {});
 
-let alcanceConfirmado = false;
-let usuarioKeyConfirmado = null;
-let promesaAlcance = null;
+if (!g[STORE_KEY]) {
+  g[STORE_KEY] = {
+    estado: {
+      sucursalActiva: null, // "todas" | "1" | "2" | null
+      sucursalesPermitidas: [],
+      puedeVerTodas: false,
+      sucursalAsignada: null,
+      inicializado: false,
+      alcanceConfirmado: false,
+      errorAlcance: false
+    },
+    alcanceConfirmado: false,
+    usuarioKeyConfirmado: null,
+    promesaAlcance: null,
+    suscriptores: new Set()
+  };
+}
+
+const storeGlobal = g[STORE_KEY];
+
+/**
+ * Detecta si el código se ejecuta dentro de un iframe temporal (como el creado
+ * por Astro ClientRouter en prepareForClientOnlyComponents en modo DEV).
+ */
+export function esContextoIframe() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // En caso de excepción por CORS cross-origin, es un iframe
+  }
+}
 
 function sonEstadosIguales(a, b) {
   if (a === b) return true;
@@ -45,12 +69,11 @@ function sonEstadosIguales(a, b) {
   return true;
 }
 
-const suscriptores = new Set();
 let notificando = false;
 let pendienteNotificar = false;
 
 function ejecutarNotificaciones() {
-  suscriptores.forEach((callback) => {
+  storeGlobal.suscriptores.forEach((callback) => {
     try {
       callback();
     } catch (e) {
@@ -127,25 +150,22 @@ export function sincronizarUrl(nuevaSucursal) {
   } else {
     url.searchParams.delete("sucursal");
   }
-  // replaceState para mantener historial limpio y que sobreviva al recargar
   window.history.replaceState({}, "", url.toString());
 }
 
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
     const urlSucursal = obtenerParametroUrl();
-    if (urlSucursal && urlSucursal !== estado.sucursalActiva) {
-      if (urlSucursal === "todas" && !estado.puedeVerTodas) {
-        // Rechazar 'todas' si no es multisede y restaurar URL
-        sincronizarUrl(estado.sucursalActiva);
+    if (urlSucursal && urlSucursal !== storeGlobal.estado.sucursalActiva) {
+      if (urlSucursal === "todas" && !storeGlobal.estado.puedeVerTodas) {
+        sincronizarUrl(storeGlobal.estado.sucursalActiva);
         return;
       }
-      if (urlSucursal !== "todas" && !estado.sucursalesPermitidas.some((s) => String(s.id) === urlSucursal)) {
-        // Rechazar sede ajena no permitida y restaurar URL
-        sincronizarUrl(estado.sucursalActiva);
+      if (urlSucursal !== "todas" && !storeGlobal.estado.sucursalesPermitidas.some((s) => String(s.id) === urlSucursal)) {
+        sincronizarUrl(storeGlobal.estado.sucursalActiva);
         return;
       }
-      estado = { ...estado, sucursalActiva: urlSucursal };
+      storeGlobal.estado = { ...storeGlobal.estado, sucursalActiva: urlSucursal };
       notificar();
     }
   });
@@ -179,14 +199,14 @@ export function inicializarAlcanceUsuario(usuario) {
   const traeAlcanceCompleto = tienePermisoExplicitamente && tieneListaPermitidas;
 
   // 1. Si no trae alcance completo y ya está confirmado para este usuario => NO-OP
-  if (!traeAlcanceCompleto && alcanceConfirmado && usuarioKeyConfirmado && keyEntrante && keyEntrante === usuarioKeyConfirmado) {
+  if (!traeAlcanceCompleto && storeGlobal.alcanceConfirmado && storeGlobal.usuarioKeyConfirmado && keyEntrante && keyEntrante === storeGlobal.usuarioKeyConfirmado) {
     return;
   }
 
   // 2. Si el usuario cambió respecto al confirmado previamente:
-  if (usuarioKeyConfirmado && keyEntrante && keyEntrante !== usuarioKeyConfirmado) {
-    alcanceConfirmado = false;
-    usuarioKeyConfirmado = null;
+  if (storeGlobal.usuarioKeyConfirmado && keyEntrante && keyEntrante !== storeGlobal.usuarioKeyConfirmado) {
+    storeGlobal.alcanceConfirmado = false;
+    storeGlobal.usuarioKeyConfirmado = null;
     if (!traeAlcanceCompleto) {
       limpiarSesionSucursal();
       refrescarAlcanceDesdeApi({ forzar: true }).catch(() => {});
@@ -195,9 +215,6 @@ export function inicializarAlcanceUsuario(usuario) {
   }
 
   if (!traeAlcanceCompleto) {
-    // Caso SSR/JWT: Es solo una pista preliminar.
-    // NUNCA establece puedeVerTodas=false de forma definitiva, NUNCA marca inicializado=true,
-    // NUNCA fuerza sucursalActiva='1', y NUNCA degrada un estado previo.
     const asignadaPista =
       usuario.sucursal_defecto != null
         ? Number(usuario.sucursal_defecto)
@@ -207,15 +224,15 @@ export function inicializarAlcanceUsuario(usuario) {
         ? Number(usuario.id_sucursal)
         : null;
 
-    if (asignadaPista != null && estado.sucursalAsignada == null) {
-      const nuevoEstado = { ...estado, sucursalAsignada: asignadaPista };
-      if (!sonEstadosIguales(estado, nuevoEstado)) {
-        estado = nuevoEstado;
+    if (asignadaPista != null && storeGlobal.estado.sucursalAsignada == null) {
+      const nuevoEstado = { ...storeGlobal.estado, sucursalAsignada: asignadaPista };
+      if (!sonEstadosIguales(storeGlobal.estado, nuevoEstado)) {
+        storeGlobal.estado = nuevoEstado;
         notificar();
       }
     }
 
-    if (!alcanceConfirmado && !promesaAlcance) {
+    if (!storeGlobal.alcanceConfirmado && !storeGlobal.promesaAlcance && !esContextoIframe()) {
       refrescarAlcanceDesdeApi().catch(() => {});
     }
     return;
@@ -293,8 +310,8 @@ export function inicializarAlcanceUsuario(usuario) {
     }
   }
 
-  alcanceConfirmado = true;
-  usuarioKeyConfirmado = keyEntrante;
+  storeGlobal.alcanceConfirmado = true;
+  storeGlobal.usuarioKeyConfirmado = keyEntrante;
   const inicializado = activa != null || puedeVerTodas || asignada != null;
 
   const nuevoEstado = {
@@ -307,11 +324,11 @@ export function inicializarAlcanceUsuario(usuario) {
     errorAlcance: false
   };
 
-  if (sonEstadosIguales(estado, nuevoEstado)) {
+  if (sonEstadosIguales(storeGlobal.estado, nuevoEstado)) {
     return;
   }
 
-  estado = nuevoEstado;
+  storeGlobal.estado = nuevoEstado;
 
   if (activa != null) {
     guardarSucursalSessionStorage(activa);
@@ -328,37 +345,37 @@ export function inicializarAlcanceUsuario(usuario) {
 export function cambiarSucursalActiva(nuevaSucursal) {
   const str = String(nuevaSucursal).trim().toLowerCase();
 
-  let nuevaActiva = estado.sucursalActiva;
+  let nuevaActiva = storeGlobal.estado.sucursalActiva;
   if (str === "todas") {
-    if (!estado.puedeVerTodas) {
+    if (!storeGlobal.estado.puedeVerTodas) {
       console.warn("[BranchStore] Intento no autorizado de seleccionar 'Todas las sucursales'");
-      sincronizarUrl(estado.sucursalActiva);
+      sincronizarUrl(storeGlobal.estado.sucursalActiva);
       return;
     }
     nuevaActiva = "todas";
   } else {
     const num = Number(str);
-    const permitida = estado.sucursalesPermitidas.some((s) => s.id === num);
-    if (!permitida && !estado.puedeVerTodas) {
+    const permitida = storeGlobal.estado.sucursalesPermitidas.some((s) => s.id === num);
+    if (!permitida && !storeGlobal.estado.puedeVerTodas) {
       console.warn(`[BranchStore] Intento no autorizado de seleccionar sucursal ${num}`);
-      sincronizarUrl(estado.sucursalActiva);
+      sincronizarUrl(storeGlobal.estado.sucursalActiva);
       return;
     }
     nuevaActiva = String(num);
   }
 
-  if (nuevaActiva === estado.sucursalActiva) {
+  if (nuevaActiva === storeGlobal.estado.sucursalActiva) {
     return;
   }
 
-  const nuevoEstado = { ...estado, sucursalActiva: nuevaActiva };
-  if (sonEstadosIguales(estado, nuevoEstado)) {
+  const nuevoEstado = { ...storeGlobal.estado, sucursalActiva: nuevaActiva };
+  if (sonEstadosIguales(storeGlobal.estado, nuevoEstado)) {
     return;
   }
-  estado = nuevoEstado;
+  storeGlobal.estado = nuevoEstado;
 
-  guardarSucursalSessionStorage(estado.sucursalActiva);
-  sincronizarUrl(estado.sucursalActiva);
+  guardarSucursalSessionStorage(storeGlobal.estado.sucursalActiva);
+  sincronizarUrl(storeGlobal.estado.sucursalActiva);
   notificar();
 }
 
@@ -366,8 +383,8 @@ export function cambiarSucursalActiva(nuevaSucursal) {
  * Reintenta la obtención del alcance si previamente ocurrió un fallo de red.
  */
 export function reintentarAlcance() {
-  if (estado.errorAlcance) {
-    estado = { ...estado, errorAlcance: false };
+  if (storeGlobal.estado.errorAlcance) {
+    storeGlobal.estado = { ...storeGlobal.estado, errorAlcance: false };
     notificar();
   }
   return refrescarAlcanceDesdeApi({ forzar: true });
@@ -382,15 +399,20 @@ export function refrescarAlcanceDesdeApi({ forzar = false } = {}) {
     return Promise.resolve(null);
   }
 
-  if (promesaAlcance) {
-    return promesaAlcance;
+  // Prevenir que iframes de Astro dev hagan fetch y sean cancelados a los ~300ms
+  if (esContextoIframe()) {
+    return Promise.resolve(storeGlobal.estado);
   }
 
-  if (alcanceConfirmado && !forzar && !estado.errorAlcance) {
-    return Promise.resolve(estado);
+  if (storeGlobal.promesaAlcance) {
+    return storeGlobal.promesaAlcance;
   }
 
-  promesaAlcance = (async () => {
+  if (storeGlobal.alcanceConfirmado && !forzar && !storeGlobal.estado.errorAlcance) {
+    return Promise.resolve(storeGlobal.estado);
+  }
+
+  storeGlobal.promesaAlcance = (async () => {
     const delays = globalThis.__BRANCH_STORE_RETRY_DELAYS || [400, 1000, 2000];
     let ultimoError = null;
 
@@ -403,7 +425,7 @@ export function refrescarAlcanceDesdeApi({ forzar = false } = {}) {
 
         if (res.status === 401 || res.status === 403) {
           if (res.status === 403) {
-            estado = { ...estado, errorAlcance: true };
+            storeGlobal.estado = { ...storeGlobal.estado, errorAlcance: true };
             notificar();
           }
           return null;
@@ -430,7 +452,7 @@ export function refrescarAlcanceDesdeApi({ forzar = false } = {}) {
         } else if (res.status >= 500) {
           throw new Error(`HTTP ${res.status}`);
         } else {
-          estado = { ...estado, errorAlcance: true };
+          storeGlobal.estado = { ...storeGlobal.estado, errorAlcance: true };
           notificar();
           return null;
         }
@@ -454,20 +476,20 @@ export function refrescarAlcanceDesdeApi({ forzar = false } = {}) {
     }
 
     console.warn("[BranchStore] No se pudo refrescar alcance tras reintentos:", ultimoError);
-    // NO tocar inicializado si ya estaba en true
-    estado = { ...estado, errorAlcance: true };
+    storeGlobal.estado = { ...storeGlobal.estado, errorAlcance: true };
     notificar();
     return null;
   })().finally(() => {
-    promesaAlcance = null;
+    storeGlobal.promesaAlcance = null;
   });
 
-  return promesaAlcance;
+  return storeGlobal.promesaAlcance;
 }
 
 export function limpiarSesionSucursal() {
-  alcanceConfirmado = false;
-  usuarioKeyConfirmado = null;
+  storeGlobal.alcanceConfirmado = false;
+  storeGlobal.usuarioKeyConfirmado = null;
+  storeGlobal.promesaAlcance = null;
   if (typeof window !== "undefined") {
     try {
       window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -483,30 +505,32 @@ export function limpiarSesionSucursal() {
     alcanceConfirmado: false,
     errorAlcance: false
   };
-  if (sonEstadosIguales(estado, nuevoEstado)) return;
-  estado = nuevoEstado;
+  if (sonEstadosIguales(storeGlobal.estado, nuevoEstado)) return;
+  storeGlobal.estado = nuevoEstado;
   notificar();
 }
 
-// Revalidación única y reactiva en navegación Astro
-if (typeof document !== "undefined") {
+// Revalidación única y reactiva en navegación Astro (solo en ventana principal)
+if (typeof document !== "undefined" && !esContextoIframe()) {
   if (!globalThis.__branchStoreAstroListeners) {
     globalThis.__branchStoreAstroListeners = true;
     document.addEventListener("astro:page-load", () => {
-      if (!alcanceConfirmado && !promesaAlcance) {
+      if (!storeGlobal.alcanceConfirmado && !storeGlobal.promesaAlcance) {
         refrescarAlcanceDesdeApi().catch(() => {});
       }
     });
   }
 }
 
-if (typeof window !== "undefined" && typeof window.document !== "undefined") {
-  // Al cargar la app en el navegador, invalidar alcance previo y sincronizar con backend real
-  refrescarAlcanceDesdeApi().catch(() => {});
+if (typeof window !== "undefined" && typeof window.document !== "undefined" && !esContextoIframe()) {
+  // Al cargar la app en la ventana principal, sincronizar con backend si no está confirmado
+  if (!storeGlobal.alcanceConfirmado && !storeGlobal.promesaAlcance) {
+    refrescarAlcanceDesdeApi().catch(() => {});
+  }
 }
 
 export function getSnapshot() {
-  return estado;
+  return storeGlobal.estado;
 }
 
 const serverSnapshot = {
@@ -524,8 +548,8 @@ export function getServerSnapshot() {
 }
 
 export function subscribe(callback) {
-  suscriptores.add(callback);
-  return () => suscriptores.delete(callback);
+  storeGlobal.suscriptores.add(callback);
+  return () => storeGlobal.suscriptores.delete(callback);
 }
 
 /**
@@ -597,14 +621,11 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     snap.alcanceConfirmado
   );
 
-  // Resolver sucursal efectiva para la pantalla
   let sucursalEfectiva = snap.sucursalActiva;
   if (!permiteTodas && sucursalEfectiva === "todas") {
     sucursalEfectiva = snap.sucursalAsignada != null ? String(snap.sucursalAsignada) : (snap.sucursalesPermitidas[0]?.id != null ? String(snap.sucursalesPermitidas[0].id) : null);
   }
 
-  // Si no está listoParaConsultar (esperando respuesta de /Usuario/mi-alcance),
-  // bloquear la asignación prematura a cualquier sede para evitar 403 en Potosí
   if (!listoParaConsultar || !sucursalEfectiva) {
     sucursalEfectiva = null;
   }
@@ -629,7 +650,7 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
       : "Cargando sucursal...");
 
   return {
-    sucursal: sucursalEfectiva, // null mientras !listoParaConsultar
+    sucursal: sucursalEfectiva,
     sucursalIdNumerico:
       !listoParaConsultar || sucursalEfectiva === "todas" || sucursalEfectiva == null
         ? null
@@ -644,7 +665,6 @@ export function usePaginaSucursal({ permiteTodas = true, usuario = null } = {}) 
     errorAlcance: Boolean(snap.errorAlcance),
     reintentar: reintentarAlcance,
     reintentarAlcance,
-    // Propiedades adicionales esperadas por componentes
     sucursales,
     cargando: !listoParaConsultar,
     cargandoAlcance: !listoParaConsultar,

@@ -15,6 +15,7 @@ import {
   SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
 import { ObtenerTodosPuntosVenta } from "@/services/Logistica/ClienteService";
+import { obtenerFechaHoyBolivia, sumarDiasBolivia } from "@/utils/fechas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,8 +95,8 @@ export default function GestorRutas({ usuario = null }) {
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Selector de fecha de rutas (Rutas de Hoy vs Rutas Históricas)
-  const hoyStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // Selector de fecha de rutas (Rutas de Hoy vs Rutas Históricas/Futuras)
+  const hoyStr = useMemo(() => obtenerFechaHoyBolivia(), []);
   const [fechaFiltro, setFechaFiltro] = useState(hoyStr);
   const [repartidores, setRepartidores] = useState([]);
   const [asignaciones, setAsignaciones] = useState([]);
@@ -598,17 +599,9 @@ export default function GestorRutas({ usuario = null }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                const m = new Date();
-                m.setDate(m.getDate() + 1);
-                setFechaFiltro(m.toISOString().split("T")[0]);
-              }}
+              onClick={() => setFechaFiltro(sumarDiasBolivia(1))}
               className={`px-3 py-1 rounded font-medium transition-colors ${
-                (() => {
-                  const m = new Date();
-                  m.setDate(m.getDate() + 1);
-                  return fechaFiltro === m.toISOString().split("T")[0];
-                })()
+                fechaFiltro === sumarDiasBolivia(1)
                   ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
@@ -617,17 +610,9 @@ export default function GestorRutas({ usuario = null }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                const m = new Date();
-                m.setDate(m.getDate() + 2);
-                setFechaFiltro(m.toISOString().split("T")[0]);
-              }}
+              onClick={() => setFechaFiltro(sumarDiasBolivia(2))}
               className={`px-3 py-1 rounded font-medium transition-colors ${
-                (() => {
-                  const m = new Date();
-                  m.setDate(m.getDate() + 2);
-                  return fechaFiltro === m.toISOString().split("T")[0];
-                })()
+                fechaFiltro === sumarDiasBolivia(2)
                   ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
@@ -636,17 +621,9 @@ export default function GestorRutas({ usuario = null }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                const m = new Date();
-                m.setDate(m.getDate() + 7);
-                setFechaFiltro(m.toISOString().split("T")[0]);
-              }}
+              onClick={() => setFechaFiltro(sumarDiasBolivia(7))}
               className={`px-3 py-1 rounded font-medium transition-colors ${
-                (() => {
-                  const m = new Date();
-                  m.setDate(m.getDate() + 7);
-                  return fechaFiltro === m.toISOString().split("T")[0];
-                })()
+                fechaFiltro === sumarDiasBolivia(7)
                   ? "bg-white text-[#1C96C5] font-bold shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
