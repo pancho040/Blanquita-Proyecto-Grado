@@ -19,6 +19,7 @@ import ModalLiquidacionRuta from "./ModalLiquidacionRuta";
 import ModalDetalleParadasGPS from "./ModalDetalleParadasGPS";
 import ModalSimuladorGPS from "./ModalSimuladorGPS";
 import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
+import { invalidarCache } from "@/lib/api-cache";
 import {
   Search,
   RefreshCw,
@@ -145,20 +146,33 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     };
   }, []);
 
-  // 2. Cargar choferes en vivo con bloqueo anti-solapamiento
+  // 2. Cargar choferes en vivo con bloqueo anti-solapamiento y AbortController
   const telemetriaEnVueloRef = useRef(false);
+  const abortControllerRef = useRef(null);
 
-  const cargarTelemetria = useCallback(async (silencioso = false) => {
-    if (telemetriaEnVueloRef.current) return;
+  const cargarTelemetria = useCallback(async (silencioso = false, forzar = false) => {
+    if (telemetriaEnVueloRef.current && !forzar) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       telemetriaEnVueloRef.current = true;
       if (!silencioso) setCargando(true);
+      if (forzar) {
+        invalidarCache("/api/logistica/telemetria");
+        invalidarCache("/api/logistica/repartidores");
+      }
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       const data = await ObtenerChoferesEnVivo(sid, fechaFiltro);
       setChoferes(data || []);
       setUltimaActualizacion(new Date());
     } catch (err) {
-      if (!silencioso) toast.error("Error al obtener telemetría satelital");
+      if (err?.name !== "AbortError") {
+        if (!silencioso) toast.error("Error al obtener telemetría satelital");
+      }
     } finally {
       telemetriaEnVueloRef.current = false;
       if (!silencioso) setCargando(false);
@@ -178,7 +192,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       await SolicitarUbicacionActualChoferes(sid);
       toast.success("Solicitud de señal GPS enviada a los choferes");
-      await cargarTelemetria(true);
+      await cargarTelemetria(true, true);
     } catch (err) {
       toast.error(err.message || "Error al solicitar ubicación actual");
     } finally {
@@ -202,7 +216,11 @@ export default function RastreoChoferesGPS({ usuario = null }) {
 
       setChoferes((prev) => {
         const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
-        if (idx === -1) return prev;
+        if (idx === -1) {
+          // Chofer nuevo o recién conectado: recargar telemetría en segundo plano
+          cargarTelemetria(true, true);
+          return prev;
+        }
         const anterior = prev[idx];
 
         let nuevaLat = Number(datos.lat ?? datos.latitud ?? anterior.Latitud);
@@ -230,6 +248,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
           FechaHoraPing: datos.timestamp || new Date().toISOString(),
           EnLinea: true,
           conectado: true,
+          EstadoMovimiento: datos.estado_movimiento || anterior.EstadoMovimiento || "En Ruta",
           SegundosDesdeUltimoReporte: 0,
         };
 
@@ -240,8 +259,35 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       setUltimaActualizacion(new Date());
     };
 
+    const marcarChoferDesconectado = (datos) => {
+      if (!datos) return;
+      const idChofer = Number(datos.id_chofer || datos.id_usuario);
+      if (!idChofer) return;
+      setChoferes((prev) => {
+        const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
+        if (idx === -1) return prev;
+        const nuevoArr = [...prev];
+        nuevoArr[idx] = {
+          ...nuevoArr[idx],
+          EnLinea: false,
+          conectado: false,
+          EstadoMovimiento: "Sin Señal",
+        };
+        return nuevoArr;
+      });
+    };
+
     const unsubUbicacion = logisticaSocket.suscribir("ubicacion_chofer_actualizada", actualizarChoferDesdeWs);
     const unsubPosicion = logisticaSocket.suscribir("POSICION_CHOFER", actualizarChoferDesdeWs);
+    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", actualizarChoferDesdeWs);
+    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", actualizarChoferDesdeWs);
+    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", marcarChoferDesconectado);
+    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
+      invalidarCache("/api/logistica/repartidores");
+      invalidarCache("/api/logistica/telemetria");
+      cargarTelemetria(true, true);
+    });
+
     const unsubSnapshot = logisticaSocket.suscribir("SNAPSHOT_INICIAL", (datos) => {
       if (datos && Array.isArray(datos.choferes)) {
         setChoferes(datos.choferes);
@@ -251,7 +297,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
 
     const handleCustomWs = (e) => {
       const { tipo } = e.detail || {};
-      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping" || tipo === "POSICION_CHOFER") {
+      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping" || tipo === "POSICION_CHOFER" || tipo === "CHOFER_ACTUALIZADO") {
         cargarTelemetria(true);
       }
     };
@@ -261,10 +307,23 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       unsubEstado();
       unsubUbicacion();
       unsubPosicion();
+      unsubChoferEnLinea();
+      unsubChoferActualizado();
+      unsubChoferSinSenal();
+      unsubChoferCreado();
       unsubSnapshot();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
   }, [cargarTelemetria, esHoy]);
+
+  // Fallback: auto-refresco periódico cada 60s SOLO cuando el WebSocket está desconectado
+  useEffect(() => {
+    if (wsConectado || !esHoy || !listoParaConsultar) return;
+    const intervaloFallback = setInterval(() => {
+      cargarTelemetria(true);
+    }, 60000);
+    return () => clearInterval(intervaloFallback);
+  }, [wsConectado, esHoy, listoParaConsultar, cargarTelemetria]);
 
   // Carga inicial y reactiva bloqueada si no está listoParaConsultar
   useEffect(() => {
@@ -600,13 +659,18 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => cargarTelemetria()}
+            onClick={() => cargarTelemetria(false, true)}
             disabled={cargando}
-            className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200"
-            title="Refrescar telemetría manualmente"
+            className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200 gap-1.5"
+            title="Refrescar telemetría satelital en tiempo real"
           >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
             <span>Actualizar</span>
+            {ultimaActualizacion && (
+              <span className="text-[10px] text-slate-400 font-normal hidden md:inline">
+                ({tiempoRelativo})
+              </span>
+            )}
           </Button>
         </div>
 

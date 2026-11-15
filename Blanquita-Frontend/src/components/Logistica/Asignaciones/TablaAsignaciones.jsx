@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import PageHeader from "@/components/common/PageHeader";
 import BranchFilter from "@/components/common/BranchFilter";
 import { usePaginaSucursal } from "@/hooks/usePaginaSucursal";
@@ -63,6 +63,8 @@ import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
 import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
 import { obtenerFechaHoyBolivia, sumarDiasBolivia } from "@/utils/fechas";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useTiempoRelativo } from "@/hooks/useTiempoRelativo";
+import { invalidarCache } from "@/lib/api-cache";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { SkeletonTable } from "@/components/common/LoadingStates";
@@ -97,6 +99,9 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [fecha, setFecha] = useState(hoyStr);
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const tiempoRelativo = useTiempoRelativo(ultimaActualizacion);
+  const abortControllerRef = useRef(null);
 
   // Vistas unificadas del hub de reparto
   const [vistaActiva, setVistaActiva] = useState(() => {
@@ -217,14 +222,26 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   };
 
   // Cargar asignaciones (memorizada para actualización)
-  const cargarAsignaciones = useCallback(async (silencioso = false) => {
+  const cargarAsignaciones = useCallback(async (silencioso = false, forzar = false) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       if (!silencioso) setLoading(true);
+      if (forzar) {
+        invalidarCache("/api/logistica/asignaciones");
+        invalidarCache("/api/logistica/repartidores");
+      }
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       const data = await ObtenerAsignaciones(fecha, null, sid);
       setAsignaciones(Array.isArray(data) ? data : (data?.items || []));
+      setUltimaActualizacion(new Date());
     } catch (err) {
-      if (!silencioso) toast.error(err.message || "Error al cargar despachos");
+      if (err?.name !== "AbortError") {
+        if (!silencioso) toast.error(err.message || "Error al cargar despachos");
+      }
     } finally {
       if (!silencioso) setLoading(false);
     }
@@ -256,7 +273,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   useEffect(() => {
     if (listoParaConsultar) {
       precargarCatalogos();
-      cargarAsignaciones();
+      cargarAsignaciones(false, true);
     }
   }, [sucursal, listoParaConsultar, precargarCatalogos, cargarAsignaciones]);
 
@@ -267,19 +284,43 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
     const unsubCarga = logisticaSocket.suscribir("solicitud_carga_recibida", (datos) => {
       toast.info("Nueva solicitud de carga de camión recibida de chofer");
-      cargarAsignaciones(true);
+      cargarAsignaciones(true, true);
     });
 
     const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", () => {
-      cargarAsignaciones(true);
+      cargarAsignaciones(true, true);
     });
 
     const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", () => {
-      cargarAsignaciones(true);
+      cargarAsignaciones(true, true);
     });
 
     const unsubFin = logisticaSocket.suscribir("ruta_finalizada_admin", () => {
-      cargarAsignaciones(true);
+      cargarAsignaciones(true, true);
+    });
+
+    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", () => {
+      invalidarCache("/api/logistica/repartidores");
+      precargarCatalogos();
+      cargarAsignaciones(true, true);
+    });
+
+    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", () => {
+      invalidarCache("/api/logistica/repartidores");
+      precargarCatalogos();
+      cargarAsignaciones(true, true);
+    });
+
+    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
+      invalidarCache("/api/logistica/repartidores");
+      precargarCatalogos();
+      cargarAsignaciones(true, true);
+    });
+
+    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", () => {
+      invalidarCache("/api/logistica/repartidores");
+      precargarCatalogos();
+      cargarAsignaciones(true, true);
     });
 
     const handleCustomWs = (e) => {
@@ -293,9 +334,22 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       unsubOp();
       unsubReorden();
       unsubFin();
+      unsubChoferEnLinea();
+      unsubChoferActualizado();
+      unsubChoferCreado();
+      unsubChoferSinSenal();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
-  }, [cargarAsignaciones]);
+  }, [cargarAsignaciones, precargarCatalogos]);
+
+  // Fallback: auto-refresco periódico cada 60s si el WebSocket está desconectado
+  useEffect(() => {
+    if (wsConectado || !listoParaConsultar) return;
+    const intervaloFallback = setInterval(() => {
+      cargarAsignaciones(true);
+    }, 60000);
+    return () => clearInterval(intervaloFallback);
+  }, [wsConectado, listoParaConsultar, cargarAsignaciones]);
 
   // Apertura instantánea sin esperar peticiones
   const abrirModalProgramar = () => {
@@ -511,13 +565,18 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => cargarAsignaciones(false)}
+            onClick={() => cargarAsignaciones(false, true)}
             disabled={loading}
             className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
             title="Actualizar despachos manualmente"
           >
             <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
             <span>Actualizar</span>
+            {ultimaActualizacion && (
+              <span className="text-[10px] text-slate-400 font-normal hidden md:inline">
+                ({tiempoRelativo})
+              </span>
+            )}
           </Button>
         </div>
 

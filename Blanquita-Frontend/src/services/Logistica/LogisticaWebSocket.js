@@ -249,6 +249,18 @@ class LogisticaWebSocketClient {
       this._despachar("solicitud_carga_creada", datos);
     } else if (tipoEvento === "POSICION_CHOFER") {
       this._despachar("ubicacion_chofer_actualizada", datos);
+    } else if (tipoEvento === "CHOFER_EN_LINEA" || tipoEvento === "chofer_en_linea") {
+      this._despachar("chofer_en_linea", datos);
+      this._despachar("CHOFER_EN_LINEA", datos);
+    } else if (tipoEvento === "CHOFER_ACTUALIZADO" || tipoEvento === "chofer_actualizado") {
+      this._despachar("chofer_actualizado", datos);
+      this._despachar("CHOFER_ACTUALIZADO", datos);
+    } else if (tipoEvento === "CHOFER_CREADO" || tipoEvento === "chofer_creado") {
+      this._despachar("chofer_creado", datos);
+      this._despachar("CHOFER_CREADO", datos);
+    } else if (tipoEvento === "CHOFER_SIN_SEÑAL" || tipoEvento === "CHOFER_SIN_SENAL" || tipoEvento === "chofer_sin_senal") {
+      this._despachar("chofer_sin_senal", datos);
+      this._despachar("CHOFER_SIN_SEÑAL", datos);
     }
 
     // 3. Notificar a oyentes globales (wildcard)

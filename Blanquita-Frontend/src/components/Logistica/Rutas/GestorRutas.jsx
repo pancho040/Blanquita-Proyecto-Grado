@@ -61,6 +61,8 @@ import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import RastreoChoferesGPS from "./RastreoChoferesGPS";
+import { useTiempoRelativo } from "@/hooks/useTiempoRelativo";
+import { invalidarCache } from "@/lib/api-cache";
 
 const DIAS_SEMANA = {
   1: "Lunes",
@@ -122,6 +124,9 @@ export default function GestorRutas({ usuario = null }) {
   const [fechaFiltro, setFechaFiltro] = useState(hoyStr);
   const [repartidores, setRepartidores] = useState([]);
   const [asignaciones, setAsignaciones] = useState([]);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const tiempoRelativo = useTiempoRelativo(ultimaActualizacion);
+  const abortControllerRef = useRef(null);
 
   // Plantillas automáticas de chofer por ruta (localStorage)
   const [plantillasAuto, setPlantillasAuto] = useState(() => {
@@ -252,9 +257,20 @@ export default function GestorRutas({ usuario = null }) {
   }, [seleccionarRuta]);
 
   const cargarDatos = useCallback(async (silencioso = false, forzar = false) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       if (!silencioso) setLoading(true);
+      if (forzar) {
+        invalidarCache("/api/logistica/zonas");
+        invalidarCache("/api/logistica/rutas");
+        invalidarCache("/api/logistica/repartidores");
+        invalidarCache("/api/logistica/asignaciones");
+      }
 
       const [resZ, resR, resPv, resRep, resAsig] = await Promise.allSettled([
         ObtenerZonas(sid),
@@ -274,6 +290,7 @@ export default function GestorRutas({ usuario = null }) {
       setTodosPuntosVenta(pv);
       setRepartidores(rep);
       setAsignaciones(asig);
+      setUltimaActualizacion(new Date());
 
       if (r.length > 0 && (!rutaSeleccionadaRef.current || !r.some(item => item.IdRutaDistribucion === rutaSeleccionadaRef.current.IdRutaDistribucion))) {
         seleccionarRuta(r[0]);
@@ -282,7 +299,9 @@ export default function GestorRutas({ usuario = null }) {
         setPuntosRuta([]);
       }
     } catch (err) {
-      if (!silencioso) toast.error(err.message || "Error al cargar rutas y zonas");
+      if (err?.name !== "AbortError") {
+        if (!silencioso) toast.error(err.message || "Error al cargar rutas y zonas");
+      }
     } finally {
       if (!silencioso) setLoading(false);
     }
@@ -310,6 +329,36 @@ export default function GestorRutas({ usuario = null }) {
       cargarDatos(true);
     });
 
+    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", () => {
+      invalidarCache("/api/logistica/repartidores");
+      cargarDatos(true, true);
+    });
+
+    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", (datos) => {
+      invalidarCache("/api/logistica/repartidores");
+      if (datos && (datos.id_chofer || datos.id_usuario)) {
+        const idChofer = Number(datos.id_chofer || datos.id_usuario);
+        setRepartidores((prev) =>
+          prev.map((r) =>
+            Number(r.IdUsuario) === idChofer
+              ? { ...r, IdEstadoUsuario: datos.id_estado ?? r.IdEstadoUsuario }
+              : r
+          )
+        );
+      }
+      cargarDatos(true, true);
+    });
+
+    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
+      invalidarCache("/api/logistica/repartidores");
+      cargarDatos(true, true);
+    });
+
+    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", () => {
+      invalidarCache("/api/logistica/repartidores");
+      cargarDatos(true, true);
+    });
+
     const handleCustomWs = (e) => {
       cargarDatos(true);
     };
@@ -322,10 +371,23 @@ export default function GestorRutas({ usuario = null }) {
       unsubEstado();
       unsubReorden();
       unsubCarga();
+      unsubChoferEnLinea();
+      unsubChoferActualizado();
+      unsubChoferCreado();
+      unsubChoferSinSenal();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
       window.removeEventListener("focus", handleFocus);
     };
   }, [cargarDatos]);
+
+  // Fallback: auto-refresco periódico cada 60s si el WebSocket está desconectado
+  useEffect(() => {
+    if (wsConectado || !listoParaConsultar) return;
+    const intervaloFallback = setInterval(() => {
+      cargarDatos(true);
+    }, 60000);
+    return () => clearInterval(intervaloFallback);
+  }, [wsConectado, listoParaConsultar, cargarDatos]);
 
   // Opciones para BuscadorSelect de Zonas
   const opcionesZonas = useMemo(() => {
@@ -586,6 +648,11 @@ export default function GestorRutas({ usuario = null }) {
               >
                 <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
                 <span>Actualizar</span>
+                {ultimaActualizacion && (
+                  <span className="text-[10px] text-slate-400 font-normal hidden md:inline">
+                    ({tiempoRelativo})
+                  </span>
+                )}
               </Button>
             </div>
 

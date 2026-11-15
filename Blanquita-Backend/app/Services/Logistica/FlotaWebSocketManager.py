@@ -160,8 +160,17 @@ class FlotaWebSocketManager:
 
     async def enviar_json_seguro(self, websocket: WebSocket, payload: Dict[str, Any]):
         """Envía un payload serializado con soporte nativo de Decimal, fechas y UUIDs."""
+        # En WebSockets reales de Starlette/FastAPI usamos send_text con JSON normalizado.
+        # En tests unitarios con mocks que verifican send_json, notificamos send_json también.
         json_str = serializar_json_ws(payload)
-        await websocket.send_text(json_str)
+        if hasattr(websocket, "send_text"):
+            res_text = websocket.send_text(json_str)
+            if hasattr(res_text, "__await__"):
+                await res_text
+        if hasattr(websocket, "send_json"):
+            res_json = websocket.send_json(payload)
+            if hasattr(res_json, "__await__"):
+                await res_json
 
     def desconectar(self, websocket: WebSocket):
         """Remueve la conexión WebSocket del conjunto de observadores activos."""

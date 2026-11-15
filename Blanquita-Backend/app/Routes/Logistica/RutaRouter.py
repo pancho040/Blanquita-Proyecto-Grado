@@ -250,7 +250,25 @@ def crear_repartidor(
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     dto.IdSucursal = alcance.validar_escritura(dto.IdSucursal, nombre_recurso="sucursal_repartidor")
-    return RutaService(db).CrearRepartidor(dto)
+    res = RutaService(db).CrearRepartidor(dto)
+    try:
+        import asyncio
+        evento_creado = {
+            "tipo": "CHOFER_CREADO",
+            "id_chofer": res.get("IdUsuario") or res.get("id_usuario"),
+            "id_usuario": res.get("IdUsuario") or res.get("id_usuario"),
+            "nombre": f"{getattr(dto, 'Nombre', '')} {getattr(dto, 'Apellido', '')}".strip() or "Nuevo Repartidor",
+            "id_sucursal": dto.IdSucursal,
+            "fecha_hora": ahora_bolivia().isoformat()
+        }
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(flota_ws_manager.emitir_a_web(evento_creado, sucursal_id=dto.IdSucursal))
+        except RuntimeError:
+            asyncio.run(flota_ws_manager.emitir_a_web(evento_creado, sucursal_id=dto.IdSucursal))
+    except Exception as e_ws:
+        logger.debug(f"Aviso WS CHOFER_CREADO: {e_ws}")
+    return res
 
 @RutaRouter.put("/repartidores/{id_usuario}/estado", response_model=dict)
 def cambiar_estado_repartidor(
@@ -265,7 +283,25 @@ def cambiar_estado_repartidor(
     if not u_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repartidor no encontrado")
     alcance.validar_recurso(u_row[0], nombre_recurso="repartidor", responder_404=True)
-    return RutaService(db).CambiarEstadoRepartidor(id_usuario, id_estado)
+    res = RutaService(db).CambiarEstadoRepartidor(id_usuario, id_estado)
+    try:
+        import asyncio
+        evento_act = {
+            "tipo": "CHOFER_ACTUALIZADO",
+            "id_chofer": id_usuario,
+            "id_usuario": id_usuario,
+            "id_estado": id_estado,
+            "id_sucursal": u_row[0],
+            "fecha_hora": ahora_bolivia().isoformat()
+        }
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(flota_ws_manager.emitir_a_web(evento_act, sucursal_id=u_row[0]))
+        except RuntimeError:
+            asyncio.run(flota_ws_manager.emitir_a_web(evento_act, sucursal_id=u_row[0]))
+    except Exception as e_ws:
+        logger.debug(f"Aviso WS CHOFER_ACTUALIZADO: {e_ws}")
+    return res
 
 # -------------------------------------------------------------
 # Telemetría y rastreo en vivo
@@ -388,6 +424,19 @@ async def websocket_flota_endpoint(
         logger.warning(f"[WS-Flota] Error al cargar snapshot inicial: {e}")
 
     await flota_ws_manager.conectar(websocket, ticket_data, snapshot)
+    if ticket_data and (ticket_data.get("tipo_cliente") == "movil" or ticket_data.get("rol") in (5, 6, 7)):
+        try:
+            suc_chofer = (ticket_data.get("sucursales_permitidas") or [None])[0]
+            evento_en_linea = {
+                "tipo": "CHOFER_EN_LINEA",
+                "id_chofer": ticket_data.get("id_chofer") or ticket_data.get("usuario_id"),
+                "id_usuario": ticket_data.get("usuario_id"),
+                "id_sucursal": suc_chofer,
+                "fecha_hora": datetime.now(timezone.utc).isoformat()
+            }
+            await flota_ws_manager.emitir_a_web(evento_en_linea, sucursal_id=suc_chofer)
+        except Exception as e_onl:
+            logger.debug(f"[WS-Flota] Error emitiendo CHOFER_EN_LINEA: {e_onl}")
     try:
         while True:
             data = await websocket.receive_text()
@@ -420,6 +469,24 @@ async def websocket_flota_endpoint(
                     logger.debug(f"[WS receive] No JSON o formato desconocido: {parse_err}")
     except WebSocketDisconnect:
         flota_ws_manager.desconectar(websocket)
+        if ticket_data and (ticket_data.get("tipo_cliente") == "movil" or ticket_data.get("rol") in (5, 6, 7)):
+            try:
+                suc_chofer = (ticket_data.get("sucursales_permitidas") or [None])[0]
+                evento_sin_senial = {
+                    "tipo": "CHOFER_SIN_SEÑAL",
+                    "id_chofer": ticket_data.get("id_chofer") or ticket_data.get("usuario_id"),
+                    "id_usuario": ticket_data.get("usuario_id"),
+                    "id_sucursal": suc_chofer,
+                    "fecha_hora": datetime.now(timezone.utc).isoformat()
+                }
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(flota_ws_manager.emitir_a_web(evento_sin_senial, sucursal_id=suc_chofer))
+                except RuntimeError:
+                    asyncio.run(flota_ws_manager.emitir_a_web(evento_sin_senial, sucursal_id=suc_chofer))
+            except Exception:
+                pass
     except Exception as ex:
         logger.debug(f"[WS-Flota] Cierre de socket: {ex}")
         flota_ws_manager.desconectar(websocket)
@@ -470,13 +537,28 @@ def registrar_telemetria(
             "timestamp": ahora_bolivia().isoformat(),
             "estado_movimiento": dto.EstadoMovimiento or "En Ruta"
         }
+        evento_chofer_act = {
+            "tipo": "CHOFER_ACTUALIZADO",
+            "id_chofer": dto.IdUsuarioRepartidor,
+            "id_usuario": dto.IdUsuarioRepartidor,
+            "id_asignacion": dto.IdAsignacionRuta,
+            "id_sucursal": suc_efectiva,
+            "latitud": dto.Latitud,
+            "longitud": dto.Longitud,
+            "velocidad": float(vel_efectiva),
+            "bateria": int(bat_efectiva),
+            "estado_movimiento": dto.EstadoMovimiento or "En Ruta",
+            "fecha_hora": ahora_bolivia().isoformat()
+        }
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(flota_ws_manager.broadcast_ubicacion(datos_ping))
             loop.create_task(flota_ws_manager.emitir_a_web(datos_ping, sucursal_id=suc_efectiva))
+            loop.create_task(flota_ws_manager.emitir_a_web(evento_chofer_act, sucursal_id=suc_efectiva))
         except RuntimeError:
             asyncio.run(flota_ws_manager.broadcast_ubicacion(datos_ping))
             asyncio.run(flota_ws_manager.emitir_a_web(datos_ping, sucursal_id=suc_efectiva))
+            asyncio.run(flota_ws_manager.emitir_a_web(evento_chofer_act, sucursal_id=suc_efectiva))
     except Exception as ws_err:
         logger.debug(f"Aviso: Broadcast WebSocket omitido: {ws_err}")
 
