@@ -541,8 +541,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
       {/* 1. Header con botón principal y pestañas unificadas */}
       <PageHeader
-        title="Centro Operativo de Reparto y Despachos"
-        subtitle="Mesa integral de flota, stock físico en camión, notas de venta en ruta y liquidación de turno"
+        title="Despachos"
+        subtitle="Control de despachos diarios, stock en camión y liquidación de rutas."
         branchFilter={
           esVistaChofer ? null : (
             <BranchFilter
@@ -585,7 +585,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
         >
           <Radio className="h-3.5 w-3.5" />
-          <span>Rastreo GPS</span>
+          <span>En vivo</span>
         </a>
 
         <Button 
@@ -619,7 +619,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           }`}
         >
           <Truck className="h-3.5 w-3.5" />
-          <span>Despachos y Salidas</span>
+          <span>Despachos</span>
           <span className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${vistaActiva === "despachos" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
             {asignaciones.length}
           </span>
@@ -635,7 +635,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           }`}
         >
           <Clock className="h-3.5 w-3.5" />
-          <span>Cierre de Turno y Rendición</span>
+          <span>Cierre y rendición</span>
         </button>
       </div>
 

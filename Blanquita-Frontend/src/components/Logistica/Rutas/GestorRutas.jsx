@@ -588,7 +588,7 @@ export default function GestorRutas({ usuario = null }) {
             }`}
           >
             <Radio className="h-3.5 w-3.5" />
-            <span>Rastreo y Monitoreo Satelital (En Vivo)</span>
+            <span>En vivo</span>
             {vistaPrincipal === "vivo" && (
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
             )}
@@ -604,12 +604,12 @@ export default function GestorRutas({ usuario = null }) {
             }`}
           >
             <Route className="h-3.5 w-3.5" />
-            <span>Zonas, Rutas y Secuencia 1..N</span>
+            <span>Planificación</span>
           </button>
         </div>
 
         <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 pr-2">
-          <span>Vista activa: <strong className="text-slate-800">{vistaPrincipal === "vivo" ? "Telemetría y Estado de Flota" : "Diseño vial e Itinerarios"}</strong></span>
+          <span>Vista: <strong className="text-slate-800">{vistaPrincipal === "vivo" ? "Telemetría de flota" : "Diseño vial"}</strong></span>
         </div>
       </div>
 
@@ -619,8 +619,8 @@ export default function GestorRutas({ usuario = null }) {
         <>
           {/* 1. Header con botones de creación y GPS bajo demanda */}
           <PageHeader
-            title="Rutas y Zonas de Distribución"
-            subtitle="Configuración vial, paradas secuenciales 1..N y georreferenciación de itinerarios de distribución."
+            title="Rutas"
+            subtitle="Planificación de itinerarios, paradas y zonas de reparto."
             branchFilter={
               <BranchFilter
                 sucursal={sucursal}
@@ -1068,7 +1068,7 @@ export default function GestorRutas({ usuario = null }) {
                       }`}
                     >
                       <MapIcon className="h-3.5 w-3.5" />
-                      <span>Mapa Satelital Vial (OSRM)</span>
+                      <span>Mapa</span>
                     </button>
                     <button
                       type="button"
@@ -1080,7 +1080,7 @@ export default function GestorRutas({ usuario = null }) {
                       }`}
                     >
                       <ListOrdered className="h-3.5 w-3.5" />
-                      <span>Secuencia & Puntos ({puntosRuta.length})</span>
+                      <span>Paradas ({puntosRuta.length})</span>
                     </button>
                     <button
                       type="button"
@@ -1092,7 +1092,7 @@ export default function GestorRutas({ usuario = null }) {
                       }`}
                     >
                       <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
-                      <span>Pedidos Programados ({fechaFiltro})</span>
+                      <span>Pedidos</span>
                     </button>
                     <button
                       type="button"
@@ -1104,7 +1104,7 @@ export default function GestorRutas({ usuario = null }) {
                       }`}
                     >
                       <Clock className="h-3.5 w-3.5 text-slate-500" />
-                      <span>Historial y Despacho ({fechaFiltro})</span>
+                      <span>Historial</span>
                     </button>
                   </div>
 
