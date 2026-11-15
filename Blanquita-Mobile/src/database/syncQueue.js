@@ -19,26 +19,29 @@ export const SyncQueue = {
   // Obtener todas las operaciones encoladas (opcionalmente filtradas por usuarioId)
   async obtenerCola(usuarioId = null) {
     try {
-      const raw = await AsyncStorage.getItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
+      let raw = await AsyncStorage.getItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
+      if (!raw) {
+        raw = await AsyncStorage.getItem("@blanquita_sync_queue");
+      }
       let items = raw ? JSON.parse(raw) : [];
       let huboCambios = false;
 
-      // Migración automática de ítems atascados (Fase 3):
-      // Ítems con error permanente 4xx o ID específico atascado pasan a 'REQUIERE_CORRECCION'
-      // para permitir al chofer abrirlos, corregir las cantidades/cobro y reenviarlos.
+      // Migración automática general de ítems con error de validación:
+      // Cualquier ítem con error 4xx de negocio pasa a 'REQUIERE_CORRECCION'
+      // para permitir al chofer abrirlos, corregir cantidades o cobro y reenviarlos.
       items = items.map((item) => {
-        const esItemAtascado422 =
-          item.id === "11d2d239-ffa6-43d0-ba40-aa1f55366b88" ||
+        const esItemRequiereCorreccion =
           item.estado === "error_validacion" ||
-          (item.esErrorPermanente && item.estado !== "REQUIERE_CORRECCION");
+          (item.esErrorPermanente && item.estado !== "REQUIERE_CORRECCION") ||
+          (typeof item.status === "number" && item.status >= 400 && item.status < 500 && item.status !== 401 && item.estado !== "REQUIERE_CORRECCION");
 
-        if (esItemAtascado422) {
+        if (esItemRequiereCorreccion) {
           huboCambios = true;
           return {
             ...item,
             estado: "REQUIERE_CORRECCION",
             esErrorPermanente: true,
-            ultimoError: item.ultimoError || "El monto cobrado excede el total entregado. Requiere corrección.",
+            ultimoError: item.ultimoError || "La operación requiere corrección antes de sincronizar.",
           };
         }
         return item;
