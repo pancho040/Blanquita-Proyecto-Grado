@@ -20,6 +20,7 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
   const [cargando, setCargando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [data, setData] = useState(null);
+  const [errorBackend, setErrorBackend] = useState(null);
 
   // Formulario de arqueo y cierre
   const [efectivoEntregado, setEfectivoEntregado] = useState("");
@@ -64,11 +65,12 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
   const diferencia = totalRendido - totalCobradoSistema;
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!data?.Asignacion) return;
 
     try {
       setProcesando(true);
+      setErrorBackend(null);
       await CerrarYLiquidarRuta(idAsignacion, {
         IdUsuarioRepartidor: data.Asignacion.IdUsuarioRepartidor,
         KilometrajeFinal: kmFinal ? parseFloat(kmFinal) : null,
@@ -85,7 +87,9 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
       if (onLiquidacionExitosa) onLiquidacionExitosa();
       onCerrar();
     } catch (err) {
-      toast.error(err.message || "Error al registrar liquidación");
+      const detalleError = err.detail || err.message || "Error al registrar liquidación";
+      setErrorBackend(detalleError);
+      toast.error(detalleError);
     } finally {
       setProcesando(false);
     }
@@ -115,6 +119,26 @@ export default function ModalLiquidacionRuta({ idAsignacion, abierto, onCerrar, 
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* ALERTA DE ERROR DEL BACKEND */}
+            {errorBackend && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span className="font-medium">{errorBackend}</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSubmit}
+                  disabled={procesando}
+                  className="h-7 px-2.5 text-xs bg-white text-rose-700 hover:bg-rose-100 border-rose-300 font-semibold shrink-0"
+                >
+                  Reintentar
+                </Button>
+              </div>
+            )}
+
             {/* ENCABEZADO DE ASIGNACIÓN */}
             <div className="bg-slate-50 border border-slate-200 rounded p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>

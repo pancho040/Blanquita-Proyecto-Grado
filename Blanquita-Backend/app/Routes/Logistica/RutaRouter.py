@@ -20,7 +20,7 @@ from app.Models.Logistica.RutaModel import (
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
     RepartidorCrear, TelemetriaPing, InsertarParadaOrdenRequest, QuitarParadaRequest,
     MoverParadaRutaRequest, SolicitudCargaCrear, SolicitudCargaRevision,
-    RevisionWebOperacionRequest, ItemAprobarCargaDTO, AprobarCargaRequest, ResolverCargaRequest,
+    RevisionWebOperacionRequest, ItemAprobarCargaDTO, ResolverCargaRequest,
     RevisionOperacionRequest, FinalizarAdminRequest, ReasignarPendientesRequest, ReasignarRutaRequest
 )
 
@@ -722,7 +722,26 @@ def cerrar_y_liquidar_ruta(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación de ruta no encontrada")
     alcance.validar_recurso(row[0], nombre_recurso="asignación de ruta", responder_404=True)
-    return RutaService(db).CerrarYLiquidarRuta(id_asignacion, datos, usuario["IdUsuario"])
+    res = RutaService(db).CerrarYLiquidarRuta(id_asignacion, datos, usuario["IdUsuario"])
+    try:
+        from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
+        import asyncio
+        payload_ws = {
+            "tipo": "ASIGNACION_COMPLETADA",
+            "asignacion_id": id_asignacion,
+            "id_sucursal": row[0],
+            "usuario_id": usuario["IdUsuario"],
+            "mensaje": f"Asignación {id_asignacion} liquidada y finalizada exitosamente."
+        }
+        try:
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                asyncio.create_task(flota_ws_manager.broadcast_json(payload_ws, id_sucursal=row[0]))
+        except RuntimeError:
+            pass
+    except Exception as e_ws:
+        print(f"[WS] Error notificando liquidación: {e_ws}")
+    return res
 
 # -------------------------------------------------------------
 # MOTOR DE REORDENAMIENTO 1..N Y GENERADOR DIARIO (SUB-AGENTE A)

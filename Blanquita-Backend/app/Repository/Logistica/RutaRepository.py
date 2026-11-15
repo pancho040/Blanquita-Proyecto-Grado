@@ -1,4 +1,5 @@
 from datetime import date
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.Repository.DbCaller import DbCaller
 from app.utils.fechas import fecha_actual_bolivia, normalizar_fecha_bolivia
@@ -950,6 +951,30 @@ class RutaRepository:
         total_cobrado = total_cobrado_efectivo + total_cobrado_transf
         saldo_pendiente = total_esperado - total_cobrado
 
+        # Consultar stock actual a bordo del camión
+        sql_stock = """
+            SELECT 
+                ic.id as "IdInventarioChofer",
+                ic.presentacion_id as "IdPresentacion",
+                COALESCE(pp."CodigoPresentacion", pp."TipoContenedor") as "NombrePresentacion",
+                p."NombreProducto",
+                COALESCE(ic.cantidad_cargada, 0) as "CantidadCargada",
+                COALESCE(ic.cantidad_vendida, 0) as "CantidadEntregada",
+                COALESCE(ic.cantidad_remanente, 0) as "CantidadRemanente",
+                0 as "CantidadMerma",
+                COALESCE(ic.precio_vigente_carga, 0) as "PrecioUnitario"
+            FROM public.inventario_chofer ic
+            JOIN public."PresentacionProducto" pp ON ic.presentacion_id = pp."IdPresentacion"
+            JOIN public."Producto" p ON pp."IdProducto" = p."IdProducto"
+            WHERE ic.chofer_id = :id_chofer
+              AND (:id_sucursal IS NULL OR ic.sucursal_id = :id_sucursal)
+            ORDER BY p."NombreProducto", pp."CodigoPresentacion";
+        """
+        stock_camion = self.caller.LlamarFuncion(sql_stock, {
+            "id_chofer": general.get("IdUsuarioRepartidor"),
+            "id_sucursal": general.get("IdSucursal")
+        })
+
         sql_rend = """
             SELECT * FROM "RendicionRuta" 
             WHERE "IdAsignacionRuta" = :id_asignacion 
@@ -966,48 +991,105 @@ class RutaRepository:
             "TotalCobrado": total_cobrado,
             "SaldoPendiente": max(0.0, saldo_pendiente),
             "RendicionRegistrada": rendicion,
-            "DetallePedidos": pedidos
+            "DetallePedidos": pedidos,
+            "StockCamion": stock_camion
         }
 
     def CerrarYLiquidarRuta(self, id_asignacion: int, datos: dict, id_usuario_aprueba: int) -> dict:
+        # 1. Validar existencia e idempotencia
+        sql_check = """
+            SELECT ar."IdAsignacionRuta", ar."Estado", ar."estado_operativo", r."IdSucursal",
+                   ar."IdUsuarioRepartidor", rend."IdRendicionRuta"
+            FROM "AsignacionRuta" ar
+            JOIN "RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+            LEFT JOIN "RendicionRuta" rend ON ar."IdAsignacionRuta" = rend."IdAsignacionRuta"
+            WHERE ar."IdAsignacionRuta" = :id_asignacion;
+        """
+        asig = self.caller.LlamarUnRegistro(sql_check, {"id_asignacion": id_asignacion})
+        if not asig:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asignación {id_asignacion} no encontrada.")
+
+        if asig.get("IdRendicionRuta") or asig.get("Estado") in ('Finalizada', 'Completada') or asig.get("estado_operativo") in ('COMPLETADA', 'FINALIZADA'):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"La asignación {id_asignacion} ya ha sido liquidada y cerrada previamente."
+            )
+
+        id_sucursal = asig.get("IdSucursal")
+        id_repartidor = datos.get("IdUsuarioRepartidor") or asig.get("IdUsuarioRepartidor")
+
+        # 2. Resolver IdAperturaCierreCaja activa o reciente para la sucursal
+        sql_caja = """
+            SELECT acc."IdAperturaCierreCaja" 
+            FROM "AperturaCierreCaja" acc
+            JOIN "Caja" c ON acc."IdCaja" = c."IdCaja"
+            WHERE c."IdSucursal" = :id_sucursal
+            ORDER BY acc."IdAperturaCierreCaja" DESC 
+            LIMIT 1;
+        """
+        row_caja = self.caller.LlamarUnRegistro(sql_caja, {"id_sucursal": id_sucursal})
+        id_apertura_caja = row_caja.get("IdAperturaCierreCaja") if row_caja else 1
+
+        # 3. Transacción atómica: Actualizar AsignacionRuta a Finalizada / COMPLETADA
         sql_update_asig = """
             UPDATE "AsignacionRuta"
-            SET "Estado" = 'Completada',
+            SET "Estado" = 'Finalizada',
+                "estado_operativo" = 'COMPLETADA',
                 "KilometrajeFinal" = COALESCE(:km_final, "KilometrajeFinal"),
-                "Observacion" = COALESCE(:obs, "Observacion")
+                "Observacion" = COALESCE(:obs, "Observacion"),
+                "cerrado_por_id" = :id_usuario_aprueba
             WHERE "IdAsignacionRuta" = :id_asignacion
             RETURNING *;
         """
         self.caller.LlamarUnRegistro(sql_update_asig, {
             "id_asignacion": id_asignacion,
             "km_final": datos.get("KilometrajeFinal"),
-            "obs": datos.get("Observacion")
+            "obs": datos.get("Observacion") or datos.get("ObservacionLiquidacion"),
+            "id_usuario_aprueba": id_usuario_aprueba
         })
+
+        # 4. Insertar registro oficial de Rendición en RendicionRuta
+        diferencia = float(datos.get("Diferencia") or 0.0)
+        conciliada = bool(datos.get("Conciliada", abs(diferencia) < 0.01))
+        estado_conciliacion = "CONCILIADO" if conciliada and abs(diferencia) < 0.01 else "CON_DIFERENCIA"
+        monto_faltante = abs(diferencia) if diferencia < 0 else 0.0
 
         sql_rend = """
             INSERT INTO "RendicionRuta" (
-                "IdUsuarioRepartidor", "IdAsignacionRuta", "FechaRendicion",
+                "IdUsuarioRepartidor", "IdAperturaCierreCaja", "IdAsignacionRuta", "FechaRendicion",
                 "MontoTotalCobradoRuta", "MontoEfectivoEntregado", "MontoTransferenciaReportada",
-                "MontoQrReportado", "Diferencia", "Conciliada", "IdUsuarioAprueba", "Observacion"
+                "MontoQrReportado", "Conciliada", "IdUsuarioAprueba", "Observacion",
+                "MontoFaltante", "CantidadMerma", "ObservacionesCierre", "EstadoConciliacion",
+                "IdSucursal", "SobrantePermaneceEnCamion", "ValorSobranteRevalorizado"
             ) VALUES (
-                :IdUsuarioRepartidor, :IdAsignacionRuta, NOW(),
+                :IdUsuarioRepartidor, :IdAperturaCierreCaja, :IdAsignacionRuta, NOW() AT TIME ZONE 'America/La_Paz',
                 :MontoTotalCobradoRuta, :MontoEfectivoEntregado, :MontoTransferenciaReportada,
-                :MontoQrReportado, :Diferencia, :Conciliada, :IdUsuarioAprueba, :Observacion
+                :MontoQrReportado, :Conciliada, :IdUsuarioAprueba, :Observacion,
+                :MontoFaltante, :CantidadMerma, :ObservacionesCierre, :EstadoConciliacion,
+                :IdSucursal, :SobrantePermaneceEnCamion, :ValorSobranteRevalorizado
             ) RETURNING *;
         """
         params_rend = {
-            "IdUsuarioRepartidor": datos["IdUsuarioRepartidor"],
+            "IdUsuarioRepartidor": id_repartidor,
+            "IdAperturaCierreCaja": id_apertura_caja,
             "IdAsignacionRuta": id_asignacion,
-            "MontoTotalCobradoRuta": datos.get("MontoTotalCobradoRuta", 0.0),
-            "MontoEfectivoEntregado": datos.get("MontoEfectivoEntregado", 0.0),
-            "MontoTransferenciaReportada": datos.get("MontoTransferenciaReportada", 0.0),
-            "MontoQrReportado": datos.get("MontoQrReportado", 0.0),
-            "Diferencia": datos.get("Diferencia", 0.0),
-            "Conciliada": datos.get("Conciliada", True),
+            "MontoTotalCobradoRuta": float(datos.get("MontoTotalCobradoRuta") or 0.0),
+            "MontoEfectivoEntregado": float(datos.get("MontoEfectivoEntregado") or 0.0),
+            "MontoTransferenciaReportada": float(datos.get("MontoTransferenciaReportada") or 0.0),
+            "MontoQrReportado": float(datos.get("MontoQrReportado") or 0.0),
+            "Conciliada": conciliada,
             "IdUsuarioAprueba": id_usuario_aprueba,
-            "Observacion": datos.get("ObservacionLiquidacion")
+            "Observacion": datos.get("ObservacionLiquidacion") or datos.get("Observacion"),
+            "MontoFaltante": monto_faltante,
+            "CantidadMerma": float(datos.get("CantidadMerma") or 0.0),
+            "ObservacionesCierre": datos.get("ObservacionLiquidacion") or datos.get("Observacion"),
+            "EstadoConciliacion": estado_conciliacion,
+            "IdSucursal": id_sucursal,
+            "SobrantePermaneceEnCamion": datos.get("SobrantePermaneceEnCamion", True),
+            "ValorSobranteRevalorizado": float(datos.get("ValorSobranteRevalorizado") or 0.0)
         }
-        return self.caller.LlamarUnRegistro(sql_rend, params_rend)
+        res_rendicion = self.caller.LlamarUnRegistro(sql_rend, params_rend, commit=True)
+        return res_rendicion
 
     # -------------------------------------------------------------
     # GENERADOR DIARIO Y REORDENAMIENTO 1..N (SUB-AGENTE A)
