@@ -18,7 +18,7 @@ import {
   Plus,
   Trash2
 } from "lucide-react";
-import { ResolverSolicitudCarga } from "@/services/Logistica/RutaService";
+import { ResolverSolicitudCarga, ObtenerTrackingAsignacion } from "@/services/Logistica/RutaService";
 import { ObtenerInventarioChofer } from "@/services/Logistica/InventarioComercialService";
 import { ObtenerPrecios } from "@/services/Logistica/PrecioService";
 
@@ -88,6 +88,7 @@ export default function BandejaSolicitudCargaModal({
   const [observacionAprobacion, setObservacionAprobacion] = useState("");
   const [itemsEditables, setItemsEditables] = useState([]);
   const [stockRemanente, setStockRemanente] = useState([]);
+  const [resumenRuta, setResumenRuta] = useState(null);
 
   // Catálogo para agregar productos
   const [catalogoPrecios, setCatalogoPrecios] = useState([]);
@@ -214,7 +215,17 @@ export default function BandejaSolicitudCargaModal({
         })
         .catch(() => {});
     }
-  }, [abierto, solicitud, asignacion, idSucursal]);
+
+    if (idAsignacion) {
+      ObtenerTrackingAsignacion(idAsignacion)
+        .then((track) => {
+          if (track) setResumenRuta(track);
+        })
+        .catch(() => setResumenRuta(null));
+    } else {
+      setResumenRuta(null);
+    }
+  }, [abierto, solicitud, asignacion, idSucursal, idAsignacion]);
 
   const handleActualizarCantidadAprobada = (index, nuevaCantidad) => {
     const val = Math.max(0, parseFloat(nuevaCantidad) || 0);
@@ -565,6 +576,41 @@ export default function BandejaSolicitudCargaModal({
                     <span>{resolviendo ? "Enviando..." : "Confirmar observación"}</span>
                   </Button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Contexto Operativo de la Ruta del Día (si ya tiene avance) */}
+          {resumenRuta && (
+            <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-700 font-semibold text-xs">
+                <span className="flex items-center gap-1.5 text-slate-800">
+                  <Truck className="h-4 w-4 text-[#1C96C5]" />
+                  <span>Avance Operativo de la Asignación</span>
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {resumenRuta.NombreRuta || rutaNombre}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Paradas Atendidas</span>
+                  <strong className="text-slate-800 font-mono">
+                    {resumenRuta.ParadasCompletadas || 0} / {resumenRuta.TotalParadas || 0}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Total Cobrado Hoy</span>
+                  <strong className="text-emerald-700 font-mono">
+                    Bs. {parseFloat(resumenRuta.MontoCobradoTotal || 0).toFixed(2)}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Estado en Ruta</span>
+                  <strong className="text-slate-800">
+                    {resumenRuta.EstadoMovimiento || "Activo"}
+                  </strong>
+                </div>
               </div>
             </div>
           )}
