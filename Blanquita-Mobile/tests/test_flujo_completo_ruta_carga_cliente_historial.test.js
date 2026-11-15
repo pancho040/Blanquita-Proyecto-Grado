@@ -1110,7 +1110,8 @@ async function ejecutarSuiteSubagenteD() {
     "La URL de reconexión NO debe contener el token expirado"
   );
 
-  // Conectar con el nuevo token y verificar headers
+  // Si el socket se cierra o requiere reconectar, la nueva conexión lleva el token renovado
+  wsService.desconectar();
   await wsService.conectar(nuevoTokenBackground);
   await new Promise((r) => setTimeout(r, 15));
   const socketRenovado = MockWebSocket.instancias[MockWebSocket.instancias.length - 1];

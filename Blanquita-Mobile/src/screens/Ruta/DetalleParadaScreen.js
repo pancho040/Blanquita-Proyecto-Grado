@@ -103,9 +103,14 @@ export const DetalleParadaScreen = ({ route, navigation }) => {
     pedido.items ||
     parada.PedidosPendientes ||
     [];
-  const estadoParada = String(parada.Estado || parada.estado || 'PENDIENTE').toUpperCase();
-  const yaEntregado = estadoParada === 'ENTREGADO';
-  const esNoEntregado = estadoParada === 'NO_ENTREGADO';
+  const estadoParadaRaw = String(
+    parada.Estado || parada.estado || parada.EstadoEntrega || parada.estado_entrega || 'PENDIENTE'
+  ).toUpperCase();
+  const yaEntregado =
+    estadoParadaRaw === 'ENTREGADO' || estadoParadaRaw === 'ENTREGADA' || parada.IdEstadoPedido === 3;
+  const esNoEntregado =
+    estadoParadaRaw === 'NO_ENTREGADO' || estadoParadaRaw === 'CANCELADO' || parada.IdEstadoPedido === 4;
+  const estadoParada = yaEntregado ? 'ENTREGADO' : (esNoEntregado ? 'NO_ENTREGADO' : 'PENDIENTE');
 
   const handleLlamar = () => {
     const tel = parada.cliente?.telefono || parada.Telefono;

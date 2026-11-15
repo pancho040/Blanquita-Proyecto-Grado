@@ -38,7 +38,10 @@ let testsPasados = 0;
 for (const file of testFiles) {
   const filePath = path.join(__dirname, file);
   console.log(`>>> Ejecutando: ${file}`);
-  const result = spawnSync("node", [filePath], { stdio: "inherit" });
+  const result = spawnSync("node", [filePath], { 
+    stdio: "inherit",
+    cwd: path.resolve(__dirname, "..")
+  });
   if (result.status === 0) {
     testsPasados++;
     console.log(`[OK] ${file} completado con éxito.\n`);

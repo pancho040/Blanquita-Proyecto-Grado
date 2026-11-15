@@ -8,6 +8,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { Colors } from "../../constants/Colors";
 import { Header } from "../../components/common/Header";
@@ -32,6 +34,10 @@ import {
   CreditCard,
   FileText,
   XCircle,
+  Calendar,
+  ChevronRight,
+  X,
+  MapPin,
 } from "lucide-react-native";
 
 export const HistorialRutaScreen = ({ navigation }) => {
@@ -39,6 +45,45 @@ export const HistorialRutaScreen = ({ navigation }) => {
   const [cargando, setCargando] = useState(false);
   const [operaciones, setOperaciones] = useState([]);
   const [filtroSeleccionado, setFiltroSeleccionado] = useState("TODOS"); // 'TODOS' | 'APROBADO' | 'PENDIENTE' | 'OBSERVADO'
+  const [seccionActiva, setSeccionActiva] = useState("HOY"); // 'HOY' | 'JORNADAS'
+  const [jornadas, setJornadas] = useState([]);
+  const [cargandoJornadas, setCargandoJornadas] = useState(false);
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState(null);
+  const [detalleJornada, setDetalleJornada] = useState(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [modalDetalleVisible, setModalDetalleVisible] = useState(false);
+
+  const cargarJornadas = useCallback(async () => {
+    setCargandoJornadas(true);
+    try {
+      const res = await ClientesApi.obtenerHistorialJornadas();
+      if (res.success && Array.isArray(res.jornadas)) {
+        setJornadas(res.jornadas);
+      }
+    } catch (_err) {
+      console.log("[HistorialRutaScreen] Error cargando jornadas:", _err.message);
+    } finally {
+      setCargandoJornadas(false);
+    }
+  }, []);
+
+  const verDetalleJornada = async (jornada) => {
+    setJornadaSeleccionada(jornada);
+    setModalDetalleVisible(true);
+    setCargandoDetalle(true);
+    try {
+      const res = await ClientesApi.obtenerDetalleJornadaHistorial(jornada.fecha);
+      if (res.success && res.detalle) {
+        setDetalleJornada(res.detalle);
+      } else {
+        setDetalleJornada(null);
+      }
+    } catch (_e) {
+      setDetalleJornada(null);
+    } finally {
+      setCargandoDetalle(false);
+    }
+  };
 
   /**
    * Cargar y unificar operaciones de hoy:
@@ -228,8 +273,12 @@ export const HistorialRutaScreen = ({ navigation }) => {
   }, [isOnline]);
 
   useEffect(() => {
-    cargarHistorial();
-  }, [cargarHistorial]);
+    if (seccionActiva === "HOY") {
+      cargarHistorial();
+    } else {
+      cargarJornadas();
+    }
+  }, [seccionActiva, cargarHistorial, cargarJornadas]);
 
   // Totales y estadísticas del día
   const metricas = useMemo(() => {
@@ -423,102 +472,299 @@ export const HistorialRutaScreen = ({ navigation }) => {
     </View>
   );
 
+  const renderJornadaItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.jornadaCard}
+      onPress={() => verDetalleJornada(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.jornadaHeader}>
+        <View style={styles.jornadaIconBox}>
+          <Calendar size={18} color="#0284C7" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.jornadaFecha}>{item.fecha}</Text>
+          <Text style={styles.jornadaRuta} numberOfLines={1}>
+            {item.nombre_ruta || item.ruta || "Ruta del Día"}
+          </Text>
+        </View>
+        <ChevronRight size={18} color="#94A3B8" />
+      </View>
+
+      <View style={styles.jornadaDetallesRow}>
+        <View style={styles.jornadaStatCol}>
+          <Text style={styles.jornadaStatLabel}>Paradas Atendidas</Text>
+          <Text style={styles.jornadaStatVal}>
+            {item.paradas_atendidas ?? item.entregadas ?? 0}/{item.total_paradas ?? item.paradas ?? 0}
+          </Text>
+        </View>
+
+        <View style={styles.jornadaStatDivider} />
+
+        <View style={styles.jornadaStatCol}>
+          <Text style={styles.jornadaStatLabel}>Total Cobrado</Text>
+          <Text style={[styles.jornadaStatVal, { color: "#166534" }]}>
+            Bs. {Number(item.total_cobrado || item.cobrado || 0).toFixed(2)}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderEmptyJornadas = () => (
+    <View style={styles.emptyContainer}>
+      <Calendar size={42} color={Colors.textMuted} />
+      <Text style={styles.emptyTitulo}>Sin jornadas anteriores registradas</Text>
+      <Text style={styles.emptySub}>
+        Los cierres y hojas de ruta de días previos aparecerán aquí organizados por fecha.
+      </Text>
+      <TouchableOpacity style={styles.btnActualizarVacio} onPress={cargarJornadas}>
+        <RotateCw size={14} color={Colors.primary} />
+        <Text style={styles.btnActualizarVacioTexto}>Actualizar</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <Header
         title="Historial de Ruta"
-        subtitle="Entregas y cobros con estado de revisión web"
+        subtitle={seccionActiva === "HOY" ? "Entregas y cobros con estado de revisión web" : "Jornadas anteriores por fecha (Solo Lectura)"}
         showBackButton
       />
 
-      {/* Panel de Resumen Superior */}
-      <View style={styles.metricasPanel}>
-        <View style={styles.metricaTotalRow}>
-          <View>
-            <Text style={styles.metricaTotalLabel}>Total Registrado Hoy</Text>
-            <Text style={styles.metricaTotalMonto}>
-              Bs. {metricas.totalRecaudado.toFixed(2)}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={cargarHistorial}
-            disabled={cargando}
-            activeOpacity={0.7}
-          >
-            <RotateCw size={16} color={Colors.primary} />
-            <Text style={styles.refreshBtnText}>Actualizar</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Selector Superior: Operaciones de Hoy vs Jornadas Anteriores */}
+      <View style={styles.tabSelectorContainer}>
+        <TouchableOpacity
+          style={[styles.tabSelectorBtn, seccionActiva === "HOY" && styles.tabSelectorBtnActivo]}
+          onPress={() => setSeccionActiva("HOY")}
+          activeOpacity={0.8}
+        >
+          <Clock size={14} color={seccionActiva === "HOY" ? "#FFFFFF" : "#64748B"} />
+          <Text style={[styles.tabSelectorText, seccionActiva === "HOY" && styles.tabSelectorTextActivo]}>
+            Operaciones de Hoy
+          </Text>
+        </TouchableOpacity>
 
-        {/* Chips de Conteo por Estado */}
-        <View style={styles.chipsRow}>
-          <View style={[styles.statChip, { backgroundColor: "#DCFCE7" }]}>
-            <Text style={[styles.statChipNum, { color: "#15803D" }]}>{metricas.aprobadas}</Text>
-            <Text style={[styles.statChipLabel, { color: "#166534" }]}>Aprobadas</Text>
-          </View>
-
-          <View style={[styles.statChip, { backgroundColor: "#E0F2FE" }]}>
-            <Text style={[styles.statChipNum, { color: "#0369A1" }]}>{metricas.pendientesWeb}</Text>
-            <Text style={[styles.statChipLabel, { color: "#075985" }]}>En Revisión</Text>
-          </View>
-
-          <View style={[styles.statChip, { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[styles.statChipNum, { color: "#B45309" }]}>{metricas.pendientesEnviar}</Text>
-            <Text style={[styles.statChipLabel, { color: "#92400E" }]}>En Cola</Text>
-          </View>
-
-          <View style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}>
-            <Text style={[styles.statChipNum, { color: "#B91C1C" }]}>{metricas.observadas}</Text>
-            <Text style={[styles.statChipLabel, { color: "#991B1B" }]}>Observadas</Text>
-          </View>
-        </View>
-
-        {/* Filtros Rápidos */}
-        <View style={styles.filtrosRow}>
-          {[
-            { id: "TODOS", label: "Todas" },
-            { id: "APROBADO", label: "Aprobadas" },
-            { id: "PENDIENTE", label: "Pendientes" },
-            { id: "OBSERVADO", label: "Observadas" },
-          ].map((f) => (
-            <TouchableOpacity
-              key={f.id}
-              style={[
-                styles.filtroBtn,
-                filtroSeleccionado === f.id && styles.filtroBtnActivo,
-              ]}
-              onPress={() => setFiltroSeleccionado(f.id)}
-            >
-              <Text
-                style={[
-                  styles.filtroBtnText,
-                  filtroSeleccionado === f.id && styles.filtroBtnTextActivo,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <TouchableOpacity
+          style={[styles.tabSelectorBtn, seccionActiva === "JORNADAS" && styles.tabSelectorBtnActivo]}
+          onPress={() => setSeccionActiva("JORNADAS")}
+          activeOpacity={0.8}
+        >
+          <Calendar size={14} color={seccionActiva === "JORNADAS" ? "#FFFFFF" : "#64748B"} />
+          <Text style={[styles.tabSelectorText, seccionActiva === "JORNADAS" && styles.tabSelectorTextActivo]}>
+            Jornadas Anteriores
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Lista de Operaciones */}
-      <FlatList
-        data={operacionesFiltradas}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={renderItem}
-        ListEmptyComponent={renderEmpty}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={cargando}
-            onRefresh={cargarHistorial}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+      {seccionActiva === "HOY" ? (
+        <>
+          {/* Panel de Resumen Superior Hoy */}
+          <View style={styles.metricasPanel}>
+            <View style={styles.metricaTotalRow}>
+              <View>
+                <Text style={styles.metricaTotalLabel}>Total Registrado Hoy</Text>
+                <Text style={styles.metricaTotalMonto}>
+                  Bs. {metricas.totalRecaudado.toFixed(2)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.refreshBtn}
+                onPress={cargarHistorial}
+                disabled={cargando}
+                activeOpacity={0.7}
+              >
+                <RotateCw size={16} color={Colors.primary} />
+                <Text style={styles.refreshBtnText}>Actualizar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Chips de Conteo por Estado */}
+            <View style={styles.chipsRow}>
+              <View style={[styles.statChip, { backgroundColor: "#DCFCE7" }]}>
+                <Text style={[styles.statChipNum, { color: "#15803D" }]}>{metricas.aprobadas}</Text>
+                <Text style={[styles.statChipLabel, { color: "#166534" }]}>Aprobadas</Text>
+              </View>
+
+              <View style={[styles.statChip, { backgroundColor: "#E0F2FE" }]}>
+                <Text style={[styles.statChipNum, { color: "#0369A1" }]}>{metricas.pendientesWeb}</Text>
+                <Text style={[styles.statChipLabel, { color: "#075985" }]}>En Revisión</Text>
+              </View>
+
+              <View style={[styles.statChip, { backgroundColor: "#FEF3C7" }]}>
+                <Text style={[styles.statChipNum, { color: "#B45309" }]}>{metricas.pendientesEnviar}</Text>
+                <Text style={[styles.statChipLabel, { color: "#92400E" }]}>En Cola</Text>
+              </View>
+
+              <View style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}>
+                <Text style={[styles.statChipNum, { color: "#B91C1C" }]}>{metricas.observadas}</Text>
+                <Text style={[styles.statChipLabel, { color: "#991B1B" }]}>Observadas</Text>
+              </View>
+            </View>
+
+            {/* Filtros Rápidos */}
+            <View style={styles.filtrosRow}>
+              {[
+                { id: "TODOS", label: "Todas" },
+                { id: "APROBADO", label: "Aprobadas" },
+                { id: "PENDIENTE", label: "Pendientes" },
+                { id: "OBSERVADO", label: "Observadas" },
+              ].map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[
+                    styles.filtroBtn,
+                    filtroSeleccionado === f.id && styles.filtroBtnActivo,
+                  ]}
+                  onPress={() => setFiltroSeleccionado(f.id)}
+                >
+                  <Text
+                    style={[
+                      styles.filtroBtnText,
+                      filtroSeleccionado === f.id && styles.filtroBtnTextActivo,
+                    ]}
+                  >
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Lista de Operaciones Hoy */}
+          <FlatList
+            data={operacionesFiltradas}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            ListEmptyComponent={renderEmpty}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={cargando}
+                onRefresh={cargarHistorial}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            }
           />
-        }
-      />
+        </>
+      ) : (
+        /* Lista de Jornadas Anteriores */
+        <FlatList
+          data={jornadas}
+          keyExtractor={(item) => String(item.fecha || item.id || Math.random())}
+          renderItem={renderJornadaItem}
+          ListEmptyComponent={renderEmptyJornadas}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={cargandoJornadas}
+              onRefresh={cargarJornadas}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
+        />
+      )}
+
+      {/* Modal Detalle de Jornada Histórica */}
+      <Modal
+        visible={modalDetalleVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalDetalleVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitulo}>
+                  Jornada: {jornadaSeleccionada?.fecha}
+                </Text>
+                <Text style={styles.modalSubtitulo} numberOfLines={1}>
+                  {detalleJornada?.nombre_ruta || jornadaSeleccionada?.nombre_ruta || "Ruta"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setModalDetalleVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {cargandoDetalle ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.modalLoadingText}>Cargando detalle de la jornada...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalBody}>
+                {/* Resumen de la Jornada */}
+                <View style={styles.modalResumenBox}>
+                  <View style={styles.modalResumenItem}>
+                    <Text style={styles.modalResumenLabel}>Paradas Totales</Text>
+                    <Text style={styles.modalResumenVal}>
+                      {detalleJornada?.paradas?.length || jornadaSeleccionada?.total_paradas || 0}
+                    </Text>
+                  </View>
+                  <View style={styles.modalResumenItem}>
+                    <Text style={styles.modalResumenLabel}>Total Cobrado</Text>
+                    <Text style={[styles.modalResumenVal, { color: "#166534" }]}>
+                      Bs. {Number(detalleJornada?.total_cobrado || jornadaSeleccionada?.total_cobrado || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Paradas de la jornada */}
+                <Text style={styles.modalSeccionTitulo}>Detalle de Paradas:</Text>
+                {(!detalleJornada?.paradas || detalleJornada.paradas.length === 0) ? (
+                  <Text style={styles.modalEmptyParadas}>
+                    No hay detalle de paradas registrado para esta fecha.
+                  </Text>
+                ) : (
+                  detalleJornada.paradas.map((p, idx) => (
+                    <View key={p.id || idx} style={styles.modalParadaItem}>
+                      <View style={styles.modalParadaHeader}>
+                        <Text style={styles.modalParadaOrden}>#{p.orden || idx + 1}</Text>
+                        <Text style={styles.modalParadaCliente} numberOfLines={1}>
+                          {p.cliente?.razon_social || p.NombreCliente || p.cliente || "Cliente"}
+                        </Text>
+                        <View style={[
+                          styles.modalParadaEstadoBadge,
+                          (p.estado === "ENTREGADO" || p.Estado === "ENTREGADO") ? styles.badgeAprobado : styles.badgePendienteRevision
+                        ]}>
+                          <Text style={[
+                            styles.badgeText,
+                            (p.estado === "ENTREGADO" || p.Estado === "ENTREGADO") ? { color: "#15803D" } : { color: "#0369A1" }
+                          ]}>
+                            {p.estado || p.Estado || "PENDIENTE"}
+                          </Text>
+                        </View>
+                      </View>
+                      {p.pedido && (
+                        <Text style={styles.modalParadaSub}>
+                          Pedido: #{p.pedido.id || p.pedido.IdPedido} • Monto: Bs. {Number(p.pedido.monto_total || 0).toFixed(2)}
+                        </Text>
+                      )}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            )}
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalBtnCerrar}
+                onPress={() => setModalDetalleVisible(false)}
+              >
+                <Text style={styles.modalBtnCerrarText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -797,6 +1043,237 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: Colors.primary,
+  },
+  // Estilos de Selector Superior
+  tabSelectorContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    padding: 4,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  tabSelectorBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 7,
+    borderRadius: 6,
+    gap: 6,
+  },
+  tabSelectorBtnActivo: {
+    backgroundColor: "#0284C7",
+  },
+  tabSelectorText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  tabSelectorTextActivo: {
+    color: "#FFFFFF",
+  },
+  // Estilos de Tarjeta de Jornada
+  jornadaCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 14,
+    marginBottom: 10,
+  },
+  jornadaHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  jornadaIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#E0F2FE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  jornadaFecha: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  jornadaRuta: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  jornadaDetallesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  jornadaStatCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  jornadaStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#CBD5E1",
+  },
+  jornadaStatLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 2,
+  },
+  jornadaStatVal: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  // Estilos Modal Detalle Jornada
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: "85%",
+    minHeight: "50%",
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  modalTitulo: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  modalSubtitulo: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  modalLoading: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  modalLoadingText: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  modalBody: {
+    padding: 16,
+  },
+  modalResumenBox: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  modalResumenItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  modalResumenLabel: {
+    fontSize: 10.5,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  modalResumenVal: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  modalSeccionTitulo: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  modalEmptyParadas: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+    paddingVertical: 20,
+    fontStyle: "italic",
+  },
+  modalParadaItem: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  modalParadaHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  modalParadaOrden: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0284C7",
+  },
+  modalParadaCliente: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalParadaEstadoBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  modalParadaSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 4,
+    paddingLeft: 18,
+  },
+  modalFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  modalBtnCerrar: {
+    backgroundColor: "#0F172A",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalBtnCerrarText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });
 

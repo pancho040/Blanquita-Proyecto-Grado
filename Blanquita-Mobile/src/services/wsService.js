@@ -52,6 +52,10 @@ class WsService {
       clearTimeout(this.ticketTimer);
       this.ticketTimer = null;
     }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   /**
@@ -98,7 +102,8 @@ class WsService {
       baseWs = baseWs.slice(0, -1);
     }
     const tokenVal = token || getTokenEnMemoria() || this.tokenActual || "";
-    const ticketVal = ticket || this.ticketActual || tokenVal;
+    // Solo enviar ticket si existe un ticket efímero real; nunca duplicar el JWT en ticket
+    const ticketVal = ticket || this.ticketActual || "";
 
     const params = [];
     if (tokenVal) {
@@ -223,7 +228,7 @@ class WsService {
       this.debeReconectar = true;
       const url = this.obtenerWsUrl(this.tokenActual, this.ticketActual);
       console.log(
-        `[wsService] Conectando a WebSocket: ${url.replace(/token=([^&]{6})[^&]+/, "token=$1...")}`
+        `[wsService] Conectando a WebSocket: ${url.replace(/(token|ticket)=[^&]+/g, "$1=***REDACTED***")}`
       );
 
       // En React Native WebSocket: enviar token tanto en query param como en cabecera Authorization
@@ -269,6 +274,16 @@ class WsService {
             })
           );
         } catch (_e) {}
+
+        // Heartbeat keepalive cada 25s para mantener el túnel vivo en proxies perimetrales (Render)
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = setInterval(() => {
+          if (this.ws === socketInstancia && this.estaConectadoVal) {
+            try {
+              socketInstancia.send(JSON.stringify({ tipo: "ping" }));
+            } catch (_err) {}
+          }
+        }, 25000);
       };
 
       socketInstancia.onmessage = (event) => {
@@ -408,6 +423,10 @@ class WsService {
    * Cierra el socket nativo limpiando sus listeners para evitar eventos espurios.
    */
   desconectarSocketInterno() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     if (this.ws) {
       try {
         this.ws.onopen = null;
@@ -421,15 +440,18 @@ class WsService {
   }
 
   /**
-   * Actualiza el token activo y fuerza una reconexión inmediata si el token es nuevo.
-   * Cancela el socket previo y reinicia el contador de backoff.
+   * Actualiza el token activo. Si el socket ya está conectado y saludable,
+   * preserva la conexión existente en memoria sin abortar el reparto.
    */
   actualizarTokenYReconectar(nuevoToken) {
     if (!esTokenValido(nuevoToken)) return;
 
-    // Si el socket actual ya está conectado con ESE MISMO token, no desconectar ni reconectar en falso
-    if (this.estaConectado() && this.tokenActual === nuevoToken) {
-      console.log("[wsService] Socket ya conectado con el mismo token; se omite reconexión innecesaria.");
+    // Si el socket actual ya está conectado y sano, NO destruirlo en pleno reparto:
+    // guardamos el nuevo token en memoria para cuando sea necesario reconectar naturalmente.
+    if (this.estaConectado()) {
+      console.log("[wsService] Socket ya conectado y sano; se actualiza token en memoria sin reiniciar canal.");
+      this.tokenActual = nuevoToken;
+      this.reintentos = 0;
       this.cancelarFallbackTicket();
       return;
     }
@@ -440,7 +462,7 @@ class WsService {
       return;
     }
 
-    console.log("[wsService] Actualizando token y reconectando WebSocket de inmediato...");
+    console.log("[wsService] Actualizando token e iniciando conexión WebSocket...");
 
     // Limpia temporizadores pendientes y cancela promesas residuales de ticket
     this.limpiarTemporizadores();

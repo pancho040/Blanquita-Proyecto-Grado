@@ -479,6 +479,16 @@ export const HojaRutaScreen = ({ navigation }) => {
                 <UserPlus size={14} color="#FFFFFF" />
                 <Text style={styles.btnNuevoClienteText}>+ Cliente</Text>
               </TouchableOpacity>
+
+              {/* Botón Acceso a Historial de Jornadas */}
+              <TouchableOpacity
+                style={styles.btnHistorial}
+                onPress={() => navigation.navigate('HistorialRuta')}
+                activeOpacity={0.8}
+              >
+                <Clock size={13} color="#0284C7" />
+                <Text style={styles.btnHistorialText}>Historial</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -589,14 +599,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 8,
-    gap: 5,
+    gap: 4,
   },
   btnNuevoClienteText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  btnHistorial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 4,
+  },
+  btnHistorialText: {
+    color: '#0284C7',
+    fontSize: 11.5,
     fontWeight: '700',
   },
   tabBtn: {

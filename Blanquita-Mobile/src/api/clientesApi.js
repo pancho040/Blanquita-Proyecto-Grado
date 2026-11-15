@@ -1,4 +1,5 @@
 import apiClient, { parsearDetalleErrorServidor } from "./client";
+import { LocalDB } from "../database/localDb";
 
 function procesarErrorApi(err) {
   const status = err.status || err.response?.status;
@@ -177,6 +178,46 @@ export const ClientesApi = {
       return { success: true, historial };
     }
     return { success: false, historial: [], error: res.error };
+  },
+
+  /**
+   * Obtener lista de jornadas anteriores trabajadas (F6 - Regla de Dominio por fecha)
+   * GET /api/movil/v1/chofer/historial
+   */
+  async obtenerHistorialJornadas() {
+    try {
+      const response = await apiClient.get("/api/movil/v1/chofer/historial");
+      const jornadas = response.data?.datos || response.data || [];
+      await LocalDB.guardarHistorialJornadas(jornadas);
+      return { success: true, jornadas, fuente: "red" };
+    } catch (err) {
+      const offlineData = await LocalDB.obtenerHistorialJornadas();
+      if (offlineData && offlineData.length > 0) {
+        return { success: true, jornadas: offlineData, fuente: "offline" };
+      }
+      return procesarErrorApi(err);
+    }
+  },
+
+  /**
+   * Obtener detalle completo de una jornada histórica (F6 - Regla de Dominio por fecha)
+   * GET /api/movil/v1/chofer/historial/{fecha}
+   */
+  async obtenerDetalleJornadaHistorial(fecha) {
+    try {
+      const response = await apiClient.get(`/api/movil/v1/chofer/historial/${fecha}`);
+      const detalle = response.data?.datos || response.data || null;
+      if (detalle) {
+        await LocalDB.guardarDetalleJornadaHistorial(fecha, detalle);
+      }
+      return { success: true, detalle, fuente: "red" };
+    } catch (err) {
+      const offlineDetalle = await LocalDB.obtenerDetalleJornadaHistorial(fecha);
+      if (offlineDetalle) {
+        return { success: true, detalle: offlineDetalle, fuente: "offline" };
+      }
+      return procesarErrorApi(err);
+    }
   },
 
   // Registrar nuevo cliente directo o punto de venta desde la app móvil (legado)

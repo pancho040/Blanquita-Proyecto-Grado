@@ -438,6 +438,53 @@ export const LocalDB = {
     }
   },
 
+  // -------------------------------------------------------------
+  // HISTORIAL DE JORNADAS (F6 - Regla de Dominio: Por Fecha)
+  // -------------------------------------------------------------
+  async guardarHistorialJornadas(jornadas) {
+    try {
+      await AsyncStorage.setItem("@blanquita_historial_jornadas", JSON.stringify(jornadas || []));
+      return true;
+    } catch (e) {
+      console.error("Error guardando historial jornadas en cache local:", e);
+      return false;
+    }
+  },
+
+  async obtenerHistorialJornadas() {
+    try {
+      const raw = await AsyncStorage.getItem("@blanquita_historial_jornadas");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error("Error leyendo historial jornadas de cache local:", e);
+      return [];
+    }
+  },
+
+  async guardarDetalleJornadaHistorial(fecha, detalle) {
+    try {
+      if (!fecha) return false;
+      const clave = `@blanquita_historial_jornada_${fecha}`;
+      await AsyncStorage.setItem(clave, JSON.stringify(detalle || null));
+      return true;
+    } catch (e) {
+      console.error(`Error guardando jornada ${fecha} en cache local:`, e);
+      return false;
+    }
+  },
+
+  async obtenerDetalleJornadaHistorial(fecha) {
+    try {
+      if (!fecha) return null;
+      const clave = `@blanquita_historial_jornada_${fecha}`;
+      const raw = await AsyncStorage.getItem(clave);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error(`Error leyendo jornada ${fecha} de cache local:`, e);
+      return null;
+    }
+  },
+
   // Limpiar toda la base local (excepto cola de sincronización si tuviera pendientes)
   async limpiarTodo() {
     try {

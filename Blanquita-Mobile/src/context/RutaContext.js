@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import { LogisticaApi, ESTADOS_RUTA } from "../api/logisticaApi";
 import { LocalDB } from "../database/localDb";
 import { SyncQueue } from "../database/syncQueue";
@@ -9,6 +10,29 @@ import { useLocation } from "./LocationContext";
 import { useAuth } from "./AuthContext";
 
 export { ESTADOS_RUTA };
+
+/**
+ * Normaliza y verifica si una parada ha sido entregada, tolerando contratos
+ * en mayúsculas, minúsculas o valores numéricos (IdEstadoPedido === 3).
+ */
+export function esParadaEntregada(p) {
+  if (!p) return false;
+  const raw = String(
+    p.Estado || p.estado || p.EstadoEntrega || p.estado_entrega || ""
+  ).toUpperCase();
+  return raw === "ENTREGADO" || raw === "ENTREGADA" || p.IdEstadoPedido === 3;
+}
+
+export function normalizarEstadoParada(p) {
+  if (!p) return "PENDIENTE";
+  if (esParadaEntregada(p)) return "ENTREGADO";
+  const raw = String(
+    p.Estado || p.estado || p.EstadoEntrega || p.estado_entrega || ""
+  ).toUpperCase();
+  if (raw === "NO_ENTREGADO" || raw === "CANCELADO" || raw === "CANCELADA" || p.IdEstadoPedido === 4) return "NO_ENTREGADO";
+  if (raw === "EN_CAMINO" || raw === "EN CAMINO" || p.IdEstadoPedido === 2) return "EN_CAMINO";
+  return "PENDIENTE";
+}
 
 /**
  * Determina el estado del flujo de ruta del chofer:
@@ -430,6 +454,22 @@ export function RutaProvider({ children }) {
     };
   }, [usuario, asignacionActiva]);
 
+  // Al volver a la app (AppState active) se dispara sync de la cola y refresco de la hoja de ruta
+  useEffect(() => {
+    const subAppState = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        if (cargarHojaRutaRef.current) {
+          cargarHojaRutaRef.current();
+        }
+        runSyncIfConnected().catch(() => {});
+      }
+    });
+
+    return () => {
+      if (subAppState?.remove) subAppState.remove();
+    };
+  }, []);
+
   /**
    * Carga la Hoja de Ruta Diaria (HU-30: Visualizar lista de rutas y pedidos)
    * Si hay red: consulta API central y actualiza almacenamiento local.
@@ -502,7 +542,58 @@ export function RutaProvider({ children }) {
             asignacionActiva?.paradas ||
             [];
 
-          rutaChofer.paradas = paradasMapeadas;
+          // Merge defensivo de paradas para no pisar entregas locales ni cola de sincronización
+          let paradasFusionadas = paradasMapeadas;
+          try {
+            const rutaLocal = await LocalDB.obtenerRutaActiva();
+            const paradasLocales = rutaLocal?.paradas || asignacionActiva?.paradas || [];
+            const operacionesCola = await SyncQueue.obtenerCola();
+            const idsPuntosVentaEnCola = new Set(
+              (operacionesCola || [])
+                .filter((op) => op.tipo === "ENTREGA" || op.tipo === "ENTREGA_CON_COBRO")
+                .map((op) => op.datos?.id_punto_venta || op.datos?.idPuntoVenta)
+                .filter(Boolean)
+            );
+
+            paradasFusionadas = paradasMapeadas.map((pServidor) => {
+              const idPv = pServidor.IdPuntoVenta || pServidor.id_punto_venta || pServidor.id;
+              const pLocal = paradasLocales.find((pl) => (pl.IdPuntoVenta || pl.id_punto_venta || pl.id) === idPv);
+
+              if (idPv && idsPuntosVentaEnCola.has(idPv)) {
+                return {
+                  ...pServidor,
+                  Estado: "ENTREGADO",
+                  estado: "ENTREGADO",
+                  estado_entrega: "Entregado",
+                  EstadoEntrega: "Entregado",
+                  pendienteSincronizar: true,
+                  ...(pLocal || {})
+                };
+              }
+
+              if (pLocal && esParadaEntregada(pLocal) && !esParadaEntregada(pServidor)) {
+                return {
+                  ...pServidor,
+                  ...pLocal,
+                  Estado: "ENTREGADO",
+                  estado: "ENTREGADO",
+                  estado_entrega: "Entregado",
+                  EstadoEntrega: "Entregado"
+                };
+              }
+
+              const stNorm = normalizarEstadoParada(pServidor);
+              return {
+                ...pServidor,
+                Estado: stNorm,
+                estado: stNorm
+              };
+            });
+          } catch (_mergeErr) {
+            console.log("[RutaContext] Aviso en merge defensivo de paradas:", _mergeErr?.message);
+          }
+
+          rutaChofer.paradas = paradasFusionadas;
 
           // Sello de carga aprobada y de solicitud
           const selloAprobado = await LocalDB.obtenerSelloCargaAprobada(idAsig);
@@ -1200,7 +1291,7 @@ export function RutaProvider({ children }) {
   // Gatekeeper: Solo desbloquear paradas si la ruta está formalmente APROBADA_EN_RUTA
   const paradasVisibles = estadoRuta === ESTADOS_RUTA.APROBADA_EN_RUTA ? paradasList : [];
 
-  const entregadosCount = paradasVisibles.filter((p) => (p.Estado || p.estado) === "ENTREGADO").length;
+  const entregadosCount = paradasVisibles.filter((p) => esParadaEntregada(p)).length;
   const pendientesCount = Math.max(0, paradasVisibles.length - entregadosCount);
 
   const metricas = {
@@ -1226,7 +1317,8 @@ export function RutaProvider({ children }) {
         paradas: paradasVisibles.map((p, idx) => ({
           id: p.IdPuntoVenta || p.id || idx + 1,
           secuencia: p.OrdenVisita || p.orden || idx + 1,
-          estado: (p.Estado || p.estado || "PENDIENTE").toUpperCase(),
+          estado: normalizarEstadoParada(p),
+          pendienteSincronizar: Boolean(p.pendienteSincronizar),
           cliente_id: p.IdCliente || p.cliente?.id,
           cliente: {
             id: p.IdCliente || p.cliente?.id,

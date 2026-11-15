@@ -9,6 +9,7 @@ import { DetalleParadaScreen } from '../screens/Ruta/DetalleParadaScreen';
 import { RegistrarEntregaScreen } from '../screens/Ruta/RegistrarEntregaScreen';
 import { RegistrarCobroScreen } from '../screens/Ruta/RegistrarCobroScreen';
 import { NuevoClienteScreen } from '../screens/Clientes/NuevoClienteScreen';
+import { HistorialRutaScreen } from '../screens/Ruta/HistorialRutaScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +32,7 @@ export const linkingConfig = {
       RegistrarEntrega: 'entrega/:id',
       RegistrarCobro: 'cobro/:id',
       NuevoCliente: 'cliente/nuevo',
+      HistorialRuta: 'historial',
     },
   },
 };
@@ -63,6 +65,7 @@ export const AppNavigator = () => {
           <Stack.Screen name="RegistrarEntrega" component={RegistrarEntregaScreen} />
           <Stack.Screen name="RegistrarCobro" component={RegistrarCobroScreen} />
           <Stack.Screen name="NuevoCliente" component={NuevoClienteScreen} />
+          <Stack.Screen name="HistorialRuta" component={HistorialRutaScreen} />
         </>
       )}
     </Stack.Navigator>

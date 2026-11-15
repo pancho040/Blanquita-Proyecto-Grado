@@ -163,8 +163,8 @@ async function runTests() {
   );
   console.log("  ✓ Cabecera Authorization: Bearer inyectada en opciones de WebSocket");
 
-  // Test 3: actualizarTokenYReconectar cancela socket anterior y reconecta de inmediato
-  console.log("\n>>> Test 3: actualizarTokenYReconectar aborta socket previo y reconecta");
+  // Test 3: actualizarTokenYReconectar no reconecta si el socket está abierto, preserva socket sano y actualiza token en memoria
+  console.log("\n>>> Test 3: actualizarTokenYReconectar preserva socket sano si está conectado");
   const socketPrevio = wsService.ws;
   wsService.reintentos = 5; // Simular backoff alto acumulado
 
@@ -172,8 +172,8 @@ async function runTests() {
 
   assert.strictEqual(wsService.tokenActual, TOKEN_RENOVADO, "Token actual debe actualizarse");
   assert.strictEqual(wsService.reintentos, 0, "Contador de reintentos debe resetearse a 0");
-  assert.notStrictEqual(wsService.ws, socketPrevio, "El socket previo debe ser descartado");
-  console.log("  ✓ actualizarTokenYReconectar reemplazó socket y reseteó backoff a 0");
+  assert.strictEqual(wsService.ws, socketPrevio, "El socket previo debe ser preservado si está sano");
+  console.log("  ✓ actualizarTokenYReconectar preservó socket sano y actualizó token en memoria");
 
   // Test 4: Suscripción reactiva a setTokenRenovadoListener
   console.log("\n>>> Test 4: Renovación de token en background invoca reconexión automática");

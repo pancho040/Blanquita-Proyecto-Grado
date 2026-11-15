@@ -6,10 +6,10 @@ export const CONFIG = {
   CLIENT_VERSION: "1.0.0",
 
   // --- DESARROLLO LOCAL ---
-  API_BASE_URL: "http://192.168.1.65:8000",
+  //API_BASE_URL: "http://192.168.1.65:8000",
 
   // URL del Servidor Backend FastAPI (Render o Red Local)
-  //API_BASE_URL: "https://blanquita-proyecto-grado-9f7j.onrender.com",
+  API_BASE_URL: "https://blanquita-proyecto-grado-9f7j.onrender.com",
   // 65 segundos en primera llamada para tolerar arranque en frío del plan gratis en Render (~54s)
   API_TIMEOUT_MS: 65000,
   API_MAX_RETRIES: 2,

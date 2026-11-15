@@ -13,10 +13,15 @@ import { Badge } from "../common/Badge";
 export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar }) => {
   const handlePress = onPress || onDetalle;
 
-  const estado = (parada.Estado || parada.estado || "PENDIENTE").toUpperCase();
-  const esEntregado = estado === "ENTREGADO";
-  const esNoEntregado = estado === "NO_ENTREGADO";
+  const estadoRaw = String(
+    parada.Estado || parada.estado || parada.EstadoEntrega || parada.estado_entrega || ""
+  ).toUpperCase();
+  const esEntregado =
+    estadoRaw === "ENTREGADO" || estadoRaw === "ENTREGADA" || parada.IdEstadoPedido === 3;
+  const esNoEntregado =
+    estadoRaw === "NO_ENTREGADO" || estadoRaw === "CANCELADO" || parada.IdEstadoPedido === 4;
   const _esPendiente = !esEntregado && !esNoEntregado;
+  const pendienteSincronizar = Boolean(parada.pendienteSincronizar);
 
   const orden = parada.OrdenVisita || parada.secuencia || parada.orden || "1";
   const nombrePunto =
@@ -59,10 +64,15 @@ export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar 
           </Text>
         </View>
 
-        <Badge
-          text={esEntregado ? "Entregado" : esNoEntregado ? "No Entregado" : "Pendiente"}
-          variant={esEntregado ? "success" : esNoEntregado ? "danger" : "warning"}
-        />
+        <View style={{ alignItems: "flex-end", gap: 3 }}>
+          <Badge
+            text={esEntregado ? "Entregado" : esNoEntregado ? "No Entregado" : "Pendiente"}
+            variant={esEntregado ? "success" : esNoEntregado ? "danger" : "warning"}
+          />
+          {pendienteSincronizar && (
+            <Badge text="Por sincronizar" variant="warning" size="small" />
+          )}
+        </View>
       </View>
 
       {/* Dirección */}

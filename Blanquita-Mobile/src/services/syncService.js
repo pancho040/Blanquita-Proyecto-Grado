@@ -850,11 +850,25 @@ class SyncService {
             serverDetail: error?.serverDetail,
           });
 
-          // Subagente B: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta
+          // Manejo resiliente ante 401: intenta renovar token de inmediato y reintentar la MISMA operación
           const msg = String(mensajeReal).toLowerCase();
           const es401 = status === 401 || msg.includes("token expirado") || msg.includes("sesión expirada");
           if (es401) {
-            console.log("[SyncService] 401 detectado durante la sync. Pausando cola de sincronización.");
+            console.log("[SyncService] 401 detectado en cola. Intentando renovación single-flight de token...");
+            try {
+              const { renovarTokenSingleFlight } = require("../api/client");
+              const tokenRenovado = await renovarTokenSingleFlight();
+              if (tokenRenovado) {
+                console.log("[SyncService] Token renovado con éxito. Reintentando la misma operación inmediatamente...");
+                // Reintentar la MISMA operación en la siguiente iteración
+                i--;
+                continue;
+              }
+            } catch (refErr) {
+              console.log("[SyncService] Falló renovación automática de token en cola:", refErr?.message);
+            }
+
+            console.log("[SyncService] Pausando cola de sincronización tras 401 sin sesión válida.");
             this.notificar({
               enProgreso: false,
               mensaje: "Sesión expirada. Inicia sesión para sincronizar (tus datos están seguros).",
