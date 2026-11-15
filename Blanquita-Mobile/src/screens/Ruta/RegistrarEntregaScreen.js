@@ -26,6 +26,12 @@ import { LogisticaApi } from '../../api/logisticaApi';
 import { ClientesApi } from '../../api/clientesApi';
 import { LocalDB } from '../../database/localDb';
 import { SyncQueue } from '../../database/syncQueue';
+import SyncService from '../../services/syncService';
+import {
+  calcularTotalEntrega,
+  redondearDosDecimales,
+  validarCoherenciaCobro,
+} from '../../utils/calculoEntrega';
 import {
   PackageCheck,
   UserCheck,
@@ -112,12 +118,24 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   } = useRuta();
   const { location, getCurrentCoords } = useLocation();
 
+  // Detección de Modo Corrección de Entrega Rechazada por 422/4xx (Fase 3 y 4)
+  const modoCorreccion = Boolean(
+    route.params?.modoCorreccion ||
+    String(parada?.estado || parada?.Estado || '').toUpperCase() === 'REQUIERE_CORRECCION' ||
+    parada?.operacionId
+  );
+  const operacionIdRechazada = route.params?.operacionId || parada?.operacionId || null;
+  const errorPrevioServidor = route.params?.errorPrevio || parada?.errorSincronizacion || null;
+  const payloadRechazado = route.params?.payloadOriginal || parada?.payloadRechazado || null;
+
   // Stock en camión cargado por el chofer (con fallback a local)
   const [inventarioCamion, setInventarioCamion] = useState([]);
 
   // Estado/Incidencia flexible de la visita (Paso 2)
   // 'NORMAL' | 'PIDIO_MAS' | 'PIDIO_MENOS' | 'ATRASO' | 'REPROGRAMAR'
-  const [situacionVisita, setSituacionVisita] = useState('NORMAL');
+  const [situacionVisita, setSituacionVisita] = useState(() => {
+    return payloadRechazado?.incidencia || 'NORMAL';
+  });
   const [situacionForzadaManual, setSituacionForzadaManual] = useState(false);
 
   // Modal para agregar productos desde el inventario del camión
@@ -125,6 +143,23 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
 
   // 1. Productos a entregar: cantidades 100% editables
   const [items, setItems] = useState(() => {
+    // Si viene de modo corrección con payload previo rechazado
+    if (payloadRechazado && Array.isArray(payloadRechazado.items_entregados) && payloadRechazado.items_entregados.length > 0) {
+      return payloadRechazado.items_entregados.map((it, idx) => ({
+        id: it.id || idx,
+        presentacion_id: it.presentacion_id || it.id_presentacion || idx + 1,
+        producto_nombre: it.producto_nombre || `Producto #${it.presentacion_id}`,
+        cantidadPedida: Number(it.cantidad || 1),
+        cantidadYaEntregada: 0,
+        cantidadPendiente: Number(it.cantidad || 1),
+        cantidadAEntregar: Number(it.cantidad || 1),
+        precio_unitario: Number(it.precio_unitario || 0),
+        es_bandeo: Boolean(it.es_cortesia_bandeo || it.es_bandeo),
+        valor_bandeo: 0,
+        es_agregado_camion: false,
+      }));
+    }
+
     const baseItems = pedido?.items || parada?.PedidosPendientes || [];
     return baseItems.map((i, idx) => {
       const pedida = Number(i.cantidad ?? i.Cantidad ?? 1);
@@ -151,13 +186,31 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const [condicionPago, setCondicionPago] = useState('COMPLETO');
   const [metodoPago, setMetodoPago] = useState('EFECTIVO'); // 'EFECTIVO' | 'QR' | 'TRANSFERENCIA' | 'MIXTO'
 
-  // Pagos en tramos
-  const [montoEfectivo, setMontoEfectivo] = useState('');
-  const [montoQr, setMontoQr] = useState('');
+  // Pagos en tramos (inicializados con payload rechazado si existe)
+  const [montoEfectivo, setMontoEfectivo] = useState(() => {
+    if (payloadRechazado?.cobro?.pagos) {
+      const p = payloadRechazado.cobro.pagos.find((x) => String(x.metodo).toUpperCase() === 'EFECTIVO');
+      return p ? String(p.monto) : '';
+    }
+    return '';
+  });
+  const [montoQr, setMontoQr] = useState(() => {
+    if (payloadRechazado?.cobro?.pagos) {
+      const p = payloadRechazado.cobro.pagos.find((x) => String(x.metodo).toUpperCase() === 'QR');
+      return p ? String(p.monto) : '';
+    }
+    return '';
+  });
   const [refQr, setRefQr] = useState('');
   const [fotoQrUri, setFotoQrUri] = useState(null);
 
-  const [montoTransf, setMontoTransf] = useState('');
+  const [montoTransf, setMontoTransf] = useState(() => {
+    if (payloadRechazado?.cobro?.pagos) {
+      const p = payloadRechazado.cobro.pagos.find((x) => String(x.metodo).toUpperCase() === 'TRANSFERENCIA');
+      return p ? String(p.monto) : '';
+    }
+    return '';
+  });
   const [refTransf, setRefTransf] = useState('');
   const [fotoTransfUri, setFotoTransfUri] = useState(null);
 
@@ -165,14 +218,36 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const [plazoDias, setPlazoDias] = useState('15');
   const [cuotasCredito, setCuotasCredito] = useState('1');
 
+  // Excedente y saldo a favor justificado
+  const [saldoAFavorHabilitado, setSaldoAFavorHabilitado] = useState(() => {
+    return Boolean(payloadRechazado?.excedente || payloadRechazado?.cobro?.excedente);
+  });
+  const [motivoExcedente, setMotivoExcedente] = useState(() => {
+    return payloadRechazado?.motivo_excedente || payloadRechazado?.cobro?.motivo_excedente || '';
+  });
+
   // Datos de entrega y firmas
-  const [receptorNombre, setReceptorNombre] = useState(
-    parada?.cliente?.razon_social || parada?.NombreCliente || ''
-  );
-  const [receptorCi, setReceptorCi] = useState('');
-  const [observaciones, setObservaciones] = useState('');
-  const [firmaChofer, setFirmaChofer] = useState(null);
-  const [firmaCliente, setFirmaCliente] = useState(null);
+  const [receptorNombre, setReceptorNombre] = useState(() => {
+    return (
+      payloadRechazado?.recibido_por ||
+      parada?.cliente?.razon_social ||
+      parada?.NombreCliente ||
+      parada?.NombrePuntoVenta ||
+      ''
+    );
+  });
+  const [receptorCi, setReceptorCi] = useState(() => {
+    return payloadRechazado?.ci_receptor || parada?.cliente?.nit_ci || parada?.cliente?.ci || '';
+  });
+  const [observaciones, setObservaciones] = useState(() => {
+    return payloadRechazado?.observacion || payloadRechazado?.observaciones || '';
+  });
+  const [firmaChofer, setFirmaChofer] = useState(() => {
+    return payloadRechazado?.firma_chofer || null;
+  });
+  const [firmaCliente, setFirmaCliente] = useState(() => {
+    return payloadRechazado?.firma_cliente || null;
+  });
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
@@ -451,31 +526,77 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
     setSituacionVisita(clave);
   };
 
-  // Cálculo de totales financieros
+  // Botones de acción rápida por ítem: fijar cantidad exacta
+  const handleFijarCantidad = (index, cantidadDeseada) => {
+    const itemActual = items[index];
+    if (!itemActual) return;
+    const itemCamion = inventarioCamion.find(
+      (s) => (s.presentacion_id || s.IdPresentacion || s.id) === itemActual.presentacion_id
+    );
+    const saldoCamion = Number(
+      itemCamion?.saldo_camion ?? itemCamion?.cantidad_remanente ?? itemCamion?.cantidad_disponible ?? itemCamion?.cantidad ?? 9999
+    );
+    const cantidadFinal = Math.max(0, Math.min(cantidadDeseada, saldoCamion));
+
+    setItems((prev) => {
+      const actualizados = prev.map((item, i) =>
+        i === index ? { ...item, cantidadAEntregar: cantidadFinal } : item
+      );
+      autoSugerirSituacion(actualizados);
+      return actualizados;
+    });
+  };
+
+  // Ajustar cobro automáticamente al total entregado
+  const handleAjustarCobroAlTotal = (total) => {
+    const totalRedondeado = redondearDosDecimales(total);
+    if (metodoPago === 'EFECTIVO' || condicionPago === 'COMPLETO') {
+      setMontoEfectivo(totalRedondeado > 0 ? totalRedondeado.toFixed(2) : '');
+      setMontoQr('');
+      setMontoTransf('');
+    } else if (metodoPago === 'QR') {
+      setMontoQr(totalRedondeado > 0 ? totalRedondeado.toFixed(2) : '');
+      setMontoEfectivo('');
+      setMontoTransf('');
+    } else if (metodoPago === 'TRANSFERENCIA') {
+      setMontoTransf(totalRedondeado > 0 ? totalRedondeado.toFixed(2) : '');
+      setMontoEfectivo('');
+      setMontoQr('');
+    }
+    setSaldoAFavorHabilitado(false);
+    setMotivoExcedente('');
+  };
+
+  // Cálculo canónico de totales usando función compartida
   const totalBultosAEntregar = useMemo(() => {
     return items.reduce((acc, item) => acc + (item.cantidadAEntregar || 0), 0);
   }, [items]);
 
   const totalMontoEntrega = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const costo = item.es_bandeo ? 0 : (item.cantidadAEntregar || 0) * (item.precio_unitario || 0);
-      return acc + costo;
-    }, 0);
+    const calc = calcularTotalEntrega(
+      items.map((it) => ({
+        cantidad: it.cantidadAEntregar || 0,
+        precio_unitario: it.precio_unitario || 0,
+        es_bandeo: it.es_bandeo,
+        es_cortesia_bandeo: it.es_bandeo,
+      }))
+    );
+    return calc.total;
   }, [items]);
 
-  // Si cambia el total y es pago completo con un solo método, ajustar monto sugerido
+  // Si cambia el total y es pago completo con un solo método, ajustar monto sugerido de forma reactiva
   useEffect(() => {
     if (condicionPago === 'COMPLETO') {
       if (metodoPago === 'EFECTIVO') {
-        setMontoEfectivo(totalMontoEntrega.toFixed(2));
+        setMontoEfectivo(totalMontoEntrega > 0 ? totalMontoEntrega.toFixed(2) : '');
         setMontoQr('');
         setMontoTransf('');
       } else if (metodoPago === 'QR') {
-        setMontoQr(totalMontoEntrega.toFixed(2));
+        setMontoQr(totalMontoEntrega > 0 ? totalMontoEntrega.toFixed(2) : '');
         setMontoEfectivo('');
         setMontoTransf('');
       } else if (metodoPago === 'TRANSFERENCIA') {
-        setMontoTransf(totalMontoEntrega.toFixed(2));
+        setMontoTransf(totalMontoEntrega > 0 ? totalMontoEntrega.toFixed(2) : '');
         setMontoEfectivo('');
         setMontoQr('');
       }
@@ -490,12 +611,16 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const efNum = parseFloat(montoEfectivo) || 0;
   const qrNum = parseFloat(montoQr) || 0;
   const trNum = parseFloat(montoTransf) || 0;
-  const totalPagadoAhora = efNum + qrNum + trNum;
+  const totalPagadoAhora = redondearDosDecimales(efNum + qrNum + trNum);
+
+  const cobroExcedeEntrega = totalPagadoAhora > (totalMontoEntrega + 0.05);
+  const excedenteMonto = cobroExcedeEntrega ? redondearDosDecimales(totalPagadoAhora - totalMontoEntrega) : 0;
+  const excedenteJustificado = saldoAFavorHabilitado && motivoExcedente.trim().length > 0;
 
   const saldoCreditoCalculado = useMemo(() => {
     if (condicionPago === 'COMPLETO') return 0;
     if (condicionPago === 'CREDITO') return totalMontoEntrega;
-    return Math.max(0, totalMontoEntrega - totalPagadoAhora);
+    return Math.max(0, redondearDosDecimales(totalMontoEntrega - totalPagadoAhora));
   }, [condicionPago, totalMontoEntrega, totalPagadoAhora]);
 
   // Validación de fotos obligatorias para QR y Transferencia
@@ -503,9 +628,12 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
   const faltaFotoTransf = trNum > 0 && !fotoTransfUri;
   const faltaFotoObligatoria = faltaFotoQr || faltaFotoTransf;
 
-  // Validación de balance
+  // Validación de balance con soporte de saldo a favor / excedente justificado
   const balanceCorrecto = useMemo(() => {
     if (totalMontoEntrega === 0) return true;
+    if (cobroExcedeEntrega) {
+      return excedenteJustificado;
+    }
     if (condicionPago === 'COMPLETO') {
       return Math.abs(totalPagadoAhora - totalMontoEntrega) < 0.05;
     }
@@ -516,7 +644,7 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return totalPagadoAhora === 0;
     }
     return false;
-  }, [condicionPago, totalMontoEntrega, totalPagadoAhora]);
+  }, [condicionPago, totalMontoEntrega, totalPagadoAhora, cobroExcedeEntrega, excedenteJustificado]);
 
   // Confirmar entrega y cobro
   const handleConfirmarEntregaYCobro = async () => {
@@ -553,10 +681,10 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return;
     }
 
-    if (totalPagadoAhora > (totalMontoEntrega + 0.05)) {
+    if (cobroExcedeEntrega && !excedenteJustificado) {
       Alert.alert(
         'Cobro Excede Entrega',
-        `El importe cobrado (Bs. ${totalPagadoAhora.toFixed(2)}) no puede exceder el total de la entrega (Bs. ${totalMontoEntrega.toFixed(2)}).`
+        `El importe cobrado (Bs. ${totalPagadoAhora.toFixed(2)}) excede el total de la entrega (Bs. ${totalMontoEntrega.toFixed(2)}) en Bs. ${excedenteMonto.toFixed(2)}.\n\nPresione "Ajustar al total entregado" o habilite "Registrar excedente como saldo a favor" e ingrese el motivo.`
       );
       return;
     }
@@ -720,6 +848,15 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       cobro: bloqueCobro,
     };
 
+    if (saldoAFavorHabilitado && excedenteMonto > 0) {
+      payloadEntregaCompuesta.excedente = excedenteMonto;
+      payloadEntregaCompuesta.motivo_excedente = motivoExcedente.trim();
+      if (payloadEntregaCompuesta.cobro) {
+        payloadEntregaCompuesta.cobro.excedente = excedenteMonto;
+        payloadEntregaCompuesta.cobro.motivo_excedente = motivoExcedente.trim();
+      }
+    }
+
     if (esNuevoClienteEnRuta) {
       const payloadClienteRuta = {
         ...(route.params?.nuevoClientePayload || {
@@ -799,6 +936,37 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (modoCorreccion && operacionIdRechazada) {
+      try {
+        await SyncQueue.actualizarOperacion(
+          operacionIdRechazada,
+          payloadEntregaCompuesta,
+          "pendiente de sincronizar"
+        );
+        const pId = idPvFinal || parada?.id || parada?.IdPuntoVenta;
+        await LocalDB.actualizarEstadoParada(pId, "ENTREGADO", {
+          ...payloadEntregaCompuesta,
+          operacionId: operacionIdRechazada,
+        });
+        if (Array.isArray(payloadEntregaCompuesta.items_entregados)) {
+          await LocalDB.descontarInventarioCamion(payloadEntregaCompuesta.items_entregados);
+        }
+        setLoading(false);
+        // Reintentar sincronización inmediatamente en background
+        SyncService.procesarCola(true).catch(() => {});
+        Alert.alert(
+          "Entrega Corregida",
+          "Los datos de la entrega fueron corregidos y puestos en cola para sincronizar con el servidor.",
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+        return;
+      } catch (errCorr) {
+        setLoading(false);
+        Alert.alert("Error al guardar corrección", errCorr?.message || "No se pudo actualizar la entrega.");
+        return;
+      }
+    }
+
     const resultado = await registrarEntrega(idPvFinal || parada?.id || parada?.IdPuntoVenta, payloadEntregaCompuesta);
     setLoading(false);
 
@@ -860,6 +1028,22 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Banner de Modo Corrección de Error 422 del Servidor */}
+          {modoCorreccion && (
+            <View style={styles.bannerModoCorreccion}>
+              <AlertTriangle size={24} color="#B91C1C" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerModoCorreccionTitulo}>
+                  Corrección requerida por el servidor
+                </Text>
+                <Text style={styles.bannerModoCorreccionTexto}>
+                  {errorPrevioServidor ||
+                    'El monto cobrado excede el total efectivamente entregado. Corrija las cantidades o el cobro y vuelva a guardar.'}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* 1. Encabezado del Cliente y Ubicación */}
           <Card title="Datos de la Parada" icon={Building} style={styles.cardSection}>
             <Text style={styles.clienteNombre}>
@@ -1029,6 +1213,36 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
                         <Plus size={22} color={item.cantidadAEntregar >= saldoCamion ? '#94A3B8' : '#0F172A'} />
                       </TouchableOpacity>
                     </View>
+                  </View>
+
+                  {/* Botones de acción rápida por producto */}
+                  <View style={styles.botonesAccionRapidaRow}>
+                    <TouchableOpacity
+                      style={styles.btnAccionRapida}
+                      onPress={() =>
+                        handleFijarCantidad(
+                          index,
+                          Math.min(item.cantidadPedida > 0 ? item.cantidadPedida : saldoCamion, saldoCamion)
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <CheckCircle2 size={13} color="#15803D" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnAccionRapidaTexto}>
+                        Entregar todo ({Math.min(item.cantidadPedida > 0 ? item.cantidadPedida : saldoCamion, saldoCamion)})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.btnAccionRapida, styles.btnAccionRapidaCero]}
+                      onPress={() => handleFijarCantidad(index, 0)}
+                      activeOpacity={0.7}
+                    >
+                      <X size={13} color="#64748B" style={{ marginRight: 4 }} />
+                      <Text style={[styles.btnAccionRapidaTexto, styles.btnAccionRapidaCeroTexto]}>
+                        No entregué (0)
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Subtotal del item */}
@@ -1344,6 +1558,66 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             </View>
+
+            {/* ALERTA PREVENTIVA SI EL COBRO EXCEDE EL TOTAL ENTREGADO (Fase 2 y 4) */}
+            {cobroExcedeEntrega && (
+              <View style={styles.alertaExcedenteCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                  <AlertTriangle size={20} color="#DC2626" style={{ marginRight: 8 }} />
+                  <Text style={styles.alertaExcedenteTitulo}>
+                    Cobro (Bs. {totalPagadoAhora.toFixed(2)}) supera lo entregado (Bs. {totalMontoEntrega.toFixed(2)})
+                  </Text>
+                </View>
+                <Text style={styles.alertaExcedenteSub}>
+                  Diferencia detectada: Bs. {excedenteMonto.toFixed(2)}
+                </Text>
+
+                <View style={styles.alertaExcedenteBotonesRow}>
+                  <TouchableOpacity
+                    style={styles.btnAjustarCobro}
+                    onPress={() => handleAjustarCobroAlTotal(totalMontoEntrega)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnAjustarCobroTexto}>
+                      Ajustar cobro a Bs. {totalMontoEntrega.toFixed(2)}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.btnSaldoFavor,
+                      saldoAFavorHabilitado && styles.btnSaldoFavorActivo,
+                    ]}
+                    onPress={() => setSaldoAFavorHabilitado(!saldoAFavorHabilitado)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.btnSaldoFavorTexto,
+                        saldoAFavorHabilitado && styles.btnSaldoFavorTextoActivo,
+                      ]}
+                    >
+                      {saldoAFavorHabilitado ? '✓ Saldo a favor activado' : '+ Saldo a favor del cliente'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {saldoAFavorHabilitado && (
+                  <View style={styles.motivoExcedenteBox}>
+                    <Text style={styles.motivoExcedenteLabel}>
+                      Motivo o justificación del saldo a favor (*):
+                    </Text>
+                    <TextInput
+                      style={styles.inputMotivoExcedente}
+                      placeholder="Ej: Anticipo para siguiente pedido / Deuda previa"
+                      placeholderTextColor="#94A3B8"
+                      value={motivoExcedente}
+                      onChangeText={setMotivoExcedente}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
           </Card>
 
           {/* Receptor de Mercadería */}
@@ -2229,6 +2503,140 @@ const styles = StyleSheet.create({
   modalBtnCerrarTexto: {
     fontSize: 13,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  // Estilos Banner Modo Corrección
+  bannerModoCorreccion: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#F87171',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 14,
+    alignItems: 'flex-start',
+  },
+  bannerModoCorreccionTitulo: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#991B1B',
+    marginBottom: 4,
+  },
+  bannerModoCorreccionTexto: {
+    fontSize: 12.5,
+    color: '#7F1D1D',
+    lineHeight: 18,
+  },
+  // Botones de acción rápida por producto
+  botonesAccionRapidaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  btnAccionRapida: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  btnAccionRapidaTexto: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  btnAccionRapidaCero: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  btnAccionRapidaCeroTexto: {
+    color: '#64748B',
+  },
+  // Alerta preventiva de cobro excedente
+  alertaExcedenteCard: {
+    marginTop: 14,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    borderRadius: 8,
+    padding: 12,
+  },
+  alertaExcedenteTitulo: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B91C1C',
+    flex: 1,
+  },
+  alertaExcedenteSub: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    marginBottom: 10,
+    fontVariant: ['tabular-nums'],
+  },
+  alertaExcedenteBotonesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  btnAjustarCobro: {
+    backgroundColor: '#B91C1C',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnAjustarCobroTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  btnSaldoFavor: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnSaldoFavorActivo: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  btnSaldoFavorTexto: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  btnSaldoFavorTextoActivo: {
+    color: '#FFFFFF',
+  },
+  motivoExcedenteBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#FECACA',
+  },
+  motivoExcedenteLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginBottom: 6,
+  },
+  inputMotivoExcedente: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12.5,
     color: '#0F172A',
   },
 });

@@ -16,11 +16,15 @@ export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar 
   const estadoRaw = String(
     parada.Estado || parada.estado || parada.EstadoEntrega || parada.estado_entrega || ""
   ).toUpperCase();
+  const esRequiereCorreccion =
+    estadoRaw === "REQUIERE_CORRECCION" || Boolean(parada.errorSincronizacion);
   const esEntregado =
-    estadoRaw === "ENTREGADO" || estadoRaw === "ENTREGADA" || parada.IdEstadoPedido === 3;
+    !esRequiereCorreccion &&
+    (estadoRaw === "ENTREGADO" || estadoRaw === "ENTREGADA" || parada.IdEstadoPedido === 3);
   const esNoEntregado =
-    estadoRaw === "NO_ENTREGADO" || estadoRaw === "CANCELADO" || parada.IdEstadoPedido === 4;
-  const _esPendiente = !esEntregado && !esNoEntregado;
+    !esRequiereCorreccion &&
+    (estadoRaw === "NO_ENTREGADO" || estadoRaw === "CANCELADO" || parada.IdEstadoPedido === 4);
+  const _esPendiente = !esEntregado && !esNoEntregado && !esRequiereCorreccion;
   const pendienteSincronizar = Boolean(parada.pendienteSincronizar);
 
   const orden = parada.OrdenVisita || parada.secuencia || parada.orden || "1";
@@ -48,11 +52,29 @@ export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar 
   };
 
   return (
-    <Card style={styles.card} onPress={handlePress}>
+    <Card
+      style={[
+        styles.card,
+        esRequiereCorreccion && styles.cardRequiereCorreccion,
+      ]}
+      onPress={handlePress}
+    >
       {/* Encabezado: Número de Parada + Nombre Cliente + Badge Estado */}
       <View style={styles.headerRow}>
-        <View style={styles.ordenBadge}>
-          <Text style={styles.ordenText}>#{orden}</Text>
+        <View
+          style={[
+            styles.ordenBadge,
+            esRequiereCorreccion && styles.ordenBadgeCorreccion,
+          ]}
+        >
+          <Text
+            style={[
+              styles.ordenText,
+              esRequiereCorreccion && styles.ordenTextCorreccion,
+            ]}
+          >
+            #{orden}
+          </Text>
         </View>
 
         <View style={styles.clienteInfo}>
@@ -65,12 +87,17 @@ export const ParadaCard = ({ parada, onPress, onDetalle, _onEntregar, _onCobrar 
         </View>
 
         <View style={{ alignItems: "flex-end", gap: 3 }}>
-          <Badge
-            text={esEntregado ? "Entregado" : esNoEntregado ? "No Entregado" : "Pendiente"}
-            variant={esEntregado ? "success" : esNoEntregado ? "danger" : "warning"}
-          />
-          {pendienteSincronizar && (
-            <Badge text="Por sincronizar" variant="warning" size="small" />
+          {esRequiereCorreccion ? (
+            <Badge text="Requiere corrección" variant="danger" />
+          ) : esEntregado ? (
+            <Badge
+              text={pendienteSincronizar ? "Por sincronizar" : "Sincronizada"}
+              variant={pendienteSincronizar ? "warning" : "success"}
+            />
+          ) : esNoEntregado ? (
+            <Badge text="No Entregado" variant="danger" />
+          ) : (
+            <Badge text="Pendiente" variant="warning" />
           )}
         </View>
       </View>
@@ -198,6 +225,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: Colors.primary,
+  },
+  cardRequiereCorreccion: {
+    borderColor: "#EF4444",
+    borderWidth: 1.5,
+    backgroundColor: "#FFF5F5",
+  },
+  ordenBadgeCorreccion: {
+    backgroundColor: "#FEE2E2",
+  },
+  ordenTextCorreccion: {
+    color: "#DC2626",
+    fontWeight: "800",
   },
 });
 

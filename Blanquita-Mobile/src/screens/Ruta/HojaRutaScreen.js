@@ -111,7 +111,25 @@ export const HojaRutaScreen = ({ navigation }) => {
   const totalRecaudado = Number(metricas?.total_recaudado || 0);
   const saldoPorCobrarRuta = Math.max(0, totalFacturadoRuta - totalRecaudado);
 
+  const paradasRequierenCorreccion = useMemo(() => {
+    return paradasList.filter((p) => {
+      const est = String(p.estado || p.Estado || '').toUpperCase();
+      return est === 'REQUIERE_CORRECCION' || Boolean(p.errorSincronizacion);
+    });
+  }, [paradasList]);
+
   const irADetalle = (parada) => {
+    const est = String(parada.estado || parada.Estado || '').toUpperCase();
+    if (est === 'REQUIERE_CORRECCION' || parada.errorSincronizacion) {
+      navigation.navigate('RegistrarEntrega', {
+        parada,
+        modoCorreccion: true,
+        operacionId: parada.operacionId,
+        errorPrevio: parada.errorSincronizacion,
+        payloadOriginal: parada.payloadRechazado,
+      });
+      return;
+    }
     navigation.navigate('DetalleParada', {
       paradaId: parada.id || parada.IdPuntoVenta,
       parada,
@@ -146,6 +164,36 @@ export const HojaRutaScreen = ({ navigation }) => {
         onActualizar={onRefresh}
         cargando={refreshing}
       />
+
+      {/* Banner de Entregas que Requieren Corrección (Fase 3.2 y 3.5) */}
+      {paradasRequierenCorreccion.length > 0 && (
+        <TouchableOpacity
+          style={styles.bannerCorreccionRuta}
+          onPress={() => {
+            const primera = paradasRequierenCorreccion[0];
+            navigation.navigate('RegistrarEntrega', {
+              parada: primera,
+              modoCorreccion: true,
+              operacionId: primera.operacionId,
+              errorPrevio: primera.errorSincronizacion,
+              payloadOriginal: primera.payloadRechazado,
+            });
+          }}
+          activeOpacity={0.8}
+        >
+          <AlertCircle size={20} color="#DC2626" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerCorreccionTitulo}>
+              {paradasRequierenCorreccion.length === 1
+                ? '1 entrega requiere corrección'
+                : `${paradasRequierenCorreccion.length} entregas requieren corrección`}
+            </Text>
+            <Text style={styles.bannerCorreccionSub}>
+              Toca aquí para revisar cantidades y montos rechazados por el servidor.
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Indicador de Transmisión Satelital GPS (Fase 1) */}
       {estadoActual === (ESTADOS_RUTA?.APROBADA_EN_RUTA || 'APROBADA_EN_RUTA') && (
@@ -1072,6 +1120,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#B45309',
+  },
+  bannerCorreccionRuta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 8,
+  },
+  bannerCorreccionTitulo: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#B91C1C',
+  },
+  bannerCorreccionSub: {
+    fontSize: 11.5,
+    color: '#7F1D1D',
+    marginTop: 2,
   },
 });
 
