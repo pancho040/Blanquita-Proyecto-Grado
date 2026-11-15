@@ -38,6 +38,7 @@ from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_AGENTE_REPARTO, ROL_SUPERVISOR, ROL_GERENTE_GENERAL
 from app.Middleware.Idempotencia import IdempotenciaService
 from app.Services.Logistica.RutaService import RutaService
+from app.utils.calculo_entrega import calcular_total_entrega, validar_coherencia_cobro, redondear_dos_decimales
 from app.Services.Contabilidad.CuentasCobrarService import CuentasCobrarService
 from app.Services.Logistica.InventarioComercialService import InventarioComercialService
 from app.Services.Common.FileStorageService import FileStorageService
@@ -1506,36 +1507,81 @@ async def registrar_entrega_movil(
         logger.warning(f"[/chofer/entregar RECHAZADO 404] Motivo: {msg} | IdUsuario: {uid}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
-    # Mapear cantidades a entregar
+    # Mapear cantidades a entregar y calcular total entregado de forma canónica
+    precios_dict = {f["IdPresentacion"]: float(f["PrecioUnitarioAplicado"] or 0.0) for f in filas_det}
+    items_para_calculo = []
     cantidades_a_entregar: Dict[int, float] = {}
+
     if dto.tipo_entrega == "PARCIAL" and dto.items_entregados:
         for it in dto.items_entregados:
             cantidades_a_entregar[it.presentacion_id] = it.cantidad
+            pu_it = it.precio_unitario if (it.precio_unitario is not None and it.precio_unitario > 0) else precios_dict.get(it.presentacion_id, 0.0)
+            items_para_calculo.append({
+                "presentacion_id": it.presentacion_id,
+                "cantidad": it.cantidad,
+                "precio_unitario": pu_it,
+                "es_bandeo": it.es_cortesia_bandeo,
+                "descuento": it.descuento or 0.0
+            })
     else:
         for f in filas_det:
-            cantidades_a_entregar[f["IdPresentacion"]] = float(f["Cantidad"])
+            pid = f["IdPresentacion"]
+            cant = float(f["Cantidad"])
+            cantidades_a_entregar[pid] = cant
+            items_para_calculo.append({
+                "presentacion_id": pid,
+                "cantidad": cant,
+                "precio_unitario": float(f["PrecioUnitarioAplicado"] or 0.0),
+                "es_bandeo": False,
+                "descuento": 0.0
+            })
 
-    # Validar coherencia entre cobro y mercadería efectivamente entregada (R4)
-    precios_dict = {f["IdPresentacion"]: float(f["PrecioUnitarioAplicado"] or 0.0) for f in filas_det}
-    total_entregado_calculado = 0.0
-    for pid, c_ent in cantidades_a_entregar.items():
-        pu_calc = precios_dict.get(pid, 0.0)
-        total_entregado_calculado += round(c_ent * pu_calc, 2)
+    total_entregado_calculado, _ = calcular_total_entrega(items_para_calculo)
 
+    # Validar coherencia entre cobro y mercadería efectivamente entregada (R4 / FASE 2)
     if dto.cobro:
-        suma_pagos = round(sum(p.monto for p in dto.cobro.pagos), 2)
-        if total_entregado_calculado > 0 and suma_pagos > (total_entregado_calculado + 0.05):
+        suma_pagos = redondear_dos_decimales(sum(p.monto for p in dto.cobro.pagos))
+        val_cobro = validar_coherencia_cobro(total_entregado_calculado, suma_pagos)
+
+        if total_entregado_calculado > 0 and val_cobro["excede"]:
             obs_cobro = (dto.observacion or "").upper()
-            if "ANTICIPO" not in obs_cobro and "EXCESO" not in obs_cobro:
-                msg = (
-                    f"El monto cobrado (Bs. {suma_pagos:.2f}) excede el total efectivamente entregado "
-                    f"(Bs. {total_entregado_calculado:.2f})."
-                )
-                logger.warning(f"[/chofer/entregar RECHAZADO 422] {msg} | IdPedido: {dto.id_pedido}")
+            excedente_declarado = getattr(dto.cobro, "excedente", None) or getattr(dto, "excedente", None) or 0.0
+            motivo_excedente = getattr(dto.cobro, "motivo_excedente", None) or getattr(dto, "motivo_excedente", None) or ""
+
+            es_saldo_a_favor = (
+                excedente_declarado > 0 or 
+                bool(motivo_excedente.strip()) or
+                "ANTICIPO" in obs_cobro or 
+                "EXCESO" in obs_cobro or 
+                "SALDO A FAVOR" in obs_cobro
+            )
+
+            if not es_saldo_a_favor:
+                diferencia = val_cobro["diferencia"]
+                detalle_422 = {
+                    "codigo": "COBRO_EXCEDE_ENTREGADO",
+                    "total_entregado": total_entregado_calculado,
+                    "monto_cobrado": suma_pagos,
+                    "diferencia": diferencia,
+                    "mensaje": f"El monto cobrado (Bs. {suma_pagos:.2f}) excede el total efectivamente entregado (Bs. {total_entregado_calculado:.2f})."
+                }
+                logger.warning(f"[/chofer/entregar RECHAZADO 422] {detalle_422['mensaje']} | IdPedido: {dto.id_pedido}")
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=msg
+                    detail=detalle_422
                 )
+            else:
+                # Constancia trazable del excedente como anticipo/saldo a favor del cliente
+                dif_saldo = val_cobro["diferencia"]
+                motivo_limpio = motivo_excedente.strip() or "Excedente cobrado como saldo a favor del cliente"
+                logger.info(
+                    f"[/chofer/entregar SALDO_A_FAVOR] Pedido #{dto.id_pedido} cobró excedente de Bs. {dif_saldo:.2f}. "
+                    f"Motivo: {motivo_limpio}"
+                )
+                if not dto.observacion:
+                    dto.observacion = f"[SALDO_A_FAVOR: Bs. {dif_saldo:.2f} - {motivo_limpio}]"
+                elif "[SALDO_A_FAVOR" not in dto.observacion:
+                    dto.observacion = f"{dto.observacion} [SALDO_A_FAVOR: Bs. {dif_saldo:.2f} - {motivo_limpio}]"
 
     if (dto.tipo_entrega == "PARCIAL" or getattr(dto, "estado_visita", None) == "PIDIO_MENOS") and total_entregado_calculado > 0:
         db.execute(text("""

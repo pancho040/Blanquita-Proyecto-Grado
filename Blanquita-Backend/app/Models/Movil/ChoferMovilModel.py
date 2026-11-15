@@ -16,6 +16,8 @@ class ItemEntregaDTO(BaseModel):
         validation_alias=AliasChoices("presentacion_id", "id_presentacion", "id_producto", "IdPresentacion", "IdProducto")
     )
     cantidad: float = Field(..., gt=0, validation_alias=AliasChoices("cantidad", "Cantidad"))
+    precio_unitario: Optional[float] = Field(None, ge=0, validation_alias=AliasChoices("precio_unitario", "PrecioUnitario", "precio"))
+    descuento: Optional[float] = Field(0.0, ge=0, validation_alias=AliasChoices("descuento", "Descuento"))
     es_cortesia_bandeo: bool = Field(False, validation_alias=AliasChoices("es_cortesia_bandeo", "EsCortesiaBandeo"))
 
 
@@ -45,6 +47,8 @@ class BloqueCobroEntregaDTO(BaseModel):
     monto_total: Optional[float] = Field(None, ge=0, validation_alias=AliasChoices("monto_total", "MontoTotal", "montoTotal"))
     pagos: List[TramoPagoDTO] = Field(default_factory=list, validation_alias=AliasChoices("pagos", "Pagos"))
     credito: Optional[BloqueCreditoDTO] = Field(None, validation_alias=AliasChoices("credito", "Credito"))
+    excedente: Optional[float] = Field(0.0, ge=0, validation_alias=AliasChoices("excedente", "Excedente", "monto_excedente"))
+    motivo_excedente: Optional[str] = Field(None, validation_alias=AliasChoices("motivo_excedente", "MotivoExcedente", "motivoExcedente"))
 
 
 class EntregaMovilRequest(BaseModel):
@@ -63,6 +67,8 @@ class EntregaMovilRequest(BaseModel):
     cobro: Optional[BloqueCobroEntregaDTO] = Field(None, validation_alias=AliasChoices("cobro", "Cobro"))
     estado_visita: Optional[str] = Field(None, description="'ENTREGADO_COMPLETO' | 'PIDIO_MAS' | 'PIDIO_MENOS'", validation_alias=AliasChoices("estado_visita", "estadoVisita", "EstadoVisita"))
     tipo_incidencia: Optional[str] = Field(None, validation_alias=AliasChoices("tipo_incidencia", "tipoIncidencia", "TipoIncidencia"))
+    excedente: Optional[float] = Field(0.0, ge=0, validation_alias=AliasChoices("excedente", "Excedente", "monto_excedente"))
+    motivo_excedente: Optional[str] = Field(None, validation_alias=AliasChoices("motivo_excedente", "MotivoExcedente", "motivoExcedente"))
 
 
 class CobroMovilRequest(BaseModel):
