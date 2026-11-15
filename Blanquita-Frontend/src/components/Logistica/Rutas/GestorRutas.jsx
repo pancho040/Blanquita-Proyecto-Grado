@@ -123,6 +123,17 @@ export default function GestorRutas({ usuario = null }) {
   const hoyStr = useMemo(() => obtenerFechaHoyBolivia(), []);
   const [fechaFiltro, setFechaFiltro] = useState(hoyStr);
   const [repartidores, setRepartidores] = useState([]);
+  const repartidoresFiltrados = useMemo(() => {
+    return repartidores.filter((rep) => {
+      if (!import.meta.env?.DEV) {
+        const nombre = (rep.NombreCompleto || rep.NombreRepartidor || "").toUpperCase();
+        if (nombre.startsWith("TEST_") || nombre.includes("PRUEBA")) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [repartidores]);
   const [asignaciones, setAsignaciones] = useState([]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
   const tiempoRelativo = useTiempoRelativo(ultimaActualizacion);
@@ -932,7 +943,7 @@ export default function GestorRutas({ usuario = null }) {
                             }}
                             className="h-6 text-[10px] border border-slate-200 rounded px-1 bg-white max-w-[120px] truncate"
                           >
-                            {repartidores.map((rep) => (
+                            {repartidoresFiltrados.map((rep) => (
                               <option key={rep.IdUsuario} value={rep.IdUsuario}>
                                 {rep.NombreCompleto}
                               </option>
@@ -1639,7 +1650,7 @@ export default function GestorRutas({ usuario = null }) {
                   required
                 >
                   <option value="">Seleccione un chofer...</option>
-                  {repartidores.map((rep) => (
+                  {repartidoresFiltrados.map((rep) => (
                     <option key={rep.IdUsuario} value={rep.IdUsuario}>
                       {rep.NombreCompleto} {rep.EnRuta ? "(En ruta)" : "(Disponible)"}
                     </option>

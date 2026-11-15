@@ -67,6 +67,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const [tiempoRelativo, setTiempoRelativo] = useState("hace unos segundos");
   const [wsConectado, setWsConectado] = useState(false);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [mostrarPruebas, setMostrarPruebas] = useState(false);
 
   // Modales
   const [modalLiquidacionAbierto, setModalLiquidacionAbierto] = useState(false);
@@ -395,12 +396,13 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
 
     // Dibujar marcadores de Choferes
-    choferes.forEach((ch) => {
+    choferesFiltrados.forEach((ch) => {
       const lat = parseFloat(ch.Latitud);
       const lng = parseFloat(ch.Longitud);
       if (isNaN(lat) || isNaN(lng)) return;
 
       const esSeleccionado = choferSeleccionado?.IdUsuarioRepartidor === ch.IdUsuarioRepartidor;
+      const frescura = formatearFrescuraSenal(ch.SegundosDesdeUltimoReporte, ch.FechaHoraPing);
 
       // Icono sobrio industrial para el camión
       const truckIcon = L.divIcon({
@@ -458,7 +460,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             <div>Velocidad: <b>${ch.Velocidad || 0} km/h</b></div>
             <div>Batería: <b>${ch.Bateria || 100}%</b></div>
             <div>Paradas: <b>${ch.ParadasCompletadas || 0} / ${ch.TotalParadas || 0}</b></div>
-            <div>Estado: <b>${ch.EstadoMovimiento || "Activo"}</b></div>
+            <div>Señal: <b>${frescura.texto}</b></div>
           </div>
           ${
             ch.Celular
@@ -542,8 +544,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
 
     // Ajustar límites del mapa
-    if (choferes.length > 0 && !choferSeleccionado) {
-      const markersCoords = choferes
+    if (choferesFiltrados.length > 0 && !choferSeleccionado) {
+      const markersCoords = choferesFiltrados
         .map((ch) => [parseFloat(ch.Latitud), parseFloat(ch.Longitud)])
         .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng));
       if (markersCoords.length > 0) {
@@ -551,11 +553,11 @@ export default function RastreoChoferesGPS({ usuario = null }) {
           const bounds = L.latLngBounds(markersCoords);
           mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
         } catch (e) {
-          mapInstanceRef.current.setView(SUCRE_CENTER, 14);
+          mapInstanceRef.current.setView(obtenerCentroSucursal(sucursal), 14);
         }
       }
     }
-  }, [choferes, choferSeleccionado, detalleAsignacion, leafletLoaded]);
+  }, [choferesFiltrados, choferSeleccionado, detalleAsignacion, leafletLoaded, sucursal]);
 
   // Centrar en un chofer
   const centrarEnChofer = (ch) => {
@@ -570,25 +572,39 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const formatearMonto = (val) =>
     new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
 
-  const formatearTiempoRelativoReporte = (segundos) => {
-    if (segundos === null || segundos === undefined || segundos === "") return "Sin reporte hoy";
+  const formatearFrescuraSenal = (segundos, fechaHoraPing) => {
+    if (segundos === null || segundos === undefined || segundos === "") {
+      return { texto: "Sin reporte hoy", enLinea: false };
+    }
     const s = Number(segundos);
-    if (isNaN(s)) return "Sin reporte hoy";
-    if (s < 10) return "hace instantes";
-    if (s < 60) return `hace ${s}s`;
+    if (isNaN(s)) return { texto: "Sin reporte hoy", enLinea: false };
+
+    if (s >= 600) {
+      let horaStr = "";
+      if (fechaHoraPing) {
+        try {
+          const d = new Date(fechaHoraPing);
+          if (!isNaN(d.getTime())) {
+            horaStr = ` (${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
+          }
+        } catch {}
+      }
+      return { texto: `Sin señal${horaStr}`, enLinea: false };
+    }
+
+    if (s < 10) return { texto: "hace instantes", enLinea: true };
+    if (s < 60) return { texto: `hace ${s} s`, enLinea: true };
     const m = Math.floor(s / 60);
-    if (m < 60) return `hace ${m} min`;
+    if (m < 60) return { texto: `hace ${m} min`, enLinea: true };
     const h = Math.floor(m / 60);
-    return `hace ${h} h ${m % 60} min`;
+    return { texto: `hace ${h} h`, enLinea: true };
   };
 
   const choferesFiltrados = choferes.filter((c) => {
-    // Si no estamos en DEV, ocultar usuarios de pruebas (TEST_*)
-    if (!import.meta.env?.DEV) {
-      const nombre = (c.NombreRepartidor || c.NombreCompleto || "").toUpperCase();
-      if (nombre.startsWith("TEST_") || nombre.includes("PRUEBA")) {
-        return false;
-      }
+    const nombre = (c.NombreRepartidor || c.NombreCompleto || "").toUpperCase();
+    const esPrueba = nombre.startsWith("TEST_") || nombre.includes("PRUEBA");
+    if (esPrueba && (!import.meta.env?.DEV || !mostrarPruebas)) {
+      return false;
     }
     const q = busqueda.toLowerCase();
     return (
@@ -675,15 +691,29 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         </div>
 
         {import.meta.env?.DEV && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setModalSimuladorAbierto(true)}
-            className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded gap-1.5 shadow-none"
-          >
-            <Radio className="h-3.5 w-3.5" />
-            <span>Simulador GPS (Dev)</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMostrarPruebas((prev) => !prev)}
+              className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
+                mostrarPruebas
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+              title="Mostrar u ocultar choferes de prueba (TEST_*)"
+            >
+              {mostrarPruebas ? "Ocultar Pruebas" : "Mostrar Pruebas"}
+            </button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setModalSimuladorAbierto(true)}
+              className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-medium h-8 rounded gap-1.5 shadow-none"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              <span>Simulador GPS (Dev)</span>
+            </Button>
+          </div>
         )}
       </PageHeader>
 
@@ -721,10 +751,10 @@ export default function RastreoChoferesGPS({ usuario = null }) {
               choferesFiltrados.map((ch) => {
                 const esSeleccionado = choferSeleccionado?.IdUsuarioRepartidor === ch.IdUsuarioRepartidor;
                 const porcentaje = ch.TotalParadas > 0 ? Math.round((ch.ParadasCompletadas / ch.TotalParadas) * 100) : 0;
-
-                const segReporte = ch.SegundosDesdeUltimoReporte ?? 0;
-                const tieneSenal = ch.EnLinea || ch.conectado || segReporte < 180;
-                const minReporte = Math.max(1, Math.floor(segReporte / 60));
+                const frescura = formatearFrescuraSenal(ch.SegundosDesdeUltimoReporte, ch.FechaHoraPing);
+                const horaReporte = ch.FechaHoraPing
+                  ? new Date(ch.FechaHoraPing).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : null;
 
                 return (
                   <div
@@ -748,15 +778,15 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                         </span>
                       </div>
 
-                      {tieneSenal ? (
+                      {frescura.enLinea ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-300">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>En línea - Ubicación actual</span>
+                          <span>En línea ({frescura.texto})</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={`Último ping hace ${segReporte} segundos`}>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title={ch.FechaHoraPing ? `Reporte: ${new Date(ch.FechaHoraPing).toLocaleTimeString()}` : "Sin señal"}>
                           <Clock className="h-2.5 w-2.5 text-slate-400" />
-                          <span>Última ubicación conocida (hace {minReporte} min)</span>
+                          <span>{frescura.texto}</span>
                         </span>
                       )}
                     </div>
@@ -771,9 +801,9 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                         <BatteryCharging className="h-3 w-3 text-emerald-600" />
                         <span>{ch.Bateria || 100}%</span>
                       </div>
-                      <div className="flex items-center gap-1 text-right justify-end" title={`Último ping hace ${ch.SegundosDesdeUltimoReporte || 0} segundos`}>
+                      <div className="flex items-center gap-1 text-right justify-end" title={ch.FechaHoraPing ? `Reporte: ${new Date(ch.FechaHoraPing).toLocaleTimeString()}` : "Sin reporte"}>
                         <Clock className="h-3 w-3 text-slate-400" />
-                        <span>{formatearTiempoRelativoReporte(ch.SegundosDesdeUltimoReporte)}</span>
+                        <span>{horaReporte ? `Hora ${horaReporte}` : frescura.texto}</span>
                       </div>
                     </div>
 

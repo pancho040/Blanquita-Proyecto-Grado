@@ -10,6 +10,7 @@ function calcularCentroMapa(idSucursal, ruta) {
   const sid = idSucursal || ruta?.IdSucursal;
   if (sid === "2" || sid === 2) return POTOSI_CENTER;
   if (String(ruta?.NombreRuta || "").toLowerCase().includes("potos")) return POTOSI_CENTER;
+  if (String(ruta?.NombreZona || "").toLowerCase().includes("potos")) return POTOSI_CENTER;
   return SUCRE_CENTER;
 }
 
@@ -33,6 +34,8 @@ export default function MapaRuta({
   const [mostrarLeyenda, setMostrarLeyenda] = useState(false);
   const [metricasRuta, setMetricasRuta] = useState(null);
   const [cargandoRutaVial, setCargandoRutaVial] = useState(false);
+  const centroActivo = calcularCentroMapa(idSucursal, rutaSeleccionada);
+  const ciudadNombre = centroActivo === POTOSI_CENTER ? "Potosí" : "Sucre";
 
   // Inicializar mapa de Leaflet
   useEffect(() => {
@@ -119,7 +122,7 @@ export default function MapaRuta({
     } else if (puntosConCoords.length === 1) {
       map.setView(puntosConCoords[0], 16);
     } else {
-      map.setView(SUCRE_CENTER, 14);
+      map.setView(calcularCentroMapa(idSucursal, rutaSeleccionada), 14);
     }
   };
 
@@ -334,7 +337,7 @@ export default function MapaRuta({
         } else if (coordsRuta.length === 1) {
           map.setView(coordsRuta[0], 16, { animate: false });
         } else {
-          map.setView(SUCRE_CENTER, 14, { animate: false });
+          map.setView(calcularCentroMapa(idSucursal, rutaSeleccionada), 14, { animate: false });
         }
       } catch {}
     }
@@ -448,7 +451,7 @@ export default function MapaRuta({
           </div>
           <div className="flex items-center gap-2">
             <span className="w-4 h-4 rounded bg-slate-600 text-white flex items-center justify-center font-bold text-xs shrink-0">+</span>
-            <span>Otros puntos en Sucre (clic para agregar)</span>
+            <span>Otros puntos en {ciudadNombre} (clic para agregar)</span>
           </div>
         </div>
       )}
