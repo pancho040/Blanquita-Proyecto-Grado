@@ -45,13 +45,27 @@ export default function EntregaChoferMovil({
     return null;
   });
 
+  const sucursalEfectiva =
+    asignacionPreseleccionada?.IdSucursal ||
+    usuario?.IdSucursal ||
+    usuario?.sucursal_efectiva ||
+    (usuario?.sucursales_permitidas?.[0]) ||
+    null;
+
   // Formulario de Entrega
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
-  const [placaCamion, setPlacaCamion] = useState(
-    asignacionPreseleccionada?.Observacion?.match(/\(([^)]+)\)/)?.[1] ||
-    asignacionPreseleccionada?.PlacaCamion ||
-    ""
-  );
+  const [placaCamion, setPlacaCamion] = useState(() => {
+    const rawPlaca = asignacionPreseleccionada?.PlacaCamion || "";
+    if (rawPlaca && !/^\d{4}-\d{2}-\d{2}/.test(rawPlaca.trim())) {
+      return rawPlaca.trim().toUpperCase();
+    }
+    const obs = asignacionPreseleccionada?.Observacion || "";
+    const match = obs.match(/\(([A-Z0-9\s-]+)\)/i);
+    if (match && match[1] && !/^\d{4}-\d{2}-\d{2}/.test(match[1].trim())) {
+      return match[1].trim().toUpperCase();
+    }
+    return "";
+  });
   const [metodoPago, setMetodoPago] = useState("Efectivo"); // Efectivo, QR, Credito, Mixto
   const [montoEfectivo, setMontoEfectivo] = useState("");
   const [montoQR, setMontoQR] = useState("");
@@ -82,7 +96,7 @@ export default function EntregaChoferMovil({
       const [cls, reps, pre] = await Promise.all([
         ObtenerClientesCxC().catch(() => []),
         ObtenerRepartidores().catch(() => []),
-        ObtenerPrecios(1).catch(() => [])
+        ObtenerPrecios(sucursalEfectiva).catch(() => [])
       ]);
 
       setClientes(cls || []);
@@ -284,7 +298,7 @@ export default function EntregaChoferMovil({
         id_chofer: Number(choferId),
         placa: (placaCamion || asignacionPreseleccionada?.PlacaCamion || "").trim() || "S/P",
         total_neto: totalBruto,
-        id_sucursal: 1,
+        id_sucursal: sucursalEfectiva || 1,
         metodo_pago: metodoPago,
         monto_efectivo: metodoPago === "Efectivo" ? totalBruto : Number(montoEfectivo || 0),
         monto_qr: metodoPago === "QR" ? totalBruto : Number(montoQR || 0),

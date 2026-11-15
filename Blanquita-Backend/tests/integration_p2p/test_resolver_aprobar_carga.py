@@ -180,10 +180,9 @@ def test_resolver_carga_idempotencia_no_duplica(datos_carga_test, db_session_rol
     resp1 = client.post(f"/logistica/asignaciones/{datos_carga_test['asig_id']}/resolver-carga", json=payload)
     assert resp1.status_code == status.HTTP_200_OK
 
-    # Segunda vez (idempotente)
+    # Segunda vez: debe rechazar con 409 Conflict porque ya fue aprobada y no duplicar stock
     resp2 = client.post(f"/logistica/asignaciones/{datos_carga_test['asig_id']}/resolver-carga", json=payload)
-    assert resp2.status_code == status.HTTP_200_OK
-    assert resp2.json().get("datos", {}).get("ya_resuelta") is True
+    assert resp2.status_code == status.HTTP_409_CONFLICT
 
     row = db_session_rollback.execute(text("""
         SELECT SUM(cantidad_cargada) as total_cargado
