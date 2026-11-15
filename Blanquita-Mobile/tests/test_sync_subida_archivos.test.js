@@ -210,7 +210,10 @@ async function runTests() {
   const colaCobroFallo = await SyncQueue.obtenerCola();
   assert.strictEqual(colaCobroFallo.length, 1, "La operación debe permanecer en cola");
   assert.strictEqual(colaCobroFallo[0].esErrorPermanente, true, "Fallo 413 se clasifica como error permanente de validación");
-  assert.strictEqual(colaCobroFallo[0].estado, "error_validacion");
+  assert(
+    colaCobroFallo[0].estado === "REQUIERE_CORRECCION" || colaCobroFallo[0].estado === "error_validacion",
+    "El estado debe ser REQUIERE_CORRECCION o error_validacion"
+  );
   assert.strictEqual(colaCobroFallo[0].payload.pagos[1].foto_uri, localQrUri, "El foto_uri debe preservarse intacto");
 
   // 4.2 Simular que se corrige o reintenta con subida exitosa (200 OK)

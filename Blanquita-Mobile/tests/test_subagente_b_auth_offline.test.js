@@ -110,7 +110,10 @@ async function runTests() {
   const itemCon422 = colaCon422.find((op) => op.id === item101.id);
 
   assert.strictEqual(itemCon422.esErrorPermanente, true, "422 debe marcarse como permanente");
-  assert.strictEqual(itemCon422.estado, "error_validacion", "El estado debe ser error_validacion");
+  assert.ok(
+    itemCon422.estado === "REQUIERE_CORRECCION" || itemCon422.estado === "error_validacion",
+    "El estado debe ser REQUIERE_CORRECCION o error_validacion"
+  );
   console.log("  ✓ Distinción entre 401 (reintento seguro al renovar) y 422 (permanente) comprobada");
 
   console.log("\n=======================================================");

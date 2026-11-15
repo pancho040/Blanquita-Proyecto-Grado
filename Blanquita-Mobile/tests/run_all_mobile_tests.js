@@ -27,6 +27,7 @@ const testFiles = [
   "test_flujo_completo_ruta_carga_cliente_historial.test.js",
   "test_entrega_editable_frecuencia_y_notificaciones.test.js",
   "test_ws_url_dinamica.test.js",
+  "test_calculo_entrega_contrato.test.js",
 ];
 
 console.log("==================================================================");

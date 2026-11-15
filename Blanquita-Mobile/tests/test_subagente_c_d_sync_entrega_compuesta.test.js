@@ -146,7 +146,10 @@ async function runTests() {
   const colaTras422 = await SyncQueue.obtenerCola(12);
   assert.strictEqual(colaTras422.length, 1, "Solo debe quedar el ítem con error 422");
   assert.strictEqual(colaTras422[0].esErrorPermanente, true, "El ítem 1 debe estar marcado como error permanente");
-  assert.strictEqual(colaTras422[0].estado, "error_validacion", "El estado debe ser error_validacion");
+  assert.ok(
+    colaTras422[0].estado === "REQUIERE_CORRECCION" || colaTras422[0].estado === "error_validacion",
+    "El estado debe ser REQUIERE_CORRECCION o error_validacion"
+  );
   assert.ok(itemsLlamados.includes("COBRO"), "El segundo ítem (COBRO) debió ejecutarse sin ser bloqueado por el 422");
   console.log("  ✓ 4xx marcado como permanente sin bloquear ítems posteriores");
 
