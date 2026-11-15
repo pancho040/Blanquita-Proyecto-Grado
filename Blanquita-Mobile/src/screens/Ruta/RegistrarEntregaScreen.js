@@ -553,6 +553,14 @@ export const RegistrarEntregaScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (totalPagadoAhora > (totalMontoEntrega + 0.05)) {
+      Alert.alert(
+        'Cobro Excede Entrega',
+        `El importe cobrado (Bs. ${totalPagadoAhora.toFixed(2)}) no puede exceder el total de la entrega (Bs. ${totalMontoEntrega.toFixed(2)}).`
+      );
+      return;
+    }
+
     if (!balanceCorrecto) {
       if (condicionPago === 'COMPLETO') {
         Alert.alert(

@@ -1,37 +1,26 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import StatusBadge from "@/components/common/StatusBadge";
 import { toast } from "sonner";
-import {
-  ObtenerTrackingAsignacion,
-  RegistrarEntregaParada,
-  RegistrarCobroParada
-} from "@/services/Logistica/RutaService";
+import { ObtenerTrackingAsignacion } from "@/services/Logistica/RutaService";
 import {
   MapPin,
   Loader2,
-  CheckCircle2,
   Phone,
-  DollarSign,
   Navigation,
-  ShieldCheck
+  ShieldCheck,
+  Clock,
+  AlertCircle
 } from "lucide-react";
 
 export default function ModalDetalleParadasGPS({
   idAsignacion,
   abierto,
-  onCerrar,
-  onActualizacion
+  onCerrar
 }) {
   const [cargando, setCargando] = useState(false);
   const [data, setData] = useState(null);
-  const [paradaParaCobro, setParadaParaCobro] = useState(null);
-  const [montoCobro, setMontoCobro] = useState("");
-  const [metodoCobro, setMetodoCobro] = useState("1"); // 1 = Efectivo
-  const [procesandoAccion, setProcesandoAccion] = useState(false);
 
   const cargarDatos = async () => {
     if (!idAsignacion) return;
@@ -39,7 +28,7 @@ export default function ModalDetalleParadasGPS({
       setCargando(true);
       const res = await ObtenerTrackingAsignacion(idAsignacion);
       setData(res);
-    } catch (err) {
+    } catch (_err) {
       toast.error("Error al cargar paradas de la asignación");
       onCerrar();
     } finally {
@@ -52,72 +41,21 @@ export default function ModalDetalleParadasGPS({
       cargarDatos();
     } else {
       setData(null);
-      setParadaParaCobro(null);
     }
   }, [abierto, idAsignacion]);
 
-  // Registrar Entrega Contingente con GPS
-  const handleEntregarParada = async (parada) => {
-    if (!parada.IdPedido) {
-      toast.error("Esta parada no tiene un pedido asignado formalmente");
-      return;
-    }
-    try {
-      setProcesandoAccion(true);
-      const lat = parseFloat(parada.Latitud) || data.LatitudChofer || -19.0435;
-      const lng = parseFloat(parada.Longitud) || data.LongitudChofer || -65.258;
-
-      await RegistrarEntregaParada({
-        IdPedido: parada.IdPedido,
-        LatitudEntrega: lat,
-        LongitudEntrega: lng,
-        Observacion: "Entrega verificada por supervisor/chofer con coordenadas GPS"
-      });
-
-      toast.success(`Pedido #${parada.NumeroPedido || parada.IdPedido} marcado como Entregado`);
-      await cargarDatos();
-      if (onActualizacion) onActualizacion();
-    } catch (err) {
-      toast.error(err.message || "Error al registrar entrega");
-    } finally {
-      setProcesandoAccion(false);
-    }
-  };
-
-  // Registrar Cobro Contingente
-  const handleRegistrarCobro = async (e) => {
-    e.preventDefault();
-    if (!paradaParaCobro || !paradaParaCobro.IdPedido) return;
-
-    try {
-      setProcesandoAccion(true);
-      const lat = parseFloat(paradaParaCobro.Latitud) || data.LatitudChofer || -19.0435;
-      const lng = parseFloat(paradaParaCobro.Longitud) || data.LongitudChofer || -65.258;
-
-      await RegistrarCobroParada({
-        IdPedido: paradaParaCobro.IdPedido,
-        IdMetodoPago: parseInt(metodoCobro, 10),
-        Monto: parseFloat(montoCobro),
-        NumeroReferencia: metodoCobro === "1" ? null : "OP-VENTA-FIELD",
-        LatitudCobro: lat,
-        LongitudCobro: lng,
-        Observacion: "Cobro registrado con captura de coordenadas GPS de campo"
-      });
-
-      toast.success("Cobro registrado y conciliado en ruta");
-      setParadaParaCobro(null);
-      setMontoCobro("");
-      await cargarDatos();
-      if (onActualizacion) onActualizacion();
-    } catch (err) {
-      toast.error(err.message || "Error al registrar cobro");
-    } finally {
-      setProcesandoAccion(false);
-    }
-  };
-
   const formatearMonto = (val) =>
     new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
+
+  const formatearHora = (isoStr) => {
+    if (!isoStr) return "";
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
 
   return (
     <Dialog open={Boolean(abierto && idAsignacion)} onOpenChange={onCerrar}>
@@ -334,48 +272,37 @@ export default function ModalDetalleParadasGPS({
                                   </span>
                                 )}
                               </div>
+
+                              {/* INFORMACIÓN ADICIONAL DE INCIDENCIA Y HORA */}
+                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
+                                {p.FechaEntrega && (
+                                  <span className="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1 font-mono">
+                                    <Clock className="h-3 w-3 text-slate-500" />
+                                    Hora: {formatearHora(p.FechaEntrega)}
+                                  </span>
+                                )}
+
+                                {(p.tipo_incidencia || p.estado_visita) && (
+                                  <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-1 font-medium">
+                                    <AlertCircle className="h-3 w-3 text-amber-600" />
+                                    {p.tipo_incidencia || p.estado_visita}
+                                  </span>
+                                )}
+
+                                {p.EsParadaExtra && (
+                                  <span className="text-sky-800 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-medium">
+                                    Parada extra
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {/* ACCIONES Y ESTADO */}
+                          {/* ESTADO DE SÓLO LECTURA (El cobro lo realiza únicamente el chofer en campo) */}
                           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                             <StatusBadge
                               estado={esEntregado ? "ENTREGADO" : "PENDIENTE"}
                             />
-
-                            {!esEntregado && p.IdPedido && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={procesandoAccion}
-                                onClick={() => handleEntregarParada(p)}
-                                className="h-7 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-medium rounded"
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Entrega
-                              </Button>
-                            )}
-
-                            {p.IdPedido && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setParadaParaCobro(p);
-                                  const resto = Math.max(
-                                    0,
-                                    parseFloat(p.MontoPedido || 0) - parseFloat(p.MontoCobrado || 0)
-                                  );
-                                  setMontoCobro(resto > 0 ? resto.toFixed(2) : "0.00");
-                                }}
-                                className="h-7 text-xs border-sky-300 text-[#1C96C5] hover:bg-sky-50 font-medium rounded"
-                              >
-                                <DollarSign className="h-3 w-3 mr-1" />
-                                Cobrar
-                              </Button>
-                            )}
                           </div>
                         </div>
                       </div>

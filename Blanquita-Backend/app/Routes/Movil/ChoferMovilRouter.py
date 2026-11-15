@@ -1515,6 +1515,35 @@ async def registrar_entrega_movil(
         for f in filas_det:
             cantidades_a_entregar[f["IdPresentacion"]] = float(f["Cantidad"])
 
+    # Validar coherencia entre cobro y mercadería efectivamente entregada (R4)
+    precios_dict = {f["IdPresentacion"]: float(f["PrecioUnitarioAplicado"] or 0.0) for f in filas_det}
+    total_entregado_calculado = 0.0
+    for pid, c_ent in cantidades_a_entregar.items():
+        pu_calc = precios_dict.get(pid, 0.0)
+        total_entregado_calculado += round(c_ent * pu_calc, 2)
+
+    if dto.cobro:
+        suma_pagos = round(sum(p.monto for p in dto.cobro.pagos), 2)
+        if total_entregado_calculado > 0 and suma_pagos > (total_entregado_calculado + 0.05):
+            obs_cobro = (dto.observacion or "").upper()
+            if "ANTICIPO" not in obs_cobro and "EXCESO" not in obs_cobro:
+                msg = (
+                    f"El monto cobrado (Bs. {suma_pagos:.2f}) excede el total efectivamente entregado "
+                    f"(Bs. {total_entregado_calculado:.2f})."
+                )
+                logger.warning(f"[/chofer/entregar RECHAZADO 422] {msg} | IdPedido: {dto.id_pedido}")
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=msg
+                )
+
+    if (dto.tipo_entrega == "PARCIAL" or getattr(dto, "estado_visita", None) == "PIDIO_MENOS") and total_entregado_calculado > 0:
+        db.execute(text("""
+            UPDATE public."Pedido"
+            SET "SubTotal" = :tot, "MontoTotal" = :tot
+            WHERE "IdPedido" = :pid;
+        """), {"tot": total_entregado_calculado, "pid": dto.id_pedido})
+
     # 3. Validar disponibilidad en inventario_chofer (auto-aprovisionando si faltase stock en pruebas o local)
     for pres_id, cant_entregar in cantidades_a_entregar.items():
         sql_stock = text("""
