@@ -13,7 +13,7 @@ from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR
 from app.Services.Logistica.RutaService import RutaService
 from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
-from app.utils.fechas import ahora_bolivia, fecha_actual_bolivia
+from app.utils.fechas import ahora_bolivia, fecha_actual_bolivia, normalizar_fecha_bolivia
 from app.Models.Logistica.RutaModel import (
     ZonaCrear, ZonaResponse, RutaCrear, RutaActualizar, RutaResponse,
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
