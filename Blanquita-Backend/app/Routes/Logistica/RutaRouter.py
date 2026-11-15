@@ -13,6 +13,7 @@ from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Constants.Roles import ROL_SUPERVISOR, ROL_GERENTE_GENERAL, ROL_CONTADOR, ROL_AGENTE_REPARTO, ROL_DISTRIBUIDOR
 from app.Services.Logistica.RutaService import RutaService
 from app.Services.Logistica.FlotaWebSocketManager import flota_ws_manager
+from app.utils.fechas import ahora_bolivia, fecha_actual_bolivia
 from app.Models.Logistica.RutaModel import (
     ZonaCrear, ZonaResponse, RutaCrear, RutaActualizar, RutaResponse,
     GuardarPuntosVentaRuta, AsignacionRutaCrear, AsignacionRutaActualizar, AsignacionRutaResponse,
@@ -808,11 +809,11 @@ def _asegurar_paradas_reales_asignacion(db: Session, id_asignacion: int, id_ruta
                 SELECT pv."IdPuntoVenta"
                 FROM public."PuntoVenta" pv
                 JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
-                WHERE (c."IdSucursal" = :sid OR pv."IdZona" IN (SELECT "IdZonaDistribucion" FROM public."RutaDistribucion" WHERE "IdRutaDistribucion" = :rid))
+                WHERE c."IdSucursal" = :sid
                   AND pv."Activo" = true
                 ORDER BY pv."IdPuntoVenta" ASC
                 LIMIT 5;
-            """), {"sid": id_sucursal, "rid": id_ruta}).fetchall()
+            """), {"sid": id_sucursal}).fetchall()
 
             for idx, pv_item in enumerate(puntos_suc, 1):
                 db.execute(text("""
@@ -1114,7 +1115,25 @@ async def resolver_carga_camion_web(
     """)
     sol = db.execute(sql_sol, {"asig_id": asig_id}).fetchone()
 
-    timestamp_iso = datetime.now(timezone.utc).isoformat()
+    # Idempotencia: Si la solicitud ya está aprobada y se intenta aprobar nuevamente, retornar éxito sin duplicar stock
+    if sol and sol.estado == "APROBADA" and decision == "APROBADA":
+        return {
+            "codigo": "EXITO",
+            "mensaje": "La solicitud de carga ya fue aprobada previamente",
+            "datos": {
+                "id_asignacion": asig_id,
+                "id_solicitud": sol.id_solicitud,
+                "decision": "APROBADA",
+                "estado_operativo": "APROBADA_EN_RUTA",
+                "habilitada_para_reparto": True,
+                "id_sucursal": sucursal_id,
+                "nombre_sucursal": nombre_sucursal,
+                "ya_resuelta": True
+            }
+        }
+
+    ahora_local = ahora_bolivia()
+    timestamp_iso = ahora_local.isoformat()
 
     if decision == "APROBADA":
         items_a_aprobar = []
@@ -1146,99 +1165,123 @@ async def resolver_carga_camion_web(
                     cantidad_aprobada=float(r.stock_adicional_solicitado)
                 ))
 
-        # Sumar stock adicional a inventario_chofer (cargada + remanente)
-        for item in items_a_aprobar:
-            cant = float(item.cantidad_aprobada or 0.0)
-            pid = item.presentacion_id
+        try:
+            # Sumar stock adicional a inventario_chofer (cargada + remanente) omitiendo cantidades <= 0
+            for item in items_a_aprobar:
+                cant = float(item.cantidad_aprobada or 0.0)
+                pid = item.presentacion_id
 
-            existe = db.execute(text("""
-                SELECT id, cantidad_cargada, cantidad_remanente
-                FROM public.inventario_chofer
-                WHERE chofer_id = :uid AND presentacion_id = :pid
-                ORDER BY id DESC LIMIT 1;
-            """), {"uid": chofer_id, "pid": pid}).fetchone()
+                if sol:
+                    db.execute(text("""
+                        UPDATE public.detalle_solicitud_carga_camion
+                        SET stock_adicional_aprobado = :cant
+                        WHERE id_solicitud = :sid AND id_presentacion = :pid;
+                    """), {"cant": cant, "sid": sol.id_solicitud, "pid": pid})
 
-            if existe:
-                db.execute(text("""
-                    UPDATE public.inventario_chofer
-                    SET cantidad_cargada = cantidad_cargada + :cant,
-                        cantidad_remanente = cantidad_remanente + :cant,
-                        fecha_carga = NOW()
-                    WHERE id = :id_inv;
-                """), {"cant": cant, "id_inv": existe.id})
-            else:
-                db.execute(text("""
-                    INSERT INTO public.inventario_chofer (
-                        chofer_id, sucursal_id, presentacion_id, cantidad_cargada,
-                        cantidad_vendida, cantidad_remanente, precio_vigente_carga, fecha_carga
-                    ) VALUES (
-                        :uid, :sid, :pid, :cant,
-                        0, :cant,
-                        (SELECT COALESCE("PrecioUnitario", 0) FROM public."PrecioProducto" WHERE "IdProducto" = (SELECT "IdProducto" FROM public."PresentacionProducto" WHERE "IdPresentacion" = :pid) LIMIT 1),
-                        NOW()
-                    );
-                """), {"uid": chofer_id, "sid": sucursal_id, "pid": pid, "cant": cant})
+                # Validación de negocio: no registrar filas con cantidad <= 0 en inventario_chofer
+                if cant <= 0.0:
+                    continue
+
+                existe = db.execute(text("""
+                    SELECT id, cantidad_cargada, cantidad_remanente
+                    FROM public.inventario_chofer
+                    WHERE chofer_id = :uid AND presentacion_id = :pid
+                    ORDER BY id DESC LIMIT 1;
+                """), {"uid": chofer_id, "pid": pid}).fetchone()
+
+                if existe:
+                    db.execute(text("""
+                        UPDATE public.inventario_chofer
+                        SET cantidad_cargada = cantidad_cargada + :cant,
+                            cantidad_remanente = cantidad_remanente + :cant,
+                            fecha_carga = :fecha_carga
+                        WHERE id = :id_inv;
+                    """), {"cant": cant, "id_inv": existe.id, "fecha_carga": ahora_local})
+                else:
+                    db.execute(text("""
+                        INSERT INTO public.inventario_chofer (
+                            chofer_id, sucursal_id, presentacion_id, cantidad_cargada,
+                            cantidad_vendida, cantidad_remanente, precio_vigente_carga, fecha_carga
+                        ) VALUES (
+                            :uid, :sid, :pid, :cant,
+                            0, :cant,
+                            COALESCE((
+                                SELECT "PrecioUnitario"
+                                FROM public."PrecioProducto"
+                                WHERE "IdPresentacion" = :pid
+                                  AND ("IdSucursal" = :sid OR "IdSucursal" IS NULL)
+                                  AND "Activo" = TRUE
+                                ORDER BY ("IdSucursal" = :sid) DESC, "IdPrecioProducto" DESC
+                                LIMIT 1
+                            ), 0.0),
+                            :fecha_carga
+                        );
+                    """), {"uid": chofer_id, "sid": sucursal_id, "pid": pid, "cant": cant, "fecha_carga": ahora_local})
 
             if sol:
                 db.execute(text("""
-                    UPDATE public.detalle_solicitud_carga_camion
-                    SET stock_adicional_aprobado = :cant
-                    WHERE id_solicitud = :sid AND id_presentacion = :pid;
-                """), {"cant": cant, "sid": sol.id_solicitud, "pid": pid})
+                    UPDATE public.solicitud_carga_camion
+                    SET estado = 'APROBADA',
+                        observacion_admin = :obs,
+                        id_admin_revision = :admin_id,
+                        fecha_revision = :fecha_rev
+                    WHERE id_solicitud = :sid;
+                """), {
+                    "obs": obs_texto or "Carga aprobada en Web",
+                    "admin_id": usuario["IdUsuario"],
+                    "sid": sol.id_solicitud,
+                    "fecha_rev": ahora_local
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO public.solicitud_carga_camion (
+                        id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                    ) VALUES (
+                        :asig_id, :chofer_id, 'APROBADA', :obs, :admin_id, :fecha_sol, :fecha_rev, :fecha_sol
+                    );
+                """), {
+                    "asig_id": asig_id,
+                    "chofer_id": chofer_id,
+                    "obs": obs_texto or "Carga aprobada en Web",
+                    "admin_id": usuario["IdUsuario"],
+                    "fecha_sol": ahora_local,
+                    "fecha_rev": ahora_local
+                })
 
-        if sol:
+            # Marcar AsignacionRuta activa principal
             db.execute(text("""
-                UPDATE public.solicitud_carga_camion
-                SET estado = 'APROBADA',
-                    observacion_admin = :obs,
-                    id_admin_revision = :admin_id,
-                    fecha_revision = NOW()
-                WHERE id_solicitud = :sid;
-            """), {
-                "obs": obs_texto or "Carga aprobada en Web",
-                "admin_id": usuario["IdUsuario"],
-                "sid": sol.id_solicitud
-            })
-        else:
+                UPDATE public."AsignacionRuta"
+                SET "estado_operativo" = 'APROBADA_EN_RUTA',
+                    "Estado" = 'En Ruta'
+                WHERE "IdAsignacionRuta" = :asig_id;
+            """), {"asig_id": asig_id})
+
+            # Asegurar paradas reales de RutaPuntoVenta o Pedido para nunca devolver paradas vacías
+            _asegurar_paradas_reales_asignacion(db, asig_id, ruta_id, sucursal_id, chofer_id)
+
+            # Notificación Interna para el chofer sin emojis con sucursal
+            notif_msg = f"Su solicitud de carga ha sido aprobada en {nombre_sucursal}. Puede iniciar el reparto."
             db.execute(text("""
-                INSERT INTO public.solicitud_carga_camion (
-                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                INSERT INTO public."NotificacionInterna" (
+                    "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
                 ) VALUES (
-                    :asig_id, :chofer_id, 'APROBADA', :obs, :admin_id, NOW(), NOW(), NOW()
+                    :uid, 'Carga de Camion Aprobada', :msg, 'CARGA_APROBADA', :asig_id, false, :fecha_crea
                 );
             """), {
+                "uid": chofer_id,
+                "msg": notif_msg,
                 "asig_id": asig_id,
-                "chofer_id": chofer_id,
-                "obs": obs_texto or "Carga aprobada en Web",
-                "admin_id": usuario["IdUsuario"]
+                "fecha_crea": ahora_local
             })
 
-        # Marcar AsignacionRuta activa principal
-        db.execute(text("""
-            UPDATE public."AsignacionRuta"
-            SET "estado_operativo" = 'APROBADA_EN_RUTA',
-                "Estado" = 'En Ruta'
-            WHERE "IdAsignacionRuta" = :asig_id;
-        """), {"asig_id": asig_id})
-
-        # Asegurar paradas reales de RutaPuntoVenta o Pedido para nunca devolver paradas vacías
-        _asegurar_paradas_reales_asignacion(db, asig_id, ruta_id, sucursal_id, chofer_id)
-
-        # Notificación Interna para el chofer sin emojis con sucursal
-        notif_msg = f"Su solicitud de carga ha sido aprobada en {nombre_sucursal}. Puede iniciar el reparto."
-        db.execute(text("""
-            INSERT INTO public."NotificacionInterna" (
-                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
-            ) VALUES (
-                :uid, 'Carga de Camion Aprobada', :msg, 'CARGA_APROBADA', :asig_id, false, NOW()
-            );
-        """), {
-            "uid": chofer_id,
-            "msg": notif_msg,
-            "asig_id": asig_id
-        })
-
-        db.commit()
+            db.commit()
+        except Exception as e_bd:
+            db.rollback()
+            logger.error(f"[resolver_carga_camion_web] Error en transacción BD: {e_bd}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al procesar la carga en base de datos: {e_bd}"
+            )
 
         # Emitir WebSockets
         evento_aprobada = {
@@ -1285,57 +1328,69 @@ async def resolver_carga_camion_web(
         }
 
     elif decision == "OBSERVADA":
-        if sol:
+        try:
+            if sol:
+                db.execute(text("""
+                    UPDATE public.solicitud_carga_camion
+                    SET estado = 'OBSERVADA',
+                        observacion_admin = :obs,
+                        id_admin_revision = :admin_id,
+                        fecha_revision = :fecha_rev
+                    WHERE id_solicitud = :sid;
+                """), {
+                    "obs": obs_texto or "Carga observada en Web por supervisión",
+                    "admin_id": usuario["IdUsuario"],
+                    "sid": sol.id_solicitud,
+                    "fecha_rev": ahora_local
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO public.solicitud_carga_camion (
+                        id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                    ) VALUES (
+                        :asig_id, :chofer_id, 'OBSERVADA', :obs, :admin_id, :fecha_sol, :fecha_rev, :fecha_sol
+                    );
+                """), {
+                    "asig_id": asig_id,
+                    "chofer_id": chofer_id,
+                    "obs": obs_texto or "Carga observada en Web por supervisión",
+                    "admin_id": usuario["IdUsuario"],
+                    "fecha_sol": ahora_local,
+                    "fecha_rev": ahora_local
+                })
+
             db.execute(text("""
-                UPDATE public.solicitud_carga_camion
-                SET estado = 'OBSERVADA',
-                    observacion_admin = :obs,
-                    id_admin_revision = :admin_id,
-                    fecha_revision = NOW()
-                WHERE id_solicitud = :sid;
-            """), {
-                "obs": obs_texto or "Carga observada en Web por supervisión",
-                "admin_id": usuario["IdUsuario"],
-                "sid": sol.id_solicitud
-            })
-        else:
-            db.execute(text("""
-                INSERT INTO public.solicitud_carga_camion (
-                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
-                ) VALUES (
-                    :asig_id, :chofer_id, 'OBSERVADA', :obs, :admin_id, NOW(), NOW(), NOW()
-                );
+                UPDATE public."AsignacionRuta"
+                SET "estado_operativo" = 'CARGA_OBSERVADA',
+                    "Observacion" = COALESCE(:obs, "Observacion")
+                WHERE "IdAsignacionRuta" = :asig_id;
             """), {
                 "asig_id": asig_id,
-                "chofer_id": chofer_id,
-                "obs": obs_texto or "Carga observada en Web por supervisión",
-                "admin_id": usuario["IdUsuario"]
+                "obs": obs_texto or "Carga observada en supervisión"
             })
 
-        db.execute(text("""
-            UPDATE public."AsignacionRuta"
-            SET "estado_operativo" = 'CARGA_OBSERVADA',
-                "Observacion" = COALESCE(:obs, "Observacion")
-            WHERE "IdAsignacionRuta" = :asig_id;
-        """), {
-            "asig_id": asig_id,
-            "obs": obs_texto or "Carga observada en supervisión"
-        })
+            notif_msg = f"Su carga ha sido observada: {obs_texto or 'Por favor revise los detalles con supervisión'}. Ruta bloqueada en {nombre_sucursal}."
+            db.execute(text("""
+                INSERT INTO public."NotificacionInterna" (
+                    "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+                ) VALUES (
+                    :uid, 'Carga de Camion Observada', :msg, 'CARGA_OBSERVADA', :asig_id, false, :fecha_crea
+                );
+            """), {
+                "uid": chofer_id,
+                "msg": notif_msg,
+                "asig_id": asig_id,
+                "fecha_crea": ahora_local
+            })
 
-        notif_msg = f"Su carga ha sido observada: {obs_texto or 'Por favor revise los detalles con supervisión'}. Ruta bloqueada en {nombre_sucursal}."
-        db.execute(text("""
-            INSERT INTO public."NotificacionInterna" (
-                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
-            ) VALUES (
-                :uid, 'Carga de Camion Observada', :msg, 'CARGA_OBSERVADA', :asig_id, false, NOW()
-            );
-        """), {
-            "uid": chofer_id,
-            "msg": notif_msg,
-            "asig_id": asig_id
-        })
-
-        db.commit()
+            db.commit()
+        except Exception as e_bd:
+            db.rollback()
+            logger.error(f"[resolver_carga_camion_web OBSERVADA] Error BD: {e_bd}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al registrar observación de carga: {e_bd}"
+            )
 
         evento_observada = {
             "tipo": "carga_camion_observada",
@@ -1384,57 +1439,69 @@ async def resolver_carga_camion_web(
         }
 
     else:  # RECHAZADA
-        if sol:
+        try:
+            if sol:
+                db.execute(text("""
+                    UPDATE public.solicitud_carga_camion
+                    SET estado = 'RECHAZADA',
+                        observacion_admin = :obs,
+                        id_admin_revision = :admin_id,
+                        fecha_revision = :fecha_rev
+                    WHERE id_solicitud = :sid;
+                """), {
+                    "obs": obs_texto or "Carga rechazada en Web por supervisión",
+                    "admin_id": usuario["IdUsuario"],
+                    "sid": sol.id_solicitud,
+                    "fecha_rev": ahora_local
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO public.solicitud_carga_camion (
+                        id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
+                    ) VALUES (
+                        :asig_id, :chofer_id, 'RECHAZADA', :obs, :admin_id, :fecha_sol, :fecha_rev, :fecha_sol
+                    );
+                """), {
+                    "asig_id": asig_id,
+                    "chofer_id": chofer_id,
+                    "obs": obs_texto or "Carga rechazada en Web por supervisión",
+                    "admin_id": usuario["IdUsuario"],
+                    "fecha_sol": ahora_local,
+                    "fecha_rev": ahora_local
+                })
+
             db.execute(text("""
-                UPDATE public.solicitud_carga_camion
-                SET estado = 'RECHAZADA',
-                    observacion_admin = :obs,
-                    id_admin_revision = :admin_id,
-                    fecha_revision = NOW()
-                WHERE id_solicitud = :sid;
-            """), {
-                "obs": obs_texto or "Carga rechazada en Web por supervisión",
-                "admin_id": usuario["IdUsuario"],
-                "sid": sol.id_solicitud
-            })
-        else:
-            db.execute(text("""
-                INSERT INTO public.solicitud_carga_camion (
-                    id_asignacion_ruta, id_chofer, estado, observacion_admin, id_admin_revision, fecha_solicitud, fecha_revision, created_at
-                ) VALUES (
-                    :asig_id, :chofer_id, 'RECHAZADA', :obs, :admin_id, NOW(), NOW(), NOW()
-                );
+                UPDATE public."AsignacionRuta"
+                SET "estado_operativo" = 'CARGA_RECHAZADA',
+                    "Observacion" = COALESCE(:obs, "Observacion")
+                WHERE "IdAsignacionRuta" = :asig_id;
             """), {
                 "asig_id": asig_id,
-                "chofer_id": chofer_id,
-                "obs": obs_texto or "Carga rechazada en Web por supervisión",
-                "admin_id": usuario["IdUsuario"]
+                "obs": obs_texto or "Carga rechazada por supervisión"
             })
 
-        db.execute(text("""
-            UPDATE public."AsignacionRuta"
-            SET "estado_operativo" = 'CARGA_RECHAZADA',
-                "Observacion" = COALESCE(:obs, "Observacion")
-            WHERE "IdAsignacionRuta" = :asig_id;
-        """), {
-            "asig_id": asig_id,
-            "obs": obs_texto or "Carga rechazada por supervisión"
-        })
+            notif_msg = f"Su solicitud de carga ha sido rechazada: {obs_texto or 'Carga no autorizada'}. Sucursal: {nombre_sucursal}."
+            db.execute(text("""
+                INSERT INTO public."NotificacionInterna" (
+                    "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+                ) VALUES (
+                    :uid, 'Carga de Camion Rechazada', :msg, 'CARGA_RECHAZADA', :asig_id, false, :fecha_crea
+                );
+            """), {
+                "uid": chofer_id,
+                "msg": notif_msg,
+                "asig_id": asig_id,
+                "fecha_crea": ahora_local
+            })
 
-        notif_msg = f"Su solicitud de carga ha sido rechazada: {obs_texto or 'Carga no autorizada'}. Sucursal: {nombre_sucursal}."
-        db.execute(text("""
-            INSERT INTO public."NotificacionInterna" (
-                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
-            ) VALUES (
-                :uid, 'Carga de Camion Rechazada', :msg, 'CARGA_RECHAZADA', :asig_id, false, NOW()
-            );
-        """), {
-            "uid": chofer_id,
-            "msg": notif_msg,
-            "asig_id": asig_id
-        })
-
-        db.commit()
+            db.commit()
+        except Exception as e_bd:
+            db.rollback()
+            logger.error(f"[resolver_carga_camion_web RECHAZADA] Error BD: {e_bd}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al registrar rechazo de carga: {e_bd}"
+            )
 
         evento_rechazada = {
             "tipo": "carga_camion_rechazada",
