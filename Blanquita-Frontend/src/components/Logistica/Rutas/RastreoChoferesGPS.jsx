@@ -12,6 +12,7 @@ import {
 } from "@/services/Logistica/RutaService";
 import { obtenerFechaHoyBolivia, esHoyBolivia } from "@/utils/fechas";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { logisticaSSE } from "@/services/Logistica/LogisticaSSEClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -289,6 +290,39 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       cargarTelemetria(true, true);
     });
 
+    // Conexión tiempo real SSE (respaldada por Outbox en BD y reconexión con Last-Event-ID)
+    logisticaSSE.setSucursal(sucursal);
+    logisticaSSE.conectar();
+    const unsubSseEstado = logisticaSSE.onEstadoConexion((conectado) => {
+      setWsConectado(conectado);
+    });
+
+    const unsubSseUbicacion = logisticaSSE.suscribir("UBICACION", (datos) => {
+      if (!datos) return;
+      actualizarChoferDesdeWs({
+        id_chofer: datos.id_chofer,
+        lat: datos.latitud,
+        lng: datos.longitud,
+        velocidad: datos.velocidad,
+        bateria: datos.bateria,
+        estado_movimiento: datos.estado_movimiento,
+        parada_actual: datos.parada_actual,
+        total_paradas: datos.total_paradas,
+        paradas_completadas: datos.paradas_completadas,
+        monto_cobrado: datos.monto_cobrado,
+      });
+    });
+
+    const unsubSseAsignacion = logisticaSSE.suscribir("ASIGNACION_ACTUALIZADA", () => {
+      cargarTelemetria(true, true);
+    });
+    const unsubSseCompletada = logisticaSSE.suscribir("ASIGNACION_COMPLETADA", () => {
+      cargarTelemetria(true, true);
+    });
+    const unsubSseCarga = logisticaSSE.suscribir("CARGA_APROBADA", () => {
+      cargarTelemetria(true, true);
+    });
+
     const unsubSnapshot = logisticaSocket.suscribir("SNAPSHOT_INICIAL", (datos) => {
       if (datos && Array.isArray(datos.choferes)) {
         setChoferes(datos.choferes);
@@ -313,6 +347,11 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       unsubChoferSinSenal();
       unsubChoferCreado();
       unsubSnapshot();
+      unsubSseEstado();
+      unsubSseUbicacion();
+      unsubSseAsignacion();
+      unsubSseCompletada();
+      unsubSseCarga();
       window.removeEventListener("blanquita:ws-event", handleCustomWs);
     };
   }, [cargarTelemetria, esHoy]);
@@ -656,7 +695,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
             <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-            <span>{wsConectado ? "WebSocket Activo" : "Conexión Manual"}</span>
+            <span>{wsConectado ? "En Línea (SSE en vivo)" : "Conexión Manual"}</span>
           </div>
 
           <Button
