@@ -20,7 +20,7 @@ from app.Models.Logistica.RutaModel import (
     RepartidorCrear, TelemetriaPing, InsertarParadaOrdenRequest, QuitarParadaRequest,
     MoverParadaRutaRequest, SolicitudCargaCrear, SolicitudCargaRevision,
     RevisionWebOperacionRequest, ItemAprobarCargaDTO, AprobarCargaRequest, ResolverCargaRequest,
-    RevisionOperacionRequest, FinalizarAdminRequest, ReasignarPendientesRequest
+    RevisionOperacionRequest, FinalizarAdminRequest, ReasignarPendientesRequest, ReasignarRutaRequest
 )
 
 RutaRouter = APIRouter(prefix="/logistica", tags=["Logística - Rutas y Asignaciones"])
@@ -711,7 +711,7 @@ def _obtener_nombre_sucursal(db: Session, id_sucursal: Optional[int]) -> str:
 def _obtener_stock_remanente_real_chofer(db: Session, id_chofer: int) -> list[dict]:
     """
     Realiza la consulta real a inventario_chofer (JOIN PresentacionProducto / Producto) para el chofer.
-    Devuelve todos los productos con cantidad > 0 actualmente en el camión.
+    Agrupa por presentacion_id para evitar duplicados y devuelve el stock remanente consolidado.
     """
     sql_rem = text("""
         SELECT 
@@ -723,17 +723,18 @@ def _obtener_stock_remanente_real_chofer(db: Session, id_chofer: int) -> list[di
             prod."NombreProducto" as "NombreProducto",
             COALESCE(pp."TipoContenedor", 'Paquete') as tipo_contenedor,
             COALESCE(pp."TipoContenedor", 'Paquete') as "TipoContenedor",
-            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad,
-            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as stock_remanente,
-            COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad_remanente,
-            ic.cantidad_cargada,
-            ic.cantidad_vendida,
-            ic.precio_vigente_carga
+            SUM(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0))) as cantidad,
+            SUM(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0))) as stock_remanente,
+            SUM(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0))) as cantidad_remanente,
+            SUM(ic.cantidad_cargada) as cantidad_cargada,
+            SUM(ic.cantidad_vendida) as cantidad_vendida,
+            MAX(ic.precio_vigente_carga) as precio_vigente_carga
         FROM public.inventario_chofer ic
         JOIN public."PresentacionProducto" pp ON ic.presentacion_id = pp."IdPresentacion"
         JOIN public."Producto" prod ON pp."IdProducto" = prod."IdProducto"
         WHERE ic.chofer_id = :id_chofer
-          AND COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) > 0
+        GROUP BY ic.presentacion_id, pp."CodigoPresentacion", prod."NombreProducto", pp."TipoContenedor"
+        HAVING SUM(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0))) > 0
         ORDER BY prod."NombreProducto" ASC, pp."CodigoPresentacion" ASC;
     """)
     return [dict(r) for r in db.execute(sql_rem, {"id_chofer": id_chofer}).mappings().fetchall()]
@@ -977,10 +978,12 @@ def obtener_solicitud_carga(
         sol["stock_remanente"] = _obtener_stock_remanente_real_chofer(db, id_chofer)
 
     detalles = sol.get("detalles") or sol.get("items_solicitados") or []
-    if not detalles:
+    if not detalles and not sol.get("stock_remanente"):
         id_suc = sol.get("id_sucursal")
         detalles = _obtener_presentaciones_sugeridas_ruta(db, id_suc)
         sol["detalles"] = detalles
+    elif not detalles:
+        sol["detalles"] = []
 
     sol["items"] = detalles
     sol["items_solicitados"] = detalles
@@ -1115,22 +1118,15 @@ async def resolver_carga_camion_web(
     """)
     sol = db.execute(sql_sol, {"asig_id": asig_id}).fetchone()
 
-    # Idempotencia: Si la solicitud ya está aprobada y se intenta aprobar nuevamente, retornar éxito sin duplicar stock
-    if sol and sol.estado == "APROBADA" and decision == "APROBADA":
-        return {
-            "codigo": "EXITO",
-            "mensaje": "La solicitud de carga ya fue aprobada previamente",
-            "datos": {
-                "id_asignacion": asig_id,
-                "id_solicitud": sol.id_solicitud,
-                "decision": "APROBADA",
-                "estado_operativo": "APROBADA_EN_RUTA",
-                "habilitada_para_reparto": True,
-                "id_sucursal": sucursal_id,
-                "nombre_sucursal": nombre_sucursal,
-                "ya_resuelta": True
-            }
-        }
+    # Si la asignación ya está en curso o ya tiene carga aprobada previa: responder 409 Conflict
+    if decision == "APROBADA" and (
+        asig.estado_operativo in ("APROBADA_EN_RUTA", "EN_RUTA")
+        or (sol and sol.estado == "APROBADA")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta ruta ya tiene su carga aprobada"
+        )
 
     ahora_local = ahora_bolivia()
     timestamp_iso = ahora_local.isoformat()
@@ -1164,6 +1160,21 @@ async def resolver_carga_camion_web(
                     presentacion_id=r.id_presentacion,
                     cantidad_aprobada=float(r.stock_adicional_solicitado)
                 ))
+
+        # Validación de stock: permitir aprobación si hay carga adicional O stock remanente en el camión
+        total_adicional = sum(float(it.cantidad_aprobada or 0.0) for it in items_a_aprobar)
+        sql_rem_total = text("""
+            SELECT COALESCE(SUM(COALESCE(cantidad_remanente, GREATEST(cantidad_cargada - cantidad_vendida, 0))), 0)
+            FROM public.inventario_chofer
+            WHERE chofer_id = :cid;
+        """)
+        total_remanente = float(db.execute(sql_rem_total, {"cid": chofer_id}).scalar() or 0.0)
+
+        if total_adicional <= 0 and total_remanente <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No hay stock en el camión ni carga solicitada para habilitar la ruta"
+            )
 
         try:
             # Sumar stock adicional a inventario_chofer (cargada + remanente) omitiendo cantidades <= 0
@@ -1552,6 +1563,270 @@ async def resolver_carga_camion_web(
 
 # Alias de compatibilidad total con endpoints anteriores
 aprobar_carga_camion_web = resolver_carga_camion_web
+
+
+# -------------------------------------------------------------
+# REASIGNACIÓN DE RUTA A OTRO CHOFER
+# -------------------------------------------------------------
+@RutaRouter.post("/asignaciones/{id}/reasignar", response_model=dict)
+@RutaRouter.post("/asignaciones/{id_asignacion}/reasignar", response_model=dict)
+async def reasignar_ruta_asignacion(
+    id: Optional[int] = None,
+    id_asignacion: Optional[int] = None,
+    dto: Optional[ReasignarRutaRequest] = None,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    asig_id = id if id is not None else id_asignacion
+    if not asig_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID de asignación requerido")
+
+    if not dto or not dto.motivo or len(dto.motivo.strip()) < 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El motivo de la reasignación es obligatorio (mínimo 5 caracteres)"
+        )
+
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", ar."IdRutaDistribucion",
+               ar."FechaAsignacion", ar."Estado", ar."estado_operativo", ar."Observacion",
+               r."IdSucursal", r."NombreRuta",
+               CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreChoferActual"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        LEFT JOIN public."Usuario" u ON ar."IdUsuarioRepartidor" = u."IdUsuario"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_asig, {"asig_id": asig_id}).fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada")
+
+    alcance.validar_recurso(asig.IdSucursal, nombre_recurso="asignación de ruta", responder_404=True)
+    sucursal_id = asig.IdSucursal
+    nombre_sucursal = _obtener_nombre_sucursal(db, sucursal_id)
+
+    estado_actual = str(asig.Estado or "").strip().lower()
+    if estado_actual in ("cancelada", "finalizada"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede reasignar una ruta que ya se encuentra cancelada o finalizada"
+        )
+
+    chofer_origen_id = asig.IdUsuarioRepartidor
+    chofer_destino_id = dto.nuevo_id_chofer
+
+    if chofer_origen_id == chofer_destino_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El nuevo chofer debe ser diferente al chofer actualmente asignado"
+        )
+
+    # Validar que el chofer destino exista y sea activo
+    sql_chofer_dest = text("""
+        SELECT "IdUsuario", CONCAT("PrimerNombre", ' ', "ApellidoPaterno") as nombre_completo, "IdSucursal", "Activo"
+        FROM public."Usuario"
+        WHERE "IdUsuario" = :uid;
+    """)
+    chofer_dest = db.execute(sql_chofer_dest, {"uid": chofer_destino_id}).fetchone()
+    if not chofer_dest or not chofer_dest.Activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El chofer destino no existe o se encuentra inactivo"
+        )
+
+    # Validar que el chofer destino no tenga ya una asignación activa para la misma fecha
+    sql_dest_ocupado = text("""
+        SELECT ar."IdAsignacionRuta", r."NombreRuta"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdUsuarioRepartidor" = :cid
+          AND ar."FechaAsignacion" = :fec
+          AND LOWER(TRIM(ar."Estado")) NOT IN ('cancelada', 'finalizada')
+          AND ar."IdAsignacionRuta" != :asig_id
+        LIMIT 1;
+    """)
+    dest_ocupado = db.execute(sql_dest_ocupado, {
+        "cid": chofer_destino_id,
+        "fec": asig.FechaAsignacion,
+        "asig_id": asig_id
+    }).fetchone()
+    if dest_ocupado:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"El chofer {chofer_dest.nombre_completo} ya tiene la ruta '{dest_ocupado.NombreRuta}' asignada para esta fecha."
+        )
+
+    ahora_local = ahora_bolivia()
+    timestamp_iso = ahora_local.isoformat()
+    motivo_limpio = dto.motivo.strip()
+    nombre_chofer_origen = asig.NombreChoferActual or f"Chofer #{chofer_origen_id}"
+    nombre_chofer_destino = chofer_dest.nombre_completo
+
+    nueva_obs = f"{asig.Observacion or ''} [Reasignada de {nombre_chofer_origen} a {nombre_chofer_destino}. Motivo: {motivo_limpio}]".strip()
+
+    try:
+        # Transferir stock a bordo si transferir_stock == True
+        if dto.transferir_stock:
+            sql_stock_origen = text("""
+                SELECT id, presentacion_id, cantidad_remanente, precio_vigente_carga
+                FROM public.inventario_chofer
+                WHERE chofer_id = :uid AND sucursal_id = :sid AND COALESCE(cantidad_remanente, 0) > 0;
+            """)
+            filas_stock = db.execute(sql_stock_origen, {"uid": chofer_origen_id, "sid": sucursal_id}).fetchall()
+            for stk in filas_stock:
+                cant_rem = float(stk.cantidad_remanente or 0)
+                if cant_rem <= 0:
+                    continue
+                db.execute(text("""
+                    UPDATE public.inventario_chofer
+                    SET cantidad_remanente = 0,
+                        cantidad_vendida = cantidad_vendida + :cant
+                    WHERE id = :id_stk;
+                """), {"cant": cant_rem, "id_stk": stk.id})
+
+                existe_dest = db.execute(text("""
+                    SELECT id FROM public.inventario_chofer
+                    WHERE chofer_id = :uid AND presentacion_id = :pid
+                    ORDER BY id DESC LIMIT 1;
+                """), {"uid": chofer_destino_id, "pid": stk.presentacion_id}).fetchone()
+
+                if existe_dest:
+                    db.execute(text("""
+                        UPDATE public.inventario_chofer
+                        SET cantidad_cargada = cantidad_cargada + :cant,
+                            cantidad_remanente = cantidad_remanente + :cant,
+                            fecha_carga = :fecha_carga
+                        WHERE id = :id_dest;
+                    """), {"cant": cant_rem, "id_dest": existe_dest.id, "fecha_carga": ahora_local})
+                else:
+                    db.execute(text("""
+                        INSERT INTO public.inventario_chofer (
+                            chofer_id, sucursal_id, presentacion_id, cantidad_cargada,
+                            cantidad_vendida, cantidad_remanente, precio_vigente_carga, fecha_carga
+                        ) VALUES (
+                            :uid, :sid, :pid, :cant,
+                            0, :cant, :precio, :fecha_carga
+                        );
+                    """), {
+                        "uid": chofer_destino_id,
+                        "sid": sucursal_id,
+                        "pid": stk.presentacion_id,
+                        "cant": cant_rem,
+                        "precio": stk.precio_vigente_carga or 0.0,
+                        "fecha_carga": ahora_local
+                    })
+
+        # Actualizar AsignacionRuta con el nuevo chofer
+        db.execute(text("""
+            UPDATE public."AsignacionRuta"
+            SET "IdUsuarioRepartidor" = :nuevo_uid,
+                "Observacion" = :obs
+            WHERE "IdAsignacionRuta" = :asig_id;
+        """), {
+            "nuevo_uid": chofer_destino_id,
+            "obs": nueva_obs,
+            "asig_id": asig_id
+        })
+
+        # Actualizar Pedidos asociados a esta asignación
+        db.execute(text("""
+            UPDATE public."Pedido"
+            SET "IdUsuarioRepartidor" = :nuevo_uid
+            WHERE "IdAsignacionRuta" = :asig_id;
+        """), {"nuevo_uid": chofer_destino_id, "asig_id": asig_id})
+
+        # Actualizar solicitudes de carga asociadas si existieran
+        db.execute(text("""
+            UPDATE public.solicitud_carga_camion
+            SET id_chofer = :nuevo_uid
+            WHERE id_asignacion_ruta = :asig_id;
+        """), {"nuevo_uid": chofer_destino_id, "asig_id": asig_id})
+
+        # Notificación Interna para chofer anterior
+        db.execute(text("""
+            INSERT INTO public."NotificacionInterna" (
+                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+            ) VALUES (
+                :uid, 'Ruta Reasignada', :msg, 'RUTA_REASIGNADA', :asig_id, false, :fecha_crea
+            );
+        """), {
+            "uid": chofer_origen_id,
+            "msg": f"La ruta {asig.NombreRuta} ha sido reasignada a {nombre_chofer_destino}. Motivo: {motivo_limpio}",
+            "asig_id": asig_id,
+            "fecha_crea": ahora_local
+        })
+
+        # Notificación Interna para nuevo chofer
+        db.execute(text("""
+            INSERT INTO public."NotificacionInterna" (
+                "IdUsuarioDestinatario", "Titulo", "Mensaje", "Tipo", "CodigoReferencia", "Leido", "FechaCreacion"
+            ) VALUES (
+                :uid, 'Nueva Ruta Asignada', :msg, 'RUTA_ASIGNADA', :asig_id, false, :fecha_crea
+            );
+        """), {
+            "uid": chofer_destino_id,
+            "msg": f"Se le ha asignado la ruta {asig.NombreRuta} en {nombre_sucursal}. Motivo: {motivo_limpio}",
+            "asig_id": asig_id,
+            "fecha_crea": ahora_local
+        })
+
+        db.commit()
+    except Exception as e_bd:
+        db.rollback()
+        logger.error(f"[reasignar_ruta_asignacion] Error BD: {e_bd}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al registrar la reasignación de ruta: {e_bd}"
+        )
+
+    evento_desasignada = {
+        "tipo": "ruta_desasignada",
+        "id_asignacion": asig_id,
+        "id_chofer": chofer_origen_id,
+        "id_sucursal": sucursal_id,
+        "motivo": motivo_limpio,
+        "timestamp": timestamp_iso
+    }
+    evento_asignada = {
+        "tipo": "ruta_asignada",
+        "id_asignacion": asig_id,
+        "id_chofer": chofer_destino_id,
+        "id_sucursal": sucursal_id,
+        "nombre_ruta": asig.NombreRuta,
+        "motivo": motivo_limpio,
+        "timestamp": timestamp_iso
+    }
+    evento_web = {
+        "tipo": "asignacion_reasignada",
+        "id_asignacion": asig_id,
+        "id_chofer_anterior": chofer_origen_id,
+        "id_chofer_nuevo": chofer_destino_id,
+        "nombre_chofer_nuevo": nombre_chofer_destino,
+        "id_sucursal": sucursal_id,
+        "motivo": motivo_limpio,
+        "timestamp": timestamp_iso
+    }
+    try:
+        await flota_ws_manager.emitir_a_chofer(chofer_origen_id, evento_desasignada)
+        await flota_ws_manager.emitir_a_chofer(chofer_destino_id, evento_asignada)
+        await flota_ws_manager.emitir_a_web(evento_web, sucursal_id)
+    except Exception as e_ws:
+        logger.debug(f"[WS reasignacion] Error emitiendo ws: {e_ws}")
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Ruta reasignada exitosamente a {nombre_chofer_destino}",
+        "datos": {
+            "id_asignacion": asig_id,
+            "id_chofer_anterior": chofer_origen_id,
+            "id_chofer_nuevo": chofer_destino_id,
+            "nombre_chofer_nuevo": nombre_chofer_destino,
+            "motivo": motivo_limpio,
+            "transferir_stock": dto.transferir_stock,
+            "id_sucursal": sucursal_id
+        }
+    }
 
 
 # -------------------------------------------------------------

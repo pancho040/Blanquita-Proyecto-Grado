@@ -49,12 +49,14 @@ class InventarioComercialRepository:
                 ic.presentacion_id,
                 p."CodigoPresentacion" as codigo_presentacion,
                 prod."NombreProducto" as nombre_producto,
-                p."TipoContenedor" as tipo_contenedor,
+                COALESCE(p."TipoContenedor", 'Paquete') as tipo_contenedor,
                 ic.cantidad_cargada,
                 ic.cantidad_vendida,
-                ic.cantidad_remanente,
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad_remanente,
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as stock_remanente,
+                COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) as cantidad,
                 ic.precio_vigente_carga,
-                ROUND(ic.cantidad_remanente * ic.precio_vigente_carga, 2) as valor_remanente,
+                ROUND(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) * ic.precio_vigente_carga, 2) as valor_remanente,
                 COALESCE((
                     SELECT pp."PrecioUnitario" 
                     FROM public."PrecioProducto" pp 
@@ -64,7 +66,7 @@ class InventarioComercialRepository:
                     ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC 
                     LIMIT 1
                 ), ic.precio_vigente_carga) as precio_vigente_actual,
-                ROUND(ic.cantidad_remanente * COALESCE((
+                ROUND(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) * COALESCE((
                     SELECT pp."PrecioUnitario" 
                     FROM public."PrecioProducto" pp 
                     WHERE pp."IdPresentacion" = ic.presentacion_id 
@@ -73,7 +75,7 @@ class InventarioComercialRepository:
                     ORDER BY (pp."IdSucursal" = ic.sucursal_id) DESC, pp."IdPrecioProducto" DESC 
                     LIMIT 1
                 ), ic.precio_vigente_carga), 2) as valor_remanente_revalorizado,
-                ROUND(ic.cantidad_remanente * (COALESCE((
+                ROUND(COALESCE(ic.cantidad_remanente, GREATEST(ic.cantidad_cargada - ic.cantidad_vendida, 0)) * (COALESCE((
                     SELECT pp."PrecioUnitario" 
                     FROM public."PrecioProducto" pp 
                     WHERE pp."IdPresentacion" = ic.presentacion_id 
