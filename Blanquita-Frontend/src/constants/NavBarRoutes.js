@@ -76,8 +76,7 @@ export const RutasAdmin = [
     subrutas: [
       { titulo: "Inicio", icono: Home, ruta: "inicio" },
       { titulo: "Clientes", icono: Users, ruta: "clientes" },
-      { titulo: "Zonas y Rutas", icono: MapPin, ruta: "rutas" },
-      { titulo: "Rastreo", icono: Radio, ruta: "rutas/rastreo" },
+      { titulo: "Rutas", icono: MapPin, ruta: "rutas" },
       { titulo: "Reparto y Despachos", icono: Truck, ruta: "asignaciones" },
       { titulo: "Precios", icono: Tag, ruta: "precios" },
       { titulo: "Inventario Comercial", icono: Boxes, ruta: "inventario-comercial" },

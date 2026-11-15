@@ -510,7 +510,26 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const formatearMonto = (val) =>
     new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
 
+  const formatearTiempoRelativoReporte = (segundos) => {
+    if (segundos === null || segundos === undefined || segundos === "") return "Sin reporte hoy";
+    const s = Number(segundos);
+    if (isNaN(s)) return "Sin reporte hoy";
+    if (s < 10) return "hace instantes";
+    if (s < 60) return `hace ${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `hace ${m} min`;
+    const h = Math.floor(m / 60);
+    return `hace ${h} h ${m % 60} min`;
+  };
+
   const choferesFiltrados = choferes.filter((c) => {
+    // Si no estamos en DEV, ocultar usuarios de pruebas (TEST_*)
+    if (!import.meta.env?.DEV) {
+      const nombre = (c.NombreRepartidor || c.NombreCompleto || "").toUpperCase();
+      if (nombre.startsWith("TEST_") || nombre.includes("PRUEBA")) {
+        return false;
+      }
+    }
     const q = busqueda.toLowerCase();
     return (
       c.NombreRepartidor?.toLowerCase().includes(q) ||
@@ -687,9 +706,9 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                         <BatteryCharging className="h-3 w-3 text-emerald-600" />
                         <span>{ch.Bateria || 100}%</span>
                       </div>
-                      <div className="flex items-center gap-1 text-right justify-end">
+                      <div className="flex items-center gap-1 text-right justify-end" title={`Último ping hace ${ch.SegundosDesdeUltimoReporte || 0} segundos`}>
                         <Clock className="h-3 w-3 text-slate-400" />
-                        <span>hace {ch.SegundosDesdeUltimoReporte || 0}s</span>
+                        <span>{formatearTiempoRelativoReporte(ch.SegundosDesdeUltimoReporte)}</span>
                       </div>
                     </div>
 
@@ -778,7 +797,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
                 const m = mapInstanceRef.current;
                 if (m && m._mapPane) {
                   try {
-                    m.flyTo(SUCRE_CENTER, 14, { animate: false });
+                    const centro = obtenerCentroSucursal(sucursal);
+                    m.flyTo(centro, 14, { animate: true });
                     m.invalidateSize();
                   } catch {}
                 }
@@ -787,8 +807,32 @@ export default function RastreoChoferesGPS({ usuario = null }) {
               className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded border border-slate-200 text-xs font-medium text-slate-700 hover:text-[#1C96C5] hover:border-[#1C96C5] transition-colors"
             >
               <Maximize2 className="h-3.5 w-3.5 text-[#1C96C5]" />
-              <span>Centrar Sucre</span>
+              <span>Centrar {sucursal === "2" || sucursal === 2 ? "Potosí" : (sucursal === "1" || sucursal === 1 ? "Sucre" : "Sede")}</span>
             </button>
+            {esMultisede && (sucursal === "todas" || !sucursal) && (
+              <div className="flex items-center gap-1 bg-white p-0.5 rounded border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = mapInstanceRef.current;
+                    if (m && m._mapPane) m.flyTo(SUCRE_CENTER, 14, { animate: true });
+                  }}
+                  className="px-2 py-1 text-[11px] font-medium text-slate-700 hover:text-[#1C96C5] hover:bg-slate-50 rounded"
+                >
+                  Sucre
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = mapInstanceRef.current;
+                    if (m && m._mapPane) m.flyTo(POTOSI_CENTER, 14, { animate: true });
+                  }}
+                  className="px-2 py-1 text-[11px] font-medium text-slate-700 hover:text-[#1C96C5] hover:bg-slate-50 rounded"
+                >
+                  Potosí
+                </button>
+              </div>
+            )}
           </div>
 
           {/* LEYENDA FLOTANTE SOBRE EL MAPA */}

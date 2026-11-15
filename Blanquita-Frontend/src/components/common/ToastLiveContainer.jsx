@@ -186,7 +186,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
           titulo: "Alerta de Chofer en Ruta",
           nombreChofer: chofer,
           detalle: datos.mensaje || `Alerta en parada: ${datos.estado_movimiento || "Detención prolongada"}`,
-          accionUrl: "/supervisor/rutas/rastreo",
+          accionUrl: "/supervisor/rutas?vista=vivo",
           accionTexto: "Ver en Mapa GPS",
           color: "rose",
           icono: ShieldAlert,

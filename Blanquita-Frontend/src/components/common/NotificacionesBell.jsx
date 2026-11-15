@@ -96,7 +96,7 @@ const NOTIFICACIONES_SEMILLA = [
     fecha: "Hace 1 hora",
     creadoEn: Date.now() - 60 * 60 * 1000,
     leida: false,
-    accionUrl: "/supervisor/rutas/rastreo",
+    accionUrl: "/supervisor/rutas?vista=vivo",
     accionTexto: "Ver en Rastreo GPS",
     color: "rose",
   },

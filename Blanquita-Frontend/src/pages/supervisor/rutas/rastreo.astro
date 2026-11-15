@@ -1,9 +1,3 @@
 ---
-import Layout from '@/layouts/Layout.astro';
-const { usuario } = Astro.locals;
-import RastreoChoferesGPS from '@/components/Logistica/Rutas/RastreoChoferesGPS';
+return Astro.redirect('/supervisor/rutas?vista=vivo');
 ---
-
-<Layout title="Rastreo | Papelera Blanquita">
-  <RastreoChoferesGPS client:only="react" usuario={usuario} />
-</Layout>

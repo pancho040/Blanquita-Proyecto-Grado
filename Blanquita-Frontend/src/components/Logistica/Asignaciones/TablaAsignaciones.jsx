@@ -521,7 +521,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         </div>
 
         <a
-          href="/supervisor/rutas/rastreo"
+          href="/supervisor/rutas?vista=vivo"
           className="inline-flex items-center h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
         >
           <Radio className="h-3.5 w-3.5" />

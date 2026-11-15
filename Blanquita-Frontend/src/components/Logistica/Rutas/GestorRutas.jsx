@@ -59,6 +59,7 @@ import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import RastreoChoferesGPS from "./RastreoChoferesGPS";
 
 const DIAS_SEMANA = {
   1: "Lunes",
@@ -94,6 +95,26 @@ export default function GestorRutas({ usuario = null }) {
   const [zonas, setZonas] = useState([]);
   const [rutas, setRutas] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modo de vista unificada: 'vivo' (Rastreo GPS en tiempo real) vs 'planificacion' (Zonas y Rutas)
+  const [vistaPrincipal, setVistaPrincipal] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const v = p.get("vista");
+      if (v === "planificacion" || v === "rutas") return "planificacion";
+      if (v === "vivo" || v === "rastreo") return "vivo";
+    }
+    return "vivo";
+  });
+
+  const cambiarVista = (nuevaVista) => {
+    setVistaPrincipal(nuevaVista);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("vista", nuevaVista);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   // Selector de fecha de rutas (Rutas de Hoy vs Rutas Históricas/Futuras)
   const hoyStr = useMemo(() => obtenerFechaHoyBolivia(), []);
@@ -491,86 +512,130 @@ export default function GestorRutas({ usuario = null }) {
       {/* 0. BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
       <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarDatos(true)} />
 
-      {/* 1. Header con botones de creación y GPS bajo demanda */}
-      <PageHeader
-        title="Rutas y Zonas de Distribución"
-        subtitle="Configuración vial, paradas secuenciales 1..N y georreferenciación de itinerarios de distribución."
-        branchFilter={
-          <BranchFilter
-            sucursal={sucursal}
-            onChange={setSucursal}
-            sucursales={sucursalesPermitidas}
-            esMultisede={esMultisede}
-            permiteTodas={true}
-          />
-        }
-      >
+      {/* SELECTOR DE VISTA UNIFICADA: RASTREO SATELITAL EN VIVO vs PLANIFICACIÓN DE RUTAS */}
+      <div className="flex items-center justify-between bg-white border border-slate-200 rounded p-1.5 shadow-2xs">
         <div className="flex items-center gap-1.5">
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
-            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-            <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
-          </div>
-
-          <Button
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => cargarDatos(false, true)}
-            disabled={loading}
-            className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
-            title="Actualizar catálogo de rutas y zonas"
+            onClick={() => cambiarVista("vivo")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
+              vistaPrincipal === "vivo"
+                ? "bg-[#1C96C5] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
-            <span>Actualizar</span>
-          </Button>
+            <Radio className="h-3.5 w-3.5" />
+            <span>Rastreo y Monitoreo Satelital (En Vivo)</span>
+            {vistaPrincipal === "vivo" && (
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => cambiarVista("planificacion")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
+              vistaPrincipal === "planificacion"
+                ? "bg-[#1C96C5] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <Route className="h-3.5 w-3.5" />
+            <span>Zonas, Rutas y Secuencia 1..N</span>
+          </button>
         </div>
 
-        <Button
-          type="button"
-          size="sm"
-          onClick={solicitarUbicacionGPS}
-          disabled={solicitandoGps}
-          className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
-          title="Emitir ping de telemetría satelital a los choferes"
-        >
-          <Navigation className={`h-3.5 w-3.5 shrink-0 ${solicitandoGps ? "animate-spin" : ""}`} />
-          <span>Solicitar Ubicación Actual de Todos los Choferes</span>
-        </Button>
+        <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 pr-2">
+          <span>Vista activa: <strong className="text-slate-800">{vistaPrincipal === "vivo" ? "Telemetría y Estado de Flota" : "Diseño vial e Itinerarios"}</strong></span>
+        </div>
+      </div>
 
-        <a
-          href="/supervisor/rutas/rastreo"
-          className="inline-flex items-center h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
-        >
-          <Radio className="h-3.5 w-3.5" />
-          <span>Ver Mapa GPS</span>
-        </a>
+      {vistaPrincipal === "vivo" ? (
+        <RastreoChoferesGPS usuario={usuario} />
+      ) : (
+        <>
+          {/* 1. Header con botones de creación y GPS bajo demanda */}
+          <PageHeader
+            title="Rutas y Zonas de Distribución"
+            subtitle="Configuración vial, paradas secuenciales 1..N y georreferenciación de itinerarios de distribución."
+            branchFilter={
+              <BranchFilter
+                sucursal={sucursal}
+                onChange={setSucursal}
+                sucursales={sucursalesPermitidas}
+                esMultisede={esMultisede}
+                permiteTodas={true}
+              />
+            }
+          >
+            <div className="flex items-center gap-1.5">
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
+                <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+                <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
+              </div>
 
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => setModalZona(true)} 
-          className="h-8 text-slate-700 border-slate-300 gap-1.5 font-medium text-xs rounded"
-        >
-          <Plus className="h-3.5 w-3.5 text-[#1C96C5]" />
-          <span>Nueva Zona</span>
-        </Button>
-        <Button 
-          size="sm"
-          onClick={() => {
-            setNuevaRuta({
-              IdZonaDistribucion: zonas.length > 0 ? String(zonas[0].IdZonaDistribucion) : "",
-              NombreRuta: "",
-              DiaSemana: 1,
-              Descripcion: ""
-            });
-            setModalRuta(true);
-          }} 
-          className="h-8 bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nueva Ruta</span>
-        </Button>
-      </PageHeader>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => cargarDatos(false, true)}
+                disabled={loading}
+                className="h-8 text-slate-700 border-slate-300 hover:bg-slate-50 gap-1.5 px-3 font-medium text-xs rounded"
+                title="Actualizar catálogo de rutas y zonas"
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#1C96C5]" : ""}`} />
+                <span>Actualizar</span>
+              </Button>
+            </div>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={solicitarUbicacionGPS}
+              disabled={solicitandoGps}
+              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
+              title="Emitir ping de telemetría satelital a los choferes"
+            >
+              <Navigation className={`h-3.5 w-3.5 shrink-0 ${solicitandoGps ? "animate-spin" : ""}`} />
+              <span>Solicitar Ubicación Actual de Todos los Choferes</span>
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => cambiarVista("vivo")}
+              className="inline-flex items-center h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              <span>Ver Rastreo Satelital</span>
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setModalZona(true)} 
+              className="h-8 text-slate-700 border-slate-300 gap-1.5 font-medium text-xs rounded"
+            >
+              <Plus className="h-3.5 w-3.5 text-[#1C96C5]" />
+              <span>Nueva Zona</span>
+            </Button>
+            <Button 
+              size="sm"
+              onClick={() => {
+                setNuevaRuta({
+                  IdZonaDistribucion: zonas.length > 0 ? String(zonas[0].IdZonaDistribucion) : "",
+                  NombreRuta: "",
+                  DiaSemana: 1,
+                  Descripcion: ""
+                });
+                setModalRuta(true);
+              }} 
+              className="h-8 bg-[#1C96C5] hover:bg-[#157A9E] text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Nueva Ruta</span>
+            </Button>
+          </PageHeader>
 
       {/* BARRA SUPERIOR DE SELECTOR DE FECHA (RUTAS DE HOY, FUTURAS Y PROGRAMADAS) */}
       <div className="bg-white border border-slate-200 rounded p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
@@ -1553,6 +1618,8 @@ export default function GestorRutas({ usuario = null }) {
           repartidores={repartidores}
           alCompletar={() => cargarDatos(true)}
         />
+      )}
+        </>
       )}
     </div>
   );
