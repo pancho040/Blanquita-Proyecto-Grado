@@ -4,6 +4,7 @@ import { Alert } from "react-native";
 import { CONFIG } from "../constants/Config";
 import { LogisticaApi } from "../api/logisticaApi";
 import { SyncQueue } from "../database/syncQueue";
+import { wsService } from "../services/wsService";
 
 const LocationContext = createContext(null);
 
@@ -12,6 +13,8 @@ export function LocationProvider({ children }) {
   const [gpsActivo, setGpsActivo] = useState(false);
   const [ultimaUbicacion, setUltimaUbicacion] = useState(null);
   const [cargandoGps, setCargandoGps] = useState(false);
+  const [enviandoGps, setEnviandoGps] = useState(false);
+  const [ultimoPingGps, setUltimoPingGps] = useState(null);
   const telemetriaIntervalRef = useRef(null);
   const ultimaUbicacionEmitidaRef = useRef(null);
 
@@ -110,17 +113,99 @@ export function LocationProvider({ children }) {
   const idRepartidorRef = useRef(null);
   const idAsignacionRef = useRef(null);
 
+  const ejecutarEnvioPing = async () => {
+    const uid = idRepartidorRef.current;
+    const asigId = idAsignacionRef.current;
+    if (!uid) return;
+
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setGpsActivo(false);
+        return;
+      }
+      setPermisoConcedido(true);
+      const chipOn = await Location.hasServicesEnabledAsync();
+      setGpsActivo(chipOn);
+      if (!chipOn) return;
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 5000,
+      });
+
+      if (!loc || !loc.coords) return;
+      const coords = loc.coords;
+      const lat = Number(coords.latitude.toFixed(6));
+      const lng = Number(coords.longitude.toFixed(6));
+      const vel = coords.speed ? Math.max(0, Math.round(coords.speed * 3.6)) : 0.0;
+      const tsIso = new Date(loc.timestamp || Date.now()).toISOString();
+
+      const gpsData = {
+        latitud: lat,
+        longitud: lng,
+        precision: Math.round(coords.accuracy || 0),
+        velocidad: vel,
+        altitud: coords.altitude || 0,
+        fechaHora: tsIso,
+      };
+      setUltimaUbicacion(gpsData);
+
+      const payload = {
+        IdUsuarioRepartidor: Number(uid),
+        IdAsignacionRuta: asigId ? Number(asigId) : null,
+        Latitud: lat,
+        Longitud: lng,
+        Velocidad: vel,
+        Bateria: 95,
+        EstadoMovimiento: vel > 5 ? "En Ruta" : "En Parada",
+        DireccionAproximada: "Reporte GPS en vivo",
+        timestamp: tsIso,
+      };
+
+      // 1. Envío HTTP API
+      LogisticaApi.enviarTelemetriaPing(payload).catch(() => {});
+
+      // 2. Envío WebSocket si socket está abierto
+      if (wsService && typeof wsService.enviar === "function") {
+        wsService.enviar({
+          tipo: "reporte_ubicacion_actual",
+          id_chofer: Number(uid),
+          id_asignacion: asigId ? Number(asigId) : null,
+          lat,
+          lng,
+          velocidad: vel,
+          bateria: 95,
+          timestamp: tsIso,
+        });
+      }
+
+      setUltimoPingGps(new Date());
+      setEnviandoGps(true);
+    } catch (_err) {
+      // Degradar silenciosamente en caso de GPS sin cobertura
+    }
+  };
+
   /**
-   * Telemetría bajo demanda para el chofer móvil (Optimizado Cero Polling / Plan Gratuito).
-   * Se elimina el setInterval continuo en background. Las posiciones satelitales
-   * se capturan en eventos operativos (entregas, cobros) o cuando el servidor
-   * central solicita la ubicación actual puntual vía WebSocket ('solicitar_ubicacion_actual').
+   * Telemetría GPS periódica para el chofer móvil durante la jornada activa (Fase 1).
+   * Envía ubicación cada 12 segundos mientras la asignación esté activa (APROBADA_EN_RUTA).
    */
   const iniciarTelemetria = (idRepartidor, idAsignacion) => {
     idRepartidorRef.current = idRepartidor;
     idAsignacionRef.current = idAsignacion;
     detenerTelemetria();
-    // Cero Polling: Sin setInterval continuo de telemetría en background
+
+    if (!idRepartidor) return;
+
+    setEnviandoGps(true);
+    // Ping inmediato al iniciar
+    ejecutarEnvioPing();
+
+    // Intervalo de transmisión periódica cada 12 segundos
+    telemetriaIntervalRef.current = setInterval(() => {
+      ejecutarEnvioPing();
+    }, 12000);
   };
 
   const detenerTelemetria = () => {
@@ -128,6 +213,7 @@ export function LocationProvider({ children }) {
       clearInterval(telemetriaIntervalRef.current);
       telemetriaIntervalRef.current = null;
     }
+    setEnviandoGps(false);
   };
 
   // Limpieza al desmontar el contexto
@@ -163,6 +249,8 @@ export function LocationProvider({ children }) {
         getCurrentCoords: obtenerUbicacionActual,
         iniciarTelemetria,
         detenerTelemetria,
+        enviandoGps,
+        ultimoPingGps,
       }}
     >
       {children}

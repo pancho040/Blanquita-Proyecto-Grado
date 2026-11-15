@@ -525,26 +525,71 @@ class RutaRepository:
                 u."IdSucursal" as "id_sucursal",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreRepartidor",
                 u."Celular",
-                COALESCE(t."IdAsignacionRuta", ar."IdAsignacionRuta") as "IdAsignacionRuta",
+                ar."IdAsignacionRuta" as "IdAsignacionRuta",
                 COALESCE(r."NombreRuta", 'Sin Ruta Asignada') as "NombreRuta",
-                COALESCE(z."NombreZona", 'Sucre') as "NombreZona",
+                COALESCE(z."NombreZona", CASE WHEN u."IdSucursal" = 2 THEN 'Potosí' ELSE 'Sucre' END) as "NombreZona",
                 COALESCE(ar."Estado", 'Sin Asignación') as "EstadoAsignacion",
+                COALESCE(ar."estado_operativo", 'PENDIENTE_CARGA') as "estado_operativo",
                 t."Latitud" as "Latitud",
                 t."Longitud" as "Longitud",
                 COALESCE(t."Velocidad", 0.0) as "Velocidad",
                 t."Bateria" as "Bateria",
-                COALESCE(t."EstadoMovimiento", 'Sin Señal') as "EstadoMovimiento",
-                COALESCE(t."DireccionAproximada", 'Sin reporte de ubicación') as "DireccionAproximada",
+                CASE
+                    WHEN t."UltimaActualizacion" IS NULL 
+                      OR DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') != :fecha_evaluar 
+                      OR EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")) > 600
+                    THEN 'Sin Señal'
+                    ELSE COALESCE(t."EstadoMovimiento", 'En Ruta')
+                END as "EstadoMovimiento",
+                CASE
+                    WHEN t."UltimaActualizacion" IS NOT NULL 
+                     AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_evaluar 
+                    THEN COALESCE(t."DireccionAproximada", 'Ubicación reportada hoy')
+                    ELSE 'Sin ubicación hoy'
+                END as "DireccionAproximada",
                 COALESCE(t."ParadaActual", 1) as "ParadaActual",
-                COALESCE(t."TotalParadas", (
-                    SELECT COUNT(*) FROM "RutaPuntoVenta" rpv 
-                    WHERE rpv."IdRutaDistribucion" = r."IdRutaDistribucion"
-                ), 0) as "TotalParadas",
-                COALESCE(t."ParadasCompletadas", 0) as "ParadasCompletadas",
-                COALESCE(t."MontoCobradoTotal", 0.0) as "MontoCobradoTotal",
-                t."UltimaActualizacion" as "UltimaActualizacion",
                 CASE 
-                    WHEN t."UltimaActualizacion" IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")))::INTEGER 
+                    WHEN ar."IdAsignacionRuta" IS NULL THEN 0
+                    ELSE GREATEST(
+                        COALESCE((
+                            SELECT COUNT(*) FROM "RutaPuntoVenta" rpv 
+                            WHERE rpv."IdRutaDistribucion" = r."IdRutaDistribucion"
+                        ), 0),
+                        COALESCE((
+                            SELECT COUNT(DISTINCT p."IdPuntoVenta") 
+                            FROM "Pedido" p 
+                            WHERE p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+                        ), 0)
+                    )
+                END as "TotalParadas",
+                CASE 
+                    WHEN ar."IdAsignacionRuta" IS NULL THEN 0
+                    ELSE COALESCE((
+                        SELECT COUNT(DISTINCT p."IdPuntoVenta")
+                        FROM "Pedido" p
+                        WHERE p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+                          AND p."IdEstadoPedido" = 3
+                    ), 0)
+                END as "ParadasCompletadas",
+                CASE 
+                    WHEN ar."IdAsignacionRuta" IS NULL THEN 0.0
+                    ELSE COALESCE((
+                        SELECT SUM(pp."Monto")
+                        FROM "PagoPedido" pp
+                        JOIN "Pedido" p ON pp."IdPedido" = p."IdPedido"
+                        WHERE p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+                    ), 0.0)
+                END as "MontoCobradoTotal",
+                CASE
+                    WHEN t."UltimaActualizacion" IS NOT NULL 
+                     AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_evaluar
+                    THEN t."UltimaActualizacion"
+                    ELSE NULL
+                END as "UltimaActualizacion",
+                CASE 
+                    WHEN t."UltimaActualizacion" IS NOT NULL 
+                     AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_evaluar
+                    THEN ROUND(EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")))::INTEGER 
                     ELSE NULL 
                 END as "SegundosDesdeUltimoReporte"
             FROM "Usuario" u
@@ -553,7 +598,11 @@ class RutaRepository:
             LEFT JOIN "RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
             LEFT JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
             WHERE u."IdRol" = 6 AND u."IdEstadoUsuario" = 1 {filtro_sucursal}
-            ORDER BY t."UltimaActualizacion" DESC NULLS LAST, u."PrimerNombre" ASC;
+            ORDER BY 
+                (ar."IdAsignacionRuta" IS NOT NULL) DESC,
+                (t."UltimaActualizacion" IS NOT NULL AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_evaluar) DESC,
+                t."UltimaActualizacion" DESC NULLS LAST, 
+                u."PrimerNombre" ASC;
         """
         return self.caller.LlamarFuncion(sql, params)
 
@@ -570,20 +619,37 @@ class RutaRepository:
                 r."IdRutaDistribucion",
                 r."NombreRuta",
                 '#20A7DB' as "ColorHex",
-                z."NombreZona",
+                COALESCE(z."NombreZona", CASE WHEN u."IdSucursal" = 2 THEN 'Potosí' ELSE 'Sucre' END) as "NombreZona",
                 u."IdUsuario" as "IdUsuarioRepartidor",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreRepartidor",
                 u."Celular" as "CelularRepartidor",
-                COALESCE(t."Latitud", -19.0330) as "LatitudChofer",
-                COALESCE(t."Longitud", -65.2550) as "LongitudChofer",
+                u."IdSucursal" as "IdSucursal",
+                t."Latitud" as "LatitudChofer",
+                t."Longitud" as "LongitudChofer",
                 COALESCE(t."Velocidad", 0) as "Velocidad",
                 COALESCE(t."Bateria", 100) as "Bateria",
-                COALESCE(t."EstadoMovimiento", 'En Espera') as "EstadoMovimiento",
-                t."UltimaActualizacion",
-                ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(t."UltimaActualizacion", NOW()))))::INTEGER as "SegundosDesdeUltimoReporte"
+                CASE
+                    WHEN t."UltimaActualizacion" IS NULL 
+                      OR DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') != ar."FechaAsignacion"
+                      OR EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")) > 600
+                    THEN 'Sin Señal'
+                    ELSE COALESCE(t."EstadoMovimiento", 'En Ruta')
+                END as "EstadoMovimiento",
+                CASE
+                    WHEN t."UltimaActualizacion" IS NOT NULL 
+                     AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = ar."FechaAsignacion"
+                    THEN t."UltimaActualizacion"
+                    ELSE NULL
+                END as "UltimaActualizacion",
+                CASE 
+                    WHEN t."UltimaActualizacion" IS NOT NULL 
+                     AND DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = ar."FechaAsignacion"
+                    THEN ROUND(EXTRACT(EPOCH FROM (NOW() - t."UltimaActualizacion")))::INTEGER 
+                    ELSE NULL 
+                END as "SegundosDesdeUltimoReporte"
             FROM "AsignacionRuta" ar
             JOIN "RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
-            JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
+            LEFT JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
             JOIN "Usuario" u ON ar."IdUsuarioRepartidor" = u."IdUsuario"
             LEFT JOIN "TrackingChofer" t ON t."IdUsuarioRepartidor" = u."IdUsuario"
             WHERE ar."IdAsignacionRuta" = :id_asignacion;
@@ -627,7 +693,8 @@ class RutaRepository:
                     SELECT SUM(pp."Monto") 
                     FROM "PagoPedido" pp 
                     WHERE pp."IdPedido" = p."IdPedido"
-                ), 0) as "MontoCobrado"
+                ), 0) as "MontoCobrado",
+                false as "EsParadaExtra"
             FROM "RutaPuntoVenta" rpv
             JOIN "PuntoVenta" pv ON rpv."IdPuntoVenta" = pv."IdPuntoVenta"
             JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
@@ -638,9 +705,62 @@ class RutaRepository:
         paradas = self.caller.LlamarFuncion(sql_paradas, {
             "id_ruta": asig["IdRutaDistribucion"],
             "id_asignacion": id_asignacion
-        })
+        }) or []
 
-        # Fallback 1: Si no hay paradas en RutaPuntoVenta, buscar pedidos vinculados a la asignación
+        # Buscar pedidos extras de esta asignación entregados o creados fuera de la plantilla oficial de RutaPuntoVenta
+        pv_ids_existentes = {p["IdPuntoVenta"] for p in paradas if p.get("IdPuntoVenta")}
+        sql_paradas_extra = """
+            SELECT 
+                pv."IdPuntoVenta",
+                pv."NombrePuntoVenta",
+                pv."Direccion",
+                pv."Latitud",
+                pv."Longitud",
+                pv."Referencia",
+                c."IdCliente",
+                COALESCE(c."NombreComercial", c."RazonSocial") as "NombreCliente",
+                c."Telefono" as "TelefonoCliente",
+                p."IdPedido",
+                p."NumeroPedido",
+                p."MontoTotal" as "MontoPedido",
+                p."IdEstadoPedido",
+                COALESCE(p."estado_visita", '') as "estado_visita",
+                COALESCE(p."tipo_incidencia", '') as "tipo_incidencia",
+                'EXTRA' as "frecuencia_visita",
+                'HOY' as "dias_visita",
+                '[]' as "items_programados_json",
+                CASE 
+                    WHEN p."IdEstadoPedido" = 3 THEN 'Entregado'
+                    WHEN p."IdEstadoPedido" = 2 THEN 'En Camino'
+                    WHEN p."IdEstadoPedido" = 4 THEN 'Cancelado'
+                    WHEN p."IdPedido" IS NOT NULL THEN 'Pendiente'
+                    ELSE 'Visita Comercial'
+                END as "EstadoEntrega",
+                p."LatitudEntrega",
+                p."LongitudEntrega",
+                p."FechaEntrega",
+                COALESCE((
+                    SELECT SUM(pp."Monto") 
+                    FROM "PagoPedido" pp 
+                    WHERE pp."IdPedido" = p."IdPedido"
+                ), 0) as "MontoCobrado",
+                true as "EsParadaExtra"
+            FROM "Pedido" p
+            JOIN "PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+            JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
+            WHERE p."IdAsignacionRuta" = :id_asignacion
+            ORDER BY p."IdPedido" ASC;
+        """
+        pedidos_asig = self.caller.LlamarFuncion(sql_paradas_extra, {"id_asignacion": id_asignacion}) or []
+        orden_actual = len(paradas)
+        for ped in pedidos_asig:
+            if ped["IdPuntoVenta"] not in pv_ids_existentes:
+                orden_actual += 1
+                ped["OrdenVisita"] = orden_actual
+                paradas.append(ped)
+                pv_ids_existentes.add(ped["IdPuntoVenta"])
+
+        # Fallback 1: Si no hay paradas en RutaPuntoVenta ni pedidos, buscar pedidos vinculados
         if not paradas:
             sql_pedidos = """
                 SELECT 
@@ -672,14 +792,15 @@ class RutaRepository:
                         SELECT SUM(pp."Monto") 
                         FROM "PagoPedido" pp 
                         WHERE pp."IdPedido" = p."IdPedido"
-                    ), 0) as "MontoCobrado"
+                    ), 0) as "MontoCobrado",
+                    false as "EsParadaExtra"
                 FROM "Pedido" p
                 JOIN "PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
                 JOIN "Cliente" c ON pv."IdCliente" = c."IdCliente"
                 WHERE p."IdAsignacionRuta" = :id_asignacion
                 ORDER BY p."IdPedido" ASC;
             """
-            paradas = self.caller.LlamarFuncion(sql_pedidos, {"id_asignacion": id_asignacion})
+            paradas = self.caller.LlamarFuncion(sql_pedidos, {"id_asignacion": id_asignacion}) or []
 
         # Fallback 2: Si aún no hay paradas, cargar puntos de venta activos de la zona/sucursal
         if not paradas:

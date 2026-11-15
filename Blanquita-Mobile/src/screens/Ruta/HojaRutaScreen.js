@@ -11,6 +11,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useRuta, ESTADOS_RUTA } from '../../context/RutaContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLocation } from '../../context/LocationContext';
 import { Header } from '../../components/common/Header';
 import { OfflineBanner } from '../../components/common/OfflineBanner';
 import { FrescuraIndicador } from '../../components/common/FrescuraIndicador';
@@ -36,6 +37,7 @@ import {
 
 export const HojaRutaScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const { permisoConcedido, gpsActivo, enviandoGps, ultimoPingGps, solicitarPermisos } = useLocation();
   const {
     hojaRuta,
     metricas,
@@ -144,6 +146,27 @@ export const HojaRutaScreen = ({ navigation }) => {
         onActualizar={onRefresh}
         cargando={refreshing}
       />
+
+      {/* Indicador de Transmisión Satelital GPS (Fase 1) */}
+      {estadoActual === (ESTADOS_RUTA?.APROBADA_EN_RUTA || 'APROBADA_EN_RUTA') && (
+        <View style={styles.gpsStatusBar}>
+          {permisoConcedido && gpsActivo ? (
+            <View style={styles.gpsRow}>
+              <View style={styles.gpsDotActive} />
+              <Text style={styles.gpsLabel}>
+                GPS en vivo {enviandoGps ? '· transmitiendo señal' : '· activo'}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.gpsRowWarning} onPress={solicitarPermisos}>
+              <AlertTriangle size={14} color="#B45309" />
+              <Text style={styles.gpsLabelWarning}>
+                GPS sin señal o permisos. Toque aquí para activar.
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* CASO 1: ESTADO SIN_RUTA */}
       {estadoActual === (ESTADOS_RUTA?.SIN_RUTA || 'SIN_RUTA') && (
@@ -1016,6 +1039,39 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 16,
     marginBottom: 8,
+  },
+  gpsStatusBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  gpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gpsDotActive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+  },
+  gpsLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#15803D',
+  },
+  gpsRowWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gpsLabelWarning: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#B45309',
   },
 });
 
