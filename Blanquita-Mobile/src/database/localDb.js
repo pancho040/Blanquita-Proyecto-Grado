@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CONFIG } from "../constants/Config";
+import { obtenerFechaHoyBolivia } from "../utils/fechas";
 
 /**
  * Base de Datos Local en Dispositivo Móvil
@@ -280,7 +281,7 @@ export const LocalDB = {
   // -------------------------------------------------------------
   async guardarSelloSolicitudCarga(idAsignacion, datos = {}) {
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
+      const hoy = obtenerFechaHoyBolivia();
       const clave = `@blanquita_sello_solicitud_carga_${idAsignacion || "activa"}`;
       const payload = {
         idAsignacion: idAsignacion || "activa",
@@ -301,7 +302,7 @@ export const LocalDB = {
 
   async obtenerSelloSolicitudCarga(idAsignacion) {
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
+      const hoy = obtenerFechaHoyBolivia();
       let clave = `@blanquita_sello_solicitud_carga_${idAsignacion || "activa"}`;
       let raw = await AsyncStorage.getItem(clave);
       if (!raw && idAsignacion && idAsignacion !== "activa") {
@@ -339,7 +340,7 @@ export const LocalDB = {
   // -------------------------------------------------------------
   async guardarSelloCargaAprobada(idAsignacion, datosAprobacion = {}) {
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
+      const hoy = obtenerFechaHoyBolivia();
       const clave = `@blanquita_sello_carga_aprobada_${idAsignacion || "activa"}`;
       const payload = {
         idAsignacion: idAsignacion || "activa",
@@ -358,7 +359,7 @@ export const LocalDB = {
 
   async obtenerSelloCargaAprobada(idAsignacion) {
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
+      const hoy = obtenerFechaHoyBolivia();
       let clave = `@blanquita_sello_carga_aprobada_${idAsignacion || "activa"}`;
       let raw = await AsyncStorage.getItem(clave);
       if (!raw && idAsignacion && idAsignacion !== "activa") {

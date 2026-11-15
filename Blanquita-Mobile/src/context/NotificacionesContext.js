@@ -634,7 +634,8 @@ export function NotificacionesProvider({ children, navigationRef }) {
 
       setConteoNoLeidas((c) => Math.max(0, c - 1));
 
-      if (!String(idNotificacion).startsWith("ws-")) {
+      // Solo notificar al backend si es un ID numérico persistido en PostgreSQL
+      if (/^\d+$/.test(String(idNotificacion).trim())) {
         await NotificacionesApi.marcarComoLeida(idNotificacion).catch(() => {});
       }
     },
