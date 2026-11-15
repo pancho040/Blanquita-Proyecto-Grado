@@ -1,6 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from app.utils.fechas import fecha_actual_bolivia, normalizar_fecha_bolivia
 from app.Repository.Logistica.RutaRepository import RutaRepository
 from app.Models.Logistica.RutaModel import (
     ZonaCrear, RutaCrear, RutaActualizar, GuardarPuntosVentaRuta,
@@ -49,18 +50,19 @@ class RutaService:
 
     # ASIGNACIONES
     def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None, id_sucursal: int | None = None) -> list[dict]:
-        # Invocación automática e idempotente del generador de rutas diarias
-        fecha_evaluar = fecha or date.today()
-        try:
-            self.repo.EjecutarGeneradorRutasDiarias(fecha_evaluar)
-        except Exception:
-            # Si la función falla por conectividad o permisos, continuar con el listado
-            pass
+        # Invocación automática e idempotente del generador de rutas diarias solo si es para hoy
+        hoy = fecha_actual_bolivia()
+        fecha_evaluar = normalizar_fecha_bolivia(fecha) if fecha else hoy
+        if fecha_evaluar >= hoy:
+            try:
+                self.repo.EjecutarGeneradorRutasDiarias(fecha_evaluar)
+            except Exception:
+                pass
         return self.repo.ListarAsignaciones(fecha, id_repartidor, id_sucursal)
 
     def GenerarRutasDiarias(self, fecha: date | None = None) -> dict:
         """Invocación explícita del generador diario de rutas."""
-        return self.repo.EjecutarGeneradorRutasDiarias(fecha or date.today())
+        return self.repo.EjecutarGeneradorRutasDiarias(normalizar_fecha_bolivia(fecha) if fecha else fecha_actual_bolivia())
 
     def CrearAsignacion(self, dto: AsignacionRutaCrear, id_usuario_asigna: int) -> dict:
         # Verificar duplicidad (uq_asignacion_ruta_fecha)
@@ -197,8 +199,8 @@ class RutaService:
     def RegistrarTelemetriaPing(self, dto: TelemetriaPing) -> dict:
         return self.repo.RegistrarTelemetriaPing(dto.model_dump())
 
-    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None) -> list[dict]:
-        return self.repo.ObtenerChoferesEnVivo(sucursal_id)
+    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None, fecha: date | None = None) -> list[dict]:
+        return self.repo.ObtenerChoferesEnVivo(sucursal_id, fecha)
 
     def ObtenerTrackingAsignacion(self, id_asignacion: int) -> dict:
         res = self.repo.ObtenerTrackingPorAsignacion(id_asignacion)

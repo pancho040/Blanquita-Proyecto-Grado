@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.utils.fechas import fecha_actual_bolivia, normalizar_fecha_bolivia
 
 from app.Config.supabase import get_db
 from app.Auth.Dependencies import require_role
@@ -108,7 +109,7 @@ def obtener_mi_ruta_activa(
     La identidad del chofer se toma forzosamente del token JWT.
     """
     service = RutaService(db)
-    hoy = date.today()
+    hoy = fecha_actual_bolivia()
 
     # Si el usuario es Agente de Reparto, su identidad SALE DEL TOKEN, nunca de la query
     if usuario.get("IdRol") == ROL_AGENTE_REPARTO:
@@ -117,19 +118,12 @@ def obtener_mi_ruta_activa(
         # Supervisores o Gerentes pueden consultar la de un chofer específico o la suya propia
         chofer_objetivo = id_chofer or usuario["IdUsuario"]
 
-    # Buscar asignación activa para hoy en la sucursal autorizada
+    # Buscar asignación activa exclusivamente para hoy en la sucursal autorizada (sin resucitar días pasados)
     asignaciones = service.ListarAsignaciones(
         fecha=hoy,
         id_repartidor=chofer_objetivo,
         id_sucursal=alcance.sucursal_efectiva
     )
-
-    if not asignaciones:
-        # Buscar la más reciente pendiente o en ruta
-        asignaciones = service.ListarAsignaciones(
-            id_repartidor=chofer_objetivo,
-            id_sucursal=alcance.sucursal_efectiva
-        )
 
     if asignaciones:
         id_asig = asignaciones[0]["IdAsignacionRuta"]

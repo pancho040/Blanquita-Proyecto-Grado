@@ -106,7 +106,7 @@ class FlotaWebSocketManager:
             f"Conexiones activas: {len(self.active_connections)}"
         )
 
-        if snapshot_inicial is not None:
+        if snapshot_inicial is not None and ticket_data.get("tipo_cliente", "web") == "web":
             try:
                 # Filtrar snapshot inicial según las sucursales permitidas
                 suc_permitidas = ticket_data.get("sucursales_permitidas")

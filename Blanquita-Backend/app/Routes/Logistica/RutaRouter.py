@@ -464,14 +464,17 @@ def registrar_telemetria(
 
 @RutaRouter.get("/telemetria/en-vivo", response_model=list[dict])
 def obtener_choferes_en_vivo(
+    fecha: Optional[str] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
 ):
     """
-    Devuelve la última posición y telemetría de todos los choferes para el mapa central de rastreo web.
+    Devuelve la posición y telemetría de todos los choferes para el mapa central de rastreo web,
+    filtrada por sucursal y fecha local (default hoy Bolivia).
     """
-    return RutaService(db).ObtenerChoferesEnVivo(alcance.sucursal_efectiva)
+    fecha_evaluar = normalizar_fecha_bolivia(fecha) if fecha else None
+    return RutaService(db).ObtenerChoferesEnVivo(alcance.sucursal_efectiva, fecha=fecha_evaluar)
 
 @RutaRouter.get("/telemetria/asignacion/{id_asignacion}", response_model=dict)
 def obtener_tracking_asignacion(
@@ -1735,7 +1738,7 @@ def reasignar_paradas_pendientes(
         SELECT "IdPedido"
         FROM public."Pedido"
         WHERE "IdAsignacionRuta" = :asig_id
-          AND "IdEstadoPedido" != 4;
+          AND "IdEstadoPedido" NOT IN (3, 4);
     """)
     pedidos_pend = [r[0] for r in db.execute(sql_ped_pend, {"asig_id": asig_id}).fetchall()]
 

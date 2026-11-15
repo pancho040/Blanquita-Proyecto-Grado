@@ -18,6 +18,7 @@ import uuid
 import logging
 from datetime import datetime, date, timezone, timedelta
 from typing import Optional, List, Dict, Any
+from app.utils.fechas import fecha_actual_bolivia, normalizar_fecha_bolivia, ahora_bolivia
 
 from fastapi import APIRouter, Depends, Request, Header, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse
@@ -397,6 +398,22 @@ def _sanitizar_y_enriquecer_paradas(
         p["numero_pedido"] = p.get("NumeroPedido")
         p["monto_pedido"] = p.get("MontoPedido", 0.0)
         p["estado_entrega"] = p.get("EstadoEntrega", "Visita Comercial")
+
+        # Normalización estricta de estado compatible con Blanquita-Mobile (busca p.Estado || p.estado === 'ENTREGADO')
+        estado_raw = str(p.get("EstadoEntrega") or "").upper()
+        if p.get("IdEstadoPedido") == 3 or estado_raw == "ENTREGADO":
+            estado_canonica = "ENTREGADO"
+        elif p.get("IdEstadoPedido") == 4 or estado_raw == "CANCELADO":
+            estado_canonica = "CANCELADO"
+        elif p.get("IdEstadoPedido") == 2 or estado_raw == "EN CAMINO":
+            estado_canonica = "EN_CAMINO"
+        elif p.get("IdPedido") is not None:
+            estado_canonica = "PENDIENTE"
+        else:
+            estado_canonica = "VISITA_COMERCIAL"
+
+        p["estado"] = estado_canonica
+        p["Estado"] = estado_canonica
 
         items = p.get("items") or []
         if not items and p.get("IdPedido"):
@@ -845,34 +862,31 @@ def _crear_cliente_y_punto_venta_en_ruta(
 @ChoferMovilRouter.get("/hoja-ruta/activa", response_model=MovilResponse[Dict[str, Any]])
 def obtener_hoja_ruta_activa_movil(
     request: Request,
+    fecha: Optional[str] = None,
     db: Session = Depends(get_db),
     usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO)),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """
-    Obtiene la hoja de ruta y paradas asignadas para el chofer autenticado.
+    Obtiene la hoja de ruta y paradas asignadas para el chofer autenticado en una fecha específica (default hoy en Bolivia).
     La identidad del chofer se extrae obligatoriamente del token JWT.
+    Cada día es un universo independiente: no mezcla rutas de días anteriores.
     """
     req_id = _obtener_request_id(request)
     chofer_id = usuario["IdUsuario"]
     service = RutaService(db)
-    hoy = date.today()
+    fecha_evaluar = normalizar_fecha_bolivia(fecha)
 
     asignaciones = service.ListarAsignaciones(
-        fecha=hoy,
+        fecha=fecha_evaluar,
         id_repartidor=chofer_id,
         id_sucursal=alcance.sucursal_efectiva
     )
-    if not asignaciones:
-        asignaciones = service.ListarAsignaciones(
-            id_repartidor=chofer_id,
-            id_sucursal=alcance.sucursal_efectiva
-        )
 
     if not asignaciones:
         return MovilResponse[Dict[str, Any]](
             codigo="EXITO",
-            mensaje="No tiene rutas asignadas pendientes para hoy.",
+            mensaje=f"No tiene rutas asignadas para la fecha {fecha_evaluar.isoformat()}.",
             request_id=req_id,
             datos={"asignacion": None, "paradas": [], "total_paradas": 0}
         )
@@ -3410,6 +3424,195 @@ async def registrar_cliente_en_ruta(
             "id_punto_venta": id_punto_venta,
             "modalidad": modalidad,
             "ruta_reordenada": ruta_reordenada
+        }
+    }
+
+
+# ==============================================================================
+# 9. HISTORIAL DE JORNADAS Y DETALLE DIARIO DEL CHOFER (FASE 6)
+# ==============================================================================
+@ChoferMovilRouter.get("/historial")
+def obtener_historial_chofer(
+    request: Request,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    limit: int = 30,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO))
+):
+    """
+    Lista el historial de jornadas de reparto del chofer autenticado con resumen de entregas y montos cobrados.
+    Filtro estricto por chofer propio y rango de fechas. Solo lectura.
+    """
+    req_id = _obtener_request_id(request)
+    chofer_id = usuario["IdUsuario"]
+
+    where_clauses = ['ar."IdUsuarioRepartidor" = :cid']
+    params = {"cid": chofer_id, "limit": limit, "offset": offset}
+
+    if desde:
+        where_clauses.append('ar."FechaAsignacion" >= :desde')
+        params["desde"] = normalizar_fecha_bolivia(desde)
+    if hasta:
+        where_clauses.append('ar."FechaAsignacion" <= :hasta')
+        params["hasta"] = normalizar_fecha_bolivia(hasta)
+
+    where_str = " AND ".join(where_clauses)
+
+    sql = text(f"""
+        SELECT 
+            ar."FechaAsignacion" as fecha,
+            ar."IdAsignacionRuta" as id_asignacion,
+            COALESCE(r."NombreRuta", 'Ruta #' || ar."IdRutaDistribucion") as nombre_ruta,
+            ar."Estado" as estado_asignacion,
+            ar."estado_operativo" as estado_operativo,
+            COUNT(DISTINCT p."IdPedido") as paradas_totales,
+            COUNT(DISTINCT CASE WHEN p."IdEstadoPedido" = 3 THEN p."IdPedido" END) as paradas_entregadas,
+            COUNT(DISTINCT CASE WHEN p."IdEstadoPedido" = 4 THEN p."IdPedido" END) as paradas_no_entregadas,
+            COALESCE(SUM(pp."Monto"), 0.0) as monto_cobrado_total
+        FROM public."AsignacionRuta" ar
+        LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        LEFT JOIN public."Pedido" p ON p."IdAsignacionRuta" = ar."IdAsignacionRuta"
+        LEFT JOIN public."PagoPedido" pp ON pp."IdPedido" = p."IdPedido"
+        WHERE {where_str}
+        GROUP BY ar."IdAsignacionRuta", ar."FechaAsignacion", r."NombreRuta", ar."IdRutaDistribucion", ar."Estado", ar."estado_operativo"
+        ORDER BY ar."FechaAsignacion" DESC, ar."IdAsignacionRuta" DESC
+        LIMIT :limit OFFSET :offset;
+    """)
+
+    filas = db.execute(sql, params).mappings().fetchall()
+    items = []
+    for f in filas:
+        d = dict(f)
+        if isinstance(d.get("fecha"), date):
+            d["fecha"] = d["fecha"].isoformat()
+        d["monto_cobrado_total"] = float(d.get("monto_cobrado_total") or 0.0)
+        items.append(d)
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Se obtuvieron {len(items)} registros del historial",
+        "request_id": req_id,
+        "datos": {
+            "historial": items,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset
+        }
+    }
+
+
+@ChoferMovilRouter.get("/historial/{fecha}")
+def obtener_detalle_historial_fecha(
+    fecha: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(ROLES_CHOFER_OPERATIVO))
+):
+    """
+    Obtiene el detalle completo de entregas, paradas y cobros de un día específico para el propio chofer.
+    """
+    req_id = _obtener_request_id(request)
+    chofer_id = usuario["IdUsuario"]
+    fecha_dt = normalizar_fecha_bolivia(fecha)
+
+    sql_asig = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdRutaDistribucion", ar."FechaAsignacion", ar."Estado", ar."estado_operativo",
+               COALESCE(r."NombreRuta", 'Ruta') as "NombreRuta"
+        FROM public."AsignacionRuta" ar
+        LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdUsuarioRepartidor" = :cid
+          AND ar."FechaAsignacion" = :fecha
+        ORDER BY ar."IdAsignacionRuta" DESC
+        LIMIT 1;
+    """)
+    asig = db.execute(sql_asig, {"cid": chofer_id, "fecha": fecha_dt}).mappings().fetchone()
+
+    if not asig:
+        return {
+            "codigo": "EXITO",
+            "mensaje": f"No hay registro de hoja de ruta para el {fecha_dt.isoformat()}",
+            "request_id": req_id,
+            "datos": {
+                "fecha": fecha_dt.isoformat(),
+                "asignacion": None,
+                "paradas": [],
+                "metricas": {"total_paradas": 0, "entregadas": 0, "no_entregadas": 0, "monto_cobrado": 0.0}
+            }
+        }
+
+    id_asig = asig["IdAsignacionRuta"]
+
+    sql_paradas = text("""
+        SELECT 
+            p."IdPedido" as id_pedido,
+            p."NumeroPedido" as numero_pedido,
+            p."IdPuntoVenta" as id_punto_venta,
+            pv."NombrePuntoVenta" as nombre_punto_venta,
+            c."IdCliente" as id_cliente,
+            c."RazonSocial" as razon_social,
+            pv."Direccion" as direccion,
+            p."MontoTotal" as monto_total,
+            p."IdEstadoPedido" as id_estado_pedido,
+            CASE 
+                WHEN p."IdEstadoPedido" = 3 THEN 'ENTREGADO'
+                WHEN p."IdEstadoPedido" = 4 THEN 'NO_ENTREGADO'
+                WHEN p."IdEstadoPedido" = 2 THEN 'EN_CAMINO'
+                ELSE 'PENDIENTE'
+            END as estado,
+            p."FechaEntrega" as fecha_entrega,
+            p."Observacion" as observacion,
+            p."tipo_incidencia" as tipo_incidencia,
+            COALESCE(pp."Monto", 0.0) as monto_cobrado,
+            COALESCE(mp."NombreMetodo", 'EFECTIVO') as metodo_pago
+        FROM public."Pedido" p
+        JOIN public."PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+        JOIN public."Cliente" c ON pv."IdCliente" = c."IdCliente"
+        LEFT JOIN public."PagoPedido" pp ON pp."IdPedido" = p."IdPedido"
+        LEFT JOIN public."MetodoPago" mp ON pp."IdMetodoPago" = mp."IdMetodoPago"
+        WHERE p."IdAsignacionRuta" = :id_asig
+        ORDER BY p."IdPedido" ASC;
+    """)
+
+    paradas_rows = db.execute(sql_paradas, {"id_asig": id_asig}).mappings().fetchall()
+    paradas = []
+    tot_cobrado = 0.0
+    tot_entregadas = 0
+    tot_no_entregadas = 0
+
+    for r in paradas_rows:
+        d = dict(r)
+        d["monto_total"] = float(d.get("monto_total") or 0.0)
+        d["monto_cobrado"] = float(d.get("monto_cobrado") or 0.0)
+        tot_cobrado += d["monto_cobrado"]
+        if d.get("id_estado_pedido") == 3:
+            tot_entregadas += 1
+        elif d.get("id_estado_pedido") == 4:
+            tot_no_entregadas += 1
+        if isinstance(d.get("fecha_entrega"), datetime):
+            d["fecha_entrega"] = d["fecha_entrega"].isoformat()
+        paradas.append(d)
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Detalle de jornada {fecha_dt.isoformat()} recuperado",
+        "request_id": req_id,
+        "datos": {
+            "fecha": fecha_dt.isoformat(),
+            "asignacion": {
+                "id_asignacion": id_asig,
+                "nombre_ruta": asig["NombreRuta"],
+                "estado": asig["Estado"],
+                "estado_operativo": asig["estado_operativo"]
+            },
+            "paradas": paradas,
+            "metricas": {
+                "total_paradas": len(paradas),
+                "entregadas": tot_entregadas,
+                "no_entregadas": tot_no_entregadas,
+                "monto_cobrado": tot_cobrado
+            }
         }
     }
 

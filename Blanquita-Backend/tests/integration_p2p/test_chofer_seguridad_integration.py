@@ -109,8 +109,9 @@ def datos_choferes_test(db_session_rollback):
         SET "IdAsignacionRuta" = EXCLUDED."IdAsignacionRuta", "IdPuntoVenta" = EXCLUDED."IdPuntoVenta", "IdUsuarioRepartidor" = EXCLUDED."IdUsuarioRepartidor";
     """), {"chofer_sucre": ID_CHOFER_SUCRE_A, "chofer_potosi": ID_CHOFER_POTOSI_C})
 
-    # 5. Inventario de chofer cargado
+    # 5. Inventario de chofer cargado (limpieza previa para evitar colisión de uq_chofer_sucursal_presentacion)
     db.execute(text("""
+        DELETE FROM public.inventario_chofer WHERE chofer_id IN (:chofer_sucre, :chofer_potosi);
         INSERT INTO public.inventario_chofer (id, chofer_id, sucursal_id, presentacion_id, cantidad_cargada, cantidad_vendida, cantidad_remanente, precio_vigente_carga)
         VALUES 
             (881, :chofer_sucre, 1, 1, 20.0, 5.0, 15.0, 25.0),

@@ -1,6 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from app.Repository.DbCaller import DbCaller
+from app.utils.fechas import fecha_actual_bolivia, normalizar_fecha_bolivia
 
 class RutaRepository:
     def __init__(self, db: Session):
@@ -439,15 +440,16 @@ class RutaRepository:
     def RegistrarTelemetriaPing(self, datos: dict) -> dict:
         id_asig = datos.get("IdAsignacionRuta")
         if not id_asig:
+            hoy_bolivia = fecha_actual_bolivia()
             sql_asig = """
                 SELECT "IdAsignacionRuta" 
                 FROM "AsignacionRuta" 
                 WHERE "IdUsuarioRepartidor" = :id_rep 
-                  AND ("FechaAsignacion" = CURRENT_DATE OR "Estado" = 'En Ruta')
+                  AND ("FechaAsignacion" = :fecha_hoy OR "Estado" = 'En Ruta')
                 ORDER BY "FechaAsignacion" DESC, "IdAsignacionRuta" DESC 
                 LIMIT 1;
             """
-            asig_row = self.caller.LlamarUnRegistro(sql_asig, {"id_rep": datos["IdUsuarioRepartidor"]})
+            asig_row = self.caller.LlamarUnRegistro(sql_asig, {"id_rep": datos["IdUsuarioRepartidor"], "fecha_hoy": hoy_bolivia})
             if asig_row and asig_row.get("IdAsignacionRuta"):
                 id_asig = asig_row["IdAsignacionRuta"]
 
@@ -504,9 +506,10 @@ class RutaRepository:
         }
         return self.caller.LlamarUnRegistro(sql, params)
 
-    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None) -> list[dict]:
+    def ObtenerChoferesEnVivo(self, sucursal_id: int | None = None, fecha: date | None = None) -> list[dict]:
+        fecha_evaluar = normalizar_fecha_bolivia(fecha)
         filtro_sucursal = ""
-        params = {}
+        params = {"fecha_evaluar": fecha_evaluar}
         if sucursal_id is not None:
             filtro_sucursal = 'AND u."IdSucursal" = :sucursal_id'
             params["sucursal_id"] = sucursal_id
@@ -515,6 +518,8 @@ class RutaRepository:
             SELECT 
                 COALESCE(t."IdTracking", 0) as "IdTracking",
                 u."IdUsuario" as "IdUsuarioRepartidor",
+                u."IdSucursal" as "IdSucursal",
+                u."IdSucursal" as "id_sucursal",
                 CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as "NombreRepartidor",
                 u."Celular",
                 COALESCE(t."IdAsignacionRuta", ar."IdAsignacionRuta") as "IdAsignacionRuta",
@@ -541,7 +546,7 @@ class RutaRepository:
                 END as "SegundosDesdeUltimoReporte"
             FROM "Usuario" u
             LEFT JOIN "TrackingChofer" t ON t."IdUsuarioRepartidor" = u."IdUsuario"
-            LEFT JOIN "AsignacionRuta" ar ON (ar."IdUsuarioRepartidor" = u."IdUsuario" AND ar."FechaAsignacion" = CURRENT_DATE)
+            LEFT JOIN "AsignacionRuta" ar ON (ar."IdUsuarioRepartidor" = u."IdUsuario" AND ar."FechaAsignacion" = :fecha_evaluar)
             LEFT JOIN "RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
             LEFT JOIN "ZonaDistribucion" z ON r."IdZonaDistribucion" = z."IdZonaDistribucion"
             WHERE u."IdRol" = 6 AND u."IdEstadoUsuario" = 1 {filtro_sucursal}
@@ -885,20 +890,18 @@ class RutaRepository:
     # -------------------------------------------------------------
     def EjecutarGeneradorRutasDiarias(self, fecha: date | None = None) -> dict:
         """Invoca la función PostgreSQL fn_generar_rutas_diarias(p_fecha)."""
-        if fecha is None:
-            fecha = date.today()
+        fecha_evaluar = normalizar_fecha_bolivia(fecha)
         sql = 'SELECT public.fn_generar_rutas_diarias(:fecha) as resultado;'
-        res = self.caller.LlamarUnRegistro(sql, {"fecha": fecha}, commit=True)
+        res = self.caller.LlamarUnRegistro(sql, {"fecha": fecha_evaluar}, commit=True)
         return res.get("resultado") if res and isinstance(res.get("resultado"), dict) else (res or {})
 
     def VerificarParadaOperadaHoy(self, id_punto_venta: int, id_ruta: int, fecha: date | None = None) -> bool:
         """
         Regla inquebrantable:
         Verifica si para este punto de venta hoy ya existe una entrega (Pedido entregado/en camino)
-        o cobro (PagoPedido) en esta ruta o globalmente en la jornada.
+        o cobro (PagoPedido) en esta ruta o globalmente en la jornada en fecha local de Bolivia.
         """
-        if fecha is None:
-            fecha = date.today()
+        fecha_evaluar = normalizar_fecha_bolivia(fecha)
 
         sql = """
             SELECT COUNT(*) as total
@@ -908,8 +911,8 @@ class RutaRepository:
             WHERE p."IdPuntoVenta" = :id_pv
               AND (
                   (ar."IdRutaDistribucion" = :id_ruta AND ar."FechaAsignacion" = :fecha)
-                  OR (p."FechaEntrega"::date = :fecha)
-                  OR (pp."FechaPago"::date = :fecha)
+                  OR ((p."FechaEntrega" AT TIME ZONE 'America/La_Paz')::date = :fecha)
+                  OR ((pp."FechaPago" AT TIME ZONE 'America/La_Paz')::date = :fecha)
               )
               AND (
                   p."IdEstadoPedido" IN (2, 3) -- 2=En Camino, 3=Entregado
@@ -917,11 +920,7 @@ class RutaRepository:
                   OR (pp."IdPagoPedido" IS NOT NULL AND pp."Monto" > 0)
               );
         """
-        res = self.caller.LlamarUnRegistro(sql, {
-            "id_pv": id_punto_venta,
-            "id_ruta": id_ruta,
-            "fecha": fecha
-        })
+        res = self.caller.LlamarUnRegistro(sql, {"id_pv": id_punto_venta, "id_ruta": id_ruta, "fecha": fecha_evaluar})
         return bool(res and res.get("total", 0) > 0)
 
     def RecalcularOrdenParadasRuta(self, id_ruta: int) -> list[dict]:
