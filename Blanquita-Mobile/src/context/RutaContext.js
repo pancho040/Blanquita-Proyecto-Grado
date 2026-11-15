@@ -243,6 +243,7 @@ export function RutaProvider({ children }) {
   detenerTelemetriaRef.current = detenerTelemetria;
 
   const cargarHojaRutaRef = useRef(null);
+  const cargarInventarioCamionRef = useRef(null);
 
   /**
    * Limpia la ruta activa localmente y restaura el estado a SIN_RUTA.
@@ -344,6 +345,9 @@ export function RutaProvider({ children }) {
       if (cargarHojaRutaRef.current) {
         cargarHojaRutaRef.current();
       }
+      if (cargarInventarioCamionRef.current) {
+        cargarInventarioCamionRef.current();
+      }
     });
 
     // 2. Evento: Carga de camión observada por supervisor en Web
@@ -423,11 +427,14 @@ export function RutaProvider({ children }) {
     });
 
     // 4. Evento: Carga de camión resuelta
+    const refrescarTodo = async () => {
+      if (cargarHojaRutaRef.current) cargarHojaRutaRef.current();
+      if (cargarInventarioCamionRef.current) cargarInventarioCamionRef.current();
+    };
+
     const unsubCargaResuelta = wsService.on("carga_camion_resuelta", async (data) => {
       console.log("[RutaContext] Evento WebSocket carga_camion_resuelta recibido:", data);
-      if (cargarHojaRutaRef.current) {
-        cargarHojaRutaRef.current();
-      }
+      refrescarTodo();
     });
 
     // 5. Evento: Administrador finaliza la ruta en Web (Soporte Multi-Ruta)
@@ -436,13 +443,14 @@ export function RutaProvider({ children }) {
       await limpiarRutaActiva();
     });
 
-    // 6. Evento: Asignación de nueva ruta en el día
+    // 6. Evento: Asignación de nueva ruta en el día y alias
     const unsubRutaAsignada = wsService.on("ruta_asignada", async (data) => {
       console.log("[RutaContext] Evento WebSocket ruta_asignada recibido:", data);
-      if (cargarHojaRutaRef.current) {
-        cargarHojaRutaRef.current();
-      }
+      refrescarTodo();
     });
+    const unsubAsigCreada = wsService.on("asignacion_creada", refrescarTodo);
+    const unsubAsigActualizada = wsService.on("asignacion_actualizada", refrescarTodo);
+    const unsubAsigReasignada = wsService.on("asignacion_reasignada", refrescarTodo);
 
     return () => {
       if (unsubCargaAprobada) unsubCargaAprobada();
@@ -451,8 +459,26 @@ export function RutaProvider({ children }) {
       if (unsubCargaResuelta) unsubCargaResuelta();
       if (unsubRutaFinalizada) unsubRutaFinalizada();
       if (unsubRutaAsignada) unsubRutaAsignada();
+      if (unsubAsigCreada) unsubAsigCreada();
+      if (unsubAsigActualizada) unsubAsigActualizada();
+      if (unsubAsigReasignada) unsubAsigReasignada();
     };
   }, [usuario, asignacionActiva]);
+
+  // Refresco de respaldo periódico cada 60s mientras haya sesión activa
+  useEffect(() => {
+    if (!usuario) return;
+    const intervalId = setInterval(() => {
+      if (cargarHojaRutaRef.current) {
+        cargarHojaRutaRef.current();
+      }
+      if (cargarInventarioCamionRef.current) {
+        cargarInventarioCamionRef.current();
+      }
+    }, 60000);
+
+    return () => clearInterval(intervalId);
+  }, [usuario]);
 
   // Al volver a la app (AppState active) se dispara sync de la cola y refresco de la hoja de ruta
   useEffect(() => {
@@ -728,6 +754,7 @@ export function RutaProvider({ children }) {
     }
   };
   cargarHojaRutaRef.current = cargarHojaRuta;
+  cargarInventarioCamionRef.current = cargarInventarioCamion;
 
   const recalcularRecaudacion = (ruta) => {
     if (!ruta || !ruta.paradas) return;

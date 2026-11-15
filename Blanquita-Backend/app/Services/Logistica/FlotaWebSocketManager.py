@@ -27,6 +27,19 @@ def serializar_json_ws(datos: Any) -> str:
     return json.dumps(datos, default=default_json_ws_serializer)
 
 
+def _es_socket_desconectado(ws: WebSocket, exc: Exception) -> bool:
+    """Determina si una excepción corresponde a una desconexión real del cliente WebSocket."""
+    try:
+        from starlette.websockets import WebSocketState
+        if getattr(ws, "client_state", None) == WebSocketState.DISCONNECTED:
+            return True
+        if getattr(ws, "application_state", None) == WebSocketState.DISCONNECTED:
+            return True
+    except Exception:
+        pass
+    err_str = str(exc).lower()
+    return any(p in err_str for p in ["disconnect", "closed", "reset", "broken pipe", "not connected"])
+
 class FlotaWebSocketManager:
     """
     Hub de WebSockets en memoria para telemetría y mapa de flota en tiempo real.
@@ -182,6 +195,8 @@ class FlotaWebSocketManager:
         """Envía un evento WebSocket directamente al chofer especificado."""
         conexiones_cerradas = []
         destinatario_encontrado = False
+        tipo_ev = evento.get("tipo") or evento.get("tipo_evento") or "DESCONOCIDO"
+
         for ws, meta in list(self.active_connections.items()):
             uid = meta.get("id_chofer") or meta.get("usuario_id")
             if uid and int(uid) == int(id_chofer):
@@ -189,8 +204,9 @@ class FlotaWebSocketManager:
                 try:
                     await self.enviar_json_seguro(ws, evento)
                 except Exception as e:
-                    logger.debug(f"[WS-Flota] Error al emitir a chofer #{id_chofer}: {e}")
-                    conexiones_cerradas.append(ws)
+                    logger.warning(f"[WS-Flota] Error al emitir {tipo_ev} a chofer #{id_chofer}: {e}")
+                    if _es_socket_desconectado(ws, e):
+                        conexiones_cerradas.append(ws)
 
         for ws in conexiones_cerradas:
             self.desconectar(ws)
@@ -202,12 +218,14 @@ class FlotaWebSocketManager:
     async def emitir_a_todos_los_choferes(self, evento: Dict[str, Any]):
         """Emite un evento a todos los choferes conectados."""
         conexiones_cerradas = []
+        tipo_ev = evento.get("tipo") or evento.get("tipo_evento") or "DESCONOCIDO"
         for ws, meta in list(self.active_connections.items()):
             try:
                 await self.enviar_json_seguro(ws, evento)
             except Exception as e:
-                logger.debug(f"[WS-Flota] Error en broadcast a chofer: {e}")
-                conexiones_cerradas.append(ws)
+                logger.warning(f"[WS-Flota] Error en broadcast {tipo_ev} a chofer #{meta.get('usuario_id')}: {e}")
+                if _es_socket_desconectado(ws, e):
+                    conexiones_cerradas.append(ws)
 
         for ws in conexiones_cerradas:
             self.desconectar(ws)
@@ -215,6 +233,7 @@ class FlotaWebSocketManager:
     async def emitir_a_web(self, evento: Dict[str, Any], sucursal_id: Optional[int] = None):
         """Envía un evento a los observadores web activos."""
         conexiones_cerradas = []
+        tipo_ev = evento.get("tipo") or evento.get("tipo_evento") or "DESCONOCIDO"
         for ws, meta in list(self.active_connections.items()):
             if meta.get("tipo_cliente") == "movil":
                 continue
@@ -225,8 +244,9 @@ class FlotaWebSocketManager:
             try:
                 await self.enviar_json_seguro(ws, evento)
             except Exception as e:
-                logger.debug(f"[WS-Flota] Error en emitir_a_web: {e}")
-                conexiones_cerradas.append(ws)
+                logger.warning(f"[WS-Flota] Error en emitir_a_web {tipo_ev}: {e}")
+                if _es_socket_desconectado(ws, e):
+                    conexiones_cerradas.append(ws)
 
         for ws in conexiones_cerradas:
             self.desconectar(ws)
@@ -234,12 +254,14 @@ class FlotaWebSocketManager:
     async def broadcast_general(self, evento: Dict[str, Any]):
         """Envía un evento a todas las conexiones WebSocket activas."""
         conexiones_cerradas = []
+        tipo_ev = evento.get("tipo") or evento.get("tipo_evento") or "DESCONOCIDO"
         for ws in list(self.active_connections.keys()):
             try:
                 await self.enviar_json_seguro(ws, evento)
             except Exception as e:
-                logger.debug(f"[WS-Flota] Error en broadcast_general: {e}")
-                conexiones_cerradas.append(ws)
+                logger.warning(f"[WS-Flota] Error en broadcast_general {tipo_ev}: {e}")
+                if _es_socket_desconectado(ws, e):
+                    conexiones_cerradas.append(ws)
 
         for ws in conexiones_cerradas:
             self.desconectar(ws)
@@ -278,8 +300,9 @@ class FlotaWebSocketManager:
             try:
                 await self.enviar_json_seguro(ws, mensaje)
             except Exception as e:
-                logger.debug(f"[WS-Flota] Error al enviar a cliente; marcando desconexión: {e}")
-                conexiones_cerradas.append(ws)
+                logger.warning(f"[WS-Flota] Error al enviar posicion a cliente: {e}")
+                if _es_socket_desconectado(ws, e):
+                    conexiones_cerradas.append(ws)
 
         for ws in conexiones_cerradas:
             self.desconectar(ws)

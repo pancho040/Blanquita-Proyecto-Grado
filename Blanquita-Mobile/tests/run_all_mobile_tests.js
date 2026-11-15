@@ -26,6 +26,7 @@ const testFiles = [
   "test_subagente_b_websocket_banner.test.js",
   "test_flujo_completo_ruta_carga_cliente_historial.test.js",
   "test_entrega_editable_frecuencia_y_notificaciones.test.js",
+  "test_ws_url_dinamica.test.js",
 ];
 
 console.log("==================================================================");

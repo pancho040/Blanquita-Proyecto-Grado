@@ -23,6 +23,38 @@ const esTokenValido = (t) => {
  * prevención de llamadas con token vencido, obtención de tickets protegida
  * contra colisiones de refresh, control estricto de concurrencia y despacho tipado de eventos.
  */
+/**
+ * Construye y valida dinámicamente la URL de WebSocket a partir de la URL base HTTP.
+ * Garantiza que el WebSocket se conecte estrictamente al mismo host y puerto que la API REST.
+ * Soporta conversión http->ws y https->wss sin fallbacks silenciosos a otros entornos.
+ *
+ * @param {string} baseHttp - URL base HTTP/HTTPS de la API (ej: "http://192.168.1.65:8000")
+ * @param {string|null} token - Token JWT opcional
+ * @param {string|null} ticket - Ticket efímero opcional
+ * @returns {string} URL WebSocket completa (ej: "ws://192.168.1.65:8000/ws/logistica")
+ */
+export function calcularWsUrl(baseHttp, token = null, ticket = null) {
+  const urlBase = String(baseHttp || "").trim();
+  if (!urlBase) {
+    throw new Error("[wsService] No se ha definido la URL base para el servicio WebSocket.");
+  }
+  let baseWs = urlBase.replace(/^http:\/\//i, "ws://").replace(/^https:\/\//i, "wss://");
+  if (baseWs.endsWith("/")) {
+    baseWs = baseWs.slice(0, -1);
+  }
+
+  const params = [];
+  if (token) {
+    params.push(`token=${encodeURIComponent(token)}`);
+  }
+  if (ticket) {
+    params.push(`ticket=${encodeURIComponent(ticket)}`);
+  }
+
+  const queryStr = params.length > 0 ? `?${params.join("&")}` : "";
+  return `${baseWs}/ws/logistica${queryStr}`;
+}
+
 class WsService {
   constructor() {
     this.ws = null;
@@ -94,27 +126,13 @@ class WsService {
 
   /**
    * Construye dinámicamente la URL de WebSocket incluyendo parámetros token y ticket.
+   * Deriva exclusivamente de apiClient.defaults.baseURL o CONFIG.API_BASE_URL.
    */
   obtenerWsUrl(token, ticket = null) {
-    const baseHttp = CONFIG.API_BASE_URL || "http://192.168.1.65:8000";
-    let baseWs = baseHttp.replace(/^http:\/\//i, "ws://").replace(/^https:\/\//i, "wss://");
-    if (baseWs.endsWith("/")) {
-      baseWs = baseWs.slice(0, -1);
-    }
+    const baseHttp = (apiClient?.defaults?.baseURL || CONFIG.API_BASE_URL || "").trim();
     const tokenVal = token || getTokenEnMemoria() || this.tokenActual || "";
-    // Solo enviar ticket si existe un ticket efímero real; nunca duplicar el JWT en ticket
     const ticketVal = ticket || this.ticketActual || "";
-
-    const params = [];
-    if (tokenVal) {
-      params.push(`token=${encodeURIComponent(tokenVal)}`);
-    }
-    if (ticketVal) {
-      params.push(`ticket=${encodeURIComponent(ticketVal)}`);
-    }
-
-    const queryStr = params.length > 0 ? `?${params.join("&")}` : "";
-    return `${baseWs}/ws/logistica${queryStr}`;
+    return calcularWsUrl(baseHttp, tokenVal, ticketVal);
   }
 
   /**
@@ -138,7 +156,7 @@ class WsService {
           return ticket;
         }
       } else {
-        const baseHttp = CONFIG.API_BASE_URL || "http://192.168.1.65:8000";
+        const baseHttp = (apiClient?.defaults?.baseURL || CONFIG.API_BASE_URL || "").trim();
         const tok = token || this.tokenActual;
         const resp = await fetch(`${baseHttp}/logistica/flota/ws-ticket`, {
           method: "POST",
@@ -227,9 +245,14 @@ class WsService {
 
       this.debeReconectar = true;
       const url = this.obtenerWsUrl(this.tokenActual, this.ticketActual);
-      console.log(
-        `[wsService] Conectando a WebSocket: ${url.replace(/(token|ticket)=[^&]+/g, "$1=***REDACTED***")}`
-      );
+      let hostLog = "desconocido";
+      try {
+        const u = new URL(url);
+        hostLog = `${u.protocol}//${u.host}${u.pathname}`;
+      } catch {
+        hostLog = url.split("?")[0];
+      }
+      console.log(`[wsService] Conectando a WebSocket endpoint=${hostLog}`);
 
       // En React Native WebSocket: enviar token tanto en query param como en cabecera Authorization
       const options = {

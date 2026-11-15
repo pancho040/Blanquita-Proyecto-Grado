@@ -277,13 +277,13 @@ export function NotificacionesProvider({ children, navigationRef }) {
     try {
       const tipoNorm = String(tipoEvento || "").toLowerCase();
       if (
-        tipoNorm === "carga_camion_aprobada" ||
         tipoNorm === "carga_camion_observada" ||
         tipoNorm === "carga_camion_rechazada"
       ) {
         const inv = await LogisticaApi.obtenerMiInventarioCamion();
         if (inv) await LocalDB.guardarInventarioCamion(inv);
       } else {
+        // Para carga aprobada, nueva ruta asignada o reordenada: refrescar hoja de ruta y stock
         const [ruta, inv] = await Promise.allSettled([
           LogisticaApi.obtenerHojaRutaActiva(),
           LogisticaApi.obtenerMiInventarioCamion(),
