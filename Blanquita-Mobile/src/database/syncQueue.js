@@ -20,7 +20,34 @@ export const SyncQueue = {
   async obtenerCola(usuarioId = null) {
     try {
       const raw = await AsyncStorage.getItem(CONFIG.SYNC.CLAVE_STORAGE_COLA);
-      const items = raw ? JSON.parse(raw) : [];
+      let items = raw ? JSON.parse(raw) : [];
+      let huboCambios = false;
+
+      // Migración automática de ítems atascados (Fase 3):
+      // Ítems con error permanente 4xx o ID específico atascado pasan a 'REQUIERE_CORRECCION'
+      // para permitir al chofer abrirlos, corregir las cantidades/cobro y reenviarlos.
+      items = items.map((item) => {
+        const esItemAtascado422 =
+          item.id === "11d2d239-ffa6-43d0-ba40-aa1f55366b88" ||
+          item.estado === "error_validacion" ||
+          (item.esErrorPermanente && item.estado !== "REQUIERE_CORRECCION");
+
+        if (esItemAtascado422) {
+          huboCambios = true;
+          return {
+            ...item,
+            estado: "REQUIERE_CORRECCION",
+            esErrorPermanente: true,
+            ultimoError: item.ultimoError || "El monto cobrado excede el total entregado. Requiere corrección.",
+          };
+        }
+        return item;
+      });
+
+      if (huboCambios) {
+        await AsyncStorage.setItem(CONFIG.SYNC.CLAVE_STORAGE_COLA, JSON.stringify(items));
+      }
+
       if (usuarioId !== null && usuarioId !== undefined) {
         return items.filter(
           (item) => item.id_usuario === undefined || item.id_usuario === null || item.id_usuario === usuarioId
@@ -174,13 +201,18 @@ export const SyncQueue = {
     }
   },
 
-  // Registrar fallo distinguiendo 4xx (no reintentable) de 5xx/red (reintentable)
-  // Requisito Subagente B: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta.
+  // Registrar fallo distinguiendo 4xx (no reintentable / requiere corrección) de 5xx/red (reintentable)
+  // Requisito Subagente B y Fase 3: Un 401 durante la sync pausa la cola; no cuenta como error del ítem ni lo descarta.
   async registrarFalloOperacion(idOperacion, error) {
     try {
       const cola = await this.obtenerCola();
       const status = error?.status || error?.response?.status;
-      const mensaje = error?.friendlyMessage || error?.message || String(error);
+      const mensaje =
+        error?.friendlyMessage ||
+        error?.message ||
+        (typeof error?.serverDetail?.mensaje === "string" ? error.serverDetail.mensaje : null) ||
+        (typeof error?.serverDetail?.detail === "string" ? error.serverDetail.detail : null) ||
+        String(error);
       const msgLower = String(mensaje).toLowerCase();
       const esError401 = status === 401 || msgLower.includes("token expirado") || msgLower.includes("sesión expirada");
       const esError4xx = typeof status === "number" && status >= 400 && status < 500 && !esError401;
@@ -193,9 +225,11 @@ export const SyncQueue = {
             intentos: esError401 ? (item.intentos || 0) : (item.intentos || 0) + 1,
             ultimoError: mensaje,
             ultimoIntento: new Date().toISOString(),
-            // Si es 4xx de validación de negocio, se marca permanente; 401 y 5xx/red NO son permanentes
+            codigoError: error?.codigo || error?.serverDetail?.codigo || null,
+            detalleError: error?.serverDetail || null,
+            // Si es 4xx de validación de negocio, se marca permanente y en estado REQUIERE_CORRECCION
             esErrorPermanente: esError401 ? false : esError4xx,
-            estado: esError4xx ? "error_validacion" : "pendiente de sincronizar",
+            estado: esError4xx ? "REQUIERE_CORRECCION" : "pendiente de sincronizar",
           };
         }
         return item;
@@ -204,6 +238,57 @@ export const SyncQueue = {
     } catch (e) {
       console.error("Error registrando fallo en operación:", e);
     }
+  },
+
+  /**
+   * Actualizar una operación existente en cola (por ejemplo tras corrección en formulario)
+   * Conserva el MISMO id e idempotencyKey para garantizar idempotencia transaccional.
+   */
+  async actualizarOperacion(idOperacion, payloadActualizado, nuevoEstado = "pendiente de sincronizar") {
+    try {
+      const cola = await this.obtenerCola();
+      let encontrada = false;
+      const actualizada = cola.map((item) => {
+        if (item.id === idOperacion || item.idempotencyKey === idOperacion) {
+          encontrada = true;
+          return {
+            ...item,
+            payload: {
+              ...(item.payload || {}),
+              ...payloadActualizado,
+            },
+            estado: nuevoEstado,
+            esErrorPermanente: false,
+            intentos: 0,
+            ultimoError: null,
+            codigoError: null,
+            detalleError: null,
+            fechaActualizacion: new Date().toISOString(),
+          };
+        }
+        return item;
+      });
+
+      if (!encontrada) {
+        console.warn(`[SyncQueue] Operación ${idOperacion} no encontrada para actualizar.`);
+        return false;
+      }
+
+      await this.guardarCola(actualizada);
+      return true;
+    } catch (e) {
+      console.error("Error actualizando operación en cola:", e);
+      return false;
+    }
+  },
+
+  // Marcar explícitamente una operación como REQUIERE_CORRECCION
+  async marcarOperacionRequiereCorreccion(idOperacion, detalleError = {}) {
+    return await this.registrarFalloOperacion(idOperacion, {
+      status: 422,
+      friendlyMessage: detalleError.mensaje || detalleError.message || "Requiere corrección de datos",
+      serverDetail: detalleError,
+    });
   },
 
   // Resetear estado de error para forzar reintento manual (Subagente C)

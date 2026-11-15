@@ -79,13 +79,29 @@ export const LocalDB = {
       if (!ruta || !ruta.paradas) return false;
 
       const paradasActualizadas = ruta.paradas.map((p) => {
-        if (p.IdPuntoVenta === idPuntoVenta || p.id === idPuntoVenta) {
-          return {
+        const match =
+          Number(p.IdPuntoVenta || p.id || p.idPuntoVenta || 0) === Number(idPuntoVenta) ||
+          Number(p.id_punto_venta || 0) === Number(idPuntoVenta);
+
+        if (match) {
+          const paradaModificada = {
             ...p,
-            estado: nuevoEstado, // "ENTREGADO", "NO_ENTREGADO", "PENDIENTE"
+            estado: nuevoEstado, // "ENTREGADO", "NO_ENTREGADO", "PENDIENTE", "REQUIERE_CORRECCION"
+            Estado: nuevoEstado,
             datosOperacion,
             fechaAtencion: new Date().toISOString(),
           };
+
+          if (nuevoEstado === "REQUIERE_CORRECCION") {
+            paradaModificada.errorSincronizacion =
+              datosOperacion.error || datosOperacion.mensaje || "Error de validación";
+            paradaModificada.operacionId = datosOperacion.operacionId || datosOperacion.id || null;
+            paradaModificada.payloadRechazado = datosOperacion.payload || null;
+          } else if (nuevoEstado === "ENTREGADO") {
+            paradaModificada.errorSincronizacion = null;
+          }
+
+          return paradaModificada;
         }
         return p;
       });
@@ -96,6 +112,22 @@ export const LocalDB = {
     } catch (e) {
       console.error("Error actualizando estado de parada local:", e);
       return false;
+    }
+  },
+
+  async marcarParadaRequiereCorreccion(idPuntoVenta, datosOperacion = {}) {
+    return await this.actualizarEstadoParada(idPuntoVenta, "REQUIERE_CORRECCION", datosOperacion);
+  },
+
+  async obtenerParadasRequierenCorreccion() {
+    try {
+      const ruta = await this.obtenerRutaActiva();
+      if (!ruta || !ruta.paradas) return [];
+      return ruta.paradas.filter(
+        (p) => String(p.estado || p.Estado || "").toUpperCase() === "REQUIERE_CORRECCION"
+      );
+    } catch (_e) {
+      return [];
     }
   },
 

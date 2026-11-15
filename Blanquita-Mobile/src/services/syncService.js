@@ -122,12 +122,29 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
       );
       const cant = typeof it.cantidad === "number" ? it.cantidad : parseFloat(it.cantidad || it.Cantidad || 0);
       const bandeo = Boolean(it.es_cortesia_bandeo || it.es_bandeo);
+      const precioUnit =
+        typeof it.precio_unitario === "number"
+          ? it.precio_unitario
+          : parseFloat(it.precio_unitario || it.PrecioUnitario || it.precio || 0) || 0;
+      const desc =
+        typeof it.descuento === "number"
+          ? it.descuento
+          : parseFloat(it.descuento || 0) || 0;
 
-      return {
+      const itemRes = {
         presentacion_id: presId,
         cantidad: Number(cant.toFixed(2)),
         es_cortesia_bandeo: bandeo,
       };
+
+      if (precioUnit > 0) {
+        itemRes.precio_unitario = Number(precioUnit.toFixed(2));
+      }
+      if (desc > 0) {
+        itemRes.descuento = Number(desc.toFixed(2));
+      }
+
+      return itemRes;
     })
     .filter((it) => it.presentacion_id > 0 && it.cantidad > 0);
 
@@ -232,6 +249,16 @@ export function normalizarPayloadEntregaCompuesta(payloadOriginal = {}) {
   }
   if (p.id_comprobante_archivo) {
     payloadFinal.id_comprobante_archivo = p.id_comprobante_archivo;
+  }
+  if (p.excedente || p.cobro?.excedente) {
+    payloadFinal.excedente = Number(
+      (parseFloat(p.excedente ?? p.cobro?.excedente ?? 0) || 0).toFixed(2)
+    );
+  }
+  if (p.motivo_excedente || p.cobro?.motivo_excedente) {
+    payloadFinal.motivo_excedente = String(
+      p.motivo_excedente || p.cobro?.motivo_excedente || ""
+    ).trim();
   }
   if (idPuntoVenta > 0 || p.id_punto_venta || p.idPuntoVenta) {
     payloadFinal.id_punto_venta = idPuntoVenta > 0 ? idPuntoVenta : (p.id_punto_venta || p.idPuntoVenta);
@@ -832,27 +859,53 @@ class SyncService {
             (typeof error?.serverDetail?.detail === "string" ? error.serverDetail.detail : null) ||
             "Error en la comunicación con el servidor.";
 
-          const payloadSanitizado = sanitizarPayloadParaLog(item.payload);
-          console.error(
-            `[SyncService] Error en item ${item.id} (${item.tipo}) [HTTP ${status}]:`,
-            mensajeReal,
-            "Payload enviado:",
-            JSON.stringify(payloadSanitizado)
-          );
+          const msgLower = String(mensajeReal).toLowerCase();
+          const es401 = status === 401 || msgLower.includes("token expirado") || msgLower.includes("sesión expirada");
+          const esError4xx = typeof status === "number" && status >= 400 && status < 500 && !es401;
+
+          if (typeof __DEV__ !== "undefined" && __DEV__) {
+            const payloadSanitizado = sanitizarPayloadParaLog(item.payload);
+            console.warn(
+              `[SyncService] Error en item ${item.id} (${item.tipo}) [HTTP ${status}]:`,
+              mensajeReal,
+              "Payload:",
+              payloadSanitizado
+            );
+          } else {
+            console.warn(
+              `[SyncService] Error en item ${item.id} (${item.tipo}) [HTTP ${status}]: ${mensajeReal}`
+            );
+          }
 
           fallidas++;
           await SyncQueue.registrarFalloOperacion(item.id, {
             status,
             message: mensajeReal,
             friendlyMessage: mensajeReal,
-            codigo: error?.codigo || error?.code,
+            codigo: error?.codigo || error?.code || error?.serverDetail?.codigo,
             response: error?.response,
             serverDetail: error?.serverDetail,
           });
 
+          // Si fue error 4xx de negocio (por ej 422 cobro excedente), marcar la parada como REQUIERE_CORRECCION
+          if (esError4xx) {
+            try {
+              const idPuntoVenta =
+                item.payload?.id_punto_venta ||
+                item.payload?.idPuntoVenta ||
+                item.payload?.IdPuntoVenta;
+              if (idPuntoVenta) {
+                await LocalDB.marcarParadaRequiereCorreccion(idPuntoVenta, {
+                  error: mensajeReal,
+                  codigo: error?.codigo || error?.code || error?.serverDetail?.codigo || "VALIDACION_NEGOCIO",
+                  operacionId: item.id,
+                  payload: item.payload,
+                });
+              }
+            } catch (_errLocal) {}
+          }
+
           // Manejo resiliente ante 401: intenta renovar token de inmediato y reintentar la MISMA operación
-          const msg = String(mensajeReal).toLowerCase();
-          const es401 = status === 401 || msg.includes("token expirado") || msg.includes("sesión expirada");
           if (es401) {
             console.log("[SyncService] 401 detectado en cola. Intentando renovación single-flight de token...");
             try {
@@ -877,7 +930,7 @@ class SyncService {
           }
 
           // Si el error es de conectividad (offline / timeout / 5xx), pausar para no quemar intentos
-          const esRed = error.isOffline || error.code === "ECONNABORTED" || msg.includes("network") || msg.includes("timeout") || status >= 500;
+          const esRed = error.isOffline || error.code === "ECONNABORTED" || msgLower.includes("network") || msgLower.includes("timeout") || status >= 500;
           if (esRed) {
             console.log("[SyncService] Conexión inestable o caída. Pausando ciclo de sincronización.");
             break;
