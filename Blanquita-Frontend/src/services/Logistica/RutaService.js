@@ -300,6 +300,19 @@ export async function AprobarCargaCamion(idAsignacion, datos = {}) {
   return await response.json();
 }
 
+export async function ReasignarRuta(idAsignacion, datos) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/reasignar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
 export async function SolicitarUbicacionActualChoferes(idSucursal = null) {
   let url = "/api/logistica/telemetria/solicitar-ubicacion-actual";
   if (idSucursal && idSucursal !== "todas") {

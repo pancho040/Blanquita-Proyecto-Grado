@@ -65,7 +65,18 @@ class RutaService:
         return self.repo.EjecutarGeneradorRutasDiarias(normalizar_fecha_bolivia(fecha) if fecha else fecha_actual_bolivia())
 
     def CrearAsignacion(self, dto: AsignacionRutaCrear, id_usuario_asigna: int) -> dict:
-        # Verificar duplicidad (uq_asignacion_ruta_fecha)
+        # 1. Validar si la ruta ya está asignada hoy a otro chofer activo
+        asigs_ruta = self.repo.ListarAsignaciones(fecha=dto.FechaAsignacion, id_ruta=dto.IdRutaDistribucion)
+        for ar in asigs_ruta:
+            estado_ar = str(ar.get("Estado", "")).strip().lower()
+            if estado_ar not in ("cancelada", "finalizada"):
+                nom_chofer = ar.get("NombreRepartidor") or f"chofer #{ar.get('IdUsuarioRepartidor')}"
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"La ruta ya se encuentra asignada a {nom_chofer} para esta fecha. Para cambiar de chofer, use la opción Reasignar Ruta."
+                )
+
+        # 2. Verificar duplicidad (uq_asignacion_ruta_fecha)
         existentes = self.repo.ListarAsignaciones(fecha=dto.FechaAsignacion, id_repartidor=dto.IdUsuarioRepartidor)
         for e in existentes:
             if e["IdRutaDistribucion"] == dto.IdRutaDistribucion:

@@ -266,7 +266,7 @@ class RutaRepository:
     # -------------------------------------------------------------
     # ASIGNACIONES DIARIAS A REPARTIDORES
     # -------------------------------------------------------------
-    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None, id_sucursal: int | None = None) -> list[dict]:
+    def ListarAsignaciones(self, fecha: date | None = None, id_repartidor: int | None = None, id_sucursal: int | None = None, id_ruta: int | None = None) -> list[dict]:
         params = {}
         where_clauses = []
         if fecha:
@@ -278,6 +278,9 @@ class RutaRepository:
         if id_sucursal:
             where_clauses.append('r."IdSucursal" = :id_sucursal')
             params["id_sucursal"] = id_sucursal
+        if id_ruta:
+            where_clauses.append('ar."IdRutaDistribucion" = :id_ruta')
+            params["id_ruta"] = id_ruta
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 

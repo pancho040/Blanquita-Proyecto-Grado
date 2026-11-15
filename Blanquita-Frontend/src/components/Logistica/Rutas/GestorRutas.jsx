@@ -878,19 +878,36 @@ export default function GestorRutas({ usuario = null }) {
                     <ListOrdered className="h-3.5 w-3.5" />
                     <span>Editar Paradas / Agregar o Mover Clientes (1..N)</span>
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      setRutaParaAsignar(rutaSeleccionada);
-                      setModalAsignarRuta(true);
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 h-8 text-xs rounded gap-1.5 shadow-none"
-                    title="Asignar o programar esta ruta a un chofer"
-                  >
-                    <Truck className="h-3.5 w-3.5" />
-                    <span>Asignar Ruta a Chofer</span>
-                  </Button>
+                  {(() => {
+                    const asigActiva = asignaciones.find(
+                      (a) =>
+                        a.IdRutaDistribucion === rutaSeleccionada.IdRutaDistribucion &&
+                        !["cancelada", "finalizada"].includes(String(a.Estado || "").toLowerCase())
+                    );
+                    if (asigActiva) {
+                      return (
+                        <div className="flex items-center gap-1.5 px-3 h-8 text-xs font-medium rounded bg-slate-100 border border-slate-300 text-slate-700">
+                          <Truck className="h-3.5 w-3.5 text-[#1C96C5]" />
+                          <span>Asignada a: <strong className="text-slate-900 font-semibold">{asigActiva.NombreRepartidor}</strong> ({asigActiva.Estado})</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setRutaParaAsignar(rutaSeleccionada);
+                          setModalAsignarRuta(true);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 h-8 text-xs rounded gap-1.5 shadow-none"
+                        title="Asignar o programar esta ruta a un chofer"
+                      >
+                        <Truck className="h-3.5 w-3.5" />
+                        <span>Asignar Ruta a Chofer</span>
+                      </Button>
+                    );
+                  })()}
                   <Button
                     onClick={guardarItinerario}
                     disabled={guardandoItinerario}

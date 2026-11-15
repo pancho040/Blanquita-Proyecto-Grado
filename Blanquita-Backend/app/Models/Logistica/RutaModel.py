@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import date, datetime
 
 class ZonaBase(BaseModel):
@@ -303,5 +303,15 @@ class ReasignarPendientesRequest(BaseModel):
     IdRutaDestino: Optional[int] = None
     observacion: Optional[str] = None
     FechaNueva: Optional[date] = None
+
+
+class ReasignarRutaRequest(BaseModel):
+    nuevo_id_chofer: int = Field(..., description="ID del nuevo chofer asignado")
+    motivo: str = Field(..., min_length=5, description="Motivo obligatorio de la reasignación")
+    transferir_stock: bool = Field(default=False, description="Indica si se transfiere el stock a bordo al nuevo chofer")
+    placa_vehiculo: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
 
 
