@@ -13,7 +13,8 @@ import {
   Filter,
   CheckCircle2,
   Navigation,
-  DollarSign
+  DollarSign,
+  History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,9 +30,11 @@ import {
   getReporteDesempenoRutas,
   getReporteCoberturaClientes,
 } from "@/services/Reportes/reportesService";
+import HistorialRepartoTab from "../Reparto/HistorialRepartoTab";
 
 const TABS = [
   { id: "desempeno_rutas", label: "Desempeño de Rutas y Choferes", icon: Truck },
+  { id: "reparto_chofer", label: "Reparto por Chofer y Liquidación", icon: History },
   { id: "cobertura_clientes", label: "Cobertura y Cartera de Clientes", icon: Users },
 ];
 
@@ -56,6 +59,9 @@ export default function CentroReportesLogistica({ usuario = null }) {
   const [filtroGps, setFiltroGps] = useState("TODOS");
 
   const cargarReporte = useCallback(async () => {
+    if (tabActiva === "reparto_chofer") {
+      return;
+    }
     setLoading(true);
     try {
       let res = { metricas: {}, data: [] };
@@ -321,8 +327,14 @@ export default function CentroReportesLogistica({ usuario = null }) {
           })}
         </div>
 
-      {/* KPIs superiores */}
-      {renderKpis()}
+      {tabActiva === "reparto_chofer" ? (
+        <div className="mt-4">
+          <HistorialRepartoTab usuario={usuario} />
+        </div>
+      ) : (
+        <>
+          {/* KPIs superiores */}
+          {renderKpis()}
 
       {/* Barra de Filtros */}
       <div className="no-print bg-white rounded border border-slate-200 p-3.5">
@@ -621,21 +633,23 @@ export default function CentroReportesLogistica({ usuario = null }) {
         )}
 
         {/* Firmas de Respaldo al Imprimir */}
-        <div className="hidden print:grid grid-cols-2 gap-12 text-center text-[11px] pt-14 pb-4">
-          <div>
-            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
-              Jefe de Logística y Despacho
+          <div className="hidden print:grid grid-cols-2 gap-12 text-center text-[11px] pt-14 pb-4">
+            <div>
+              <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+                Jefe de Logística y Despacho
+              </div>
+              <span className="text-[11px] text-gray-700">Control Operativo de Distribución</span>
             </div>
-            <span className="text-[11px] text-gray-700">Control Operativo de Distribución</span>
-          </div>
-          <div>
-            <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
-              Gerente General
+            <div>
+              <div className="border-t border-black pt-1 w-2/3 mx-auto font-bold uppercase">
+                Gerente General
+              </div>
+              <span className="text-[11px] text-gray-700">Papelera Blanquita S.R.L. - Aprobado</span>
             </div>
-            <span className="text-[11px] text-gray-700">Papelera Blanquita S.R.L. - Aprobado</span>
           </div>
         </div>
-      </div>
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 }

@@ -55,6 +55,8 @@ import InventarioCamionTab from "../Reparto/InventarioCamionTab";
 import HistorialRepartoTab from "../Reparto/HistorialRepartoTab";
 import EditorParadasDinamicoModal from "../Rutas/EditorParadasDinamicoModal";
 import ModalReasignarParadas from "../Rutas/ModalReasignarParadas";
+import ModalReasignarRuta from "./ModalReasignarRuta";
+import ModalStockCamion from "./ModalStockCamion";
 import BandejaSolicitudCargaModal from "../Reparto/BandejaSolicitudCargaModal";
 import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanner";
 import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
@@ -158,6 +160,10 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [asignacionParaEditarParadas, setAsignacionParaEditarParadas] = useState(null);
   const [modalReasignarParadas, setModalReasignarParadas] = useState(false);
   const [asignacionParaReasignar, setAsignacionParaReasignar] = useState(null);
+  const [modalReasignarRuta, setModalReasignarRuta] = useState(false);
+  const [asignacionParaReasignarRuta, setAsignacionParaReasignarRuta] = useState(null);
+  const [modalStockCamion, setModalStockCamion] = useState(false);
+  const [choferStockData, setChoferStockData] = useState(null);
   const [modalSolicitudCarga, setModalSolicitudCarga] = useState(false);
   const [asignacionParaCarga, setAsignacionParaCarga] = useState(null);
   const [wsConectado, setWsConectado] = useState(false);
@@ -561,32 +567,6 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
 
         <button
           type="button"
-          onClick={() => cambiarVista("inventario")}
-          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
-            vistaActiva === "inventario"
-              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
-              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
-          }`}
-        >
-          <Boxes className="h-3.5 w-3.5" />
-          <span>Inventario en Camión (Stock)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => cambiarVista("entregas")}
-          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
-            vistaActiva === "entregas"
-              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
-              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
-          }`}
-        >
-          <Receipt className="h-3.5 w-3.5" />
-          <span>Entregas en Ruta (NV-501)</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => cambiarVista("cierre")}
           className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
             vistaActiva === "cierre"
@@ -597,73 +577,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
           <Clock className="h-3.5 w-3.5" />
           <span>Cierre de Turno y Rendición</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => cambiarVista("historial")}
-          className={`px-3 py-1.5 text-xs font-semibold rounded border transition-all flex items-center gap-1.5 ${
-            vistaActiva === "historial"
-              ? "bg-[#1C96C5] text-white border-[#1C96C5]"
-              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
-          }`}
-        >
-          <History className="h-3.5 w-3.5" />
-          <span>Historial de Reparto</span>
-        </button>
       </div>
-
-      {vistaActiva === "inventario" && (
-        <InventarioCamionTab
-          usuario={usuario}
-          choferPreseleccionado={choferAccionRapida?.idChofer}
-          asignacionPreseleccionada={choferAccionRapida?.asignacion}
-          alActualizar={recargarAsignacionesSilencioso}
-        />
-      )}
-
-      {vistaActiva === "historial" && (
-        <HistorialRepartoTab
-          usuario={usuario}
-          choferPreseleccionado={choferAccionRapida?.idChofer}
-          fechaInicial={fecha}
-          alActualizar={recargarAsignacionesSilencioso}
-        />
-      )}
-
-      {vistaActiva === "entregas" && (
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
-            <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-[#1C96C5]" />
-              <span>Registrar Entrega / Cobro en Ruta</span>
-            </h3>
-            <EntregaChoferMovil
-              usuario={usuario}
-              choferPreseleccionado={choferAccionRapida?.idChofer}
-              asignacionPreseleccionada={choferAccionRapida?.asignacion}
-              alCompletar={recargarAsignacionesSilencioso}
-            />
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded p-4 shadow-2xs">
-            <div className="border-b border-slate-200 pb-2 mb-3">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[#1C96C5]" />
-                <span>Historial de Entregas y Cobros de la Ruta (Auditoría 1 a 1)</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Aprueba, observa o rechaza individualmente cada entrega y cobro realizado por los choferes
-              </p>
-            </div>
-            <HistorialRepartoTab
-              usuario={usuario}
-              choferPreseleccionado={choferAccionRapida?.idChofer}
-              fechaInicial={fecha}
-              alActualizar={recargarAsignacionesSilencioso}
-            />
-          </div>
-        </div>
-      )}
 
       {vistaActiva === "cierre" && (
         <div className="space-y-6">
@@ -1007,16 +921,16 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               <span>Carga</span>
                             </Button>
 
-                            {/* Reasignar paradas pendientes a otro chofer */}
+                            {/* Reasignar ruta a otro chofer */}
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setAsignacionParaReasignar(a);
-                                setModalReasignarParadas(true);
+                                setAsignacionParaReasignarRuta(a);
+                                setModalReasignarRuta(true);
                               }}
                               className="h-8 px-2 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 gap-1 rounded font-medium"
-                              title="Reasignar paradas pendientes a otro chofer"
+                              title="Reasignar esta ruta a otro chofer"
                             >
                               <Users className="h-3.5 w-3.5 text-amber-600" />
                               <span>Reasignar</span>
@@ -1037,40 +951,23 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               <span>Paradas 1..N</span>
                             </Button>
 
-                            {/* Consultar Stock Físico en Camión */}
+                            {/* Consultar Stock Físico en Camión (Modal) */}
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                cambiarVista("inventario", {
+                                setChoferStockData({
                                   idChofer: a.IdUsuarioRepartidor,
                                   nombreChofer: a.NombreRepartidor,
                                   asignacion: a
                                 });
+                                setModalStockCamion(true);
                               }}
                               className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
-                              title={`Consultar inventario cargado en el camión de ${a.NombreRepartidor}`}
+                              title={`Consultar inventario en el camión de ${a.NombreRepartidor}`}
                             >
                               <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
-                              <span>Stock</span>
-                            </Button>
-
-                            {/* Registrar Entrega / Nota de Venta */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                cambiarVista("entregas", {
-                                  idChofer: a.IdUsuarioRepartidor,
-                                  nombreChofer: a.NombreRepartidor,
-                                  asignacion: a
-                                });
-                              }}
-                              className="h-8 px-2 text-xs text-[#1C96C5] border-[#1C96C5]/40 hover:bg-[#1C96C5]/10 gap-1 rounded font-medium"
-                              title={`Registrar entrega / Nota de Venta para ${a.NombreRepartidor}`}
-                            >
-                              <Receipt className="h-3.5 w-3.5" />
-                              <span>Entrega</span>
+                              <span>Ver Stock</span>
                             </Button>
 
                             {/* Cierre de Jornada y Rendición */}
@@ -1506,6 +1403,29 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
             setAsignacionParaEditarParadas(asig);
             setModalEditorParadas(true);
           }}
+        />
+      )}
+      {/* MODAL REASIGNAR RUTA COMPLETA A OTRO CHOFER */}
+      {modalReasignarRuta && (
+        <ModalReasignarRuta
+          abierto={modalReasignarRuta}
+          onOpenChange={setModalReasignarRuta}
+          asignacion={asignacionParaReasignarRuta}
+          repartidores={repartidores}
+          alReasignar={() => {
+            recargarAsignacionesSilencioso();
+          }}
+        />
+      )}
+
+      {/* MODAL STOCK CAMIÓN DEL CHOFER */}
+      {modalStockCamion && (
+        <ModalStockCamion
+          abierto={modalStockCamion}
+          onOpenChange={setModalStockCamion}
+          idChofer={choferStockData?.idChofer}
+          nombreChofer={choferStockData?.nombreChofer}
+          asignacion={choferStockData?.asignacion}
         />
       )}
     </div>
