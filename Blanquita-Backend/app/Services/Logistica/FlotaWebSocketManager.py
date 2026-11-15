@@ -1,11 +1,30 @@
 import time
 import secrets
 import logging
-from datetime import datetime, timezone
+import json
+from decimal import Decimal
+from uuid import UUID
+from datetime import date, datetime, timezone
 from typing import Dict, Any, List, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
+
+
+def default_json_ws_serializer(obj: Any) -> Any:
+    """Serializador universal seguro para WebSockets (Decimal, datetime, date, UUID)."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, UUID):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+def serializar_json_ws(datos: Any) -> str:
+    """Convierte cualquier diccionario o lista a string JSON seguro para WebSockets."""
+    return json.dumps(datos, default=default_json_ws_serializer)
 
 
 class FlotaWebSocketManager:
@@ -118,13 +137,18 @@ class FlotaWebSocketManager:
                 else:
                     snapshot_filtrado = snapshot_inicial
 
-                await websocket.send_json({
+                await self.enviar_json_seguro(websocket, {
                     "tipo": "SNAPSHOT_INICIAL",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "choferes": snapshot_filtrado
                 })
             except Exception as e:
                 logger.warning(f"[WS-Flota] Error al enviar snapshot inicial: {e}")
+
+    async def enviar_json_seguro(self, websocket: WebSocket, payload: Dict[str, Any]):
+        """Envía un payload serializado con soporte nativo de Decimal, fechas y UUIDs."""
+        json_str = serializar_json_ws(payload)
+        await websocket.send_text(json_str)
 
     def desconectar(self, websocket: WebSocket):
         """Remueve la conexión WebSocket del conjunto de observadores activos."""
@@ -138,7 +162,7 @@ class FlotaWebSocketManager:
     async def responder_pong(self, websocket: WebSocket):
         """Responde a un mensaje de heartbeat ping."""
         try:
-            await websocket.send_json({
+            await self.enviar_json_seguro(websocket, {
                 "tipo": "pong",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
@@ -163,7 +187,7 @@ class FlotaWebSocketManager:
             if uid and int(uid) == int(id_chofer):
                 destinatario_encontrado = True
                 try:
-                    await ws.send_json(evento)
+                    await self.enviar_json_seguro(ws, evento)
                 except Exception as e:
                     logger.debug(f"[WS-Flota] Error al emitir a chofer #{id_chofer}: {e}")
                     conexiones_cerradas.append(ws)
@@ -180,7 +204,7 @@ class FlotaWebSocketManager:
         conexiones_cerradas = []
         for ws, meta in list(self.active_connections.items()):
             try:
-                await ws.send_json(evento)
+                await self.enviar_json_seguro(ws, evento)
             except Exception as e:
                 logger.debug(f"[WS-Flota] Error en broadcast a chofer: {e}")
                 conexiones_cerradas.append(ws)
@@ -199,7 +223,7 @@ class FlotaWebSocketManager:
                 if sucursal_id not in suc_permitidas:
                     continue
             try:
-                await ws.send_json(evento)
+                await self.enviar_json_seguro(ws, evento)
             except Exception as e:
                 logger.debug(f"[WS-Flota] Error en emitir_a_web: {e}")
                 conexiones_cerradas.append(ws)
@@ -212,7 +236,7 @@ class FlotaWebSocketManager:
         conexiones_cerradas = []
         for ws in list(self.active_connections.keys()):
             try:
-                await ws.send_json(evento)
+                await self.enviar_json_seguro(ws, evento)
             except Exception as e:
                 logger.debug(f"[WS-Flota] Error en broadcast_general: {e}")
                 conexiones_cerradas.append(ws)
@@ -252,7 +276,7 @@ class FlotaWebSocketManager:
                     continue
 
             try:
-                await ws.send_json(mensaje)
+                await self.enviar_json_seguro(ws, mensaje)
             except Exception as e:
                 logger.debug(f"[WS-Flota] Error al enviar a cliente; marcando desconexión: {e}")
                 conexiones_cerradas.append(ws)
