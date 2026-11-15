@@ -217,7 +217,7 @@ export default function EditorParadasDinamicoModal({
     if (idRuta) {
       try {
         await QuitarParadaRuta(idRuta, objetivo.IdPuntoVenta);
-        toast.info("Parada quitada y secuencia 1..N compactada en base de datos");
+        toast.info("Parada quitada y orden actualizado");
       } catch (err) {
         toast.error(err.message || "Error al quitar parada en servidor");
         return;
@@ -250,7 +250,7 @@ export default function EditorParadasDinamicoModal({
     if (idRutaOrigen) {
       try {
         await MoverParadaRuta(paradaParaMover.IdPuntoVenta, idRutaOrigen, rutaDestinoId);
-        toast.success("Cliente trasladado a la ruta destino. Orden 1..N recalculado en ambas rutas");
+        toast.success("Cliente trasladado a la ruta destino. Orden recalculado.");
       } catch (err) {
         toast.error(err.message || "Error al mover cliente de ruta");
         return;
@@ -277,7 +277,7 @@ export default function EditorParadasDinamicoModal({
       if (Array.isArray(res) && res.length > 0) {
         setParadas(res.map((p, idx) => ({ ...p, OrdenVisita: idx + 1 })));
       }
-      toast.success("Secuencia vial 1..N compactada sin huecos");
+      toast.success("Secuencia de paradas actualizada sin huecos");
     } catch (err) {
       toast.error(err.message || "Error al recalcular paradas");
     } finally {
@@ -334,7 +334,7 @@ export default function EditorParadasDinamicoModal({
         } catch {}
       }
 
-      toast.success("¡Itinerario 1..N y pedidos programados guardados correctamente!");
+      toast.success("¡Itinerario y paradas guardados correctamente!");
 
       if (alGuardar) {
         alGuardar(paradas);
@@ -591,10 +591,10 @@ export default function EditorParadasDinamicoModal({
               onClick={handleRecalcularOrden}
               disabled={guardando}
               className="text-xs text-slate-700 border-slate-300 gap-1.5"
-              title="Compactar la secuencia vial 1..N sin huecos"
+              title="Compactar la secuencia de paradas sin huecos"
             >
               <ListOrdered className="h-3.5 w-3.5 text-[#1C96C5] shrink-0" />
-              <span>Compactar 1..N</span>
+              <span>Reordenar Secuencia</span>
             </Button>
             <div className="flex items-center gap-2">
               <Button
@@ -614,7 +614,7 @@ export default function EditorParadasDinamicoModal({
                 className="bg-[#1C96C5] hover:bg-[#157A9E] text-white text-xs font-semibold gap-1.5"
               >
                 <Save className="h-3.5 w-3.5 shrink-0" />
-                <span>{guardando ? "Guardando..." : "Guardar Itinerario 1..N"}</span>
+                <span>{guardando ? "Guardando..." : "Guardar Itinerario"}</span>
               </Button>
             </div>
           </div>

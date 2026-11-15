@@ -673,7 +673,7 @@ export default function GestorRutas({ usuario = null }) {
               onClick={solicitarUbicacionGPS}
               disabled={solicitandoGps}
               className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold px-3 rounded text-xs shadow-none"
-              title="Emitir ping de telemetría satelital a los choferes"
+              title="Solicitar reporte de ubicación a los choferes"
             >
               <Navigation className={`h-3.5 w-3.5 shrink-0 ${solicitandoGps ? "animate-spin" : ""}`} />
               <span>Solicitar Ubicación Actual de Todos los Choferes</span>
@@ -686,7 +686,7 @@ export default function GestorRutas({ usuario = null }) {
               className="inline-flex items-center h-8 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold gap-1.5 transition-colors shadow-none"
             >
               <Radio className="h-3.5 w-3.5" />
-              <span>Ver Rastreo Satelital</span>
+              <span>Ver Rastreo en Vivo</span>
             </Button>
 
             <Button 
@@ -977,10 +977,10 @@ export default function GestorRutas({ usuario = null }) {
                               setModalEditorParadas(true);
                             }}
                             className="h-6 px-1.5 text-[10px] text-[#1C96C5] border-sky-300 hover:bg-sky-50 rounded font-semibold"
-                            title="Editar Paradas 1..N dinámicamente"
+                            title="Editar paradas de la ruta"
                           >
                             <ListOrdered className="h-3 w-3 mr-0.5" />
-                            <span>1..N</span>
+                            <span>Paradas</span>
                           </Button>
                         </div>
                       </div>
@@ -1017,10 +1017,10 @@ export default function GestorRutas({ usuario = null }) {
                     size="sm"
                     onClick={() => setModalEditorParadas(true)}
                     className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-bold px-3 h-8 text-xs rounded gap-1.5 shadow-none"
-                    title="Editar orden 1..N, agregar o mover clientes"
+                    title="Editar orden, agregar o mover clientes"
                   >
                     <ListOrdered className="h-3.5 w-3.5" />
-                    <span>Editar Paradas / Agregar o Mover Clientes (1..N)</span>
+                    <span>Editar Paradas</span>
                   </Button>
                   {(() => {
                     const asigActiva = asignaciones.find(

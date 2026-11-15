@@ -173,7 +173,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       setUltimaActualizacion(new Date());
     } catch (err) {
       if (err?.name !== "AbortError") {
-        if (!silencioso) toast.error("Error al obtener telemetría satelital");
+        if (!silencioso) toast.error("Error al obtener ubicación de repartidores");
       }
     } finally {
       telemetriaEnVueloRef.current = false;
@@ -657,8 +657,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     <div className="space-y-4">
       {/* BARRA SUPERIOR */}
       <PageHeader
-        title="Rastreo Satelital en Vivo"
-        subtitle="Monitoreo en tiempo real de unidades de reparto, velocidad y avance de paradas"
+        title="Rastreo en Vivo"
+        subtitle="Ubicación en tiempo real de repartidores, velocidad y avance de paradas"
         branchFilter={
           <div className="flex flex-wrap items-center gap-2">
             <BranchFilter
@@ -717,7 +717,7 @@ export default function RastreoChoferesGPS({ usuario = null }) {
             onClick={() => cargarTelemetria(false, true)}
             disabled={cargando}
             className="text-xs font-medium text-slate-700 h-8 rounded border-slate-200 gap-1.5"
-            title="Refrescar telemetría satelital en tiempo real"
+            title="Actualizar ubicaciones en tiempo real"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin text-[#1C96C5]" : ""}`} />
             <span>Actualizar</span>

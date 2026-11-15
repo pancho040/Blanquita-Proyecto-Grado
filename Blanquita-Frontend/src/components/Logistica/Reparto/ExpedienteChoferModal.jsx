@@ -530,7 +530,7 @@ export default function ExpedienteChoferModal({
             }`}
           >
             <Route className="h-4 w-4" />
-            <span>2. Paradas 1..N & Pedidos</span>
+            <span>2. Paradas & Pedidos</span>
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${tabActivo === "paradas" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
               {paradasRuta.length}
             </span>
@@ -808,7 +808,7 @@ export default function ExpedienteChoferModal({
                     className="h-8 text-xs border-sky-300 text-sky-800 hover:bg-sky-50 gap-1.5"
                   >
                     <Route className="h-3.5 w-3.5 text-[#1C96C5]" />
-                    <span>Abrir Editor Completo 1..N</span>
+                    <span>Abrir Editor de Paradas</span>
                   </Button>
                 )}
               </div>
@@ -1168,7 +1168,7 @@ export default function ExpedienteChoferModal({
         {/* Footer Impecable */}
         <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
           <div className="text-[11px] text-slate-500 font-medium">
-            Papelera Blanquita • Centro de Mando Logístico Dual
+            Papelera Blanquita • Despachos y Rutas
           </div>
 
           <Button

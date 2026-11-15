@@ -996,7 +996,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               <span>Reasignar</span>
                             </Button>
 
-                            {/* Editor dinámico de paradas 1..N */}
+                            {/* Editor de paradas */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -1005,10 +1005,10 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                                 setModalEditorParadas(true);
                               }}
                               className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
-                              title="Editar orden secuencial 1..N, agregar o mover paradas"
+                              title="Editar orden de paradas, agregar o mover comercios"
                             >
                               <Route className="h-3.5 w-3.5 text-slate-600" />
-                              <span>Paradas 1..N</span>
+                              <span>Paradas</span>
                             </Button>
 
                             {/* Consultar Stock Físico en Camión (Modal) */}
@@ -1064,7 +1064,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                               variant="outline"
                               onClick={() => verRutaEnMapa(a)}
                               className="h-8 px-2 text-xs text-[#1C96C5] border-slate-300 hover:bg-[#1C96C5]/10 gap-1 rounded"
-                              title="Ver paradas de la ruta en mapa satelital OSRM"
+                              title="Ver paradas de la ruta en el mapa"
                             >
                               <MapIcon className="h-3.5 w-3.5" />
                               <span>Mapa</span>

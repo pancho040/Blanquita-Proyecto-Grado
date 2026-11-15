@@ -205,7 +205,7 @@ export default function InicioSupervisor({ usuario }) {
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
-            <span className="text-slate-600">Monitoreo de Flota</span>
+            <span className="text-slate-600">Rutas y Repartidores</span>
             <a href="/supervisor/rutas?vista=vivo" className="font-medium text-[#1C96C5] hover:underline flex items-center">
               Rastreo GPS <ChevronRight className="h-3 w-3 ml-0.5" />
             </a>
