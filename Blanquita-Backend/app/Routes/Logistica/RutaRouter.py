@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -278,7 +279,7 @@ def generar_ticket_websocket_flota(
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal),
 ):
     """
-    Emite un ticket efímero de un solo uso y corta duración (60s) para autenticar
+    Emite un ticket efímero de un solo uso y duración suficiente (90s) para autenticar
     la conexión WebSocket del mapa satelital sin exponer el JWT en URLs o logs del proxy.
     Permite roles administrativos y choferes operativos.
     """
@@ -287,10 +288,10 @@ def generar_ticket_websocket_flota(
     ticket = flota_ws_manager.crear_ticket(
         usuario_id=usuario["IdUsuario"],
         sucursales_permitidas=sucursales_permitidas,
-        duracion_segundos=60,
+        duracion_segundos=90,
         rol=usuario.get("IdRol")
     )
-    return {"ticket": ticket, "expira_en_segundos": 60}
+    return {"ticket": ticket, "expira_en_segundos": 90}
 
 
 async def websocket_flota_endpoint(
@@ -333,25 +334,28 @@ async def websocket_flota_endpoint(
                     estado_usr = meta.get("IdEstadoUsuario")
                     suc_id = meta.get("IdSucursal") or payload.get("id_sucursal") or payload.get("IdSucursal")
 
-                    with SessionLocal() as db_session:
-                        usr = None
-                        if not uid and auth_sub:
-                            usr = db_session.execute(
-                                text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "AuthUserId" = :sub LIMIT 1;'),
-                                {"sub": str(auth_sub)}
-                            ).fetchone()
-                        elif uid:
-                            usr = db_session.execute(
-                                text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "IdUsuario" = :uid LIMIT 1;'),
-                                {"uid": int(uid)}
-                            ).fetchone()
+                    def _consultar_usr_handshake():
+                        with SessionLocal() as db_session:
+                            if not uid and auth_sub:
+                                return db_session.execute(
+                                    text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "AuthUserId" = :sub LIMIT 1;'),
+                                    {"sub": str(auth_sub)}
+                                ).fetchone()
+                            elif uid:
+                                return db_session.execute(
+                                    text('SELECT "IdUsuario", "IdRol", "IdEstadoUsuario", "IdSucursal" FROM public."Usuario" WHERE "IdUsuario" = :uid LIMIT 1;'),
+                                    {"uid": int(uid)}
+                                ).fetchone()
+                            return None
 
-                        if usr:
-                            uid = usr[0]
-                            rol = usr[1]
-                            estado_usr = usr[2]
-                            if usr[3] is not None:
-                                suc_id = usr[3]
+                    usr = await run_in_threadpool(_consultar_usr_handshake)
+
+                    if usr:
+                        uid = usr[0]
+                        rol = usr[1]
+                        estado_usr = usr[2]
+                        if usr[3] is not None:
+                            suc_id = usr[3]
 
                     if estado_usr == 1 or estado_usr is None:
                         rol_int = int(rol) if rol is not None else 6
@@ -371,12 +375,15 @@ async def websocket_flota_endpoint(
         await websocket.close(code=4401, reason="Ticket o token invalido o expirado")
         return
 
-    # Cargar snapshot inicial de choferes en vivo
+    # Cargar snapshot inicial de choferes en vivo en threadpool sin bloquear asyncio
     snapshot = []
     try:
-        with SessionLocal() as db_session:
-            suc_filtro = ticket_data.get("sucursales_permitidas")[0] if ticket_data.get("sucursales_permitidas") else None
-            snapshot = RutaService(db_session).ObtenerChoferesEnVivo(suc_filtro)
+        def _obtener_snapshot_en_vivo():
+            with SessionLocal() as db_session:
+                suc_filtro = ticket_data.get("sucursales_permitidas")[0] if ticket_data.get("sucursales_permitidas") else None
+                return RutaService(db_session).ObtenerChoferesEnVivo(suc_filtro)
+
+        snapshot = await run_in_threadpool(_obtener_snapshot_en_vivo)
     except Exception as e:
         logger.warning(f"[WS-Flota] Error al cargar snapshot inicial: {e}")
 
@@ -394,17 +401,20 @@ async def websocket_flota_endpoint(
                     if tipo_msg in ("reporte_ubicacion_actual", "POSICION_CHOFER"):
                         uid_reporte = msg_json.get("id_chofer") or ticket_data.get("usuario_id")
                         if uid_reporte and msg_json.get("lat") and msg_json.get("lng"):
-                            with SessionLocal() as db_session:
-                                dto_ping = TelemetriaPing(
-                                    IdUsuarioRepartidor=int(uid_reporte),
-                                    IdAsignacionRuta=msg_json.get("id_asignacion"),
-                                    Latitud=float(msg_json["lat"]),
-                                    Longitud=float(msg_json["lng"]),
-                                    Velocidad=float(msg_json.get("velocidad", 0.0)),
-                                    Bateria=int(msg_json.get("bateria", 100)),
-                                    EstadoMovimiento=msg_json.get("estado_movimiento", "En Ruta")
-                                )
-                                RutaService(db_session).RegistrarTelemetriaPing(dto_ping)
+                            def _guardar_ping_en_db(uid_rep, payload_msg):
+                                with SessionLocal() as db_session:
+                                    dto_ping = TelemetriaPing(
+                                        IdUsuarioRepartidor=int(uid_rep),
+                                        IdAsignacionRuta=payload_msg.get("id_asignacion"),
+                                        Latitud=float(payload_msg["lat"]),
+                                        Longitud=float(payload_msg["lng"]),
+                                        Velocidad=float(payload_msg.get("velocidad", 0.0)),
+                                        Bateria=int(payload_msg.get("bateria", 100)),
+                                        EstadoMovimiento=payload_msg.get("estado_movimiento", "En Ruta")
+                                    )
+                                    RutaService(db_session).RegistrarTelemetriaPing(dto_ping)
+
+                            await run_in_threadpool(_guardar_ping_en_db, uid_reporte, msg_json)
                             await flota_ws_manager.broadcast_ubicacion(msg_json)
                 except Exception as parse_err:
                     logger.debug(f"[WS receive] No JSON o formato desconocido: {parse_err}")
@@ -444,20 +454,29 @@ def registrar_telemetria(
     # Difundir en tiempo real al WebSocket Hub (Render Web Service)
     try:
         import asyncio
+        vel_efectiva = getattr(dto, "Velocidad", None) or getattr(dto, "VelocidadKmH", 0.0) or 0.0
+        bat_efectiva = getattr(dto, "Bateria", None) or getattr(dto, "NivelBateria", 100) or 100
+        suc_efectiva = getattr(dto, "IdSucursal", None) or usuario.get("IdSucursal", 1)
         datos_ping = {
+            "tipo": "UBICACION",
             "id_chofer": dto.IdUsuarioRepartidor,
-            "sucursal_id": dto.IdSucursal or usuario.get("IdSucursal", 1),
+            "IdUsuarioRepartidor": dto.IdUsuarioRepartidor,
+            "IdAsignacionRuta": dto.IdAsignacionRuta,
+            "sucursal_id": suc_efectiva,
             "lat": dto.Latitud,
             "lng": dto.Longitud,
-            "velocidad": dto.VelocidadKmH or 0.0,
-            "bateria": dto.NivelBateria or 100,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "velocidad": float(vel_efectiva),
+            "bateria": int(bat_efectiva),
+            "timestamp": ahora_bolivia().isoformat(),
+            "estado_movimiento": dto.EstadoMovimiento or "En Ruta"
         }
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(flota_ws_manager.broadcast_ubicacion(datos_ping))
+            loop.create_task(flota_ws_manager.emitir_a_web(datos_ping, sucursal_id=suc_efectiva))
         except RuntimeError:
             asyncio.run(flota_ws_manager.broadcast_ubicacion(datos_ping))
+            asyncio.run(flota_ws_manager.emitir_a_web(datos_ping, sucursal_id=suc_efectiva))
     except Exception as ws_err:
         logger.debug(f"Aviso: Broadcast WebSocket omitido: {ws_err}")
 
@@ -2141,40 +2160,50 @@ async def solicitar_ubicacion_actual_flota(
     await flota_ws_manager.emitir_a_todos_los_choferes(evento_solicitud)
 
     choferes_ws_activos = flota_ws_manager.obtener_choferes_conectados()
-
+    hoy_bolivia = fecha_actual_bolivia()
     filtro_suc = alcance.sucursal_efectiva
-    sql_choferes = text("""
-        SELECT 
-            u."IdUsuario",
-            u."PrimerNombre" || ' ' || u."ApellidoPaterno" AS "NombreCompleto",
-            u."Celular",
-            u."IdSucursal",
-            t."IdAsignacionRuta",
-            r."NombreRuta",
-            t."Latitud",
-            t."Longitud",
-            t."Velocidad",
-            t."Bateria",
-            t."EstadoMovimiento",
-            t."UltimaActualizacion"
-        FROM public."Usuario" u
-        LEFT JOIN public."TrackingChofer" t ON u."IdUsuario" = t."IdUsuarioRepartidor"
-        LEFT JOIN public."AsignacionRuta" ar ON t."IdAsignacionRuta" = ar."IdAsignacionRuta"
-        LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
-        WHERE u."IdRol" = :rol_chofer
-          AND u."IdEstadoUsuario" = 1
-          AND (:suc_filtro IS NULL OR u."IdSucursal" = :suc_filtro)
-        ORDER BY u."ApellidoPaterno" ASC;
-    """)
-    filas = db.execute(sql_choferes, {
-        "rol_chofer": ROL_AGENTE_REPARTO,
-        "suc_filtro": filtro_suc
-    }).mappings().fetchall()
+
+    def _consultar_choferes_flota():
+        sql_choferes = text("""
+            SELECT 
+                u."IdUsuario",
+                u."PrimerNombre" || ' ' || u."ApellidoPaterno" AS "NombreCompleto",
+                u."Celular",
+                u."IdSucursal",
+                ar."IdAsignacionRuta",
+                r."NombreRuta",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."Latitud" ELSE NULL END as "Latitud",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."Longitud" ELSE NULL END as "Longitud",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."Velocidad" ELSE 0.0 END as "Velocidad",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."Bateria" ELSE NULL END as "Bateria",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."EstadoMovimiento" ELSE 'Sin Señal' END as "EstadoMovimiento",
+                CASE WHEN DATE(t."UltimaActualizacion" AT TIME ZONE 'America/La_Paz') = :fecha_hoy THEN t."UltimaActualizacion" ELSE NULL END as "UltimaActualizacion"
+            FROM public."Usuario" u
+            LEFT JOIN public."AsignacionRuta" ar ON (
+                u."IdUsuario" = ar."IdUsuarioRepartidor" 
+                AND ar."FechaAsignacion" = :fecha_hoy
+                AND ar."Estado" = 1
+            )
+            LEFT JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+            LEFT JOIN public."TrackingChofer" t ON u."IdUsuario" = t."IdUsuarioRepartidor"
+            WHERE u."IdRol" = :rol_chofer
+              AND u."IdEstadoUsuario" = 1
+              AND (:suc_filtro IS NULL OR u."IdSucursal" = :suc_filtro)
+            ORDER BY u."ApellidoPaterno" ASC;
+        """)
+        return db.execute(sql_choferes, {
+            "rol_chofer": ROL_AGENTE_REPARTO,
+            "suc_filtro": filtro_suc,
+            "fecha_hoy": hoy_bolivia
+        }).mappings().fetchall()
+
+    filas = await run_in_threadpool(_consultar_choferes_flota)
 
     lista_resultado = []
     for f in filas:
         uid = f["IdUsuario"]
         en_vivo = uid in choferes_ws_activos
+        tiene_loc_hoy = f["Latitud"] is not None and f["Longitud"] is not None
         lista_resultado.append({
             "id_chofer": uid,
             "nombre_chofer": f["NombreCompleto"],
@@ -2182,12 +2211,12 @@ async def solicitar_ubicacion_actual_flota(
             "id_asignacion_ruta": f["IdAsignacionRuta"],
             "nombre_ruta": f["NombreRuta"],
             "ubicacion_en_vivo": en_vivo,
-            "origen_dato": "EN_VIVO" if en_vivo else "Última ubicación conocida",
-            "latitud": float(f["Latitud"]) if f["Latitud"] is not None else None,
-            "longitud": float(f["Longitud"]) if f["Longitud"] is not None else None,
+            "origen_dato": "EN_VIVO" if en_vivo else ("Última ubicación conocida" if tiene_loc_hoy else "Sin ubicación hoy"),
+            "latitud": float(f["Latitud"]) if tiene_loc_hoy else None,
+            "longitud": float(f["Longitud"]) if tiene_loc_hoy else None,
             "velocidad": float(f["Velocidad"] or 0.0),
             "bateria": f["Bateria"],
-            "estado_movimiento": "En Vivo" if en_vivo else (f["EstadoMovimiento"] or "Sin Señal"),
+            "estado_movimiento": "En Vivo" if en_vivo else (f["EstadoMovimiento"] if tiene_loc_hoy else "Sin Señal"),
             "ultima_actualizacion": f["UltimaActualizacion"].isoformat() if f["UltimaActualizacion"] else None
         })
 

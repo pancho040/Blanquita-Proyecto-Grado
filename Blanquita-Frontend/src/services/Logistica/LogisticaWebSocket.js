@@ -162,11 +162,23 @@ class LogisticaWebSocketClient {
         }
       };
 
-      this.socket.onclose = () => {
+      this.socket.onclose = (event) => {
+        if (import.meta.env?.DEV) {
+          console.warn(`[LogisticaWS] Conexión cerrada. Code: ${event.code}, Reason: ${event.reason || 'sin razón'}, Clean: ${event.wasClean}`);
+        }
         this.estaConectado = false;
         this.isConnecting = false;
         this._notificarCambioEstado(false);
         if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+
+        // Si fue código 4401 (no autorizado / ticket caducado), limpiar ticket y esperar reautenticación
+        if (event.code === 4401) {
+          if (import.meta.env?.DEV) {
+            console.warn("[LogisticaWS] Ticket no válido o sesión caducada (4401).");
+          }
+          g[WS_TICKET_KEY] = null;
+          return;
+        }
 
         // Backoff exponencial con tope de 30s
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
