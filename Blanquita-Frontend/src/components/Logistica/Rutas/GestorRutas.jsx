@@ -561,7 +561,7 @@ export default function GestorRutas({ usuario = null }) {
         IdUsuarioRepartidor: Number(choferAsignarId),
         FechaAsignacion: fechaFiltro,
         KilometrajeInicial: kmInicialAsignar ? Number(kmInicialAsignar) : 45120,
-        Observacion: `Asignación programada desde Centro de Control (${fechaFiltro})`
+        Observacion: `Asignación programada (${fechaFiltro})`
       });
       toast.success(`¡Ruta asignada a chofer para el día ${fechaFiltro}!`);
       setModalAsignarRuta(false);
@@ -580,7 +580,7 @@ export default function GestorRutas({ usuario = null }) {
         <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarDatos(true)} />
       </PanelErrorBoundary>
 
-      {/* SELECTOR DE VISTA UNIFICADA: RASTREO SATELITAL EN VIVO vs PLANIFICACIÓN DE RUTAS */}
+      {/* SELECTOR DE VISTA UNIFICADA: RASTREO EN VIVO vs PLANIFICACIÓN DE RUTAS */}
       <div className="flex items-center justify-between bg-white border border-slate-200 rounded p-1.5 shadow-2xs">
         <div className="flex items-center gap-1.5">
           <button

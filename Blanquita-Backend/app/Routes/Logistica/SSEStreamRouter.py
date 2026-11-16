@@ -3,8 +3,14 @@ Conectado a la outbox persistente evento_logistica con LISTEN/NOTIFY y soporte L
 """
 import asyncio
 import json
+import os
+import select
+import threading
+import time
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 
+import psycopg2
 from fastapi import APIRouter, Request, Query, Header, HTTPException, status, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
@@ -31,6 +37,96 @@ ROLES_PERMITIDOS = [
     ROL_CONTADOR,
     ROL_DISTRIBUIDOR
 ]
+
+
+def obtener_direct_db_url() -> str:
+    """Obtiene la URL directa de PostgreSQL en puerto 5432 para soporte LISTEN/NOTIFY."""
+    direct = os.getenv("DATABASE_DIRECT_URL")
+    if direct:
+        return direct
+    raw = os.getenv("DATABASE_URL", "")
+    if not raw:
+        return ""
+    try:
+        u = urlparse(raw)
+        # En Supabase el puerto directo es 5432
+        netloc = f"{u.username}:{u.password}@{u.hostname}:5432"
+        return urlunparse((u.scheme, netloc, u.path, u.params, u.query, u.fragment))
+    except Exception:
+        return raw
+
+
+class DbNotificationHub:
+    """Hub centralizado de notificaciones PostgreSQL LISTEN/NOTIFY sobre puerto 5432 directo.
+    Despierta a todos los clientes SSE al instante (< 50ms) y ofrece sondeo de respaldo a 1.0s.
+    """
+    def __init__(self):
+        self._listeners: set[asyncio.Event] = set()
+        self._lock = threading.Lock()
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+
+    def iniciar(self):
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._running = True
+            self._thread = threading.Thread(target=self._run_listener, daemon=True, name="DbNotificationHubThread")
+            self._thread.start()
+
+    def registrar_evento(self, event: asyncio.Event):
+        with self._lock:
+            self._listeners.add(event)
+
+    def desregistrar_evento(self, event: asyncio.Event):
+        with self._lock:
+            self._listeners.discard(event)
+
+    def _notificar_todos(self):
+        with self._lock:
+            listeners = list(self._listeners)
+        for ev in listeners:
+            try:
+                loop = getattr(ev, "_loop", None)
+                if loop and loop.is_running():
+                    loop.call_soon_threadsafe(ev.set)
+                else:
+                    ev.set()
+            except Exception:
+                pass
+
+    def _run_listener(self):
+        db_url = obtener_direct_db_url()
+        if not db_url:
+            return
+
+        while self._running:
+            conn = None
+            try:
+                conn = psycopg2.connect(db_url, connect_timeout=10)
+                conn.autocommit = True
+                cur = conn.cursor()
+                cur.execute("LISTEN logistica_eventos; LISTEN evento_logistica;")
+                while self._running:
+                    if select.select([conn], [], [], 1.5) == ([], [], []):
+                        continue
+                    conn.poll()
+                    notificaciones = []
+                    while conn.notifies:
+                        notificaciones.append(conn.notifies.pop(0))
+                    if notificaciones:
+                        self._notificar_todos()
+            except Exception:
+                time.sleep(3.0)
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+
+hub_notificaciones = DbNotificationHub()
 
 
 def resolver_usuario_sse(
@@ -184,37 +280,48 @@ async def stream_eventos_logistica(
         # Enviar evento de conexión exitosa
         yield f"event: CONECTADO\ndata: {json.dumps({'status': 'ok', 'usuario_id': usuario['IdUsuario'], 'cursor': cursor_id})}\n\n"
 
-        segundos_desde_ping = 0
+        hub_notificaciones.iniciar()
+        evento_despertar = asyncio.Event()
+        hub_notificaciones.registrar_evento(evento_despertar)
 
-        while True:
-            if await request.is_disconnected():
-                break
+        segundos_desde_ping = 0.0
 
-            # Consultar eventos pendientes en outbox
-            eventos = await run_in_threadpool(
-                consultar_eventos_outbox,
-                cursor_id=cursor_id,
-                sucursal_id=sucursal_efectiva,
-                usuario_id=usuario["IdUsuario"],
-                es_chofer=es_chofer,
-                limite=100
-            )
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
 
-            if eventos:
-                for ev in eventos:
-                    cursor_id = ev["id"]
-                    payload_str = json_dumps_safe(ev["payload"])
-                    yield f"id: {ev['id']}\nevent: {ev['tipo']}\ndata: {payload_str}\n\n"
-                segundos_desde_ping = 0
-            else:
-                # Sin eventos en este tick: sleep adaptativo rápido para latencia sub-segundo
-                await asyncio.sleep(0.35)
-                segundos_desde_ping += 0.35
+                # Consultar eventos pendientes en outbox
+                eventos = await run_in_threadpool(
+                    consultar_eventos_outbox,
+                    cursor_id=cursor_id,
+                    sucursal_id=sucursal_efectiva,
+                    usuario_id=usuario["IdUsuario"],
+                    es_chofer=es_chofer,
+                    limite=100
+                )
 
-                # Heartbeat cada 15 segundos para mantener vivo el canal
-                if segundos_desde_ping >= 15:
-                    yield ": ping\n\n"
-                    segundos_desde_ping = 0
+                if eventos:
+                    for ev in eventos:
+                        cursor_id = ev["id"]
+                        payload_str = json_dumps_safe(ev["payload"])
+                        yield f"id: {ev['id']}\nevent: {ev['tipo']}\ndata: {payload_str}\n\n"
+                    segundos_desde_ping = 0.0
+                else:
+                    evento_despertar.clear()
+                    try:
+                        # Despertar inmediato por NOTIFY o fallback a sondeo cada 1.0s
+                        await asyncio.wait_for(evento_despertar.wait(), timeout=1.0)
+                        segundos_desde_ping += 0.05
+                    except asyncio.TimeoutError:
+                        segundos_desde_ping += 1.0
+
+                    # Heartbeat cada 15 segundos para mantener vivo el canal
+                    if segundos_desde_ping >= 15.0:
+                        yield ": ping\n\n"
+                        segundos_desde_ping = 0.0
+        finally:
+            hub_notificaciones.desregistrar_evento(evento_despertar)
 
     return StreamingResponse(
         generador_eventos(),

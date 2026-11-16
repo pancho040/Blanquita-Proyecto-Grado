@@ -151,7 +151,7 @@ export default function InicioSupervisor({ usuario }) {
 
       {/* 1. ENCABEZADO INDUSTRIAL OPERATIVO */}
       <PageHeader
-        title="Centro de Control Logístico"
+        title="Operaciones de Logística"
         subtitle={`${fechaActual} · Despacho de vehículos, seguimiento de rutas de entrega y liquidaciones de campo.`}
         branchFilter={
           <BranchFilter
