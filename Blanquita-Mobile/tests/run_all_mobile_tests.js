@@ -28,6 +28,7 @@ const testFiles = [
   "test_entrega_editable_frecuencia_y_notificaciones.test.js",
   "test_ws_url_dinamica.test.js",
   "test_calculo_entrega_contrato.test.js",
+  "test_sse_service_mobile.test.js",
 ];
 
 console.log("==================================================================");
