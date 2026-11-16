@@ -35,7 +35,7 @@ import {
   RevisarOperacionRuta,
   FinalizarRutaAdmin
 } from "@/services/Logistica/RutaService";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useLogisticaEventos, useEstadoConexionLogistica, ESTADO_EN_LINEA } from "@/services/Logistica/LogisticaSSEClient";
 
 export default function HistorialRepartoTab({
   usuario = null,
@@ -74,7 +74,8 @@ export default function HistorialRepartoTab({
   const [observacionFinalizar, setObservacionFinalizar] = useState("");
   const [estadoFinalRuta, setEstadoFinalRuta] = useState("APROBADA");
   const [finalizandoRuta, setFinalizandoRuta] = useState(false);
-  const [wsConectado, setWsConectado] = useState(false);
+  const estadoConexion = useEstadoConexionLogistica();
+  const wsConectado = estadoConexion === ESTADO_EN_LINEA;
 
   // Datos de notas de venta
   const [notas, setNotas] = useState([]);
@@ -231,38 +232,45 @@ export default function HistorialRepartoTab({
     }
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 
-  // WebSocket en tiempo real: Cero Polling innecesario para optimización en plan gratuito
-  useEffect(() => {
-    logisticaSocket.conectar();
-    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
-
-    const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", () => {
+  // Eventos SSE en tiempo real para notas de entrega, cobros y cierres
+  useLogisticaEventos({
+    tipos: [
+      "operacion_ruta_registrada",
+      "ENTREGA_REGISTRADA",
+      "COBRO_REGISTRADO",
+      "operacion_revisada",
+      "ruta_finalizada_admin",
+      "ASIGNACION_COMPLETADA",
+    ],
+    onEvento: () => {
       consultarNotas(false);
       if (seccionActiva === "cierres") {
         consultarTurnos();
       }
-    });
+    },
+  });
 
-    const unsubRev = logisticaSocket.suscribir("operacion_revisada", () => {
-      consultarNotas(false);
-    });
-
-    const handleCustomWs = (e) => {
+  useEffect(() => {
+    const handleSseEvent = (e) => {
       const { tipo } = e.detail || {};
-      if (tipo === "operacion_ruta_registrada" || tipo === "operacion_revisada" || tipo === "ruta_finalizada_admin") {
+      if (
+        tipo === "operacion_ruta_registrada" ||
+        tipo === "ENTREGA_REGISTRADA" ||
+        tipo === "COBRO_REGISTRADO" ||
+        tipo === "operacion_revisada" ||
+        tipo === "ruta_finalizada_admin" ||
+        tipo === "ASIGNACION_COMPLETADA"
+      ) {
         consultarNotas(false);
         if (seccionActiva === "cierres") {
           consultarTurnos();
         }
       }
     };
-    window.addEventListener("blanquita:ws-event", handleCustomWs);
+    window.addEventListener("blanquita:sse-event", handleSseEvent);
 
     return () => {
-      unsubEstado();
-      unsubOp();
-      unsubRev();
-      window.removeEventListener("blanquita:ws-event", handleCustomWs);
+      window.removeEventListener("blanquita:sse-event", handleSseEvent);
     };
   }, [consultarNotas, consultarTurnos, seccionActiva]);
 

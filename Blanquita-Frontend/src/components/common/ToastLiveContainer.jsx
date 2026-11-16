@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   User,
 } from "lucide-react";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { logisticaSSE, useLogisticaEventos } from "@/services/Logistica/LogisticaSSEClient";
 import { useBranch } from "@/stores/branchStore";
 import { abrirAprobarCarga } from "@/stores/aprobacionCargaStore";
 
@@ -123,158 +123,164 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
     agregarToastRef.current = agregarToast;
   }, [agregarToast]);
 
-  // Conexión permanente a WebSocket y escucha de eventos de logística
-  useEffect(() => {
-    // Conecta automáticamente al montar
-    logisticaSocket.conectar();
-
-    // 1. Solicitud de Carga de Camión
-    const unsubCarga1 = logisticaSocket.suscribir("solicitud_carga_recibida", (datos = {}) => {
-      const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
-      agregarToastRef.current({
-        tipo: "solicitud_carga",
-        titulo: "Solicitud de Carga de Camión",
-        nombreChofer: chofer,
-        detalle: datos.mensaje || `Solicitó validación de stock para salir a reparto (${datos.items_count || 1} ítems).`,
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ver y Aprobar Stock",
-        color: "amber",
-        icono: Truck,
-        payload: datos,
-      });
-    });
-
-    const unsubCarga2 = logisticaSocket.suscribir("solicitud_carga_creada", (datos = {}) => {
-      const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
-      agregarToastRef.current({
-        tipo: "solicitud_carga",
-        titulo: "Solicitud de Carga de Camión",
-        nombreChofer: chofer,
-        detalle: datos.mensaje || `El chofer registró nueva solicitud de carga para el camión.`,
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ver y Aprobar Stock",
-        color: "amber",
-        icono: Truck,
-        payload: datos,
-      });
-    });
-
-    // 2. Operación de ruta registrada (Entrega o Cobro en camino)
-    const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", (datos = {}) => {
-      const chofer = datos.nombre_chofer || datos.chofer || "Chofer en ruta";
-      const esCobro = datos.tipo_operacion === "COBRO" || datos.monto;
-      agregarToastRef.current({
-        tipo: esCobro ? "cobro_ruta" : "entrega_ruta",
-        titulo: esCobro ? "Cobro Registrado en Ruta" : "Entrega Registrada en Ruta",
-        nombreChofer: chofer,
-        detalle: datos.mensaje || (esCobro ? `Se registró un cobro por Bs. ${datos.monto || "0.00"}` : "Pedido entregado al cliente en ruta."),
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ir a Revisar / Aprobar",
-        color: "emerald",
-        icono: esCobro ? DollarSign : CheckCircle2,
-        payload: datos,
-      });
-    });
-
-    // 3. Ubicación de Chofer Actualizada (Telemetría Satelital)
-    const unsubUbicacion = logisticaSocket.suscribir("ubicacion_chofer_actualizada", (datos = {}) => {
-      // Notificar solo si hay cambios significativos o estado de alerta
-      if (datos.alerta || datos.estado_movimiento === "Detenido con Alarma") {
-        const chofer = datos.nombre_chofer || `Chofer #${datos.id_chofer || datos.IdUsuarioRepartidor || ""}`;
+  // Escucha centralizada de eventos SSE de logística
+  const manejarEvento = useCallback((datos = {}, tipo) => {
+    switch (tipo) {
+      case "solicitud_carga_recibida":
+      case "solicitud_carga_creada":
+      case "SOLICITUD_CARGA": {
+        const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
         agregarToastRef.current({
-          tipo: "alerta_ubicacion",
-          titulo: "Alerta de Chofer en Ruta",
+          tipo: "solicitud_carga",
+          titulo: "Solicitud de Carga de Camión",
           nombreChofer: chofer,
-          detalle: datos.mensaje || `Alerta en parada: ${datos.estado_movimiento || "Detención prolongada"}`,
-          accionUrl: "/supervisor/rutas?vista=vivo",
-          accionTexto: "Ver en Mapa GPS",
-          color: "rose",
-          icono: ShieldAlert,
+          detalle: datos.mensaje || `Solicitó validación de stock para salir a reparto (${datos.items_count || 1} ítems).`,
+          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          accionTexto: "Ver y Aprobar Stock",
+          color: "amber",
+          icono: Truck,
           payload: datos,
         });
+        break;
       }
-    });
 
-    // 4. Ruta Reordenada
-    const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", (datos = {}) => {
-      agregarToastRef.current({
-        tipo: "ruta_reordenada",
-        titulo: "Secuencia de Ruta Reordenada",
-        nombreChofer: datos.nombre_chofer || "Supervisor de Logística",
-        detalle: datos.mensaje || "Se modificó el orden vial de paradas asignadas para hoy.",
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ver Asignaciones",
-        color: "indigo",
-        icono: RefreshCw,
-        payload: datos,
-      });
-    });
+      case "operacion_ruta_registrada":
+      case "ENTREGA_REGISTRADA":
+      case "COBRO_REGISTRADO": {
+        const chofer = datos.nombre_chofer || datos.chofer || "Chofer en ruta";
+        const esCobro = tipo === "COBRO_REGISTRADO" || datos.tipo_operacion === "COBRO" || datos.monto;
+        agregarToastRef.current({
+          tipo: esCobro ? "cobro_ruta" : "entrega_ruta",
+          titulo: esCobro ? "Cobro Registrado en Ruta" : "Entrega Registrada en Ruta",
+          nombreChofer: chofer,
+          detalle: datos.mensaje || (esCobro ? `Se registró un cobro por Bs. ${datos.monto || "0.00"}` : "Pedido entregado al cliente en ruta."),
+          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          accionTexto: "Ir a Revisar / Aprobar",
+          color: "emerald",
+          icono: esCobro ? DollarSign : CheckCircle2,
+          payload: datos,
+        });
+        break;
+      }
 
-    // 5. Carga de Camión Aprobada
-    const unsubCargaAprobada = logisticaSocket.suscribir("carga_camion_aprobada", (datos = {}) => {
-      agregarToastRef.current({
-        tipo: "carga_aprobada",
-        titulo: "Carga de Camión Aprobada",
-        nombreChofer: datos.nombre_chofer || "Administración",
-        detalle: datos.mensaje || `Asignación #${datos.id_asignacion || ""} habilitada para salir a reparto.`,
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ver Ruta",
-        color: "emerald",
-        icono: CheckCircle2,
-        payload: datos,
-      });
-    });
+      case "ubicacion_chofer_actualizada":
+      case "UBICACION": {
+        if (datos.alerta || datos.estado_movimiento === "Detenido con Alarma") {
+          const chofer = datos.nombre_chofer || `Chofer #${datos.id_chofer || datos.IdUsuarioRepartidor || ""}`;
+          agregarToastRef.current({
+            tipo: "alerta_ubicacion",
+            titulo: "Alerta de Chofer en Ruta",
+            nombreChofer: chofer,
+            detalle: datos.mensaje || `Alerta en parada: ${datos.estado_movimiento || "Detención prolongada"}`,
+            accionUrl: "/supervisor/rutas?vista=vivo",
+            accionTexto: "Ver en Mapa GPS",
+            color: "rose",
+            icono: ShieldAlert,
+            payload: datos,
+          });
+        }
+        break;
+      }
 
-    // 6. Ruta Finalizada por Admin
-    const unsubRutaFin = logisticaSocket.suscribir("ruta_finalizada_admin", (datos = {}) => {
-      agregarToastRef.current({
-        tipo: "ruta_finalizada",
-        titulo: "Ruta Finalizada y Chofer Liberado",
-        nombreChofer: datos.nombre_chofer || "Supervisión",
-        detalle: datos.mensaje || "Ruta cerrada exitosamente por auditoría. Chofer listo para nuevo viaje.",
-        accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-        accionTexto: "Ver Historial",
-        color: "slate",
-        icono: Clock,
-        payload: datos,
-      });
-    });
+      case "ruta_reordenada": {
+        agregarToastRef.current({
+          tipo: "ruta_reordenada",
+          titulo: "Secuencia de Ruta Reordenada",
+          nombreChofer: datos.nombre_chofer || "Supervisor de Logística",
+          detalle: datos.mensaje || "Se modificó el orden de paradas asignadas para hoy.",
+          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          accionTexto: "Ver Asignaciones",
+          color: "indigo",
+          icono: RefreshCw,
+          payload: datos,
+        });
+        break;
+      }
 
-    // 7. Cobro QR Registrado
-    const unsubQr = logisticaSocket.suscribir("cobro_qr_registrado", (datos = {}) => {
-      agregarToastRef.current({
-        tipo: "cobro_qr",
-        titulo: "Nuevo Pago QR Pendiente",
-        nombreChofer: datos.nombre_chofer || "Reparto / Clientes",
-        detalle: datos.mensaje || `Comprobante QR por Bs. ${datos.monto || "0.00"} pendiente de validación contable.`,
-        accionUrl: "/contador/aprobacion-qr",
-        accionTexto: "Aprobar QR",
-        color: "blue",
-        icono: QrCode,
-        payload: datos,
-      });
-    });
+      case "carga_camion_aprobada":
+      case "CARGA_APROBADA": {
+        agregarToastRef.current({
+          tipo: "carga_aprobada",
+          titulo: "Carga de Camión Aprobada",
+          nombreChofer: datos.nombre_chofer || "Administración",
+          detalle: datos.mensaje || `Asignación #${datos.id_asignacion || ""} habilitada para salir a reparto.`,
+          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          accionTexto: "Ver Ruta",
+          color: "emerald",
+          icono: CheckCircle2,
+          payload: datos,
+        });
+        break;
+      }
 
-    // 8. Soporte para eventos lanzados desde ventanas o pruebas locales
+      case "ruta_finalizada_admin":
+      case "ASIGNACION_COMPLETADA": {
+        agregarToastRef.current({
+          tipo: "ruta_finalizada",
+          titulo: "Ruta Finalizada y Chofer Liberado",
+          nombreChofer: datos.nombre_chofer || "Supervisión",
+          detalle: datos.mensaje || "Ruta cerrada exitosamente. Chofer disponible para nuevo viaje.",
+          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          accionTexto: "Ver Historial",
+          color: "slate",
+          icono: Clock,
+          payload: datos,
+        });
+        break;
+      }
+
+      case "cobro_qr_registrado": {
+        agregarToastRef.current({
+          tipo: "cobro_qr",
+          titulo: "Nuevo Pago QR Pendiente",
+          nombreChofer: datos.nombre_chofer || "Reparto / Clientes",
+          detalle: datos.mensaje || `Comprobante QR por Bs. ${datos.monto || "0.00"} pendiente de validación contable.`,
+          accionUrl: "/contador/aprobacion-qr",
+          accionTexto: "Aprobar QR",
+          color: "blue",
+          icono: QrCode,
+          payload: datos,
+        });
+        break;
+      }
+
+      default:
+        break;
+    }
+  }, [esAdmin]);
+
+  useLogisticaEventos({
+    tipos: [
+      "solicitud_carga_recibida",
+      "solicitud_carga_creada",
+      "SOLICITUD_CARGA",
+      "operacion_ruta_registrada",
+      "ENTREGA_REGISTRADA",
+      "COBRO_REGISTRADO",
+      "ubicacion_chofer_actualizada",
+      "UBICACION",
+      "ruta_reordenada",
+      "carga_camion_aprobada",
+      "CARGA_APROBADA",
+      "ruta_finalizada_admin",
+      "ASIGNACION_COMPLETADA",
+      "cobro_qr_registrado",
+    ],
+    onEvento: manejarEvento,
+  });
+
+  // Soporte para eventos lanzados desde ventanas o pruebas locales
+  useEffect(() => {
     const handleTrigger = (e) => {
       if (e?.detail) {
         agregarToastRef.current(e.detail);
       }
     };
     window.addEventListener("blanquita:trigger-toast", handleTrigger);
-
     return () => {
-      unsubCarga1();
-      unsubCarga2();
-      unsubOp();
-      unsubUbicacion();
-      unsubReorden();
-      unsubCargaAprobada();
-      unsubRutaFin();
-      unsubQr();
       window.removeEventListener("blanquita:trigger-toast", handleTrigger);
     };
-  }, [esAdmin]);
+  }, []);
 
   if (toasts.length === 0) return null;
 

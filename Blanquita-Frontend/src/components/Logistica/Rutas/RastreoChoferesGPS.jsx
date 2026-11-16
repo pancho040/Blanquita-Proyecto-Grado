@@ -11,8 +11,7 @@ import {
   SolicitarUbicacionActualChoferes
 } from "@/services/Logistica/RutaService";
 import { obtenerFechaHoyBolivia, esHoyBolivia } from "@/utils/fechas";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
-import { logisticaSSE } from "@/services/Logistica/LogisticaSSEClient";
+import { logisticaSSE, useLogisticaEventos, useEstadoConexionLogistica, ESTADO_EN_LINEA, ESTADO_RECONECTANDO } from "@/services/Logistica/LogisticaSSEClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -66,7 +65,8 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const [autoRefresh] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
   const [tiempoRelativo, setTiempoRelativo] = useState("hace unos segundos");
-  const [wsConectado, setWsConectado] = useState(false);
+  const estadoConexion = useEstadoConexionLogistica();
+  const wsConectado = estadoConexion === ESTADO_EN_LINEA;
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [mostrarPruebas, setMostrarPruebas] = useState(false);
 
@@ -107,7 +107,13 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     return { texto: `hace ${h} h`, enLinea: true };
   };
 
-  const choferesFiltrados = (choferes || []).filter((c) => {
+  const listaBase = Array.isArray(choferes)
+    ? choferes
+    : Array.isArray(choferes?.choferes)
+    ? choferes.choferes
+    : [];
+
+  const choferesFiltrados = listaBase.filter((c) => {
     const nombre = (c?.NombreRepartidor || c?.NombreCompleto || "").toUpperCase();
     const esPrueba = nombre.startsWith("TEST_") || nombre.includes("PRUEBA");
     if (esPrueba && (!import.meta.env?.DEV || !mostrarPruebas)) {
@@ -225,7 +231,12 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       }
       const sid = (!sucursal || sucursal === "todas") ? null : sucursal;
       const data = await ObtenerChoferesEnVivo(sid, fechaFiltro);
-      setChoferes(data || []);
+      const listaChoferes = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.choferes)
+        ? data.choferes
+        : [];
+      setChoferes(listaChoferes);
       setUltimaActualizacion(new Date());
     } catch (err) {
       if (err?.name !== "AbortError") {
@@ -258,166 +269,150 @@ export default function RastreoChoferesGPS({ usuario = null }) {
     }
   };
 
-  // Suscripción al WebSocket de Logística (solo para el día en curso; días pasados son solo lectura)
-  useEffect(() => {
-    if (!esHoy) {
-      setWsConectado(false);
-      return;
-    }
-    logisticaSocket.conectar();
-    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
+  // Suscripción al stream SSE de Logística (solo para el día en curso; días pasados son solo lectura)
+  const actualizarChoferDesdeWs = useCallback((datos) => {
+    if (!datos) return;
+    const idChofer = Number(datos.id_chofer || datos.idUsuarioRepartidor || datos.IdUsuarioRepartidor);
+    if (!idChofer) return;
 
-    const actualizarChoferDesdeWs = (datos) => {
-      if (!datos) return;
-      const idChofer = Number(datos.id_chofer || datos.idUsuarioRepartidor || datos.IdUsuarioRepartidor);
-      if (!idChofer) return;
-
-      setChoferes((prev) => {
-        const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
-        if (idx === -1) {
-          // Chofer nuevo o recién conectado: recargar telemetría en segundo plano
-          cargarTelemetria(true, true);
-          return prev;
-        }
-        const anterior = prev[idx];
-
-        let nuevaLat = Number(datos.lat ?? datos.latitud ?? anterior.Latitud);
-        let nuevaLng = Number(datos.lng ?? datos.longitud ?? anterior.Longitud);
-
-        // Filtro de 25 metros de desplazamiento mínimo
-        if (anterior.Latitud && anterior.Longitud && !isNaN(nuevaLat) && !isNaN(nuevaLng)) {
-          const dLat = (nuevaLat - anterior.Latitud) * 111000;
-          const dLng = (nuevaLng - anterior.Longitud) * 111000 * Math.cos((anterior.Latitud * Math.PI) / 180);
-          const distMetros = Math.sqrt(dLat * dLat + dLng * dLng);
-          if (distMetros < 25) {
-            nuevaLat = anterior.Latitud;
-            nuevaLng = anterior.Longitud;
-          }
-        }
-
-        const choferActualizado = {
-          ...anterior,
-          Latitud: nuevaLat,
-          Longitud: nuevaLng,
-          VelocidadKmH: datos.velocidad ?? datos.VelocidadKmH ?? anterior.VelocidadKmH,
-          Velocidad: datos.velocidad ?? datos.Velocidad ?? anterior.Velocidad,
-          NivelBateria: datos.bateria ?? datos.NivelBateria ?? anterior.NivelBateria,
-          Bateria: datos.bateria ?? datos.Bateria ?? anterior.Bateria,
-          FechaHoraPing: datos.timestamp || new Date().toISOString(),
-          EnLinea: true,
-          conectado: true,
-          EstadoMovimiento: datos.estado_movimiento || anterior.EstadoMovimiento || "En Ruta",
-          SegundosDesdeUltimoReporte: 0,
-        };
-
-        const nuevoArr = [...prev];
-        nuevoArr[idx] = choferActualizado;
-        return nuevoArr;
-      });
-      setUltimaActualizacion(new Date());
-    };
-
-    const marcarChoferDesconectado = (datos) => {
-      if (!datos) return;
-      const idChofer = Number(datos.id_chofer || datos.id_usuario);
-      if (!idChofer) return;
-      setChoferes((prev) => {
-        const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
-        if (idx === -1) return prev;
-        const nuevoArr = [...prev];
-        nuevoArr[idx] = {
-          ...nuevoArr[idx],
-          EnLinea: false,
-          conectado: false,
-          EstadoMovimiento: "Sin Señal",
-        };
-        return nuevoArr;
-      });
-    };
-
-    const unsubUbicacion = logisticaSocket.suscribir("ubicacion_chofer_actualizada", actualizarChoferDesdeWs);
-    const unsubPosicion = logisticaSocket.suscribir("POSICION_CHOFER", actualizarChoferDesdeWs);
-    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", actualizarChoferDesdeWs);
-    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", actualizarChoferDesdeWs);
-    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", marcarChoferDesconectado);
-    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
-      invalidarCache("/api/logistica/repartidores");
-      invalidarCache("/api/logistica/telemetria");
-      cargarTelemetria(true, true);
-    });
-
-    // Conexión tiempo real SSE (respaldada por Outbox en BD y reconexión con Last-Event-ID)
-    logisticaSSE.setSucursal(sucursal);
-    logisticaSSE.conectar();
-    const unsubSseEstado = logisticaSSE.onEstadoConexion((conectado) => {
-      setWsConectado(conectado);
-    });
-
-    const unsubSseUbicacion = logisticaSSE.suscribir("UBICACION", (datos) => {
-      if (!datos) return;
-      actualizarChoferDesdeWs({
-        id_chofer: datos.id_chofer,
-        lat: datos.latitud,
-        lng: datos.longitud,
-        velocidad: datos.velocidad,
-        bateria: datos.bateria,
-        estado_movimiento: datos.estado_movimiento,
-        parada_actual: datos.parada_actual,
-        total_paradas: datos.total_paradas,
-        paradas_completadas: datos.paradas_completadas,
-        monto_cobrado: datos.monto_cobrado,
-      });
-    });
-
-    const unsubSseAsignacion = logisticaSSE.suscribir("ASIGNACION_ACTUALIZADA", () => {
-      cargarTelemetria(true, true);
-    });
-    const unsubSseCompletada = logisticaSSE.suscribir("ASIGNACION_COMPLETADA", () => {
-      cargarTelemetria(true, true);
-    });
-    const unsubSseCarga = logisticaSSE.suscribir("CARGA_APROBADA", () => {
-      cargarTelemetria(true, true);
-    });
-
-    const unsubSnapshot = logisticaSocket.suscribir("SNAPSHOT_INICIAL", (datos) => {
-      if (datos && Array.isArray(datos.choferes)) {
-        setChoferes(datos.choferes);
-        setUltimaActualizacion(new Date());
+    setChoferes((prev) => {
+      const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
+      if (idx === -1) {
+        cargarTelemetria(true, true);
+        return prev;
       }
-    });
+      const anterior = prev[idx];
 
-    const handleCustomWs = (e) => {
+      let nuevaLat = Number(datos.lat ?? datos.latitud ?? anterior.Latitud);
+      let nuevaLng = Number(datos.lng ?? datos.longitud ?? anterior.Longitud);
+
+      // Filtro de 25 metros de desplazamiento mínimo
+      if (anterior.Latitud && anterior.Longitud && !isNaN(nuevaLat) && !isNaN(nuevaLng)) {
+        const dLat = (nuevaLat - anterior.Latitud) * 111000;
+        const dLng = (nuevaLng - anterior.Longitud) * 111000 * Math.cos((anterior.Latitud * Math.PI) / 180);
+        const distMetros = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (distMetros < 25) {
+          nuevaLat = anterior.Latitud;
+          nuevaLng = anterior.Longitud;
+        }
+      }
+
+      const choferActualizado = {
+        ...anterior,
+        Latitud: nuevaLat,
+        Longitud: nuevaLng,
+        VelocidadKmH: datos.velocidad ?? datos.VelocidadKmH ?? anterior.VelocidadKmH,
+        Velocidad: datos.velocidad ?? datos.Velocidad ?? anterior.Velocidad,
+        NivelBateria: datos.bateria ?? datos.NivelBateria ?? anterior.NivelBateria,
+        Bateria: datos.bateria ?? datos.Bateria ?? anterior.Bateria,
+        FechaHoraPing: datos.timestamp || new Date().toISOString(),
+        EnLinea: true,
+        conectado: true,
+        EstadoMovimiento: datos.estado_movimiento || anterior.EstadoMovimiento || "En Ruta",
+        SegundosDesdeUltimoReporte: 0,
+      };
+
+      const nuevoArr = [...prev];
+      nuevoArr[idx] = choferActualizado;
+      return nuevoArr;
+    });
+    setUltimaActualizacion(new Date());
+  }, [cargarTelemetria]);
+
+  const marcarChoferDesconectado = useCallback((datos) => {
+    if (!datos) return;
+    const idChofer = Number(datos.id_chofer || datos.id_usuario);
+    if (!idChofer) return;
+    setChoferes((prev) => {
+      const idx = prev.findIndex((c) => Number(c.IdUsuarioRepartidor) === idChofer);
+      if (idx === -1) return prev;
+      const nuevoArr = [...prev];
+      nuevoArr[idx] = {
+        ...nuevoArr[idx],
+        EnLinea: false,
+        conectado: false,
+        EstadoMovimiento: "Sin Señal",
+      };
+      return nuevoArr;
+    });
+  }, []);
+
+  useLogisticaEventos({
+    enabled: esHoy,
+    sucursalId: sucursal,
+    tipos: [
+      "UBICACION",
+      "ubicacion_chofer_actualizada",
+      "POSICION_CHOFER",
+      "CHOFER_EN_LINEA",
+      "CHOFER_ACTUALIZADO",
+      "CHOFER_SIN_SEÑAL",
+      "CHOFER_CREADO",
+      "ASIGNACION_ACTUALIZADA",
+      "ASIGNACION_COMPLETADA",
+      "CARGA_APROBADA",
+      "ENTREGA_REGISTRADA",
+      "COBRO_REGISTRADO",
+      "SNAPSHOT_INICIAL",
+    ],
+    onEvento: (datos, tipo) => {
+      if (tipo === "UBICACION" || tipo === "ubicacion_chofer_actualizada" || tipo === "POSICION_CHOFER") {
+        actualizarChoferDesdeWs({
+          id_chofer: datos.id_chofer || datos.idUsuarioRepartidor || datos.IdUsuarioRepartidor,
+          lat: datos.latitud ?? datos.lat,
+          lng: datos.longitud ?? datos.lng,
+          velocidad: datos.velocidad,
+          bateria: datos.bateria,
+          estado_movimiento: datos.estado_movimiento,
+          parada_actual: datos.parada_actual,
+          total_paradas: datos.total_paradas,
+          paradas_completadas: datos.paradas_completadas,
+          monto_cobrado: datos.monto_cobrado,
+        });
+      } else if (tipo === "CHOFER_EN_LINEA" || tipo === "CHOFER_ACTUALIZADO") {
+        actualizarChoferDesdeWs(datos);
+      } else if (tipo === "CHOFER_SIN_SEÑAL") {
+        marcarChoferDesconectado(datos);
+      } else if (tipo === "SNAPSHOT_INICIAL") {
+        if (datos && Array.isArray(datos.choferes)) {
+          setChoferes(datos.choferes);
+          setUltimaActualizacion(new Date());
+        }
+      } else {
+        invalidarCache("/api/logistica/telemetria");
+        cargarTelemetria(true, true);
+      }
+    },
+  });
+
+  useEffect(() => {
+    const handleSseEvent = (e) => {
       const { tipo } = e.detail || {};
-      if (tipo === "ubicacion_chofer_actualizada" || tipo === "telemetria_ping" || tipo === "POSICION_CHOFER" || tipo === "CHOFER_ACTUALIZADO") {
+      if (tipo === "telemetria_ping" || tipo === "ubicacion_chofer_actualizada") {
         cargarTelemetria(true);
       }
     };
-    window.addEventListener("blanquita:ws-event", handleCustomWs);
+    const handleFallbackPoll = () => {
+      if (esHoy) cargarTelemetria(true);
+    };
+
+    window.addEventListener("blanquita:sse-event", handleSseEvent);
+    window.addEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
 
     return () => {
-      unsubEstado();
-      unsubUbicacion();
-      unsubPosicion();
-      unsubChoferEnLinea();
-      unsubChoferActualizado();
-      unsubChoferSinSenal();
-      unsubChoferCreado();
-      unsubSnapshot();
-      unsubSseEstado();
-      unsubSseUbicacion();
-      unsubSseAsignacion();
-      unsubSseCompletada();
-      unsubSseCarga();
-      window.removeEventListener("blanquita:ws-event", handleCustomWs);
+      window.removeEventListener("blanquita:sse-event", handleSseEvent);
+      window.removeEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
     };
   }, [cargarTelemetria, esHoy]);
 
-  // Fallback: auto-refresco periódico cada 60s SOLO cuando el WebSocket está desconectado
+  // Fallback: auto-refresco periódico cada 45s SOLO cuando el stream no está en línea y pestaña visible
   useEffect(() => {
     if (wsConectado || !esHoy || !listoParaConsultar) return;
     const intervaloFallback = setInterval(() => {
-      cargarTelemetria(true);
-    }, 60000);
+      if (typeof document !== "undefined" && !document.hidden) {
+        cargarTelemetria(true);
+      }
+    }, 45000);
     return () => clearInterval(intervaloFallback);
   }, [wsConectado, esHoy, listoParaConsultar, cargarTelemetria]);
 
@@ -695,8 +690,14 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       >
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
-            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-            <span>{wsConectado ? "En Línea (SSE en vivo)" : "Conexión Manual"}</span>
+            <span className={`h-2 w-2 rounded-full ${
+              estadoConexion === ESTADO_EN_LINEA
+                ? "bg-emerald-500 animate-pulse"
+                : estadoConexion === ESTADO_RECONECTANDO
+                ? "bg-amber-500 animate-pulse"
+                : "bg-slate-400"
+            }`} />
+            <span>{estadoConexion}</span>
           </div>
 
           <Button

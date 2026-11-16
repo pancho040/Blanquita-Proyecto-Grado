@@ -48,6 +48,27 @@ const customRulesPlugin = {
         };
       },
     },
+    "no-new-websocket": {
+      meta: {
+        type: "problem",
+        docs: {
+          description: "Bloquear cualquier instanciacion de new WebSocket en src/",
+        },
+        schema: [],
+      },
+      create(context) {
+        return {
+          NewExpression(node) {
+            if (node.callee && (node.callee.name === "WebSocket" || node.callee.property?.name === "WebSocket")) {
+              context.report({
+                node,
+                message: "Prohibido instanciar 'new WebSocket'. Toda la flota y logística opera sobre LogisticaSSEClient.",
+              });
+            }
+          },
+        };
+      },
+    },
   },
 };
 
@@ -82,6 +103,26 @@ export default [
       "no-undef": "error",
       "react/jsx-no-undef": "error",
       "custom/no-var-before-define": "error",
+      "custom/no-new-websocket": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["*LogisticaWebSocket*"],
+              message: "El módulo LogisticaWebSocket ha sido eliminado. Toda la flota opera sobre LogisticaSSEClient.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "window",
+          property: "WebSocket",
+          message: "Uso de window.WebSocket prohibido. Usa LogisticaSSEClient.",
+        },
+      ],
       "react-hooks/rules-of-hooks": "off",
       "react-hooks/exhaustive-deps": "off",
     },

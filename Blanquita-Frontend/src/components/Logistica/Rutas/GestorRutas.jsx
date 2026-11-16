@@ -60,7 +60,7 @@ import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { PanelErrorBoundary } from "@/components/common/PanelErrorBoundary";
 import { cache } from "@/lib/cacheService";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useLogisticaEventos, useEstadoConexionLogistica, ESTADO_EN_LINEA, ESTADO_RECONECTANDO } from "@/services/Logistica/LogisticaSSEClient";
 import RastreoChoferesGPS from "./RastreoChoferesGPS";
 import { useTiempoRelativo } from "@/hooks/useTiempoRelativo";
 import { invalidarCache } from "@/lib/api-cache";
@@ -319,7 +319,8 @@ export default function GestorRutas({ usuario = null }) {
     }
   }, [sucursal, fechaFiltro, seleccionarRuta]);
 
-  const [wsConectado, setWsConectado] = useState(false);
+  const estadoConexion = useEstadoConexionLogistica();
+  const wsConectado = estadoConexion === ESTADO_EN_LINEA;
 
   // Carga reactiva al cambiar sucursal o fecha bloqueada si no está listoParaConsultar
   useEffect(() => {
@@ -328,76 +329,66 @@ export default function GestorRutas({ usuario = null }) {
     }
   }, [sucursal, fechaFiltro, listoParaConsultar, cargarDatos]);
 
-  // WebSocket en tiempo real + Escucha de 'blanquita:ws-event'
-  useEffect(() => {
-    logisticaSocket.conectar();
-    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
-
-    const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", () => {
-      cargarDatos(true);
-    });
-
-    const unsubCarga = logisticaSocket.suscribir("solicitud_carga_recibida", () => {
-      cargarDatos(true);
-    });
-
-    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", () => {
-      invalidarCache("/api/logistica/repartidores");
-      cargarDatos(true, true);
-    });
-
-    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", (datos) => {
-      invalidarCache("/api/logistica/repartidores");
-      if (datos && (datos.id_chofer || datos.id_usuario)) {
-        const idChofer = Number(datos.id_chofer || datos.id_usuario);
-        setRepartidores((prev) =>
-          prev.map((r) =>
-            Number(r.IdUsuario) === idChofer
-              ? { ...r, IdEstadoUsuario: datos.id_estado ?? r.IdEstadoUsuario }
-              : r
-          )
-        );
+  // Eventos SSE en tiempo real
+  useLogisticaEventos({
+    tipos: [
+      "ruta_reordenada",
+      "solicitud_carga_recibida",
+      "CHOFER_EN_LINEA",
+      "CHOFER_ACTUALIZADO",
+      "CHOFER_CREADO",
+      "CHOFER_SIN_SEÑAL",
+      "ASIGNACION_ACTUALIZADA",
+      "ASIGNACION_COMPLETADA",
+      "CARGA_APROBADA",
+    ],
+    onEvento: (datos, tipo) => {
+      if (tipo === "CHOFER_ACTUALIZADO") {
+        invalidarCache("/api/logistica/repartidores");
+        if (datos && (datos.id_chofer || datos.id_usuario)) {
+          const idChofer = Number(datos.id_chofer || datos.id_usuario);
+          setRepartidores((prev) =>
+            prev.map((r) =>
+              Number(r.IdUsuario) === idChofer
+                ? { ...r, IdEstadoUsuario: datos.id_estado ?? r.IdEstadoUsuario }
+                : r
+            )
+          );
+        }
+        cargarDatos(true, true);
+      } else if (tipo === "CHOFER_EN_LINEA" || tipo === "CHOFER_CREADO" || tipo === "CHOFER_SIN_SEÑAL") {
+        invalidarCache("/api/logistica/repartidores");
+        cargarDatos(true, true);
+      } else {
+        cargarDatos(true);
       }
-      cargarDatos(true, true);
-    });
+    },
+  });
 
-    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
-      invalidarCache("/api/logistica/repartidores");
-      cargarDatos(true, true);
-    });
-
-    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", () => {
-      invalidarCache("/api/logistica/repartidores");
-      cargarDatos(true, true);
-    });
-
-    const handleCustomWs = (e) => {
-      cargarDatos(true);
-    };
-    window.addEventListener("blanquita:ws-event", handleCustomWs);
-
+  useEffect(() => {
+    const handleSseEvent = () => cargarDatos(true);
+    const handleFallbackPoll = () => cargarDatos(true);
     const handleFocus = () => cargarDatos(true);
+
+    window.addEventListener("blanquita:sse-event", handleSseEvent);
+    window.addEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      unsubEstado();
-      unsubReorden();
-      unsubCarga();
-      unsubChoferEnLinea();
-      unsubChoferActualizado();
-      unsubChoferCreado();
-      unsubChoferSinSenal();
-      window.removeEventListener("blanquita:ws-event", handleCustomWs);
+      window.removeEventListener("blanquita:sse-event", handleSseEvent);
+      window.removeEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
       window.removeEventListener("focus", handleFocus);
     };
   }, [cargarDatos]);
 
-  // Fallback: auto-refresco periódico cada 60s si el WebSocket está desconectado
+  // Fallback: auto-refresco periódico cada 45s si no está en línea y ventana visible
   useEffect(() => {
     if (wsConectado || !listoParaConsultar) return;
     const intervaloFallback = setInterval(() => {
-      cargarDatos(true);
-    }, 60000);
+      if (typeof document !== "undefined" && !document.hidden) {
+        cargarDatos(true);
+      }
+    }, 45000);
     return () => clearInterval(intervaloFallback);
   }, [wsConectado, listoParaConsultar, cargarDatos]);
 
@@ -585,7 +576,9 @@ export default function GestorRutas({ usuario = null }) {
   return (
     <div className="space-y-4">
       {/* 0. BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
-      <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarDatos(true)} />
+      <PanelErrorBoundary titulo="Bandeja de Carga" fallback={null}>
+        <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarDatos(true)} />
+      </PanelErrorBoundary>
 
       {/* SELECTOR DE VISTA UNIFICADA: RASTREO SATELITAL EN VIVO vs PLANIFICACIÓN DE RUTAS */}
       <div className="flex items-center justify-between bg-white border border-slate-200 rounded p-1.5 shadow-2xs">
@@ -647,8 +640,14 @@ export default function GestorRutas({ usuario = null }) {
           >
             <div className="flex items-center gap-1.5">
               <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
-                <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-                <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
+                <span className={`h-2 w-2 rounded-full ${
+                  estadoConexion === ESTADO_EN_LINEA
+                    ? "bg-emerald-500 animate-pulse"
+                    : estadoConexion === ESTADO_RECONECTANDO
+                    ? "bg-amber-500 animate-pulse"
+                    : "bg-slate-400"
+                }`} />
+                <span>{estadoConexion}</span>
               </div>
 
               <Button

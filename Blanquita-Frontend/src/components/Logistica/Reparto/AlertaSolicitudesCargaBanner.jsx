@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListarSolicitudesCarga } from "@/services/Logistica/RutaService";
 import BandejaSolicitudCargaModal from "./BandejaSolicitudCargaModal";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useLogisticaEventos } from "@/services/Logistica/LogisticaSSEClient";
 
 export default function AlertaSolicitudesCargaBanner({ sucursal = null, onAprobado = null }) {
   const [solicitudesPendientes, setSolicitudesPendientes] = useState([]);
@@ -43,19 +43,25 @@ export default function AlertaSolicitudesCargaBanner({ sucursal = null, onAproba
     }, 250);
   }, [consultarPendientes]);
 
+  useLogisticaEventos({
+    tipos: [
+      "solicitud_carga_recibida",
+      "solicitud_carga_creada",
+      "carga_camion_aprobada",
+      "carga_camion_observada",
+      "carga_camion_rechazada",
+      "CARGA_APROBADA",
+      "SOLICITUD_CARGA",
+    ],
+    onEvento: consultarPendientesDebounced,
+  });
+
   useEffect(() => {
     consultarPendientes();
 
-    logisticaSocket.conectar();
-    const unsubCarga1 = logisticaSocket.suscribir("solicitud_carga_recibida", consultarPendientesDebounced);
-    const unsubCarga2 = logisticaSocket.suscribir("solicitud_carga_creada", consultarPendientesDebounced);
-    const unsubCarga3 = logisticaSocket.suscribir("carga_camion_aprobada", consultarPendientesDebounced);
-    const unsubCarga4 = logisticaSocket.suscribir("carga_camion_observada", consultarPendientesDebounced);
-    const unsubCarga5 = logisticaSocket.suscribir("carga_camion_rechazada", consultarPendientesDebounced);
-
-    const handleWsEvent = (e) => {
+    const handleSseEvent = (e) => {
       const { tipo } = e.detail || {};
-      if (tipo && (tipo.includes("carga") || tipo.includes("ruta"))) {
+      if (tipo && (tipo.includes("carga") || tipo.includes("ruta") || tipo.includes("CARGA"))) {
         consultarPendientesDebounced();
       }
     };
@@ -73,18 +79,13 @@ export default function AlertaSolicitudesCargaBanner({ sucursal = null, onAproba
       consultarPendientesDebounced();
     };
 
-    window.addEventListener("blanquita:ws-event", handleWsEvent);
+    window.addEventListener("blanquita:sse-event", handleSseEvent);
     window.addEventListener("blanquita:carga-actualizada", handleCargaActualizada);
 
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
-      unsubCarga1();
-      unsubCarga2();
-      unsubCarga3();
-      unsubCarga4();
-      unsubCarga5();
-      window.removeEventListener("blanquita:ws-event", handleWsEvent);
+      window.removeEventListener("blanquita:sse-event", handleSseEvent);
       window.removeEventListener("blanquita:carga-actualizada", handleCargaActualizada);
     };
   }, [consultarPendientes, consultarPendientesDebounced]);

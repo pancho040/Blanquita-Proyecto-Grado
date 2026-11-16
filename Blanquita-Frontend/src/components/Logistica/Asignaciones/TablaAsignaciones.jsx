@@ -62,7 +62,7 @@ import AlertaSolicitudesCargaBanner from "../Reparto/AlertaSolicitudesCargaBanne
 import ExpedienteChoferModal from "../Reparto/ExpedienteChoferModal";
 import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
 import { obtenerFechaHoyBolivia, sumarDiasBolivia } from "@/utils/fechas";
-import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
+import { useLogisticaEventos, useEstadoConexionLogistica, ESTADO_EN_LINEA, ESTADO_RECONECTANDO } from "@/services/Logistica/LogisticaSSEClient";
 import { useTiempoRelativo } from "@/hooks/useTiempoRelativo";
 import { invalidarCache } from "@/lib/api-cache";
 import { usePaginacion } from "@/hooks/usePaginacion";
@@ -172,7 +172,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [choferStockData, setChoferStockData] = useState(null);
   const [modalSolicitudCarga, setModalSolicitudCarga] = useState(false);
   const [asignacionParaCarga, setAsignacionParaCarga] = useState(null);
-  const [wsConectado, setWsConectado] = useState(false);
+  const estadoConexion = useEstadoConexionLogistica();
+  const wsConectado = estadoConexion === ESTADO_EN_LINEA;
 
   // Modal Centralizado por Chofer (Expediente de Ruta)
   const [modalExpedienteChofer, setModalExpedienteChofer] = useState(false);
@@ -277,77 +278,62 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }
   }, [sucursal, listoParaConsultar, precargarCatalogos, cargarAsignaciones]);
 
-  // WebSocket en tiempo real: Cero Polling Innecesario (Plan Gratuito)
+  // Eventos SSE en tiempo real
+  useLogisticaEventos({
+    tipos: [
+      "solicitud_carga_recibida",
+      "SOLICITUD_CARGA",
+      "operacion_ruta_registrada",
+      "ENTREGA_REGISTRADA",
+      "COBRO_REGISTRADO",
+      "ruta_reordenada",
+      "ruta_finalizada_admin",
+      "ASIGNACION_COMPLETADA",
+      "CHOFER_EN_LINEA",
+      "CHOFER_ACTUALIZADO",
+      "CHOFER_CREADO",
+      "CHOFER_SIN_SEÑAL",
+    ],
+    onEvento: (datos, tipo) => {
+      if (tipo === "solicitud_carga_recibida" || tipo === "SOLICITUD_CARGA") {
+        toast.info("Nueva solicitud de carga de camión recibida de chofer");
+        cargarAsignaciones(true, true);
+      } else if (
+        tipo === "CHOFER_EN_LINEA" ||
+        tipo === "CHOFER_ACTUALIZADO" ||
+        tipo === "CHOFER_CREADO" ||
+        tipo === "CHOFER_SIN_SEÑAL"
+      ) {
+        invalidarCache("/api/logistica/repartidores");
+        precargarCatalogos();
+        cargarAsignaciones(true, true);
+      } else {
+        cargarAsignaciones(true, true);
+      }
+    },
+  });
+
   useEffect(() => {
-    logisticaSocket.conectar();
-    const unsubEstado = logisticaSocket.onEstadoConexion(setWsConectado);
+    const handleSseEvent = () => cargarAsignaciones(true);
+    const handleFallbackPoll = () => cargarAsignaciones(true);
 
-    const unsubCarga = logisticaSocket.suscribir("solicitud_carga_recibida", (datos) => {
-      toast.info("Nueva solicitud de carga de camión recibida de chofer");
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubOp = logisticaSocket.suscribir("operacion_ruta_registrada", () => {
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubReorden = logisticaSocket.suscribir("ruta_reordenada", () => {
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubFin = logisticaSocket.suscribir("ruta_finalizada_admin", () => {
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubChoferEnLinea = logisticaSocket.suscribir("CHOFER_EN_LINEA", () => {
-      invalidarCache("/api/logistica/repartidores");
-      precargarCatalogos();
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubChoferActualizado = logisticaSocket.suscribir("CHOFER_ACTUALIZADO", () => {
-      invalidarCache("/api/logistica/repartidores");
-      precargarCatalogos();
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubChoferCreado = logisticaSocket.suscribir("CHOFER_CREADO", () => {
-      invalidarCache("/api/logistica/repartidores");
-      precargarCatalogos();
-      cargarAsignaciones(true, true);
-    });
-
-    const unsubChoferSinSenal = logisticaSocket.suscribir("CHOFER_SIN_SEÑAL", () => {
-      invalidarCache("/api/logistica/repartidores");
-      precargarCatalogos();
-      cargarAsignaciones(true, true);
-    });
-
-    const handleCustomWs = (e) => {
-      cargarAsignaciones(true);
-    };
-    window.addEventListener("blanquita:ws-event", handleCustomWs);
+    window.addEventListener("blanquita:sse-event", handleSseEvent);
+    window.addEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
 
     return () => {
-      unsubEstado();
-      unsubCarga();
-      unsubOp();
-      unsubReorden();
-      unsubFin();
-      unsubChoferEnLinea();
-      unsubChoferActualizado();
-      unsubChoferCreado();
-      unsubChoferSinSenal();
-      window.removeEventListener("blanquita:ws-event", handleCustomWs);
+      window.removeEventListener("blanquita:sse-event", handleSseEvent);
+      window.removeEventListener("blanquita:sse-fallback-poll", handleFallbackPoll);
     };
-  }, [cargarAsignaciones, precargarCatalogos]);
+  }, [cargarAsignaciones]);
 
-  // Fallback: auto-refresco periódico cada 60s si el WebSocket está desconectado
+  // Fallback: auto-refresco periódico cada 45s si no está en línea y pestaña visible
   useEffect(() => {
     if (wsConectado || !listoParaConsultar) return;
     const intervaloFallback = setInterval(() => {
-      cargarAsignaciones(true);
-    }, 60000);
+      if (typeof document !== "undefined" && !document.hidden) {
+        cargarAsignaciones(true);
+      }
+    }, 45000);
     return () => clearInterval(intervaloFallback);
   }, [wsConectado, listoParaConsultar, cargarAsignaciones]);
 
@@ -537,7 +523,9 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   return (
     <div className="space-y-4">
       {/* BANDEJA DESTACADA DE SOLICITUDES DE CARGA */}
-      <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarAsignaciones(true)} />
+      <PanelErrorBoundary titulo="Bandeja de Carga" fallback={null}>
+        <AlertaSolicitudesCargaBanner sucursal={sucursal} onAprobado={() => cargarAsignaciones(true)} />
+      </PanelErrorBoundary>
 
       {/* 1. Header con botón principal y pestañas unificadas */}
       <PageHeader
@@ -557,8 +545,14 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       >
         <div className="flex items-center gap-1.5">
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-[11px] font-medium text-slate-600 border border-slate-200">
-            <span className={`h-2 w-2 rounded-full ${wsConectado ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-            <span>{wsConectado ? "WebSocket En Vivo" : "Sincronizado"}</span>
+            <span className={`h-2 w-2 rounded-full ${
+              estadoConexion === ESTADO_EN_LINEA
+                ? "bg-emerald-500 animate-pulse"
+                : estadoConexion === ESTADO_RECONECTANDO
+                ? "bg-amber-500 animate-pulse"
+                : "bg-slate-400"
+            }`} />
+            <span>{estadoConexion}</span>
           </div>
 
           <Button

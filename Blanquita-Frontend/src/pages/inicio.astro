@@ -1,0 +1,8 @@
+---
+export const prerender = false;
+
+const sesion = Astro.locals.usuario;
+const qs = Astro.url.search;
+const destino = sesion ? `/supervisor/inicio${qs}` : `/${qs}`;
+return Astro.redirect(destino);
+---

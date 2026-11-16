@@ -173,7 +173,7 @@ if (typeof window !== "undefined") {
 
 function extraerUsuarioKey(u) {
   if (!u) return null;
-  const key = u.AuthUserId ?? u.auth_user_id ?? u.IdUsuario ?? u.id_usuario ?? u.id ?? null;
+  const key = u.IdUsuario ?? u.id_usuario ?? u.id ?? u.AuthUserId ?? u.auth_user_id ?? null;
   return key != null ? String(key) : null;
 }
 

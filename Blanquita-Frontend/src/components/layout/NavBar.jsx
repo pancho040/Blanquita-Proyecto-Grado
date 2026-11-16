@@ -14,6 +14,7 @@ import ThemeToggle from "@/components/layout/ThemeToggle";
 import NotificacionesBell from "@/components/common/NotificacionesBell";
 import ToastLiveContainer from "@/components/common/ToastLiveContainer";
 import HostModalAprobarCarga from "@/components/Logistica/Reparto/HostModalAprobarCarga";
+import PanelErrorBoundary from "@/components/common/PanelErrorBoundary";
 import {
   Sheet,
   SheetTrigger,
@@ -364,14 +365,16 @@ export default function NavBar({
             <span className="truncate max-w-[140px]">{rolTexto}</span>
           </div>
 
-          {/* Campana de Notificaciones en Tiempo Real */}
-          <NotificacionesBell
-            idRol={idRol}
-            esAdmin={esAdmin}
-            basePath={basePath}
-            sucursalActiva={sucursalActiva}
-            puedeVerTodas={puedeVerTodas}
-          />
+          {/* Campana de Notificaciones en Tiempo Real protegida con Error Boundary */}
+          <PanelErrorBoundary titulo="Notificaciones" fallback={null}>
+            <NotificacionesBell
+              idRol={idRol}
+              esAdmin={esAdmin}
+              basePath={basePath}
+              sucursalActiva={sucursalActiva}
+              puedeVerTodas={puedeVerTodas}
+            />
+          </PanelErrorBoundary>
 
           {/* Botón de Modo Oscuro Inerte (Listo para activar más adelante) */}
           <ThemeToggle />
@@ -407,10 +410,14 @@ export default function NavBar({
         </div>
       </div>
 
-      {/* Contenedor Global de Toasts en Tiempo Real vía WebSocket */}
-      <ToastLiveContainer basePath={basePath} esAdmin={esAdmin} />
-      {/* Host Global de Modal de Aprobación de Carga (sin redirección de página) */}
-      <HostModalAprobarCarga />
+      {/* Contenedor Global de Toasts en Tiempo Real protegido */}
+      <PanelErrorBoundary titulo="Notificaciones Emergentes" fallback={null}>
+        <ToastLiveContainer basePath={basePath} esAdmin={esAdmin} />
+      </PanelErrorBoundary>
+      {/* Host Global de Modal de Aprobación de Carga */}
+      <PanelErrorBoundary titulo="Aprobación de Carga" fallback={null}>
+        <HostModalAprobarCarga />
+      </PanelErrorBoundary>
     </header>
   );
 }
