@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 import { ResolverSolicitudCarga, ObtenerTrackingAsignacion } from "@/services/Logistica/RutaService";
 import { ObtenerInventarioChofer } from "@/services/Logistica/InventarioComercialService";
 import { ObtenerPrecios } from "@/services/Logistica/PrecioService";
+import { useBranch } from "@/context/BranchContext";
 
 function fusionarItemsPorPresentacion(items) {
   const mapa = new Map();
@@ -92,30 +93,72 @@ export default function BandejaSolicitudCargaModal({
 
   // Catálogo para agregar productos
   const [catalogoPrecios, setCatalogoPrecios] = useState([]);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(false);
   const [mostrarAgregar, setMostrarAgregar] = useState(false);
   const [presentacionSeleccionada, setPresentacionSeleccionada] = useState("");
   const [cantidadNueva, setCantidadNueva] = useState("10");
+  const [datosAsignacionAuto, setDatosAsignacionAuto] = useState(null);
+
+  let branchCtx = null;
+  try {
+    branchCtx = useBranch();
+  } catch {}
+  const sucursalSupervisor = branchCtx?.sucursalAsignada || branchCtx?.sucursalActiva;
 
   const idAsignacion =
     asignacion?.IdAsignacionRuta ||
     solicitud?.id_asignacion ||
     solicitud?.id_asignacion_ruta ||
     solicitud?.IdAsignacionRuta;
+
   const choferNombre =
     asignacion?.NombreRepartidor ||
+    datosAsignacionAuto?.nombre_chofer ||
+    datosAsignacionAuto?.NombreRepartidor ||
     solicitud?.nombre_chofer ||
     solicitud?.chofer_nombre ||
     "Chofer";
+
   const rutaNombre =
     asignacion?.NombreRuta ||
+    datosAsignacionAuto?.nombre_ruta ||
+    datosAsignacionAuto?.NombreRuta ||
     solicitud?.ruta_nombre ||
     solicitud?.nombre_ruta ||
     "Ruta de Distribución";
+
   const idSucursal =
     solicitud?.id_sucursal ||
     asignacion?.IdSucursal ||
-    (rutaNombre.toLowerCase().includes("potosí") || rutaNombre.toLowerCase().includes("potosi") ? 2 : 1);
+    datosAsignacionAuto?.id_sucursal ||
+    (sucursalSupervisor && sucursalSupervisor !== "todas" ? Number(sucursalSupervisor) : null) ||
+    (rutaNombre.toLowerCase().includes("potosí") || rutaNombre.toLowerCase().includes("potosi") ? 2 : 2);
   const nombreSede = idSucursal === 2 ? "Potosí" : "Sucre";
+
+  // Carga automática de datos de la asignación si faltan nombres
+  useEffect(() => {
+    if (!abierto || !idAsignacion) return;
+    if (asignacion?.NombreRepartidor && asignacion?.NombreRuta) return;
+    ObtenerTrackingAsignacion(idAsignacion)
+      .then((res) => {
+        if (res) setDatosAsignacionAuto(res.datos || res);
+      })
+      .catch(() => {});
+  }, [abierto, idAsignacion, asignacion]);
+
+  // Función lazy para cargar precios SOLO bajo demanda (al pulsar '+ Agregar producto')
+  const cargarCatalogoSiEsNecesario = useCallback(async () => {
+    if (catalogoPrecios.length > 0 || cargandoCatalogo || !idSucursal) return;
+    try {
+      setCargandoCatalogo(true);
+      const precios = await ObtenerPrecios(idSucursal);
+      setCatalogoPrecios(Array.isArray(precios) ? precios : []);
+    } catch {
+      setCatalogoPrecios([]);
+    } finally {
+      setCargandoCatalogo(false);
+    }
+  }, [catalogoPrecios.length, cargandoCatalogo, idSucursal]);
 
   useEffect(() => {
     if (!abierto) {
@@ -124,13 +167,6 @@ export default function BandejaSolicitudCargaModal({
       setMostrarAgregar(false);
       return;
     }
-
-    // Cargar catálogo de la sucursal para posibilitar añadir productos
-    ObtenerPrecios(idSucursal)
-      .then((precios) => {
-        setCatalogoPrecios(Array.isArray(precios) ? precios : []);
-      })
-      .catch(() => setCatalogoPrecios([]));
 
     let itemsBase = [];
     let remanenteBase = [];
@@ -434,7 +470,7 @@ export default function BandejaSolicitudCargaModal({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent showCloseButton={false} className="max-w-none sm:max-w-[min(1000px,96vw)] w-[min(1000px,96vw)] max-h-[min(92vh,900px)] flex flex-col p-0 overflow-hidden bg-white shadow-2xl rounded-2xl border border-slate-200">
         {/* Header */}
         <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-white">
           <div className="flex items-start gap-3 min-w-0">
@@ -446,9 +482,9 @@ export default function BandejaSolicitudCargaModal({
                 Revisión de carga de camión
               </DialogTitle>
               <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-1">
-                <span className="font-semibold text-slate-700 truncate">{rutaNombre}</span>
+                <span className="font-semibold text-slate-800">{rutaNombre}</span>
                 <span>•</span>
-                <span>Chofer: <strong className="text-slate-700">{choferNombre}</strong></span>
+                <span>Chofer: <strong className="text-slate-900 font-bold">{choferNombre}</strong></span>
                 <span>•</span>
                 <Badge
                   variant="outline"
@@ -668,8 +704,12 @@ export default function BandejaSolicitudCargaModal({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setMostrarAgregar(!mostrarAgregar)}
-                className="h-7 text-xs border-sky-300 text-[#1C96C5] hover:bg-sky-50 gap-1 px-2"
+                onClick={() => {
+                  const nuevo = !mostrarAgregar;
+                  setMostrarAgregar(nuevo);
+                  if (nuevo) cargarCatalogoSiEsNecesario();
+                }}
+                className="h-7 text-xs border-sky-300 text-[#1C96C5] hover:bg-sky-50 gap-1 px-2 cursor-pointer"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Agregar producto</span>

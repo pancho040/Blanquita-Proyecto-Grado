@@ -86,6 +86,19 @@ export async function fetchConCache(url, opciones = {}, ttlMs = 45000) {
   const clave = url;
   const ahora = Date.now();
 
+  // 0. Bloqueo de tormentas: si dio error 401/403/404 recientemente (< 10s), no repetir la llamada
+  if (cacheStore.has(`err:${clave}`)) {
+    const errorReciente = cacheStore.get(`err:${clave}`);
+    if (ahora - errorReciente.timestamp < 10000) {
+      return new Response(JSON.stringify(errorReciente.body || { detail: errorReciente.statusText }), {
+        status: errorReciente.status,
+        statusText: errorReciente.statusText,
+        headers: { "Content-Type": "application/json", "X-Cache": "BLOCKED-AFTER-ERROR" }
+      });
+    }
+    cacheStore.delete(`err:${clave}`);
+  }
+
   // 1. Revisar memoria RAM (0 ms)
   let entrada = cacheStore.get(clave);
   if (!entrada) {
@@ -135,7 +148,11 @@ export async function fetchConCache(url, opciones = {}, ttlMs = 45000) {
     }
   }
 
-  // 4. Disparar fetch y registrar promesa en vuelo
+  // 4. Disparar fetch único y registrar promesa en vuelo
+  let statusError = null;
+  let statusTextError = null;
+  let bodyError = null;
+
   const fetchPromise = (async () => {
     try {
       const respuesta = await fetch(url, opciones);
@@ -145,6 +162,23 @@ export async function fetchConCache(url, opciones = {}, ttlMs = 45000) {
         cacheStore.set(clave, registro);
         guardarEnSession(clave, data, registro.timestamp);
         return data;
+      }
+
+      // Si es error de cliente/autorización, registrar para no inundar el backend con reintentos
+      if ([401, 403, 404].includes(respuesta.status)) {
+        statusError = respuesta.status;
+        statusTextError = respuesta.statusText;
+        try {
+          bodyError = await respuesta.clone().json();
+        } catch {
+          bodyError = { detail: respuesta.statusText };
+        }
+        cacheStore.set(`err:${clave}`, {
+          status: statusError,
+          statusText: statusTextError,
+          body: bodyError,
+          timestamp: Date.now()
+        });
       }
     } catch (err) {
       /* ignorar para permitir fallback */
@@ -165,7 +199,16 @@ export async function fetchConCache(url, opciones = {}, ttlMs = 45000) {
     return crearRespuestaCache(dataFinal);
   }
 
-  // Fallback si no fue JSON o dio error
+  // Si dio 401/403/404, devolver la respuesta con el status correspondiente SIN duplicar con otro fetch
+  if (statusError) {
+    return new Response(JSON.stringify(bodyError || { detail: statusTextError }), {
+      status: statusError,
+      statusText: statusTextError,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  // Fallback si no fue JSON o dio error de conexión
   return await fetch(url, opciones);
 }
 

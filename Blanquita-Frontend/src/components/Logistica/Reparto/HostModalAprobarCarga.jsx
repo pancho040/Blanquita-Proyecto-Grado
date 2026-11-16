@@ -29,23 +29,8 @@ export default function HostModalAprobarCarga() {
     return unsub;
   }, []);
 
-  // 2. Soporte para Deep Link (?solicitud=<id> o ?aprobar_carga=<id>)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const idSol = urlParams.get("solicitud") || urlParams.get("aprobar_carga") || urlParams.get("id_solicitud");
-      const idAsig = urlParams.get("asignacion") || urlParams.get("id_asignacion");
-      if (idSol || idAsig) {
-        abrirAprobarCarga({
-          idSolicitud: idSol ? Number(idSol) : null,
-          idAsignacion: idAsig ? Number(idAsig) : null,
-        });
-      }
-    } catch (_e) {
-      // Ignorar error al parsear search params
-    }
-  }, []);
+  // NOTA FASE 2: Eliminada apertura por lectura de search params en este host.
+  // La gestión de modales por URL pertenece exclusivamente a la página de Despachos.
 
   // 3. Si se abre el modal y solo se tiene el ID de la solicitud o asignación, buscar el detalle
   useEffect(() => {

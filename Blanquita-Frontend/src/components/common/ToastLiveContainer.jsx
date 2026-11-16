@@ -125,7 +125,8 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
   // Escucha centralizada de eventos SSE de logística
   const manejarEvento = useCallback((datos = {}, tipo) => {
-    const sedeEvento = extraerSedeEvento(datos) || (sucursalAsignada ? Number(sucursalAsignada) : null);
+    const rawSede = extraerSedeEvento(datos);
+    const sedeEvento = rawSede || (sucursalAsignada ? Number(sucursalAsignada) : (sucursalActiva && sucursalActiva !== "todas" ? Number(sucursalActiva) : 2));
     const idAsig = datos.id_asignacion || datos.id_asignacion_ruta || datos.asignacion_id;
     const rutaRaw = datos.nombre_ruta || datos.ruta || "";
     const rutaCorta = rutaRaw ? (rutaRaw.includes(" - ") ? rutaRaw.split(" - ")[0] : rutaRaw) : (idAsig ? `Asignación #${idAsig}` : "Ruta");
@@ -137,7 +138,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       case "SOLICITUD_CARGA": {
         const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
         const queryParams = new URLSearchParams();
-        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        queryParams.set("sucursal", sedeEvento);
         if (idAsig) queryParams.set("asignacion", idAsig);
         queryParams.set("tab", "carga");
 
@@ -162,7 +163,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
         const esCobro = tipo === "COBRO_REGISTRADO" || datos.tipo_operacion === "COBRO" || datos.monto;
         const idFoco = datos.id_pago || datos.id_operacion || datos.id_pedido;
         const queryParams = new URLSearchParams();
-        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        queryParams.set("sucursal", sedeEvento);
         if (idAsig) queryParams.set("asignacion", idAsig);
         queryParams.set("tab", "cobros");
         if (idFoco) queryParams.set("foco", idFoco);
@@ -224,7 +225,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       case "CARGA_APROBADA": {
         const chofer = datos.nombre_chofer || "Administración";
         const queryParams = new URLSearchParams();
-        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        queryParams.set("sucursal", sedeEvento);
         if (idAsig) queryParams.set("asignacion", idAsig);
         queryParams.set("tab", "paradas");
 
