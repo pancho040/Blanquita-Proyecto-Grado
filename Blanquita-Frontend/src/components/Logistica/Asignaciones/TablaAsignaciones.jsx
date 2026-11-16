@@ -1373,12 +1373,6 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                   </div>
                 )}
               </FloatingDropdownPortal>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
 
               {/* Paginación de despachos */}
               <PaginacionTabla {...paginacion} />
