@@ -531,4 +531,16 @@ export async function AprobarTodasOperacionesAsignacion(idAsignacion) {
   return await response.json();
 }
 
+export async function AprobarPedidoCompletoAsignacion(idAsignacion, idPedido) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/pedidos/${idPedido}/aprobar-completo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
 

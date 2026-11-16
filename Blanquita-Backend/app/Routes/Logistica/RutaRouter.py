@@ -2423,6 +2423,86 @@ def obtener_operaciones_asignacion(
     # Ordenar por fecha_hora descendente
     todas_operaciones.sort(key=lambda x: str(x.get("fecha_hora") or ""), reverse=True)
 
+    # 3. Agrupación por Pedido (Un Pedido = Una Tarjeta Integral)
+    pedidos_map = {}
+    for ent in entregas:
+        pid = ent["id_pedido"]
+        pedidos_map[pid] = {
+            "id_pedido": pid,
+            "numero_pedido": ent.get("numero_pedido") or f"PED-{pid}",
+            "cliente": ent.get("cliente") or "Cliente Final",
+            "punto_venta": ent.get("punto_venta") or "Punto de venta",
+            "hora": ent.get("fecha_hora"),
+            "monto_total": round(float(ent.get("monto_pedido_total") or ent.get("monto") or 0.0), 2),
+            "entrega": {
+                "id_operacion": ent["id_operacion"],
+                "tipo_operacion": "ENTREGA",
+                "id_pedido": pid,
+                "estado_revision_web": (ent.get("estado_revision_web") or "PENDIENTE").upper(),
+                "observacion_revision": ent.get("observacion_revision"),
+                "fecha_revision": ent.get("fecha_revision"),
+                "revisado_por_id": ent.get("revisado_por_id"),
+                "latitud": ent.get("latitud"),
+                "longitud": ent.get("longitud"),
+                "fecha_hora": ent.get("fecha_hora")
+            },
+            "cobros": [],
+            "saldo": round(float(ent.get("monto_pedido_total") or ent.get("monto") or 0.0), 2),
+            "tiene_pendientes": (ent.get("estado_revision_web") or "PENDIENTE").upper() == "PENDIENTE"
+        }
+
+    for cob in cobros:
+        pid = cob["id_pedido"]
+        cobro_item = {
+            "id_operacion": cob["id_operacion"],
+            "id_pago": cob["id_operacion"],
+            "tipo_operacion": "COBRO",
+            "id_pedido": pid,
+            "monto": round(float(cob.get("monto") or 0.0), 2),
+            "metodo_pago": cob.get("metodo_pago") or "Efectivo",
+            "numero_referencia": cob.get("numero_referencia"),
+            "estado_revision_web": (cob.get("estado_revision_web") or "PENDIENTE").upper(),
+            "observacion_revision": cob.get("observacion_revision"),
+            "fecha_revision": cob.get("fecha_revision"),
+            "revisado_por_id": cob.get("revisado_por_id"),
+            "latitud": cob.get("latitud"),
+            "longitud": cob.get("longitud"),
+            "fecha_hora": cob.get("fecha_hora")
+        }
+        if pid in pedidos_map:
+            pedidos_map[pid]["cobros"].append(cobro_item)
+            if cobro_item["estado_revision_web"] == "PENDIENTE":
+                pedidos_map[pid]["tiene_pendientes"] = True
+        else:
+            # Caso cobro huérfano de pedido no listado
+            pedidos_map[pid] = {
+                "id_pedido": pid,
+                "numero_pedido": cob.get("numero_pedido") or f"PED-{pid}",
+                "cliente": cob.get("cliente") or "Cliente Final",
+                "punto_venta": cob.get("punto_venta") or "Punto de venta",
+                "hora": cob.get("fecha_hora"),
+                "monto_total": round(float(cob.get("monto_pedido_total") or cob.get("monto") or 0.0), 2),
+                "entrega": None,
+                "cobros": [cobro_item],
+                "saldo": 0.0,
+                "tiene_pendientes": cobro_item["estado_revision_web"] == "PENDIENTE"
+            }
+
+    # Recalcular saldos de cada pedido
+    pedidos_lista = []
+    for pid, pdata in pedidos_map.items():
+        total_pagado = sum(c["monto"] for c in pdata["cobros"])
+        pdata["saldo"] = round(max(0.0, pdata["monto_total"] - total_pagado), 2)
+        pdata["total_cobrado_pedido"] = round(total_pagado, 2)
+        pedidos_lista.append(pdata)
+
+    # Ordenar pedidos por id_pedido descendente
+    pedidos_lista.sort(key=lambda p: p["id_pedido"], reverse=True)
+
+    pendientes_entregas = sum(1 for p in pedidos_lista if p["entrega"] and p["entrega"]["estado_revision_web"] == "PENDIENTE")
+    pendientes_cobros = sum(1 for c in cobros if (c.get("estado_revision_web") or "PENDIENTE").upper() == "PENDIENTE")
+    pedidos_con_pendientes = sum(1 for p in pedidos_lista if p["tiene_pendientes"])
+
     pendientes = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "PENDIENTE").upper() == "PENDIENTE")
     aprobadas = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "").upper() == "APROBADO")
     observadas = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "").upper() == "OBSERVADO")
@@ -2442,6 +2522,10 @@ def obtener_operaciones_asignacion(
         "id_sucursal": asig["IdSucursal"],
         "resumen": {
             "total_operaciones": len(todas_operaciones),
+            "total_pedidos": len(pedidos_lista),
+            "pedidos_pendientes": pedidos_con_pendientes,
+            "entregas_pendientes": pendientes_entregas,
+            "cobros_pendientes": pendientes_cobros,
             "pendientes": pendientes,
             "aprobadas": aprobadas,
             "observadas": observadas,
@@ -2452,6 +2536,7 @@ def obtener_operaciones_asignacion(
             "total_entregado": round(total_entregado, 2),
             "saldo_pendiente": round(max(0.0, total_entregado - total_cobrado), 2)
         },
+        "pedidos": pedidos_lista,
         "operaciones": todas_operaciones,
         "cobros": cobros,
         "entregas": entregas
@@ -2544,6 +2629,74 @@ def aprobar_todas_operaciones_asignacion(
         "cobros_aprobados": cobros_aprobados,
         "entregas_aprobadas": entregas_aprobadas,
         "total_aprobadas": total_aprobados
+    }
+
+
+@RutaRouter.post("/asignaciones/{id_asignacion}/pedidos/{id_pedido}/aprobar-completo", response_model=dict)
+def aprobar_pedido_completo_asignacion(
+    id_asignacion: int,
+    id_pedido: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Aprueba en una sola transacción la entrega y todos los cobros pendientes de un pedido específico.
+    """
+    sql_check = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_check, {"asig_id": id_asignacion}).mappings().fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asignación {id_asignacion} no encontrada")
+    alcance.validar_recurso(asig["IdSucursal"], nombre_recurso="asignación de ruta", responder_404=True)
+
+    # Validar que el pedido pertenece a esta asignación
+    pedido_check = db.execute(text("""
+        SELECT "IdPedido", "NumeroPedido" FROM public."Pedido" 
+        WHERE "IdPedido" = :id_ped AND "IdAsignacionRuta" = :asig_id;
+    """), {"id_ped": id_pedido, "asig_id": id_asignacion}).mappings().fetchone()
+    if not pedido_check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Pedido {id_pedido} no pertenece a la asignación {id_asignacion}")
+
+    admin_id = usuario.get("IdUsuario")
+    if admin_id:
+        usr_valido = db.execute(text('SELECT 1 FROM public."Usuario" WHERE "IdUsuario" = :u'), {"u": admin_id}).scalar()
+        if not usr_valido:
+            admin_id = db.execute(text('SELECT "IdUsuario" FROM public."Usuario" WHERE "IdRol" IN (1, 2, 3) ORDER BY "IdUsuario" ASC LIMIT 1')).scalar()
+
+    # 1. Aprobar entrega del pedido
+    res_ent = db.execute(text("""
+        UPDATE public."Pedido"
+        SET "estado_revision_web" = 'APROBADO',
+            "observacion_revision" = 'Aprobación de pedido completo por supervisor',
+            "revisado_por_id" = :adm,
+            "fecha_revision" = NOW()
+        WHERE "IdPedido" = :id_ped AND "IdAsignacionRuta" = :asig_id;
+    """), {"adm": admin_id, "id_ped": id_pedido, "asig_id": id_asignacion})
+
+    # 2. Aprobar todos los cobros pendientes de este pedido
+    res_cob = db.execute(text("""
+        UPDATE public."PagoPedido"
+        SET "estado_revision_web" = 'APROBADO',
+            "observacion_revision" = 'Aprobación de pedido completo por supervisor',
+            "revisado_por_id" = :adm,
+            "fecha_revision" = NOW()
+        WHERE "IdPedido" = :id_ped;
+    """), {"adm": admin_id, "id_ped": id_pedido})
+
+    db.commit()
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Pedido {pedido_check['NumeroPedido']} aprobado completamente (entrega y cobros)",
+        "id_asignacion": id_asignacion,
+        "id_pedido": id_pedido,
+        "cobros_aprobados": res_cob.rowcount,
+        "entrega_aprobada": res_ent.rowcount
     }
 
 
