@@ -395,7 +395,7 @@ async def websocket_flota_endpoint(
 
                     if estado_usr == 1 or estado_usr is None:
                         rol_int = int(rol) if rol is not None else 6
-                        es_chofer = rol_int in (5, 6, 7)
+                        es_chofer = rol_int in (6, 7)
                         ticket_data = {
                             "usuario_id": int(uid) if uid else None,
                             "id_chofer": int(uid) if uid else None,
