@@ -5,13 +5,14 @@ import asyncio
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Request, Query, Header, HTTPException, status
+from fastapi import APIRouter, Request, Query, Header, HTTPException, status, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
 from app.core.serializers import json_dumps_safe
 from app.Auth.Jwt import verificar_token
+from app.Auth.AlcanceSucursal import AlcanceUsuario, DependenciaAlcanceSucursal
 from app.Config.supabase import SessionLocal
 from app.Constants.Roles import (
     ROL_SUPERVISOR,
@@ -151,7 +152,8 @@ async def stream_eventos_logistica(
     request: Request,
     last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
     last_id_query: Optional[int] = Query(None, alias="last_event_id"),
-    sucursal_id: Optional[int] = Query(None)
+    sucursal_id: Optional[int] = Query(None),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
     """Canal Server-Sent Events (SSE) para logística y flota.
     Admite reconexión con cabecera Last-Event-ID, filtrado por sucursal y rol,
@@ -161,7 +163,7 @@ async def stream_eventos_logistica(
     usuario = resolver_usuario_sse(request, auth_header=auth_header)
 
     es_chofer = (usuario["IdRol"] == ROL_CHOFER)
-    sucursal_efectiva = sucursal_id if sucursal_id is not None else usuario.get("IdSucursal")
+    sucursal_efectiva = alcance.sucursal_efectiva if (alcance and alcance.sucursal_efectiva) else (sucursal_id if sucursal_id is not None else usuario.get("IdSucursal"))
 
     # Determinar cursor inicial
     cursor_id = 0
