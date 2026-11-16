@@ -947,10 +947,10 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                                 setModalExpedienteChofer(true);
                               }}
                               className="h-8 px-2.5 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold gap-1.5 rounded shadow-xs"
-                              title={`Gestionar Chofer / Expediente de Ruta para ${a.NombreRepartidor}`}
+                              title={`Gestionar Chofer / Detalle de Ruta para ${a.NombreRepartidor}`}
                             >
                               <UserCheck className="h-3.5 w-3.5" />
-                              <span className="font-semibold">Gestionar Chofer / Expediente</span>
+                              <span className="font-semibold">Gestionar Chofer / Detalle</span>
                             </Button>
 
                             {/* Botón rápido cambiar a En Ruta si está pendiente */}
@@ -1449,9 +1449,9 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
         />
       </PanelErrorBoundary>
 
-      {/* MODAL CENTRALIZADO: EXPEDIENTE DE RUTA Y CONTROL DEL CHOFER */}
+      {/* MODAL CENTRALIZADO: GESTIÓN Y DETALLE DEL CHOFER */}
       {modalExpedienteChofer && (
-        <PanelErrorBoundary titulo="Expediente Chofer" onClose={() => setModalExpedienteChofer(false)}>
+        <PanelErrorBoundary titulo="Detalle Chofer" onClose={() => setModalExpedienteChofer(false)}>
           <ExpedienteChoferModal
             abierto={modalExpedienteChofer}
             onOpenChange={setModalExpedienteChofer}

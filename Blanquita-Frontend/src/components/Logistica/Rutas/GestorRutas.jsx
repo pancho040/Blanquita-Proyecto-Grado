@@ -724,7 +724,7 @@ export default function GestorRutas({ usuario = null }) {
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
             <Calendar className="h-4 w-4 text-[#1C96C5]" />
-            <span>Itinerario y Despachos:</span>
+            <span>Fecha de Despacho:</span>
           </span>
           <Input
             type="date"

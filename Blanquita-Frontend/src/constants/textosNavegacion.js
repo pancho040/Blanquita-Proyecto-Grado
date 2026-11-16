@@ -34,14 +34,14 @@ export const TEXTOS_SUPERVISOR = {
   NUEVA_RUTA: "Nueva ruta",
   NUEVA_ZONA: "Nueva zona",
   ASIGNAR_CHOFER: "Asignar chofer",
-  EXPEDIENTE: "Expediente",
+  EXPEDIENTE: "Detalle",
   LIQUIDAR: "Liquidar ruta",
   REASIGNAR: "Reasignar",
 
   // Modales
   TITULO_CARGA: "Carga y stock de camión",
   TITULO_PARADAS: "Paradas de la ruta",
-  TITULO_EXPEDIENTE: "Expediente del chofer",
+  TITULO_EXPEDIENTE: "Detalle del chofer",
   TITULO_LIQUIDACION: "Liquidación y rendición",
 };
 

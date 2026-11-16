@@ -134,7 +134,7 @@ export default function CentroReportesAuditoria({ usuario = null }) {
       <div className="no-print">
         <PageHeader
           title="Centro de Reportes de Auditoría y Seguridad"
-          subtitle="Trazabilidad integral de eventos del sistema, modificaciones de datos contables, nóminas y despachos."
+          subtitle="Historial y registro de auditoría de eventos del sistema, modificaciones contables, nóminas y despachos."
           branchFilter={
             <BranchFilter
               sucursal={sucursal}

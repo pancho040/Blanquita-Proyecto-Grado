@@ -154,7 +154,7 @@ export default function DashboardGerencial({ usuario = null }) {
       {/* 1. HEADER GERENCIAL CON PAGEHEADER Y BRANCHFILTER */}
       <PageHeader
         title="Panel Gerencial"
-        subtitle={`${fechaActual} · Visión integral de tesorería, distribución logística, personal y seguridad.`}
+        subtitle={`${fechaActual} · Resumen general de tesorería, distribución logística, personal y seguridad.`}
         branchFilter={
           <BranchFilter
             sucursal={sucursal}
@@ -378,7 +378,7 @@ export default function DashboardGerencial({ usuario = null }) {
                 <div>
                   <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wide">
                     <Truck className="h-4 w-4 text-slate-600" />
-                    Monitoreo de Rutas &amp; Despachos
+                    Rastreo de Rutas y Despachos
                   </CardTitle>
                   <p className="text-xs text-slate-600 mt-0.5">
                     Actividad de distribución del día

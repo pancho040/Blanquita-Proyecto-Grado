@@ -10,31 +10,40 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DIR_LOGISTICA = path.resolve(__dirname, "../src/components/Logistica");
+const DIR_SRC = path.resolve(__dirname, "../src");
 
-const PALABRAS_PROHIBIDAS = [
+const PATRONES_PROHIBIDOS = [
   /satelital/i,
   /centro de mando/i,
   /1\.\.N/i,
   /monitoreo de flota/i,
+  /monitoreo de rutas/i,
+  /visión integral/i,
+  /gestionar chofer \/ expediente/i,
+  /expediente de ruta/i,
+  /cerrar expediente/i,
+  /auditoría al día/i,
+  /inventario físico a bordo/i,
+  /itinerario y despachos/i,
+  /sistema (integral de gestión|de gestión integral)/i,
 ];
 
-function obtenerArchivosJsx(dir) {
+function obtenerArchivos(dir) {
   let archivos = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const ent of entries) {
     const fullPath = path.join(dir, ent.name);
     if (ent.isDirectory()) {
-      archivos = archivos.concat(obtenerArchivosJsx(fullPath));
-    } else if (ent.isFile() && (ent.name.endsWith(".jsx") || ent.name.endsWith(".js"))) {
+      archivos = archivos.concat(obtenerArchivos(fullPath));
+    } else if (ent.isFile() && (ent.name.endsWith(".jsx") || ent.name.endsWith(".js") || ent.name.endsWith(".astro"))) {
       archivos.push(fullPath);
     }
   }
   return archivos;
 }
 
-test("Verificación de Textos Limpios y Libres de Relleno en Logística", (t) => {
-  const archivos = obtenerArchivosJsx(DIR_LOGISTICA);
+test("Verificación de Textos Limpios y Libres de Relleno en todo el Frontend (L5)", (t) => {
+  const archivos = obtenerArchivos(DIR_SRC);
   const fallos = [];
 
   for (const archivo of archivos) {
@@ -48,13 +57,17 @@ test("Verificación de Textos Limpios y Libres de Relleno en Logística", (t) =>
         return;
       }
 
-      for (const patron of PALABRAS_PROHIBIDAS) {
+      // Ignorar imports técnicos
+      if (lineaTrim.startsWith("import ") || lineaTrim.startsWith("export default function Expediente")) {
+        return;
+      }
+
+      for (const patron of PATRONES_PROHIBIDOS) {
         if (patron.test(linea)) {
-          // Si es parte de un comentario inline
           const sinComentarios = linea.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//, "");
           if (patron.test(sinComentarios)) {
             fallos.push({
-              archivo: path.relative(DIR_LOGISTICA, archivo),
+              archivo: path.relative(DIR_SRC, archivo),
               linea: index + 1,
               patron: patron.toString(),
               texto: linea.trim()

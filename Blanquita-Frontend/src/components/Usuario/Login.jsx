@@ -94,7 +94,7 @@ export default function Login() {
             Papelera Blanquita
           </h1>
           <p className="text-xs font-medium text-slate-500 mt-0.5">
-            Sistema Integral de Gestión y Control ERP
+            Sistema de Gestión y Control ERP
           </p>
         </div>
 

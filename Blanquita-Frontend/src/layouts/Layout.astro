@@ -10,7 +10,7 @@ interface Props {
   sinMenu?: boolean;
 }
 
-const { title = "Sistema de Gestión Integral - Papel Blanquita", sinMenu = false } = Astro.props;
+const { title = "Sistema de Gestión - Papel Blanquita", sinMenu = false } = Astro.props;
 const usuario = Astro.locals.usuario;
 const rutaActual = Astro.url.pathname;
 const mostrarMenu = !sinMenu && Boolean(usuario);

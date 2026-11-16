@@ -365,7 +365,7 @@ export default function ExpedienteChoferModal({
   const handleAprobarOp = async (op) => {
     const id = op.IdNotaVenta || op.id_nota_venta || op.id || op.IdOperacion;
     try {
-      await RevisarOperacionRuta(id, "APROBADO", "Aprobado por supervisor en Expediente de Ruta");
+      await RevisarOperacionRuta(id, "APROBADO", "Aprobado por supervisor en Detalle de Ruta");
       toast.success(`Operación ${op.NumeroNota || id} aprobada`);
       await cargarOperacionesChofer();
       if (alActualizar) alActualizar();
@@ -457,7 +457,7 @@ export default function ExpedienteChoferModal({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <DialogTitle className="text-base font-bold leading-tight text-white">
-                  Expediente de Ruta & Control del Chofer
+                  Detalle de Ruta y Gestión del Chofer
                 </DialogTitle>
                 <Badge className="bg-[#1C96C5]/20 text-sky-300 border border-sky-400/40 text-[11px] px-2 py-0.5 font-mono">
                   {nombreChofer}
@@ -487,7 +487,7 @@ export default function ExpedienteChoferModal({
             ) : (
               <Badge variant="outline" className="border-emerald-400 text-emerald-300 bg-emerald-950/40 text-xs px-2.5 py-1 font-semibold flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Auditoría al día (0 pend.)</span>
+                <span>Verificación al día (0 pend.)</span>
               </Badge>
             )}
 
@@ -722,7 +722,7 @@ export default function ExpedienteChoferModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
                     <Truck className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Inventario Físico a Bordo del Camión (Stock Actual)</span>
+                    <span>Stock en Camión (Saldo Actual)</span>
                   </div>
                   <Button
                     size="sm"
@@ -1168,7 +1168,7 @@ export default function ExpedienteChoferModal({
         {/* Footer Impecable */}
         <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
           <div className="text-[11px] text-slate-500 font-medium">
-            Papelera Blanquita • Despachos y Rutas
+            Despachos y Rutas
           </div>
 
           <Button
@@ -1178,7 +1178,7 @@ export default function ExpedienteChoferModal({
             onClick={() => onOpenChange(false)}
             className="h-8 text-xs text-slate-600 hover:text-slate-900 border-slate-300"
           >
-            Cerrar Expediente
+            Cerrar Detalle
           </Button>
         </div>
       </DialogContent>

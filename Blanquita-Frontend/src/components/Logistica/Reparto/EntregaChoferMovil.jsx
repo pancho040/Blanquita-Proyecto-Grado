@@ -380,10 +380,10 @@ export default function EntregaChoferMovil({
               size="sm"
               onClick={() => setModalExpedienteAbierto(true)}
               className="h-8 px-3 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold gap-1.5 rounded shadow-xs"
-              title="Abrir Expediente Integral del Chofer (Carga, Paradas, Auditoría 1 a 1 y Liquidación)"
+              title="Abrir Detalle del Chofer (Carga, Paradas, Verificación y Liquidación)"
             >
               <UserCheck className="w-3.5 h-3.5" />
-              <span>Gestionar Chofer / Expediente de Ruta</span>
+              <span>Gestionar Chofer / Detalle de Ruta</span>
             </Button>
           )}
 
