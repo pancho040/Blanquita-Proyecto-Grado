@@ -1077,7 +1077,7 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                       const partes = (a.NombreRuta || "").split(" - ");
                       const codigoRuta = partes[0] || a.NombreRuta || "Ruta";
                       const nombreResto = partes.slice(1).join(" - ");
-                      const esKebabAbierto = menuKebabId === a.IdAsignacionRuta;
+                      const esKebabAbierto = menuKebabAsignacion?.IdAsignacionRuta === a.IdAsignacionRuta;
 
                       return (
                         <tr key={a.IdAsignacionRuta} className="hover:bg-sky-50/40 transition-colors">
