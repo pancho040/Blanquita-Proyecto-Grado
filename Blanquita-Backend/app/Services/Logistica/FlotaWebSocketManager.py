@@ -2,29 +2,23 @@ import time
 import secrets
 import logging
 import json
-from decimal import Decimal
-from uuid import UUID
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
+
+from app.core.serializers import json_dumps_safe, json_safe_encoder
 
 logger = logging.getLogger(__name__)
 
 
 def default_json_ws_serializer(obj: Any) -> Any:
     """Serializador universal seguro para WebSockets (Decimal, datetime, date, UUID)."""
-    if isinstance(obj, Decimal):
-        return float(obj)
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    if isinstance(obj, UUID):
-        return str(obj)
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+    return json_safe_encoder(obj)
 
 
 def serializar_json_ws(datos: Any) -> str:
     """Convierte cualquier diccionario o lista a string JSON seguro para WebSockets."""
-    return json.dumps(datos, default=default_json_ws_serializer)
+    return json_dumps_safe(datos)
 
 
 def _es_socket_desconectado(ws: WebSocket, exc: Exception) -> bool:
@@ -160,15 +154,16 @@ class FlotaWebSocketManager:
 
     async def enviar_json_seguro(self, websocket: WebSocket, payload: Dict[str, Any]):
         """Envía un payload serializado con soporte nativo de Decimal, fechas y UUIDs."""
-        # En WebSockets reales de Starlette/FastAPI usamos send_text con JSON normalizado.
-        # En tests unitarios con mocks que verifican send_json, notificamos send_json también.
-        json_str = serializar_json_ws(payload)
+        json_str = json_dumps_safe(payload)
+        # Siempre enviar por send_text para evitar TypeError de Decimal con el serializer por defecto de FastAPI/Starlette
         if hasattr(websocket, "send_text"):
             res_text = websocket.send_text(json_str)
             if hasattr(res_text, "__await__"):
                 await res_text
-        if hasattr(websocket, "send_json"):
-            res_json = websocket.send_json(payload)
+        elif hasattr(websocket, "send_json"):
+            # En caso de mocks de pruebas que solo implementen send_json
+            parsed = json.loads(json_str)
+            res_json = websocket.send_json(parsed)
             if hasattr(res_json, "__await__"):
                 await res_json
 
