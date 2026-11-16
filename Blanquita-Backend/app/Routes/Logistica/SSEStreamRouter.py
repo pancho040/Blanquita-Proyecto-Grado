@@ -3,8 +3,6 @@ Conectado a la outbox persistente evento_logistica con LISTEN/NOTIFY y soporte L
 """
 import asyncio
 import json
-from datetime import datetime, date
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Request, Query, Header, HTTPException, status
@@ -12,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
+from app.core.serializers import json_dumps_safe
 from app.Auth.Jwt import verificar_token
 from app.Config.supabase import SessionLocal
 from app.Constants.Roles import (
@@ -33,32 +32,21 @@ ROLES_PERMITIDOS = [
 ]
 
 
-def json_serializer(obj):
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    if isinstance(obj, Decimal):
-        return float(obj)
-    raise TypeError(f"Type {type(obj)} not serializable")
-
-
 def resolver_usuario_sse(
     request: Request,
-    token_query: Optional[str] = None,
     auth_header: Optional[str] = None
 ) -> dict:
-    """Extrae y valida el JWT desde header Bearer, query token o cookie."""
+    """Extrae y valida el JWT exclusivamente desde cabecera Authorization: Bearer o cookie segura."""
     token = None
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
-    elif token_query:
-        token = token_query
     elif "access_token" in request.cookies:
         token = request.cookies.get("access_token")
 
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No se proporcionó token de autenticación para el stream SSE"
+            detail="No se proporcionó token de autenticación en cabecera Authorization: Bearer"
         )
 
     try:
@@ -163,7 +151,6 @@ async def stream_eventos_logistica(
     request: Request,
     last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
     last_id_query: Optional[int] = Query(None, alias="last_event_id"),
-    token: Optional[str] = Query(None),
     sucursal_id: Optional[int] = Query(None)
 ):
     """Canal Server-Sent Events (SSE) para logística y flota.
@@ -171,7 +158,7 @@ async def stream_eventos_logistica(
     y latidos heartbeat cada 15 segundos.
     """
     auth_header = request.headers.get("Authorization")
-    usuario = resolver_usuario_sse(request, token_query=token, auth_header=auth_header)
+    usuario = resolver_usuario_sse(request, auth_header=auth_header)
 
     es_chofer = (usuario["IdRol"] == ROL_CHOFER)
     sucursal_efectiva = sucursal_id if sucursal_id is not None else usuario.get("IdSucursal")
@@ -214,13 +201,13 @@ async def stream_eventos_logistica(
             if eventos:
                 for ev in eventos:
                     cursor_id = ev["id"]
-                    payload_str = json.dumps(ev["payload"], default=json_serializer)
+                    payload_str = json_dumps_safe(ev["payload"])
                     yield f"id: {ev['id']}\nevent: {ev['tipo']}\ndata: {payload_str}\n\n"
                 segundos_desde_ping = 0
             else:
-                # Sin eventos en este tick
-                await asyncio.sleep(1.0)
-                segundos_desde_ping += 1
+                # Sin eventos en este tick: sleep adaptativo rápido para latencia sub-segundo
+                await asyncio.sleep(0.35)
+                segundos_desde_ping += 0.35
 
                 # Heartbeat cada 15 segundos para mantener vivo el canal
                 if segundos_desde_ping >= 15:

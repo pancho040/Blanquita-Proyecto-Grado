@@ -1,335 +1,62 @@
 /**
- * LogisticaWebSocket.js
- * Canal WebSocket en tiempo real para optimización de cuota en planes gratuitos (Cero Polling).
- * Maneja eventos de:
- *  - solicitud_carga_recibida / solicitud_carga_creada
- *  - operacion_ruta_registrada
- *  - ubicacion_chofer_actualizada / POSICION_CHOFER
- *  - carga_camion_aprobada
- *  - ruta_reordenada
- *  - operacion_revisada
- *  - ruta_finalizada_admin
- *  - cobro_qr_registrado
- *
- * Implementa Singleton Inmune a Evaluaciones Múltiples de Vite (?t=...) y a
- * contextos de iframe generados durante la transición de ClientRouter de Astro.
+ * LogisticaWebSocket.js (Fachada Retrocompatible sobre LogisticaSSEClient)
+ * Toda la comunicación en tiempo real de Logística y Flota ha migrado a Server-Sent Events (SSE).
+ * Este módulo provee una fachada con la misma API de logisticaSocket delegando completamente
+ * en logisticaSSE, evitando aperturas de WebSocket paralelos y garantizando un único stream activo.
  */
+import { logisticaSSE } from "./LogisticaSSEClient";
 
-const WS_CLIENT_KEY = Symbol.for("blanquita.logisticaSocket");
-const WS_TICKET_KEY = Symbol.for("blanquita.wsTicketPromise");
-const g = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {});
+class LogisticaWebSocketFacade {
+  constructor() {
+    this.sse = logisticaSSE;
+  }
 
-/**
- * Detecta si el código se ejecuta dentro de un iframe temporal (como el creado
- * por Astro ClientRouter en prepareForClientOnlyComponents en modo DEV).
- */
-function esContextoIframe() {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.self !== window.top;
-  } catch {
+  conectar(token = null) {
+    if (token) {
+      this.sse.setToken(token);
+    }
+    this.sse.conectar();
+  }
+
+  desconectar() {
+    this.sse.desconectar();
+  }
+
+  setSucursal(sucursalId) {
+    this.sse.setSucursal(sucursalId);
+  }
+
+  setToken(token) {
+    this.sse.setToken(token);
+  }
+
+  on(evento, callback) {
+    return this.sse.on(evento, callback);
+  }
+
+  off(evento, callback) {
+    return this.sse.off(evento, callback);
+  }
+
+  onEstadoChange(callback) {
+    return this.sse.onEstadoChange((conectado, estado) => {
+      callback(conectado, estado);
+    });
+  }
+
+  estaConectado() {
+    return this.sse.conectado;
+  }
+
+  enviar(tipo, payload = {}) {
+    // Los eventos en SSE se emiten a través de mutaciones HTTP / API REST
     return true;
   }
 }
 
-async function obtenerWsTicketCompartido() {
-  if (esContextoIframe()) return null;
-  if (g[WS_TICKET_KEY]) return g[WS_TICKET_KEY];
+// Singleton global persistente
+const g = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {});
+const WS_FACADE_KEY = Symbol.for("blanquita.logisticaSocketFacade");
 
-  g[WS_TICKET_KEY] = (async () => {
-    const reintentos = [1000, 2000, 4000];
-    for (let intento = 0; intento <= reintentos.length; intento++) {
-      try {
-        const res = await fetch("/api/logistica/flota/ws-ticket", { method: "POST" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.ticket) {
-            return data.ticket;
-          }
-        }
-        if (res.status === 401 || res.status === 403) {
-          return null;
-        }
-      } catch (err) {
-        if (intento === reintentos.length) break;
-        await new Promise((r) => setTimeout(r, reintentos[intento]));
-      }
-    }
-    return null;
-  })().finally(() => {
-    g[WS_TICKET_KEY] = null;
-  });
-
-  return g[WS_TICKET_KEY];
-}
-
-class LogisticaWebSocketClient {
-  constructor() {
-    this.socket = null;
-    this.listeners = new Map();
-    this.wildcardListeners = new Set();
-    this.reconnectAttempts = 0;
-    this.reconnectTimer = null;
-    this.heartbeatTimer = null;
-    this.estaConectado = false;
-    this.isConnecting = false;
-    this.estadoListeners = new Set();
-    this._ticketActual = null;
-  }
-
-  async conectar() {
-    if (typeof window === "undefined") return;
-    if (esContextoIframe()) return;
-
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-    if (this.isConnecting) return;
-
-    this.isConnecting = true;
-
-    try {
-      // 1. Resolver protocolo y host de WebSocket conectando al Backend (puerto 8000 en dev) y NUNCA a Astro (4321)
-      let apiBase = "";
-      if (typeof import.meta !== "undefined" && import.meta.env?.PUBLIC_API_URL) {
-        apiBase = import.meta.env.PUBLIC_API_URL;
-      } else if (typeof import.meta !== "undefined" && import.meta.env?.PUBLIC_BACKEND_URL) {
-        apiBase = import.meta.env.PUBLIC_BACKEND_URL;
-      }
-
-      let wsProtocol = "ws:";
-      let wsHost = "localhost:8000";
-
-      if (apiBase) {
-        try {
-          const u = new URL(apiBase);
-          wsProtocol = u.protocol === "https:" ? "wss:" : "ws:";
-          wsHost = u.host;
-        } catch {
-          wsHost = apiBase.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-          wsProtocol = apiBase.toLowerCase().startsWith("https") ? "wss:" : "ws:";
-        }
-      } else if (typeof window !== "undefined") {
-        const hostname = window.location.hostname;
-        if (hostname === "localhost" || hostname === "127.0.0.1") {
-          wsProtocol = "ws:";
-          wsHost = `${hostname}:8000`;
-        } else {
-          wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-          wsHost = window.location.host;
-        }
-      }
-
-      // Obtener ticket de autenticación efímero deduplicado con backoff
-      const ticket = await obtenerWsTicketCompartido();
-      const ticketParam = ticket ? `?ticket=${encodeURIComponent(ticket)}` : "";
-
-      // Si otro flujo ya conectó mientras esperábamos el ticket, abortar
-      if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-        return;
-      }
-
-      // URL del WebSocket de logística apuntando al backend (ej. ws://localhost:8000/ws/logistica)
-      const wsUrl = `${wsProtocol}//${wsHost}/ws/logistica${ticketParam}`;
-
-      this.socket = new WebSocket(wsUrl);
-
-      this.socket.onopen = () => {
-        this.estaConectado = true;
-        this.isConnecting = false;
-        this.reconnectAttempts = 0;
-        this._notificarCambioEstado(true);
-
-        // Heartbeat cada 25s para mantener el túnel vivo en proxies perimetrales (Render)
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = setInterval(() => {
-          if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ tipo: "ping" }));
-          }
-        }, 25000);
-      };
-
-      this.socket.onmessage = (event) => {
-        try {
-          const mensaje = JSON.parse(event.data);
-          const tipoEvento = mensaje.tipo || mensaje.event || mensaje.evento;
-          if (tipoEvento && tipoEvento !== "pong") {
-            const datos = mensaje.datos || mensaje.payload || mensaje;
-            this._procesarYDespachar(tipoEvento, datos);
-          }
-        } catch {
-          // Ignorar mensajes no-JSON o pongs planos
-        }
-      };
-
-      this.socket.onclose = (event) => {
-        if (import.meta.env?.DEV) {
-          console.warn(`[LogisticaWS] Conexión cerrada. Code: ${event.code}, Reason: ${event.reason || 'sin razón'}, Clean: ${event.wasClean}`);
-        }
-        this.estaConectado = false;
-        this.isConnecting = false;
-        this._notificarCambioEstado(false);
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-
-        // Si fue código 4401 (no autorizado / ticket caducado), limpiar ticket y esperar reautenticación
-        if (event.code === 4401) {
-          if (import.meta.env?.DEV) {
-            console.warn("[LogisticaWS] Ticket no válido o sesión caducada (4401).");
-          }
-          g[WS_TICKET_KEY] = null;
-          return;
-        }
-
-        // Backoff exponencial con tope de 30s
-        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        this.reconnectAttempts += 1;
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => {
-          this.conectar();
-        }, delay);
-      };
-
-      this.socket.onerror = () => {
-        this.isConnecting = false;
-      };
-    } catch {
-      this.estaConectado = false;
-      this._notificarCambioEstado(false);
-    } finally {
-      this.isConnecting = false;
-    }
-  }
-
-  suscribir(evento, callback) {
-    if (!this.listeners.has(evento)) {
-      this.listeners.set(evento, new Set());
-    }
-    this.listeners.get(evento).add(callback);
-
-    // Retorna función desuscriptora para useEffect
-    return () => {
-      const setCallbacks = this.listeners.get(evento);
-      if (setCallbacks) {
-        setCallbacks.delete(callback);
-      }
-    };
-  }
-
-  suscribirATodos(callback) {
-    this.wildcardListeners.add(callback);
-    return () => {
-      this.wildcardListeners.delete(callback);
-    };
-  }
-
-  onEstadoConexion(callback) {
-    this.estadoListeners.add(callback);
-    callback(this.estaConectado);
-    return () => {
-      this.estadoListeners.delete(callback);
-    };
-  }
-
-  _notificarCambioEstado(conectado) {
-    this.estadoListeners.forEach((cb) => {
-      try {
-        cb(conectado);
-      } catch {}
-    });
-  }
-
-  _procesarYDespachar(tipoEvento, datos) {
-    // 1. Notificar a oyentes específicos
-    this._despachar(tipoEvento, datos);
-
-    // 2. Normalización de alias para interoperabilidad perfecta
-    if (tipoEvento === "solicitud_carga_creada") {
-      this._despachar("solicitud_carga_recibida", datos);
-    } else if (tipoEvento === "solicitud_carga_recibida") {
-      this._despachar("solicitud_carga_creada", datos);
-    } else if (tipoEvento === "POSICION_CHOFER") {
-      this._despachar("ubicacion_chofer_actualizada", datos);
-    } else if (tipoEvento === "CHOFER_EN_LINEA" || tipoEvento === "chofer_en_linea") {
-      this._despachar("chofer_en_linea", datos);
-      this._despachar("CHOFER_EN_LINEA", datos);
-    } else if (tipoEvento === "CHOFER_ACTUALIZADO" || tipoEvento === "chofer_actualizado") {
-      this._despachar("chofer_actualizado", datos);
-      this._despachar("CHOFER_ACTUALIZADO", datos);
-    } else if (tipoEvento === "CHOFER_CREADO" || tipoEvento === "chofer_creado") {
-      this._despachar("chofer_creado", datos);
-      this._despachar("CHOFER_CREADO", datos);
-    } else if (tipoEvento === "CHOFER_SIN_SEÑAL" || tipoEvento === "CHOFER_SIN_SENAL" || tipoEvento === "chofer_sin_senal") {
-      this._despachar("chofer_sin_senal", datos);
-      this._despachar("CHOFER_SIN_SEÑAL", datos);
-    }
-
-    // 3. Notificar a oyentes globales (wildcard)
-    this.wildcardListeners.forEach((cb) => {
-      try {
-        cb(tipoEvento, datos);
-      } catch (err) {
-        console.error("Error en wildcard listener:", err);
-      }
-    });
-
-    // 4. Disparar evento del DOM global para que cualquier tabla abierta se entere
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("blanquita:ws-event", {
-          detail: { tipo: tipoEvento, ...datos },
-        })
-      );
-    }
-  }
-
-  _despachar(evento, datos) {
-    const callbacks = this.listeners.get(evento);
-    if (callbacks) {
-      callbacks.forEach((cb) => {
-        try {
-          cb(datos);
-        } catch (err) {
-          console.error(`Error en listener de WebSocket [${evento}]:`, err);
-        }
-      });
-    }
-  }
-
-  enviar(tipo, payload = {}) {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ tipo, ...payload }));
-      return true;
-    }
-    return false;
-  }
-
-  desconectar() {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    if (this.socket) {
-      try {
-        this.socket.close();
-      } catch {}
-      this.socket = null;
-    }
-    this.estaConectado = false;
-    this.isConnecting = false;
-    this._notificarCambioEstado(false);
-  }
-}
-
-// Reconexión automática al volver a la pestaña si el socket cayó mientras estaba oculta
-if (typeof document !== "undefined" && !g.__logisticaWsVisibilityListener && !esContextoIframe()) {
-  g.__logisticaWsVisibilityListener = true;
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      const sock = g[WS_CLIENT_KEY];
-      if (sock && (!sock.socket || (sock.socket.readyState !== WebSocket.OPEN && sock.socket.readyState !== WebSocket.CONNECTING))) {
-        sock.conectar();
-      }
-    }
-  });
-}
-
-// Singleton global persistente entre módulos re-evaluados por Vite
-export const logisticaSocket = (g[WS_CLIENT_KEY] ??= new LogisticaWebSocketClient());
+export const logisticaSocket = (g[WS_FACADE_KEY] ??= new LogisticaWebSocketFacade());
+export default logisticaSocket;
