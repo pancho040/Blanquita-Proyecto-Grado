@@ -46,7 +46,8 @@ import {
   ObtenerAsignaciones,
   ListarSolicitudesCarga,
   ObtenerOperacionesAsignacion,
-  AprobarTodasOperacionesAsignacion
+  AprobarTodasOperacionesAsignacion,
+  AprobarPedidoCompletoAsignacion
 } from "@/services/Logistica/RutaService";
 import { useLogisticaEventos } from "@/services/Logistica/LogisticaSSEClient";
 
@@ -124,8 +125,11 @@ export default function ExpedienteChoferModal({
 
   // Estados Tab 3: Entregas y Cobros
   const [operaciones, setOperaciones] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
+  const [resumenOperaciones, setResumenOperaciones] = useState(null);
   const [cargandoOperaciones, setCargandoOperaciones] = useState(false);
   const [aprobandoTodo, setAprobandoTodo] = useState(false);
+  const [resolviendoOperacionId, setResolviendoOperacionId] = useState(null);
   const [modalObsOp, setModalObsOp] = useState(false);
   const [opSeleccionada, setOpSeleccionada] = useState(null);
   const [textoObsOp, setTextoObsOp] = useState("");
@@ -228,18 +232,26 @@ export default function ExpedienteChoferModal({
   const cargarOperacionesChofer = useCallback(async () => {
     if (!idAsignacion) {
       setOperaciones([]);
+      setPedidos([]);
+      setResumenOperaciones(null);
       return;
     }
     try {
       setCargandoOperaciones(true);
       const res = await ObtenerOperacionesAsignacion(idAsignacion).catch(() => null);
-      if (res && Array.isArray(res.operaciones)) {
-        setOperaciones(res.operaciones);
+      if (res) {
+        setOperaciones(Array.isArray(res.operaciones) ? res.operaciones : []);
+        setPedidos(Array.isArray(res.pedidos) ? res.pedidos : []);
+        setResumenOperaciones(res.resumen || null);
       } else {
         setOperaciones([]);
+        setPedidos([]);
+        setResumenOperaciones(null);
       }
     } catch {
       setOperaciones([]);
+      setPedidos([]);
+      setResumenOperaciones(null);
     } finally {
       setCargandoOperaciones(false);
     }
@@ -283,16 +295,45 @@ export default function ExpedienteChoferModal({
   // -------------------------------------------------------------------------
   // Métricas y Contadores Clave
   // -------------------------------------------------------------------------
-  const operacionesPendientes = useMemo(() => {
-    return operaciones.filter((op) => {
-      const rev = (op.estado_revision_web || op.EstadoRevision || "PENDIENTE").toUpperCase();
-      return rev === "PENDIENTE";
-    });
-  }, [operaciones]);
+  const pedidosPendientesCount = useMemo(() => {
+    if (resumenOperaciones?.pedidos_pendientes != null) {
+      return resumenOperaciones.pedidos_pendientes;
+    }
+    return pedidos.filter((p) => p.tiene_pendientes).length;
+  }, [pedidos, resumenOperaciones]);
 
-  const operacionesPendientesCount = operacionesPendientes.length;
+  const entregasPendientesCount = useMemo(() => {
+    if (resumenOperaciones?.entregas_pendientes != null) {
+      return resumenOperaciones.entregas_pendientes;
+    }
+    return pedidos.filter((p) => p.entrega && p.entrega.estado_revision_web === "PENDIENTE").length;
+  }, [pedidos, resumenOperaciones]);
+
+  const cobrosPendientesCount = useMemo(() => {
+    if (resumenOperaciones?.cobros_pendientes != null) {
+      return resumenOperaciones.cobros_pendientes;
+    }
+    let count = 0;
+    pedidos.forEach((p) => {
+      (p.cobros || []).forEach((c) => {
+        if (c.estado_revision_web === "PENDIENTE") count++;
+      });
+    });
+    return count;
+  }, [pedidos, resumenOperaciones]);
+
+  const operacionesPendientesCount = pedidosPendientesCount;
 
   const arqueo = useMemo(() => {
+    if (resumenOperaciones) {
+      return {
+        ef: Number(resumenOperaciones.total_cobrado_efectivo || 0),
+        qr: Number(resumenOperaciones.total_cobrado_qr || 0),
+        totalCobrado: Number(resumenOperaciones.total_cobrado || 0),
+        totalEntregado: Number(resumenOperaciones.total_entregado || 0),
+        saldoPendiente: Number(resumenOperaciones.saldo_pendiente || 0)
+      };
+    }
     let ef = 0;
     let qr = 0;
     let totalCobrado = 0;
@@ -319,7 +360,45 @@ export default function ExpedienteChoferModal({
       totalEntregado,
       saldoPendiente: Math.max(0, totalEntregado - totalCobrado)
     };
-  }, [operaciones]);
+  }, [operaciones, resumenOperaciones]);
+
+  const listaPedidosRender = useMemo(() => {
+    if (pedidos && pedidos.length > 0) return pedidos;
+    if (!operaciones || operaciones.length === 0) return [];
+
+    const map = new Map();
+    for (const op of operaciones) {
+      const pId = op.id_pedido || op.IdPedido || `GEN-${op.id_operacion || Math.random()}`;
+      if (!map.has(pId)) {
+        map.set(pId, {
+          id_pedido: pId,
+          numero_pedido: op.numero_pedido || `PED-${pId}`,
+          cliente: {
+            nombre: op.cliente || op.Cliente || "Cliente Final",
+            direccion: op.direccion || op.Direccion || "",
+            punto_venta: op.punto_venta || op.PuntoVenta || ""
+          },
+          monto_total: 0,
+          saldo_restante: 0,
+          tiene_pendientes: false,
+          entrega: null,
+          cobros: []
+        });
+      }
+      const item = map.get(pId);
+      const tipo = String(op.tipo_operacion || "").toUpperCase();
+      const rev = (op.estado_revision_web || op.EstadoRevision || "PENDIENTE").toUpperCase();
+      if (rev === "PENDIENTE") item.tiene_pendientes = true;
+
+      if (tipo === "ENTREGA") {
+        item.entrega = op;
+        item.monto_total = Number(op.monto || op.TotalNeto || item.monto_total);
+      } else {
+        item.cobros.push(op);
+      }
+    }
+    return Array.from(map.values());
+  }, [pedidos, operaciones]);
 
   // -------------------------------------------------------------------------
   // Handlers Tab 1: Carga y Stock
@@ -405,16 +484,40 @@ export default function ExpedienteChoferModal({
   // -------------------------------------------------------------------------
   // Handlers Tab 3: Entregas y Cobros
   // -------------------------------------------------------------------------
+  const extraerIdOp = (op) => {
+    if (!op) return null;
+    const tipo = String(op.tipo_operacion || "entrega").toLowerCase();
+    if (tipo === "cobro") {
+      return op.id_pago || op.IdPagoPedido || String(op.id_operacion || "").replace(/^COB-/, "");
+    }
+    return op.id_pedido || op.IdPedido || String(op.id_operacion || "").replace(/^ENT-/, "");
+  };
+
   const handleAprobarOp = async (op) => {
-    const id = op.id_operacion || op.IdPagoPedido || op.IdPedido;
+    const id = extraerIdOp(op);
     const tipo = String(op.tipo_operacion || "entrega").toLowerCase();
     try {
       await RevisarOperacionRuta(id, "APROBADO", "Aprobado por supervisor en Detalle de Ruta", tipo);
-      toast.success(`Operación ${op.numero_pedido || id} aprobada exitosamente`);
+      toast.success(`Operación aprobada exitosamente`);
       await cargarOperacionesChofer();
       if (alActualizar) alActualizar();
     } catch (err) {
       toast.error(err.message || "Error al aprobar operación");
+    }
+  };
+
+  const handleAprobarPedidoCompleto = async (idPedido) => {
+    if (!idAsignacion || !idPedido) return;
+    try {
+      setResolviendoOperacionId(`PED-${idPedido}`);
+      const res = await AprobarPedidoCompletoAsignacion(idAsignacion, idPedido);
+      toast.success(res?.mensaje || `Pedido #${idPedido} aprobado completamente (entrega y cobros)`);
+      await cargarOperacionesChofer();
+      if (alActualizar) alActualizar();
+    } catch (err) {
+      toast.error(err.message || `Error al aprobar pedido #${idPedido}`);
+    } finally {
+      setResolviendoOperacionId(null);
     }
   };
 
@@ -438,11 +541,11 @@ export default function ExpedienteChoferModal({
       toast.error("Ingresa el motivo de la observación");
       return;
     }
-    const id = opSeleccionada.id_operacion || opSeleccionada.IdPagoPedido || opSeleccionada.IdPedido;
+    const id = extraerIdOp(opSeleccionada);
     const tipo = String(opSeleccionada.tipo_operacion || "entrega").toLowerCase();
     try {
       await RevisarOperacionRuta(id, "OBSERVADO", textoObsOp.trim(), tipo);
-      toast.info(`Operación ${opSeleccionada.numero_pedido || id} marcada como OBSERVADA`);
+      toast.info(`Operación marcada como OBSERVADA`);
       setModalObsOp(false);
       setTextoObsOp("");
       await cargarOperacionesChofer();
@@ -457,11 +560,11 @@ export default function ExpedienteChoferModal({
       toast.error("Ingresa el motivo del rechazo");
       return;
     }
-    const id = opSeleccionada.id_operacion || opSeleccionada.IdPagoPedido || opSeleccionada.IdPedido;
+    const id = extraerIdOp(opSeleccionada);
     const tipo = String(opSeleccionada.tipo_operacion || "entrega").toLowerCase();
     try {
       await RevisarOperacionRuta(id, "RECHAZADO", textoRechazarOp.trim(), tipo);
-      toast.error(`Operación ${opSeleccionada.numero_pedido || id} RECHAZADA`);
+      toast.error(`Operación RECHAZADA`);
       setModalRechazarOp(false);
       setTextoRechazarOp("");
       await cargarOperacionesChofer();
@@ -504,7 +607,7 @@ export default function ExpedienteChoferModal({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-w-5xl w-[92vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white shadow-2xl rounded-2xl border border-slate-200">
+      <DialogContent showCloseButton={false} className="max-w-none sm:max-w-[min(1200px,96vw)] w-[min(1200px,96vw)] max-h-[min(92vh,900px)] h-[min(92vh,900px)] flex flex-col p-0 overflow-hidden bg-white shadow-2xl rounded-2xl border border-slate-200">
         {/* Cabecera Limpia en Modo Claro */}
         <div className="shrink-0 border-b border-slate-200 px-6 py-4 bg-white text-slate-900">
           <div className="flex items-start justify-between gap-4">
@@ -583,35 +686,35 @@ export default function ExpedienteChoferModal({
         </div>
 
         {/* Barra de Pestañas Limpias (Sin Numeraciones ni Nombres Arcaicos) */}
-        <div className="shrink-0 flex items-center border-b border-slate-200 bg-slate-50/70 px-6 py-2 gap-2 overflow-x-auto">
+        <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 border-b border-slate-200 bg-slate-50/70 p-2 gap-2">
           <button
             type="button"
             onClick={() => setTabActivo("carga")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full justify-center px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "carga"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
-            <Boxes className="h-4 w-4" />
-            <span>Carga y stock</span>
+            <Boxes className="h-4 w-4 shrink-0" />
+            <span className="truncate">Carga y stock</span>
             {solicitudCarga && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
             )}
           </button>
 
           <button
             type="button"
             onClick={() => setTabActivo("paradas")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full justify-center px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "paradas"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
-            <Route className="h-4 w-4" />
-            <span>Paradas</span>
-            <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${tabActivo === "paradas" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+            <Route className="h-4 w-4 shrink-0" />
+            <span className="truncate">Paradas</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono shrink-0 ${tabActivo === "paradas" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
               {paradasRuta.length}
             </span>
           </button>
@@ -619,20 +722,20 @@ export default function ExpedienteChoferModal({
           <button
             type="button"
             onClick={() => setTabActivo("aprobaciones")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full justify-center px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "aprobaciones"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
-            <Receipt className="h-4 w-4" />
-            <span>Entregas y cobros</span>
+            <Receipt className="h-4 w-4 shrink-0" />
+            <span className="truncate">Entregas y cobros</span>
             {operacionesPendientesCount > 0 ? (
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500 text-white shadow-2xs">
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500 text-white shadow-2xs shrink-0">
                 {operacionesPendientesCount} por aprobar
               </span>
             ) : (
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
                 Al día
               </span>
             )}
@@ -641,16 +744,16 @@ export default function ExpedienteChoferModal({
           <button
             type="button"
             onClick={() => setTabActivo("cierre")}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full justify-center px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "cierre"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
-            <ShieldCheck className="h-4 w-4" />
-            <span>Cierre de jornada</span>
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span className="truncate">Cierre de jornada</span>
             {(asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa) && (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
             )}
           </button>
         </div>
@@ -986,19 +1089,19 @@ export default function ExpedienteChoferModal({
                 <div>
                   <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Receipt className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Auditoría de Entregas y Cobros en Ruta</span>
+                    <span>Auditoría de Entregas y Cobros por Pedido</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Inspecciona y aprueba individual o masivamente cada cobro y entrega registrada por el chofer.
+                    Inspecciona y aprueba individualmente la entrega y cada cobro registrado, o aprueba el pedido completo.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="border-sky-300 text-sky-800 bg-sky-50 text-xs font-semibold px-2.5 py-1">
-                    {operaciones.length} registradas
+                    {listaPedidosRender.length} pedidos en ruta
                   </Badge>
 
-                  {operacionesPendientesCount > 0 && (
+                  {pedidosPendientesCount > 0 && (
                     <Button
                       size="sm"
                       onClick={handleAprobarTodo}
@@ -1006,7 +1109,7 @@ export default function ExpedienteChoferModal({
                       className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-xs cursor-pointer"
                     >
                       <CheckCheck className="h-4 w-4" />
-                      <span>Aprobar todo ({operacionesPendientesCount})</span>
+                      <span>Aprobar todo ({pedidosPendientesCount} pendientes)</span>
                     </Button>
                   )}
                 </div>
@@ -1016,149 +1119,321 @@ export default function ExpedienteChoferModal({
                 <div className="py-10 text-center text-xs text-slate-400">
                   Cargando entregas y cobros de la asignación...
                 </div>
-              ) : operaciones.length === 0 ? (
+              ) : listaPedidosRender.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-white">
                   No hay operaciones registradas para esta asignación en la jornada seleccionada.
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {operaciones.map((op, idx) => {
-                    const rev = (op.estado_revision_web || op.EstadoRevision || "PENDIENTE").toUpperCase();
-                    const monto = Number(op.monto ?? op.TotalNeto ?? 0);
-                    const metodo = op.metodo_pago || op.MetodoPago || (op.tipo_operacion === "COBRO" ? "Efectivo" : "Entrega");
-                    const cliente = op.cliente || op.Cliente || "Cliente Final";
+                <div className="space-y-3.5">
+                  {listaPedidosRender.map((ped) => {
+                    const cli = ped.cliente || {};
+                    const entrega = ped.entrega;
+                    const cobros = ped.cobros || [];
+                    const revEntrega = (entrega?.estado_revision_web || "PENDIENTE").toUpperCase();
                     const esFoco = focoId && (
-                      String(op.id_operacion) === String(focoId) ||
-                      String(op.id_pago) === String(focoId) ||
-                      String(op.id_pedido) === String(focoId)
+                      String(ped.id_pedido) === String(focoId) ||
+                      String(ped.numero_pedido) === String(focoId) ||
+                      cobros.some((c) => String(c.id_pago) === String(focoId) || String(c.id_operacion) === String(focoId)) ||
+                      String(entrega?.id_operacion) === String(focoId)
                     );
-                    const esCobro = String(op.tipo_operacion).toUpperCase() === "COBRO";
+                    const resolviendoEstePedido = resolviendoOperacionId === `PED-${ped.id_pedido}`;
 
                     return (
                       <div
-                        key={idx}
-                        id={`operacion-${op.id_pago || op.id_operacion}`}
+                        key={ped.id_pedido}
+                        id={`pedido-${ped.id_pedido}`}
                         data-foco={esFoco ? "true" : undefined}
                         ref={esFoco ? focoElementRef : null}
-                        className={`bg-white border rounded-xl p-3.5 transition-all shadow-2xs ${
+                        className={`bg-white border rounded-2xl overflow-hidden transition-all shadow-xs ${
                           esFoco
-                            ? "ring-2 ring-[#20A7DB] border-[#20A7DB] bg-sky-50/50 shadow-md"
-                            : rev === "PENDIENTE"
-                            ? "border-amber-300 bg-amber-50/20"
-                            : rev === "APROBADO"
-                            ? "border-emerald-200"
-                            : rev === "OBSERVADO"
-                            ? "border-purple-200"
-                            : "border-rose-200"
+                            ? "ring-2 ring-[#1C96C5] border-[#1C96C5] bg-sky-50/10 shadow-md"
+                            : ped.tiene_pendientes
+                            ? "border-amber-300"
+                            : "border-slate-200"
                         }`}
                       >
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        {/* Cabecera del Pedido con Datos del Cliente y Resumen */}
+                        <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] font-extrabold px-1.5 py-0 border ${
-                                  esCobro
-                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                    : "bg-sky-50 text-sky-800 border-sky-300"
-                                }`}
-                              >
-                                {esCobro ? "COBRO" : "ENTREGA"}
+                              <Badge className="bg-[#1C96C5] text-white font-mono text-xs font-bold px-2 py-0.5">
+                                #{ped.numero_pedido || ped.id_pedido}
                               </Badge>
 
-                              <span className="font-bold text-xs text-slate-900">
-                                {op.numero_pedido || `Operación #${op.id_operacion || idx + 1}`}
+                              <span className="font-bold text-xs text-slate-900 truncate">
+                                {cli.nombre || "Cliente Final"}
                               </span>
 
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-300 text-slate-700 bg-white">
-                                {metodo}
-                              </Badge>
+                              {cli.documento && (
+                                <span className="text-[10px] font-mono text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                                  DOC: {cli.documento}
+                                </span>
+                              )}
 
-                              <span className="text-[11px] text-slate-500 font-mono">
-                                {op.fecha_hora ? new Date(op.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Hoy"}
-                              </span>
+                              {cli.punto_venta && (
+                                <span className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md font-medium">
+                                  {cli.punto_venta}
+                                </span>
+                              )}
 
                               {esFoco && (
-                                <Badge className="bg-[#20A7DB] text-white text-[9px] font-bold">
-                                  Notificación
+                                <Badge className="bg-amber-500 text-white text-[9px] font-bold">
+                                  Enfoque notificación
                                 </Badge>
                               )}
                             </div>
 
-                            <div className="text-xs text-slate-700 font-medium truncate">
-                              Cliente: <strong className="text-slate-900">{cliente}</strong>
-                              {op.punto_venta && (
-                                <span className="text-slate-500 ml-1">({op.punto_venta})</span>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+                              {cli.direccion && (
+                                <span className="flex items-center gap-1 truncate max-w-xs">
+                                  <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span className="truncate">{cli.direccion}</span>
+                                </span>
                               )}
-                            </div>
-
-                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                              <span>Monto: <strong className="text-emerald-700 font-mono text-xs">Bs. {monto.toFixed(2)}</strong></span>
-                              {op.numero_referencia && (
-                                <span className="text-slate-400 font-mono text-[10px]">
-                                  Ref: {op.numero_referencia}
+                              {cli.telefono && (
+                                <span className="text-slate-600 font-mono">
+                                  Tel: {cli.telefono}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Botones de Aprobación Individual */}
-                          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                            {rev === "PENDIENTE" ? (
-                              <div className="flex items-center gap-1.5">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAprobarOp(op)}
-                                  className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-none cursor-pointer"
-                                >
-                                  Aprobar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setOpSeleccionada(op);
-                                    setModalObsOp(true);
-                                  }}
-                                  className="h-7 px-2.5 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 rounded cursor-pointer"
-                                >
-                                  Observar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setOpSeleccionada(op);
-                                    setModalRechazarOp(true);
-                                  }}
-                                  className="h-7 px-2.5 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 rounded cursor-pointer"
-                                >
-                                  Rechazar
-                                </Button>
+                          <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+                            <div className="text-right">
+                              <div className="text-[10px] text-slate-400 font-semibold uppercase">Total / Saldo</div>
+                              <div className="text-xs font-bold text-slate-900 font-mono">
+                                Bs. {Number(ped.monto_total || 0).toFixed(2)}{" "}
+                                <span className={Number(ped.saldo_restante || 0) > 0 ? "text-amber-700 font-bold" : "text-emerald-700"}>
+                                  (Saldo: Bs. {Number(ped.saldo_restante || 0).toFixed(2)})
+                                </span>
+                              </div>
+                            </div>
+
+                            {ped.tiene_pendientes && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleAprobarPedidoCompleto(ped.id_pedido)}
+                                disabled={resolviendoEstePedido || aprobandoTodo}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 px-3 gap-1 shadow-xs cursor-pointer"
+                                title="Aprobar tanto la entrega como todos los cobros de este pedido"
+                              >
+                                <CheckCheck className="h-3.5 w-3.5" />
+                                <span>{resolviendoEstePedido ? "Aprobando..." : "Aprobar pedido completo"}</span>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Sub-tarjetas internas: Fila de Entrega + Fila de Cobros */}
+                        <div className="p-4 space-y-3">
+                          {/* 1. Entrega Física */}
+                          <div className="bg-white border border-slate-200/90 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg text-[#1C96C5] shrink-0 mt-0.5">
+                                <Truck className="h-4 w-4" />
+                              </div>
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-bold text-slate-800">Entrega de mercadería</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] px-1.5 py-0 border ${
+                                      entrega?.estado_entrega === "ENTREGADO" || entrega?.estado_entrega === "COMPLETO"
+                                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                        : "bg-slate-100 text-slate-700 border-slate-200"
+                                    }`}
+                                  >
+                                    {entrega?.estado_entrega || "PENDIENTE"}
+                                  </Badge>
+                                  {entrega?.fecha_entrega && (
+                                    <span className="text-[11px] text-slate-500 font-mono">
+                                      {new Date(entrega.fecha_entrega).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                  {entrega?.observaciones_revision || "Verificación física de entrega de productos al cliente"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
+                              {revEntrega === "PENDIENTE" ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleAprobarOp(entrega || { id_pedido: ped.id_pedido, tipo_operacion: "entrega" })}
+                                    className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-none cursor-pointer"
+                                  >
+                                    Aprobar entrega
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setOpSeleccionada(entrega || { id_pedido: ped.id_pedido, tipo_operacion: "entrega" });
+                                      setModalObsOp(true);
+                                    }}
+                                    className="h-7 px-2 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 rounded cursor-pointer"
+                                  >
+                                    Observar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setOpSeleccionada(entrega || { id_pedido: ped.id_pedido, tipo_operacion: "entrega" });
+                                      setModalRechazarOp(true);
+                                    }}
+                                    className="h-7 px-2 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 rounded cursor-pointer"
+                                  >
+                                    Rechazar
+                                  </Button>
+                                </>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    className={`text-xs px-2.5 py-0.5 font-semibold ${
+                                      revEntrega === "APROBADO"
+                                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                        : revEntrega === "OBSERVADO"
+                                        ? "bg-amber-100 text-amber-800 border-amber-300"
+                                        : "bg-rose-100 text-rose-800 border-rose-300"
+                                    }`}
+                                  >
+                                    {revEntrega}
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleAprobarOp(entrega || { id_pedido: ped.id_pedido, tipo_operacion: "entrega" })}
+                                    className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
+                                    title="Re-aprobar entrega"
+                                  >
+                                    Rectificar
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. Cobros Registrados */}
+                          <div className="space-y-2">
+                            <div className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 px-1">
+                              <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>Cobros registrados para este pedido ({cobros.length}):</span>
+                            </div>
+
+                            {cobros.length === 0 ? (
+                              <div className="p-3 bg-slate-50/70 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400">
+                                Sin cobros registrados en ruta para este pedido (posible venta a crédito o saldo pendiente).
                               </div>
                             ) : (
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  className={`text-xs px-2.5 py-0.5 font-semibold ${
-                                    rev === "APROBADO"
-                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                      : rev === "OBSERVADO"
-                                      ? "bg-amber-100 text-amber-800 border-amber-300"
-                                      : "bg-rose-100 text-rose-800 border-rose-300"
-                                  }`}
-                                >
-                                  {rev}
-                                </Badge>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleAprobarOp(op)}
-                                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
-                                  title="Re-aprobar operación"
-                                >
-                                  Rectificar
-                                </Button>
-                              </div>
+                              cobros.map((cobro, cIdx) => {
+                                const revCobro = (cobro.estado_revision_web || "PENDIENTE").toUpperCase();
+                                const metCobro = String(cobro.metodo_pago || "Efectivo").toUpperCase();
+                                const montoCobro = Number(cobro.monto || 0);
+
+                                return (
+                                  <div
+                                    key={cobro.id_pago || cIdx}
+                                    id={`cobro-${cobro.id_pago}`}
+                                    className="bg-slate-50/40 border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3"
+                                  >
+                                    <div className="flex items-start gap-3 min-w-0">
+                                      <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 shrink-0 mt-0.5">
+                                        {metCobro.includes("QR") ? (
+                                          <QrCode className="h-4 w-4" />
+                                        ) : (
+                                          <Banknote className="h-4 w-4" />
+                                        )}
+                                      </div>
+                                      <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs font-bold text-slate-900">
+                                            Cobro en {cobro.metodo_pago || "Efectivo"}
+                                          </span>
+                                          <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 font-mono text-xs font-bold px-2 py-0">
+                                            Bs. {montoCobro.toFixed(2)}
+                                          </Badge>
+                                          {cobro.numero_referencia && (
+                                            <span className="text-[10px] font-mono text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                                              Ref: {cobro.numero_referencia}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                                          <span>Registrado por chofer</span>
+                                          {cobro.fecha_pago && (
+                                            <span className="font-mono">
+                                              • {new Date(cobro.fecha_pago).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
+                                      {revCobro === "PENDIENTE" ? (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleAprobarOp(cobro)}
+                                            className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-none cursor-pointer"
+                                          >
+                                            Aprobar cobro
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                              setOpSeleccionada(cobro);
+                                              setModalObsOp(true);
+                                            }}
+                                            className="h-7 px-2 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 rounded cursor-pointer"
+                                          >
+                                            Observar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                              setOpSeleccionada(cobro);
+                                              setModalRechazarOp(true);
+                                            }}
+                                            className="h-7 px-2 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 rounded cursor-pointer"
+                                          >
+                                            Rechazar
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            className={`text-xs px-2.5 py-0.5 font-semibold ${
+                                              revCobro === "APROBADO"
+                                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                                : revCobro === "OBSERVADO"
+                                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                                : "bg-rose-100 text-rose-800 border-rose-300"
+                                            }`}
+                                          >
+                                            {revCobro}
+                                          </Badge>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => handleAprobarOp(cobro)}
+                                            className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
+                                            title="Re-aprobar cobro"
+                                          >
+                                            Rectificar
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
                             )}
                           </div>
                         </div>
