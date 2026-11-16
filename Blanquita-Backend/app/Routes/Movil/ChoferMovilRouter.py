@@ -2508,6 +2508,22 @@ async def registrar_nuevo_cliente_movil(
     if respuesta_cacheada:
         return respuesta_cacheada
 
+    datos_cliente = _crear_cliente_y_punto_venta_en_ruta(
+        db=db,
+        uid=uid,
+        payload=dto.model_dump(),
+        lat=dto.latitud,
+        lng=dto.longitud,
+        alcance=alcance
+    )
+
+    respuesta_datos = {
+        "codigo": "EXITO",
+        "mensaje": "Nuevo cliente y punto de venta registrados exitosamente",
+        "request_id": req_id,
+        "datos": datos_cliente
+    }
+
     IdempotenciaService.registrar_respuesta(
         session=db,
         usuario_id=uid,
@@ -2610,7 +2626,7 @@ async def solicitar_carga_camion_movil(
             }
         }
         if x_idempotency_key:
-            _registrar_respuesta_idempotente(
+            IdempotenciaService.registrar_respuesta(
                 session=db,
                 usuario_id=uid,
                 clave=x_idempotency_key,
@@ -2762,7 +2778,7 @@ async def solicitar_carga_camion_movil(
     }
 
     if x_idempotency_key:
-        _registrar_respuesta_idempotente(
+        IdempotenciaService.registrar_respuesta(
             session=db,
             usuario_id=uid,
             clave=x_idempotency_key,

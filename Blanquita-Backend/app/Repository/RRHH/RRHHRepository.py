@@ -1004,7 +1004,7 @@ class RRHHRepository:
         id_apertura = caja["IdAperturaCierreCaja"] if caja else 1
 
         # 4. Obtener o crear categoría Sueldos y Salarios
-        sql_cat = 'SELECT "IdCategoriaMovimientoCaja" FROM "CategoriaMovimientoCaja" WHERE "NombreCategoria" ILIKE '%sueldo%' OR "NombreCategoria" ILIKE '%salario%' LIMIT 1;'
+        sql_cat = """SELECT "IdCategoriaMovimientoCaja" FROM "CategoriaMovimientoCaja" WHERE "NombreCategoria" ILIKE '%sueldo%' OR "NombreCategoria" ILIKE '%salario%' LIMIT 1;"""
         cat = self.caller.LlamarUnRegistro(sql_cat)
         id_cat = cat["IdCategoriaMovimientoCaja"] if cat else 1
 
