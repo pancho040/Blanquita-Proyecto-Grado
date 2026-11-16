@@ -207,20 +207,6 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }
   };
 
-  const cambiarChoferManualmente = async (asignacion, nuevoChoferId) => {
-    if (!asignacion || !nuevoChoferId) return;
-    try {
-      await ActualizarAsignacion(asignacion.IdAsignacionRuta, {
-        IdUsuarioRepartidor: Number(nuevoChoferId)
-      });
-      const repObj = repartidores.find((r) => Number(r.IdUsuario) === Number(nuevoChoferId));
-      toast.success(`Chofer cambiado a: ${repObj?.NombreCompleto || "Nuevo repartidor"}`);
-      cargarAsignaciones(true);
-    } catch (err) {
-      toast.error(err.message || "Error al cambiar chofer");
-    }
-  };
-
   // Cargar asignaciones (memorizada para actualización)
   const cargarAsignaciones = useCallback(async (silencioso = false, forzar = false) => {
     if (abortControllerRef.current) {
@@ -246,6 +232,20 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
       if (!silencioso) setLoading(false);
     }
   }, [fecha, sucursal]);
+
+  const cambiarChoferManualmente = async (asignacion, nuevoChoferId) => {
+    if (!asignacion || !nuevoChoferId) return;
+    try {
+      await ActualizarAsignacion(asignacion.IdAsignacionRuta, {
+        IdUsuarioRepartidor: Number(nuevoChoferId)
+      });
+      const repObj = repartidores.find((r) => Number(r.IdUsuario) === Number(nuevoChoferId));
+      toast.success(`Chofer cambiado a: ${repObj?.NombreCompleto || "Nuevo repartidor"}`);
+      cargarAsignaciones(true);
+    } catch (err) {
+      toast.error(err.message || "Error al cambiar chofer");
+    }
+  };
 
   const recargarAsignacionesSilencioso = useCallback(() => {
     cargarAsignaciones(true);

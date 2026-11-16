@@ -58,6 +58,7 @@ import EditorParadasDinamicoModal from "./EditorParadasDinamicoModal";
 import ModalReasignarParadas from "./ModalReasignarParadas";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
+import { PanelErrorBoundary } from "@/components/common/PanelErrorBoundary";
 import { cache } from "@/lib/cacheService";
 import { logisticaSocket } from "@/services/Logistica/LogisticaWebSocket";
 import RastreoChoferesGPS from "./RastreoChoferesGPS";
@@ -625,7 +626,9 @@ export default function GestorRutas({ usuario = null }) {
       </div>
 
       {vistaPrincipal === "vivo" ? (
-        <RastreoChoferesGPS usuario={usuario} />
+        <PanelErrorBoundary titulo="Rastreo en Vivo">
+          <RastreoChoferesGPS usuario={usuario} />
+        </PanelErrorBoundary>
       ) : (
         <>
           {/* 1. Header con botones de creación y GPS bajo demanda */}
@@ -1122,13 +1125,15 @@ export default function GestorRutas({ usuario = null }) {
                   {/* TAB 1: MAPA */}
                   {subTabRuta === "mapa" && (
                     <div className="space-y-3">
-                      <MapaRuta
-                        puntosRuta={puntosRuta}
-                        todosPuntosVenta={todosPuntosVenta}
-                        rutaSeleccionada={rutaSeleccionada}
-                        idSucursal={sucursal}
-                        altura="h-[520px]"
-                      />
+                      <PanelErrorBoundary titulo="Mapa de Ruta">
+                        <MapaRuta
+                          puntosRuta={puntosRuta}
+                          todosPuntosVenta={todosPuntosVenta}
+                          rutaSeleccionada={rutaSeleccionada}
+                          idSucursal={sucursal}
+                          altura="h-[520px]"
+                        />
+                      </PanelErrorBoundary>
                     </div>
                   )}
 

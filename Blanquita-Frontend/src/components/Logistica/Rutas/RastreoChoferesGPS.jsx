@@ -76,9 +76,66 @@ export default function RastreoChoferesGPS({ usuario = null }) {
   const [modalSimuladorAbierto, setModalSimuladorAbierto] = useState(false);
   const [idAsignacionParaModal, setIdAsignacionParaModal] = useState(null);
 
+  const formatearMonto = (val) =>
+    new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
+
+  const formatearFrescuraSenal = (segundos, fechaHoraPing) => {
+    if (segundos === null || segundos === undefined || segundos === "") {
+      return { texto: "Sin reporte hoy", enLinea: false };
+    }
+    const s = Number(segundos);
+    if (isNaN(s)) return { texto: "Sin reporte hoy", enLinea: false };
+
+    if (s >= 600) {
+      let horaStr = "";
+      if (fechaHoraPing) {
+        try {
+          const d = new Date(fechaHoraPing);
+          if (!isNaN(d.getTime())) {
+            horaStr = ` (${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
+          }
+        } catch {}
+      }
+      return { texto: `Sin señal${horaStr}`, enLinea: false };
+    }
+
+    if (s < 10) return { texto: "hace instantes", enLinea: true };
+    if (s < 60) return { texto: `hace ${s} s`, enLinea: true };
+    const m = Math.floor(s / 60);
+    if (m < 60) return { texto: `hace ${m} min`, enLinea: true };
+    const h = Math.floor(m / 60);
+    return { texto: `hace ${h} h`, enLinea: true };
+  };
+
+  const choferesFiltrados = (choferes || []).filter((c) => {
+    const nombre = (c?.NombreRepartidor || c?.NombreCompleto || "").toUpperCase();
+    const esPrueba = nombre.startsWith("TEST_") || nombre.includes("PRUEBA");
+    if (esPrueba && (!import.meta.env?.DEV || !mostrarPruebas)) {
+      return false;
+    }
+    const q = (busqueda || "").toLowerCase();
+    return (
+      (c?.NombreRepartidor || "")?.toLowerCase().includes(q) ||
+      (c?.NombreRuta || "")?.toLowerCase().includes(q) ||
+      (c?.NombreZona || "")?.toLowerCase().includes(q)
+    );
+  });
+
+  const centrarEnChofer = (ch) => {
+    setChoferSeleccionado(ch);
+    const lat = parseFloat(ch?.Latitud);
+    const lng = parseFloat(ch?.Longitud);
+    if (!isNaN(lat) && !isNaN(lng) && mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+      } catch {}
+    }
+  };
+
   // 1. Inicializar Mapa Leaflet
   useEffect(() => {
     let isMounted = true;
+    const timersInit = [];
 
     async function initMap() {
       if (typeof window === "undefined" || !mapContainerRef.current) return;
@@ -132,7 +189,6 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       timersInit.push(t1, t2, t3);
     }
 
-    const timersInit = [];
     initMap();
 
     return () => {
@@ -597,61 +653,6 @@ export default function RastreoChoferesGPS({ usuario = null }) {
       }
     }
   }, [choferesFiltrados, choferSeleccionado, detalleAsignacion, leafletLoaded, sucursal]);
-
-  // Centrar en un chofer
-  const centrarEnChofer = (ch) => {
-    setChoferSeleccionado(ch);
-    const lat = parseFloat(ch.Latitud);
-    const lng = parseFloat(ch.Longitud);
-    if (!isNaN(lat) && !isNaN(lng) && mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
-    }
-  };
-
-  const formatearMonto = (val) =>
-    new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(val || 0);
-
-  const formatearFrescuraSenal = (segundos, fechaHoraPing) => {
-    if (segundos === null || segundos === undefined || segundos === "") {
-      return { texto: "Sin reporte hoy", enLinea: false };
-    }
-    const s = Number(segundos);
-    if (isNaN(s)) return { texto: "Sin reporte hoy", enLinea: false };
-
-    if (s >= 600) {
-      let horaStr = "";
-      if (fechaHoraPing) {
-        try {
-          const d = new Date(fechaHoraPing);
-          if (!isNaN(d.getTime())) {
-            horaStr = ` (${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
-          }
-        } catch {}
-      }
-      return { texto: `Sin señal${horaStr}`, enLinea: false };
-    }
-
-    if (s < 10) return { texto: "hace instantes", enLinea: true };
-    if (s < 60) return { texto: `hace ${s} s`, enLinea: true };
-    const m = Math.floor(s / 60);
-    if (m < 60) return { texto: `hace ${m} min`, enLinea: true };
-    const h = Math.floor(m / 60);
-    return { texto: `hace ${h} h`, enLinea: true };
-  };
-
-  const choferesFiltrados = choferes.filter((c) => {
-    const nombre = (c.NombreRepartidor || c.NombreCompleto || "").toUpperCase();
-    const esPrueba = nombre.startsWith("TEST_") || nombre.includes("PRUEBA");
-    if (esPrueba && (!import.meta.env?.DEV || !mostrarPruebas)) {
-      return false;
-    }
-    const q = busqueda.toLowerCase();
-    return (
-      c.NombreRepartidor?.toLowerCase().includes(q) ||
-      c.NombreRuta?.toLowerCase().includes(q) ||
-      c.NombreZona?.toLowerCase().includes(q)
-    );
-  });
 
   return (
     <div className="space-y-4">

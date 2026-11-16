@@ -40,6 +40,7 @@ export default function MapaRuta({
   // Inicializar mapa de Leaflet
   useEffect(() => {
     let isMounted = true;
+    const timersRef = [];
 
     async function initMap() {
       if (typeof window === "undefined" || !mapContainerRef.current) return;
@@ -93,7 +94,6 @@ export default function MapaRuta({
       timersRef.push(t1, t2, t3);
     }
 
-    const timersRef = [];
     initMap();
 
     return () => {
