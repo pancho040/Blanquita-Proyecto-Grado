@@ -81,10 +81,10 @@ def test_conexion_websocket_exitosa_snapshot_y_heartbeat(client):
 async def test_filtrado_por_sucursal_en_broadcast():
     """Un cliente con alcance a sucursal 1 no debe recibir broadcast de un chofer en sucursal 2."""
     mock_ws_sucre = MagicMock()
-    mock_ws_sucre.send_json = pytest.importorskip("unittest.mock").AsyncMock()
+    mock_ws_sucre.send_text = pytest.importorskip("unittest.mock").AsyncMock()
 
     mock_ws_potosi = MagicMock()
-    mock_ws_potosi.send_json = pytest.importorskip("unittest.mock").AsyncMock()
+    mock_ws_potosi.send_text = pytest.importorskip("unittest.mock").AsyncMock()
 
     # Registrar manualmente en el hub
     flota_ws_manager.active_connections[mock_ws_sucre] = {
@@ -109,14 +109,15 @@ async def test_filtrado_por_sucursal_en_broadcast():
         await flota_ws_manager.broadcast_ubicacion(ping_potosi)
 
         # El cliente de Potosí debe recibir el mensaje
-        mock_ws_potosi.send_json.assert_called_once()
-        msg_enviado = mock_ws_potosi.send_json.call_args[0][0]
+        mock_ws_potosi.send_text.assert_called_once()
+        import json
+        msg_enviado = json.loads(mock_ws_potosi.send_text.call_args[0][0])
         assert msg_enviado["tipo"] == "POSICION_CHOFER"
         assert msg_enviado["id_chofer"] == 25
         assert msg_enviado["sucursal_id"] == 2
 
         # El cliente de Sucre NO debe recibir el mensaje
-        mock_ws_sucre.send_json.assert_not_called()
+        mock_ws_sucre.send_text.assert_not_called()
 
     finally:
         flota_ws_manager.active_connections.pop(mock_ws_sucre, None)

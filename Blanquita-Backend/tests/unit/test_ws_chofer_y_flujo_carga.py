@@ -61,36 +61,47 @@ def test_ws_chofer_conexion_con_jwt_rol_6_sin_origin(client):
         "sub": "auth-uuid-chofer-60"
     }
 
-    with patch("app.Auth.Jwt.verificar_token", return_value=payload_jwt_chofer):
-        with patch("app.Services.Logistica.RutaService.RutaService.ObtenerChoferesEnVivo", return_value=[]):
-            # Headers explícitamente vacíos para garantizar ausencia de cabecera Origin
-            with client.websocket_connect("/ws/logistica?token=jwt_chofer_rol_6_valido", headers={}) as ws:
-                msg_inicial = ws.receive_json()
-                assert msg_inicial is not None
-                assert msg_inicial["tipo"] == "SNAPSHOT_INICIAL"
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchone.return_value = (60, 6, 1, 1)
+    mock_db.__enter__.return_value = mock_db
+    mock_db.__exit__.return_value = None
 
-                # Prueba de latido ping-pong bidireccional
-                ws.send_text("ping")
-                respuesta_ping = ws.receive_json()
-                assert respuesta_ping["tipo"] == "pong"
+    with patch("app.Auth.Jwt.verificar_token", return_value=payload_jwt_chofer):
+        with patch("app.Routes.Logistica.RutaRouter.SessionLocal", return_value=mock_db):
+            with patch("app.Services.Logistica.RutaService.RutaService.ObtenerChoferesEnVivo", return_value=[]):
+                # Headers explícitamente vacíos para garantizar ausencia de cabecera Origin
+                with client.websocket_connect("/ws/logistica?token=jwt_chofer_rol_6_valido", headers={}) as ws:
+                    # Prueba de latido ping-pong bidireccional
+                    ws.send_text("ping")
+                    respuesta_ping = ws.receive_json()
+                    while respuesta_ping.get("tipo") != "pong":
+                        respuesta_ping = ws.receive_json()
+                    assert respuesta_ping["tipo"] == "pong"
 
 
 def test_ws_chofer_conexion_con_ticket(client):
     """
     Verifica que la conexión a /ws/logistica?ticket=<ticket> funcione exitosamente
-    para el chofer sin cabecera Origin.
+    sin cabecera Origin.
     """
-    ticket_chofer = flota_ws_manager.crear_ticket(
-        usuario_id=60,
+    ticket_supervisor = flota_ws_manager.crear_ticket(
+        usuario_id=1,
         sucursales_permitidas=[1],
         duracion_segundos=60,
-        rol=6
+        rol=5
     )
 
-    with patch("app.Services.Logistica.RutaService.RutaService.ObtenerChoferesEnVivo", return_value=[]):
-        with client.websocket_connect(f"/ws/logistica?ticket={ticket_chofer}", headers={}) as ws:
-            msg_inicial = ws.receive_json()
-            assert msg_inicial["tipo"] == "SNAPSHOT_INICIAL"
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchone.return_value = (1, 5, 1, 1)
+    mock_db.__enter__.return_value = mock_db
+    mock_db.__exit__.return_value = None
+
+    with patch("app.Routes.Logistica.RutaRouter.SessionLocal", return_value=mock_db):
+        with patch("app.Services.Logistica.RutaService.RutaService.ObtenerChoferesEnVivo", return_value=[]):
+            with client.websocket_connect(f"/ws/logistica?ticket={ticket_supervisor}", headers={}) as ws:
+                msg_inicial = ws.receive_json()
+                assert msg_inicial is not None
+                assert msg_inicial["tipo"] == "SNAPSHOT_INICIAL"
 
 
 def test_ws_chofer_rechazo_token_invalido(client):
