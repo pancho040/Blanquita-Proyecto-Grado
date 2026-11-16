@@ -125,18 +125,29 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
   // Escucha centralizada de eventos SSE de logística
   const manejarEvento = useCallback((datos = {}, tipo) => {
+    const sedeEvento = extraerSedeEvento(datos) || (sucursalAsignada ? Number(sucursalAsignada) : null);
+    const idAsig = datos.id_asignacion || datos.id_asignacion_ruta || datos.asignacion_id;
+    const rutaRaw = datos.nombre_ruta || datos.ruta || "";
+    const rutaCorta = rutaRaw ? (rutaRaw.includes(" - ") ? rutaRaw.split(" - ")[0] : rutaRaw) : (idAsig ? `Asignación #${idAsig}` : "Ruta");
+    const rutaBase = esAdmin ? "/admin/despachos" : "/supervisor/despachos";
+
     switch (tipo) {
       case "solicitud_carga_recibida":
       case "solicitud_carga_creada":
       case "SOLICITUD_CARGA": {
         const chofer = datos.nombre_chofer || datos.chofer || (datos.id_chofer ? `Chofer #${datos.id_chofer}` : "Chofer en planta");
+        const queryParams = new URLSearchParams();
+        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        if (idAsig) queryParams.set("asignacion", idAsig);
+        queryParams.set("tab", "carga");
+
         agregarToastRef.current({
           tipo: "solicitud_carga",
           titulo: "Solicitud de Carga de Camión",
-          nombreChofer: chofer,
-          detalle: datos.mensaje || `Solicitó validación de stock para salir a reparto (${datos.items_count || 1} ítems).`,
-          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-          accionTexto: "Ver y Aprobar Stock",
+          nombreChofer: `${rutaCorta} · ${chofer}`,
+          detalle: datos.mensaje || `Solicitó validación de stock para salir a reparto en ${rutaCorta}.`,
+          accionUrl: `${rutaBase}?${queryParams.toString()}`,
+          accionTexto: "Ver y Aprobar Carga",
           color: "amber",
           icono: Truck,
           payload: datos,
@@ -149,12 +160,24 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
       case "COBRO_REGISTRADO": {
         const chofer = datos.nombre_chofer || datos.chofer || "Chofer en ruta";
         const esCobro = tipo === "COBRO_REGISTRADO" || datos.tipo_operacion === "COBRO" || datos.monto;
+        const idFoco = datos.id_pago || datos.id_operacion || datos.id_pedido;
+        const queryParams = new URLSearchParams();
+        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        if (idAsig) queryParams.set("asignacion", idAsig);
+        queryParams.set("tab", "cobros");
+        if (idFoco) queryParams.set("foco", idFoco);
+
+        const montoStr = Number(datos.monto || 0).toFixed(2);
+        const detalleCanonico = datos.mensaje || (esCobro
+          ? `Cobro registrado · ${rutaCorta} · ${chofer} · Bs. ${montoStr}`
+          : `Entrega registrada · ${rutaCorta} · ${chofer} · Bs. ${montoStr}`);
+
         agregarToastRef.current({
           tipo: esCobro ? "cobro_ruta" : "entrega_ruta",
           titulo: esCobro ? "Cobro Registrado en Ruta" : "Entrega Registrada en Ruta",
-          nombreChofer: chofer,
-          detalle: datos.mensaje || (esCobro ? `Se registró un cobro por Bs. ${datos.monto || "0.00"}` : "Pedido entregado al cliente en ruta."),
-          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          nombreChofer: `${rutaCorta} · ${chofer}`,
+          detalle: detalleCanonico,
+          accionUrl: `${rutaBase}?${queryParams.toString()}`,
           accionTexto: "Ir a Revisar / Aprobar",
           color: "emerald",
           icono: esCobro ? DollarSign : CheckCircle2,
@@ -172,7 +195,7 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
             titulo: "Alerta de Chofer en Ruta",
             nombreChofer: chofer,
             detalle: datos.mensaje || `Alerta en parada: ${datos.estado_movimiento || "Detención prolongada"}`,
-            accionUrl: "/supervisor/rutas?vista=vivo",
+            accionUrl: `/supervisor/rutas?vista=vivo${sedeEvento ? `&sucursal=${sedeEvento}` : ""}`,
             accionTexto: "Ver en Mapa GPS",
             color: "rose",
             icono: ShieldAlert,
@@ -188,8 +211,8 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
           titulo: "Secuencia de Ruta Reordenada",
           nombreChofer: datos.nombre_chofer || "Supervisor de Logística",
           detalle: datos.mensaje || "Se modificó el orden de paradas asignadas para hoy.",
-          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-          accionTexto: "Ver Asignaciones",
+          accionUrl: `${rutaBase}${sedeEvento ? `?sucursal=${sedeEvento}` : ""}`,
+          accionTexto: "Ver Despachos",
           color: "indigo",
           icono: RefreshCw,
           payload: datos,
@@ -199,12 +222,18 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
       case "carga_camion_aprobada":
       case "CARGA_APROBADA": {
+        const chofer = datos.nombre_chofer || "Administración";
+        const queryParams = new URLSearchParams();
+        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        if (idAsig) queryParams.set("asignacion", idAsig);
+        queryParams.set("tab", "paradas");
+
         agregarToastRef.current({
           tipo: "carga_aprobada",
           titulo: "Carga de Camión Aprobada",
-          nombreChofer: datos.nombre_chofer || "Administración",
-          detalle: datos.mensaje || `Asignación #${datos.id_asignacion || ""} habilitada para salir a reparto.`,
-          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
+          nombreChofer: `${rutaCorta} · ${chofer}`,
+          detalle: datos.mensaje || `Carga aprobada · ${rutaCorta} · ${chofer} habilitado para salir a reparto.`,
+          accionUrl: `${rutaBase}?${queryParams.toString()}`,
           accionTexto: "Ver Ruta",
           color: "emerald",
           icono: CheckCircle2,
@@ -215,13 +244,19 @@ export default function ToastLiveContainer({ basePath = "supervisor", esAdmin = 
 
       case "ruta_finalizada_admin":
       case "ASIGNACION_COMPLETADA": {
+        const chofer = datos.nombre_chofer || "Supervisión";
+        const queryParams = new URLSearchParams();
+        if (sedeEvento) queryParams.set("sucursal", sedeEvento);
+        if (idAsig) queryParams.set("asignacion", idAsig);
+        queryParams.set("tab", "cierre");
+
         agregarToastRef.current({
           tipo: "ruta_finalizada",
           titulo: "Ruta Finalizada y Chofer Liberado",
-          nombreChofer: datos.nombre_chofer || "Supervisión",
-          detalle: datos.mensaje || "Ruta cerrada exitosamente. Chofer disponible para nuevo viaje.",
-          accionUrl: esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones",
-          accionTexto: "Ver Historial",
+          nombreChofer: `${rutaCorta} · ${chofer}`,
+          detalle: datos.mensaje || `Ruta ${rutaCorta} cerrada exitosamente. Chofer disponible para nuevo viaje.`,
+          accionUrl: `${rutaBase}?${queryParams.toString()}`,
+          accionTexto: "Ver Cierre",
           color: "slate",
           icono: Clock,
           payload: datos,

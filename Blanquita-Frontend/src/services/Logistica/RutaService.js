@@ -511,3 +511,24 @@ export async function FinalizarRutaAdmin(idAsignacion, observacionGeneral = "", 
   return await response.json();
 }
 
+export async function ObtenerOperacionesAsignacion(idAsignacion) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/operaciones`);
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  return await response.json();
+}
+
+export async function AprobarTodasOperacionesAsignacion(idAsignacion) {
+  const response = await fetch(`/api/logistica/asignaciones/${idAsignacion}/aprobar-todo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    await manejarErrorBackend(response);
+  }
+  invalidarCache("/api/logistica");
+  return await response.json();
+}
+
+

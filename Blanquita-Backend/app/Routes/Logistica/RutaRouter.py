@@ -1984,7 +1984,11 @@ async def revisar_operacion_ruta_1a1(
 
     obs_norm = dto.observacion or dto.ObservacionRevision or ""
     chofer_id = None
-    admin_id = usuario["IdUsuario"]
+    admin_id = usuario.get("IdUsuario")
+    if admin_id:
+        usr_valido = db.execute(text('SELECT 1 FROM public."Usuario" WHERE "IdUsuario" = :u'), {"u": admin_id}).scalar()
+        if not usr_valido:
+            admin_id = db.execute(text('SELECT "IdUsuario" FROM public."Usuario" WHERE "IdRol" IN (1, 2, 3) ORDER BY "IdUsuario" ASC LIMIT 1')).scalar()
 
     if tipo_norm == "entrega":
         sql_ped = text("""
@@ -2328,5 +2332,219 @@ async def solicitar_ubicacion_actual_flota(
         "choferes_en_vivo_count": sum(1 for c in lista_resultado if c["ubicacion_en_vivo"]),
         "choferes": lista_resultado
     }
+
+
+# -------------------------------------------------------------
+# OPERACIONES Y AUDITORÍA DE ASIGNACIÓN (ENTREGAS Y COBROS)
+# -------------------------------------------------------------
+@RutaRouter.get("/asignaciones/{id_asignacion}/operaciones", response_model=dict)
+def obtener_operaciones_asignacion(
+    id_asignacion: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Obtiene la lista consolidada de todas las entregas y cobros realizados en una asignación de ruta,
+    con su estado de revisión (PENDIENTE, APROBADO, OBSERVADO, RECHAZADO) y métricas de arqueo.
+    """
+    sql_check = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal",
+               r."NombreRuta", CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno") as chofer
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        LEFT JOIN public."Usuario" u ON ar."IdUsuarioRepartidor" = u."IdUsuario"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_check, {"asig_id": id_asignacion}).mappings().fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asignación {id_asignacion} no encontrada")
+    alcance.validar_recurso(asig["IdSucursal"], nombre_recurso="asignación de ruta", responder_404=True)
+
+    # 1. Cobros registrados (PagoPedido)
+    sql_cobros = text("""
+        SELECT 
+            pp."IdPagoPedido" as id_operacion,
+            'COBRO' as tipo_operacion,
+            pp."IdPedido" as id_pedido,
+            p."NumeroPedido" as numero_pedido,
+            COALESCE(c."NombreComercial", c."RazonSocial", c."NombrePropietario", 'Cliente Final') as cliente,
+            COALESCE(pv."NombrePuntoVenta", pv."Direccion", 'Punto de venta') as punto_venta,
+            pp."Monto"::float as monto,
+            COALESCE(mp."NombreMetodoPago", 'Efectivo') as metodo_pago,
+            pp."FechaPago"::text as fecha_hora,
+            COALESCE(pp."estado_revision_web", 'PENDIENTE') as estado_revision_web,
+            pp."observacion_revision" as observacion_revision,
+            pp."revisado_por_id" as revisado_por_id,
+            pp."fecha_revision"::text as fecha_revision,
+            pp."LatitudCobro"::float as latitud,
+            pp."LongitudCobro"::float as longitud,
+            pp."NumeroReferencia" as numero_referencia,
+            p."MontoTotal"::float as monto_pedido_total
+        FROM public."PagoPedido" pp
+        JOIN public."Pedido" p ON pp."IdPedido" = p."IdPedido"
+        LEFT JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        LEFT JOIN public."PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+        LEFT JOIN public."MetodoPago" mp ON pp."IdMetodoPago" = mp."IdMetodoPago"
+        WHERE p."IdAsignacionRuta" = :asig_id
+        ORDER BY pp."IdPagoPedido" DESC;
+    """)
+    cobros = [dict(r) for r in db.execute(sql_cobros, {"asig_id": id_asignacion}).mappings().fetchall()]
+
+    # 2. Entregas registradas (Pedido)
+    sql_entregas = text("""
+        SELECT 
+            p."IdPedido" as id_operacion,
+            'ENTREGA' as tipo_operacion,
+            p."IdPedido" as id_pedido,
+            p."NumeroPedido" as numero_pedido,
+            COALESCE(c."NombreComercial", c."RazonSocial", c."NombrePropietario", 'Cliente Final') as cliente,
+            COALESCE(pv."NombrePuntoVenta", pv."Direccion", 'Punto de venta') as punto_venta,
+            p."MontoTotal"::float as monto,
+            'Entrega en ruta' as metodo_pago,
+            COALESCE(p."FechaEntrega", p."FechaPedido")::text as fecha_hora,
+            COALESCE(p."estado_revision_web", 'PENDIENTE') as estado_revision_web,
+            p."observacion_revision" as observacion_revision,
+            p."revisado_por_id" as revisado_por_id,
+            p."fecha_revision"::text as fecha_revision,
+            p."LatitudEntrega"::float as latitud,
+            p."LongitudEntrega"::float as longitud,
+            NULL as numero_referencia,
+            p."MontoTotal"::float as monto_pedido_total
+        FROM public."Pedido" p
+        LEFT JOIN public."Cliente" c ON p."IdCliente" = c."IdCliente"
+        LEFT JOIN public."PuntoVenta" pv ON p."IdPuntoVenta" = pv."IdPuntoVenta"
+        WHERE p."IdAsignacionRuta" = :asig_id
+        ORDER BY p."IdPedido" DESC;
+    """)
+    entregas = [dict(r) for r in db.execute(sql_entregas, {"asig_id": id_asignacion}).mappings().fetchall()]
+
+    todas_operaciones = cobros + entregas
+    # Ordenar por fecha_hora descendente
+    todas_operaciones.sort(key=lambda x: str(x.get("fecha_hora") or ""), reverse=True)
+
+    pendientes = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "PENDIENTE").upper() == "PENDIENTE")
+    aprobadas = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "").upper() == "APROBADO")
+    observadas = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "").upper() == "OBSERVADO")
+    rechazadas = sum(1 for op in todas_operaciones if (op.get("estado_revision_web") or "").upper() == "RECHAZADO")
+
+    total_efectivo = sum(op["monto"] for op in cobros if "efectivo" in (op.get("metodo_pago") or "").lower())
+    total_qr = sum(op["monto"] for op in cobros if any(q in (op.get("metodo_pago") or "").lower() for q in ("qr", "transferencia")))
+    total_cobrado = sum(op["monto"] for op in cobros)
+    total_entregado = sum(op["monto"] for op in entregas)
+
+    return {
+        "codigo": "EXITO",
+        "asignacion_id": id_asignacion,
+        "nombre_ruta": asig["NombreRuta"],
+        "chofer": asig["chofer"],
+        "id_chofer": asig["IdUsuarioRepartidor"],
+        "id_sucursal": asig["IdSucursal"],
+        "resumen": {
+            "total_operaciones": len(todas_operaciones),
+            "pendientes": pendientes,
+            "aprobadas": aprobadas,
+            "observadas": observadas,
+            "rechazadas": rechazadas,
+            "total_cobrado_efectivo": round(total_efectivo, 2),
+            "total_cobrado_qr": round(total_qr, 2),
+            "total_cobrado": round(total_cobrado, 2),
+            "total_entregado": round(total_entregado, 2),
+            "saldo_pendiente": round(max(0.0, total_entregado - total_cobrado), 2)
+        },
+        "operaciones": todas_operaciones,
+        "cobros": cobros,
+        "entregas": entregas
+    }
+
+
+@RutaRouter.post("/asignaciones/{id_asignacion}/aprobar-todo", response_model=dict)
+def aprobar_todas_operaciones_asignacion(
+    id_asignacion: int,
+    db: Session = Depends(get_db),
+    usuario: dict = Depends(require_role(PERMISOS_LOGISTICA)),
+    alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
+):
+    """
+    Aprueba de manera masiva todas las entregas y cobros pendientes de una asignación.
+    """
+    sql_check = text("""
+        SELECT ar."IdAsignacionRuta", ar."IdUsuarioRepartidor", r."IdSucursal"
+        FROM public."AsignacionRuta" ar
+        JOIN public."RutaDistribucion" r ON ar."IdRutaDistribucion" = r."IdRutaDistribucion"
+        WHERE ar."IdAsignacionRuta" = :asig_id;
+    """)
+    asig = db.execute(sql_check, {"asig_id": id_asignacion}).mappings().fetchone()
+    if not asig:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asignación {id_asignacion} no encontrada")
+    alcance.validar_recurso(asig["IdSucursal"], nombre_recurso="asignación de ruta", responder_404=True)
+
+    admin_id = usuario.get("IdUsuario")
+    if admin_id:
+        usr_valido = db.execute(text('SELECT 1 FROM public."Usuario" WHERE "IdUsuario" = :u'), {"u": admin_id}).scalar()
+        if not usr_valido:
+            admin_id = db.execute(text('SELECT "IdUsuario" FROM public."Usuario" WHERE "IdRol" IN (1, 2, 3) ORDER BY "IdUsuario" ASC LIMIT 1')).scalar()
+
+    # 1. Aprobar cobros pendientes
+    res_cobros = db.execute(text("""
+        UPDATE public."PagoPedido"
+        SET "estado_revision_web" = 'APROBADO',
+            "observacion_revision" = 'Aprobación masiva por supervisor',
+            "revisado_por_id" = :adm,
+            "fecha_revision" = NOW()
+        WHERE "IdPedido" IN (
+            SELECT "IdPedido" FROM public."Pedido" WHERE "IdAsignacionRuta" = :asig_id
+        )
+        AND ("estado_revision_web" IS NULL OR "estado_revision_web" = 'PENDIENTE');
+    """), {"adm": admin_id, "asig_id": id_asignacion})
+    cobros_aprobados = res_cobros.rowcount
+
+    # 2. Aprobar entregas pendientes
+    res_entregas = db.execute(text("""
+        UPDATE public."Pedido"
+        SET "estado_revision_web" = 'APROBADO',
+            "observacion_revision" = 'Aprobación masiva por supervisor',
+            "revisado_por_id" = :adm,
+            "fecha_revision" = NOW()
+        WHERE "IdAsignacionRuta" = :asig_id
+        AND ("estado_revision_web" IS NULL OR "estado_revision_web" = 'PENDIENTE');
+    """), {"adm": admin_id, "asig_id": id_asignacion})
+    entregas_aprobadas = res_entregas.rowcount
+
+    db.commit()
+
+    total_aprobados = cobros_aprobados + entregas_aprobadas
+
+    # Notificar al chofer por WS si está conectado
+    chofer_id = asig["IdUsuarioRepartidor"]
+    if chofer_id:
+        evento_ws = {
+            "tipo": "operacion_revisada",
+            "tipo_operacion": "masiva",
+            "id_asignacion": id_asignacion,
+            "total_aprobadas": total_aprobados,
+            "estado_revision_web": "APROBADO",
+            "observacion_revision": "Aprobación masiva por supervisor",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+            except RuntimeError:
+                asyncio.run(flota_ws_manager.emitir_a_chofer(chofer_id, evento_ws))
+        except Exception as e:
+            logger.debug(f"[WS aprobacion masiva] Error: {e}")
+
+    return {
+        "codigo": "EXITO",
+        "mensaje": f"Se aprobaron {total_aprobados} operaciones ({cobros_aprobados} cobros, {entregas_aprobadas} entregas)",
+        "asignacion_id": id_asignacion,
+        "cobros_aprobados": cobros_aprobados,
+        "entregas_aprobadas": entregas_aprobadas,
+        "total_aprobadas": total_aprobados
+    }
+
 
 

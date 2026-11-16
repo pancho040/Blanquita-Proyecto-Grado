@@ -30,44 +30,44 @@ const NOTIFICACIONES_SEMILLA = [
     tipo: "solicitud_carga",
     categoria: "CARGA",
     titulo: "Solicitud de Carga de Camión",
-    nombreChofer: "Carlos Méndez (Camión #3)",
+    nombreChofer: "Ruta 101 · Carlos Méndez",
     idSucursal: 1, // Sucre
-    detalle: "Solicita validación de stock remanente y carga de 150 paq. Higiénico Clásico y 80 Servilletas para iniciar Ruta 101.",
+    detalle: "Solicita validación de stock remanente y carga para iniciar Ruta 101.",
     fecha: "Hace 10 min",
     creadoEn: Date.now() - 10 * 60 * 1000,
     leida: false,
-    accionUrl: "/supervisor/asignaciones",
-    accionTexto: "Ver y Resolver Stock",
+    accionUrl: "/supervisor/despachos?sucursal=1&tab=carga",
+    accionTexto: "Ver y Aprobar Carga",
     color: "amber",
   },
   {
     id: "semilla-carga-102",
     tipo: "solicitud_carga",
     categoria: "CARGA",
-    titulo: "Solicitud de Carga de Camión - Potosí",
-    nombreChofer: "Gonzalo Rivera (Camión #5)",
+    titulo: "Solicitud de Carga de Camión",
+    nombreChofer: "Ruta 202 · Milton Choque",
     idSucursal: 2, // Potosí
-    detalle: "Solicita validación de carga para Ruta Villa Imperial Potosí (90 paq. Clásico, 40 Servilletas).",
+    detalle: "Solicita validación de carga para Ruta 202 - Mercado Uyuni y Feria Popular.",
     fecha: "Hace 15 min",
     creadoEn: Date.now() - 15 * 60 * 1000,
     leida: false,
-    accionUrl: "/supervisor/asignaciones",
-    accionTexto: "Ver y Resolver Stock",
+    accionUrl: "/supervisor/despachos?sucursal=2&tab=carga",
+    accionTexto: "Ver y Aprobar Carga",
     color: "amber",
   },
   {
     id: "semilla-cobro-202",
     tipo: "operacion_ruta",
     categoria: "COBROS",
-    titulo: "Nueva Entrega con Cobro en Ruta",
-    nombreChofer: "Mario Flores (Camión #1)",
-    idSucursal: 1, // Sucre
-    detalle: "Completó entrega a Supermercado Litoral: Cobro de Bs. 1,450.00 en efectivo registrado.",
+    titulo: "Cobro Registrado en Ruta",
+    nombreChofer: "Ruta 202 · Milton Choque",
+    idSucursal: 2, // Potosí
+    detalle: "Cobro registrado · Ruta 202 · Milton Choque · Bs. 125.00 en efectivo.",
     fecha: "Hace 22 min",
     creadoEn: Date.now() - 22 * 60 * 1000,
     leida: false,
-    accionUrl: "/supervisor/asignaciones",
-    accionTexto: "Ir a Revisar/Aprobar",
+    accionUrl: "/supervisor/despachos?sucursal=2&tab=cobros",
+    accionTexto: "Ir a Revisar / Aprobar",
     color: "emerald",
   },
   {
@@ -75,7 +75,7 @@ const NOTIFICACIONES_SEMILLA = [
     tipo: "cobro_qr",
     categoria: "COBROS",
     titulo: "Cobro QR Pendiente de Aprobación",
-    nombreChofer: "Juan Pérez (Camión #2)",
+    nombreChofer: "Ruta 201 · Jaime Villegas",
     idSucursal: 2, // Potosí
     detalle: "Cliente Tienda El Sol Potosí realizó abono QR por Bs. 320.00 (Ref #849201). Pendiente de conciliación.",
     fecha: "Hace 45 min",
@@ -90,13 +90,13 @@ const NOTIFICACIONES_SEMILLA = [
     tipo: "alerta_ruta",
     categoria: "ALERTAS",
     titulo: "Alerta: No-Entrega en Parada",
-    nombreChofer: "Roberto Arce (Camión #4)",
+    nombreChofer: "Ruta 101 · Ramiro Gutiérrez",
     idSucursal: 1, // Sucre
-    detalle: "Parada #5 (Distribuidora Central) reportada como No Entregada. Motivo: Local cerrado temporalmente.",
+    detalle: "Parada #5 reportada como No Entregada. Motivo: Local cerrado temporalmente.",
     fecha: "Hace 1 hora",
     creadoEn: Date.now() - 60 * 60 * 1000,
     leida: false,
-    accionUrl: "/supervisor/rutas?vista=vivo",
+    accionUrl: "/supervisor/rutas?vista=vivo&sucursal=1",
     accionTexto: "Ver en Rastreo GPS",
     color: "rose",
   },
@@ -172,6 +172,7 @@ export default function NotificacionesBell({
         return;
       }
 
+      const defaultBase = esAdmin ? "/admin/despachos" : "/supervisor/despachos";
       const itemFormateado = {
         id: nuevo.id || `notif-${Date.now()}`,
         tipo: nuevo.tipo || "alerta",
@@ -183,9 +184,10 @@ export default function NotificacionesBell({
         fecha: "Ahora mismo",
         creadoEn: Date.now(),
         leida: false,
-        accionUrl: nuevo.accionUrl || (esAdmin ? "/admin/asignaciones" : "/supervisor/asignaciones"),
+        accionUrl: nuevo.accionUrl || (idSede ? `${defaultBase}?sucursal=${idSede}` : defaultBase),
         accionTexto: nuevo.accionTexto || "Ver Detalles",
         color: nuevo.color || "amber",
+        payload: nuevo.payload || nuevo,
       };
 
       setNotificaciones((prev) => {

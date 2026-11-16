@@ -42,7 +42,9 @@ import {
   Receipt,
   Boxes,
   History,
-  ShieldCheck
+  ShieldCheck,
+  MoreVertical,
+  SlidersHorizontal
 } from "lucide-react";
 import MapaRuta from "../Rutas/MapaRuta";
 import BuscadorSelect from "../Common/BuscadorSelect";
@@ -179,6 +181,47 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
   const [modalExpedienteChofer, setModalExpedienteChofer] = useState(false);
   const [choferParaExpediente, setChoferParaExpediente] = useState(null);
   const [asignacionParaExpediente, setAsignacionParaExpediente] = useState(null);
+  const [tabInicialExpediente, setTabInicialExpediente] = useState("carga");
+  const [focoIdExpediente, setFocoIdExpediente] = useState(null);
+
+  // Columnas personalizables persistidas en localStorage
+  const STORAGE_KEY_COLUMNAS = "blanquita_columnas_despachos";
+  const CONFIG_COLUMNAS_DEFECTO = useMemo(() => ({
+    kmInicial: false,
+    kmFinal: false,
+    flotaObs: false,
+  }), []);
+
+  const [columnasVisibles, setColumnasVisibles] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const guardado = localStorage.getItem("blanquita_columnas_despachos");
+        if (guardado) return { ...CONFIG_COLUMNAS_DEFECTO, ...JSON.parse(guardado) };
+      } catch {}
+    }
+    return CONFIG_COLUMNAS_DEFECTO;
+  });
+
+  const [menuColumnasAbierto, setMenuColumnasAbierto] = useState(false);
+  const [menuKebabId, setMenuKebabId] = useState(null);
+
+  const toggleColumna = (colKey) => {
+    setColumnasVisibles((prev) => {
+      const nuevo = { ...prev, [colKey]: !prev[colKey] };
+      try {
+        localStorage.setItem(STORAGE_KEY_COLUMNAS, JSON.stringify(nuevo));
+      } catch {}
+      return nuevo;
+    });
+  };
+
+  const restablecerColumnas = () => {
+    setColumnasVisibles(CONFIG_COLUMNAS_DEFECTO);
+    try {
+      localStorage.setItem(STORAGE_KEY_COLUMNAS, JSON.stringify(CONFIG_COLUMNAS_DEFECTO));
+    } catch {}
+    toast.info("Configuración de columnas restablecida");
+  };
 
   // Plantillas automáticas de chofer por ruta (localStorage)
   const [plantillasAutomaticas, setPlantillasAutomaticas] = useState(() => {
@@ -336,6 +379,73 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
     }, 45000);
     return () => clearInterval(intervaloFallback);
   }, [wsConectado, listoParaConsultar, cargarAsignaciones]);
+
+  // Deep Linking desde Notificaciones en campana o toasts
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const procesarDeepLink = () => {
+      const params = new URLSearchParams(window.location.search);
+      const asigParam = params.get("asignacion");
+      const tabParam = params.get("tab");
+      const focoParam = params.get("foco");
+
+      if (!asigParam) return;
+      const idBuscado = Number(asigParam);
+
+      const abrirConAsignacion = (asig) => {
+        setAsignacionParaExpediente(asig);
+        setChoferParaExpediente({
+          IdUsuario: asig.IdUsuarioRepartidor,
+          NombreCompleto: asig.NombreRepartidor,
+        });
+        setTabInicialExpediente(tabParam || "carga");
+        setFocoIdExpediente(focoParam || null);
+        setModalExpedienteChofer(true);
+
+        // Limpiar parámetros de deep link de la URL de forma limpia
+        const cleanParams = new URLSearchParams(window.location.search);
+        cleanParams.delete("asignacion");
+        cleanParams.delete("tab");
+        cleanParams.delete("foco");
+        const nuevaUrl = window.location.pathname + (cleanParams.toString() ? `?${cleanParams.toString()}` : "");
+        window.history.replaceState({}, document.title, nuevaUrl);
+      };
+
+      const asigEncontrada = asignaciones.find((a) => Number(a.IdAsignacionRuta) === idBuscado);
+      if (asigEncontrada) {
+        abrirConAsignacion(asigEncontrada);
+      } else if (listoParaConsultar && !loading) {
+        ObtenerAsignaciones(null, idBuscado, sucursal)
+          .then((res) => {
+            const items = Array.isArray(res) ? res : res?.items || [];
+            const encontradaPuntual = items.find((x) => Number(x.IdAsignacionRuta) === idBuscado) || items[0];
+            if (encontradaPuntual) {
+              abrirConAsignacion(encontradaPuntual);
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    procesarDeepLink();
+    window.addEventListener("popstate", procesarDeepLink);
+    return () => window.removeEventListener("popstate", procesarDeepLink);
+  }, [asignaciones, listoParaConsultar, loading, sucursal]);
+
+  // Cerrar menús flotantes al hacer clic afuera
+  useEffect(() => {
+    const handleClickFuera = (e) => {
+      if (!e.target.closest("[data-menu-columna]")) {
+        setMenuColumnasAbierto(false);
+      }
+      if (!e.target.closest("[data-menu-kebab]")) {
+        setMenuKebabId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickFuera);
+    return () => document.removeEventListener("mousedown", handleClickFuera);
+  }, []);
 
   // Apertura instantánea sin esperar peticiones
   const abrirModalProgramar = () => {
@@ -809,6 +919,67 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                   <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
               )}
+
+              {/* Selector de Columnas Ocultables con Dropdown */}
+              <div className="relative inline-block" data-menu-columna="true">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMenuColumnasAbierto((prev) => !prev)}
+                  className="h-9 px-2.5 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 cursor-pointer font-medium"
+                  title="Personalizar columnas visibles"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Columnas</span>
+                </Button>
+
+                {menuColumnasAbierto && (
+                  <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl bg-white border border-slate-200 shadow-xl z-50 p-2.5 text-xs text-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                      <span className="font-bold text-slate-900">Columnas de tabla</span>
+                      <button
+                        type="button"
+                        onClick={restablecerColumnas}
+                        className="text-[11px] text-[#1C96C5] hover:underline font-semibold cursor-pointer"
+                      >
+                        Restablecer
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={columnasVisibles.kmInicial}
+                          onChange={() => toggleColumna("kmInicial")}
+                          className="rounded text-[#1C96C5] focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span>Km Inicial</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={columnasVisibles.kmFinal}
+                          onChange={() => toggleColumna("kmFinal")}
+                          className="rounded text-[#1C96C5] focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span>Km Final</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={columnasVisibles.flotaObs}
+                          onChange={() => toggleColumna("flotaObs")}
+                          className="rounded text-[#1C96C5] focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span>Flota y observaciones</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -859,225 +1030,277 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
                 <table className="w-full text-sm text-left border-collapse">
                   <thead className="bg-slate-50/90 text-xs text-slate-600 uppercase font-semibold border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-3.5">Ruta & Zona</th>
+                      <th className="px-4 py-3.5 min-w-[260px]">Ruta y zona</th>
                       <th className="px-4 py-3.5">Repartidor Asignado</th>
                       <th className="px-4 py-3.5 text-center">Estado</th>
-                      <th className="px-4 py-3.5 text-center">Km Inicial</th>
-                      <th className="px-4 py-3.5 text-center">Km Final</th>
-                      <th className="px-4 py-3.5">Flota & Observaciones</th>
-                      <th className="px-4 py-3.5 text-center">Acciones Rápidas</th>
+                      {columnasVisibles.kmInicial && (
+                        <th className="px-4 py-3.5 text-center">Km Inicial</th>
+                      )}
+                      {columnasVisibles.kmFinal && (
+                        <th className="px-4 py-3.5 text-center">Km Final</th>
+                      )}
+                      {columnasVisibles.flotaObs && (
+                        <th className="px-4 py-3.5">Flota y observaciones</th>
+                      )}
+                      <th className="px-4 py-3.5 text-center w-[150px]">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {paginacion.itemsPaginados.map((a) => (
-                      <tr key={a.IdAsignacionRuta} className="hover:bg-sky-50/40 transition-colors">
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">{a.NombreRuta}</div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span className="inline-block w-2 h-2 rounded-full bg-[#1C96C5]" />
-                            <span>{a.NombreZona}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="space-y-1">
-                            {/* Selector manual de chofer */}
-                            <div className="flex items-center gap-1.5">
-                              <UserCheck className="h-4 w-4 text-[#1C96C5] shrink-0" />
-                              <select
-                                value={a.IdUsuarioRepartidor}
-                                onChange={(e) => cambiarChoferManualmente(a, e.target.value)}
-                                className="h-7 text-xs border border-slate-200 rounded bg-white font-medium text-slate-800 max-w-[170px] truncate"
-                                title="Cambiar chofer manualmente para este despacho"
-                              >
-                                {repartidores.map((r) => (
-                                  <option key={r.IdUsuario} value={r.IdUsuario}>
-                                    {r.NombreCompleto}
-                                  </option>
-                                ))}
-                              </select>
+                    {paginacion.itemsPaginados.map((a) => {
+                      const partes = (a.NombreRuta || "").split(" - ");
+                      const codigoRuta = partes[0] || a.NombreRuta || "Ruta";
+                      const nombreResto = partes.slice(1).join(" - ");
+                      const esKebabAbierto = menuKebabId === a.IdAsignacionRuta;
+
+                      return (
+                        <tr key={a.IdAsignacionRuta} className="hover:bg-sky-50/40 transition-colors">
+                          <td className="px-4 py-3.5 min-w-[260px] max-w-[320px]">
+                            <div className="space-y-0.5 whitespace-normal">
+                              <div className="font-bold text-sm text-slate-900 leading-snug">
+                                {codigoRuta}
+                              </div>
+                              {nombreResto && (
+                                <div className="text-xs text-slate-700 font-medium line-clamp-2 leading-tight">
+                                  {nombreResto}
+                                </div>
+                              )}
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <span className="inline-block w-2 h-2 rounded-full bg-[#1C96C5] shrink-0" />
+                                <span className="truncate">{a.NombreZona || "Zona general"}</span>
+                              </div>
                             </div>
+                          </td>
 
-                            {/* Switch Asignación Automática a este chofer */}
-                            <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={plantillasAutomaticas[a.IdRutaDistribucion] === a.IdUsuarioRepartidor}
-                                onChange={() => toggleAsignacionAutomatica(a.IdRutaDistribucion, a.IdUsuarioRepartidor)}
-                                className="rounded text-[#1C96C5] focus:ring-0 h-3 w-3"
-                              />
-                              <span className="truncate">Auto-asignar a este chofer</span>
-                            </label>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          {badgeEstado(a.Estado)}
-                        </td>
-                        <td className="px-4 py-3.5 text-center text-xs text-slate-700">
-                          {a.KilometrajeInicial ? `${a.KilometrajeInicial} km` : "—"}
-                        </td>
-                        <td className="px-4 py-3.5 text-center text-xs text-slate-700">
-                          {a.KilometrajeFinal ? (
-                            <span className="font-bold text-emerald-600">{a.KilometrajeFinal} km</span>
-                          ) : (
-                            <span className="text-slate-400 italic">Pendiente</span>
+                          <td className="px-4 py-3.5">
+                            <div className="space-y-1">
+                              {/* Selector manual de chofer */}
+                              <div className="flex items-center gap-1.5">
+                                <UserCheck className="h-4 w-4 text-[#1C96C5] shrink-0" />
+                                <select
+                                  value={a.IdUsuarioRepartidor}
+                                  onChange={(e) => cambiarChoferManualmente(a, e.target.value)}
+                                  className="h-7 text-xs border border-slate-200 rounded bg-white font-medium text-slate-800 max-w-[170px] truncate"
+                                  title="Cambiar chofer manualmente para este despacho"
+                                >
+                                  {repartidores.map((r) => (
+                                    <option key={r.IdUsuario} value={r.IdUsuario}>
+                                      {r.NombreCompleto}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Switch Asignación Automática a este chofer */}
+                              <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={plantillasAutomaticas[a.IdRutaDistribucion] === a.IdUsuarioRepartidor}
+                                  onChange={() => toggleAsignacionAutomatica(a.IdRutaDistribucion, a.IdUsuarioRepartidor)}
+                                  className="rounded text-[#1C96C5] focus:ring-0 h-3 w-3"
+                                />
+                                <span className="truncate">Auto-asignar a este chofer</span>
+                              </label>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-center">
+                            {badgeEstado(a.Estado)}
+                          </td>
+
+                          {columnasVisibles.kmInicial && (
+                            <td className="px-4 py-3.5 text-center text-xs text-slate-700">
+                              {a.KilometrajeInicial ? `${a.KilometrajeInicial} km` : "—"}
+                            </td>
                           )}
-                        </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-600 max-w-sm">
-                          <div className="line-clamp-2" title={a.Observacion || ""}>
-                            {a.Observacion || <span className="text-slate-400 italic">Sin observaciones</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <div className="inline-flex items-center gap-1.5">
-                            {/* Botón Destacado Centralizado: Gestionar Chofer / Expediente de Ruta */}
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                setChoferParaExpediente({
-                                  IdUsuario: a.IdUsuarioRepartidor,
-                                  NombreCompleto: a.NombreRepartidor
-                                });
-                                setAsignacionParaExpediente(a);
-                                setModalExpedienteChofer(true);
-                              }}
-                              className="h-8 px-2.5 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-semibold gap-1.5 rounded shadow-xs"
-                              title={`Gestionar Chofer / Detalle de Ruta para ${a.NombreRepartidor}`}
-                            >
-                              <UserCheck className="h-3.5 w-3.5" />
-                              <span className="font-semibold">Gestionar Chofer / Detalle</span>
-                            </Button>
 
-                            {/* Botón rápido cambiar a En Ruta si está pendiente */}
-                            {a.Estado === "Pendiente" && (
+                          {columnasVisibles.kmFinal && (
+                            <td className="px-4 py-3.5 text-center text-xs text-slate-700">
+                              {a.KilometrajeFinal ? (
+                                <span className="font-bold text-emerald-600">{a.KilometrajeFinal} km</span>
+                              ) : (
+                                <span className="text-slate-400 italic">Pendiente</span>
+                              )}
+                            </td>
+                          )}
+
+                          {columnasVisibles.flotaObs && (
+                            <td className="px-4 py-3.5 text-xs text-slate-600 max-w-sm">
+                              <div className="line-clamp-2" title={a.Observacion || ""}>
+                                {a.Observacion || <span className="text-slate-400 italic">Sin observaciones</span>}
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Acciones Consolidadas: Botón Principal Gestionar + Menú Kebab */}
+                          <td className="px-4 py-3.5 text-center w-[150px]">
+                            <div className="inline-flex items-center gap-1.5 justify-center">
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                onClick={() => cambiarEstadoRapido(a, "En Ruta")}
-                                className="h-8 px-2 text-xs text-[#1C96C5] hover:bg-[#1C96C5]/10 rounded"
-                                title="Marcar como En Ruta"
+                                onClick={() => {
+                                  setChoferParaExpediente({
+                                    IdUsuario: a.IdUsuarioRepartidor,
+                                    NombreCompleto: a.NombreRepartidor
+                                  });
+                                  setAsignacionParaExpediente(a);
+                                  setTabInicialExpediente("carga");
+                                  setFocoIdExpediente(null);
+                                  setModalExpedienteChofer(true);
+                                }}
+                                className="h-8 px-3 text-xs bg-[#1C96C5] hover:bg-[#157A9E] text-white font-bold rounded-lg shadow-2xs gap-1.5 cursor-pointer"
+                                title={`Gestionar ruta y despacho para ${a.NombreRepartidor}`}
                               >
-                                <PlayCircle className="h-4 w-4" />
+                                <UserCheck className="h-3.5 w-3.5" />
+                                <span>Gestionar</span>
                               </Button>
-                            )}
 
-                            {/* Bandeja de Solicitud de Carga */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setAsignacionParaCarga(a);
-                                setModalSolicitudCarga(true);
-                              }}
-                              className="h-8 px-2 text-xs text-sky-800 border-sky-300 hover:bg-sky-50 gap-1 rounded font-medium"
-                              title="Revisar solicitud de carga de camión y stock remanente"
-                            >
-                              <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
-                              <span>Carga</span>
-                            </Button>
+                              {/* Menú Kebab de Acciones Secundarias */}
+                              <div className="relative inline-block" data-menu-kebab="true">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setMenuKebabId(esKebabAbierto ? null : a.IdAsignacionRuta)}
+                                  className="h-8 w-8 p-0 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-100 rounded-lg cursor-pointer"
+                                  title="Más opciones de despacho"
+                                  aria-label="Más opciones"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
 
-                            {/* Reasignar ruta a otro chofer */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setAsignacionParaReasignarRuta(a);
-                                setModalReasignarRuta(true);
-                              }}
-                              className="h-8 px-2 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 gap-1 rounded font-medium"
-                              title="Reasignar esta ruta a otro chofer"
-                            >
-                              <Users className="h-3.5 w-3.5 text-amber-600" />
-                              <span>Reasignar</span>
-                            </Button>
+                                {esKebabAbierto && (
+                                  <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white border border-slate-200 shadow-2xl z-50 py-1.5 text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100">
+                                    <div className="py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          setAsignacionParaCarga(a);
+                                          setModalSolicitudCarga(true);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <Boxes className="h-4 w-4 text-[#1C96C5] shrink-0" />
+                                        <span>Aprobar Carga de Camión</span>
+                                      </button>
 
-                            {/* Editor de paradas */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setAsignacionParaEditarParadas(a);
-                                setModalEditorParadas(true);
-                              }}
-                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
-                              title="Editar orden de paradas, agregar o mover comercios"
-                            >
-                              <Route className="h-3.5 w-3.5 text-slate-600" />
-                              <span>Paradas</span>
-                            </Button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          setAsignacionParaReasignarRuta(a);
+                                          setModalReasignarRuta(true);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-amber-800 font-medium cursor-pointer"
+                                      >
+                                        <Users className="h-4 w-4 text-amber-600 shrink-0" />
+                                        <span>Reasignar a otro chofer</span>
+                                      </button>
 
-                            {/* Consultar Stock Físico en Camión (Modal) */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setChoferStockData({
-                                  idChofer: a.IdUsuarioRepartidor,
-                                  nombreChofer: a.NombreRepartidor,
-                                  asignacion: a
-                                });
-                                setModalStockCamion(true);
-                              }}
-                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
-                              title={`Consultar inventario en el camión de ${a.NombreRepartidor}`}
-                            >
-                              <Boxes className="h-3.5 w-3.5 text-[#1C96C5]" />
-                              <span>Ver Stock</span>
-                            </Button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          setAsignacionParaEditarParadas(a);
+                                          setModalEditorParadas(true);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <Route className="h-4 w-4 text-slate-500 shrink-0" />
+                                        <span>Editar orden de paradas</span>
+                                      </button>
 
-                            {/* Cierre de Jornada y Rendición */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                cambiarVista("cierre", {
-                                  idChofer: a.IdUsuarioRepartidor,
-                                  nombreChofer: a.NombreRepartidor,
-                                  asignacion: a
-                                });
-                              }}
-                              className="h-8 px-2 text-xs text-slate-800 border-slate-300 hover:bg-slate-50 gap-1 rounded font-medium"
-                              title={`Cierre de jornada y rendición para ${a.NombreRepartidor}`}
-                            >
-                              <Clock className="h-3.5 w-3.5 text-slate-600" />
-                              <span>Cierre</span>
-                            </Button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          setChoferStockData({
+                                            idChofer: a.IdUsuarioRepartidor,
+                                            nombreChofer: a.NombreRepartidor,
+                                            asignacion: a
+                                          });
+                                          setModalStockCamion(true);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <Boxes className="h-4 w-4 text-slate-500 shrink-0" />
+                                        <span>Ver inventario a bordo</span>
+                                      </button>
+                                    </div>
 
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setHojaRutaAsignacion(a)}
-                              className="h-8 px-2 text-xs text-slate-700 border-slate-300 hover:bg-slate-50 gap-1 rounded"
-                              title="Imprimir Hoja de Ruta Oficial para el Chofer"
-                            >
-                              <FileText className="h-3.5 w-3.5 text-slate-500" />
-                              <span>Planilla</span>
-                            </Button>
+                                    <div className="py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          setHojaRutaAsignacion(a);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <FileText className="h-4 w-4 text-slate-500 shrink-0" />
+                                        <span>Imprimir Hoja de Ruta</span>
+                                      </button>
 
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => verRutaEnMapa(a)}
-                              className="h-8 px-2 text-xs text-[#1C96C5] border-slate-300 hover:bg-[#1C96C5]/10 gap-1 rounded"
-                              title="Ver paradas de la ruta en el mapa"
-                            >
-                              <MapIcon className="h-3.5 w-3.5" />
-                              <span>Mapa</span>
-                            </Button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          verRutaEnMapa(a);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-[#1C96C5] font-medium cursor-pointer"
+                                      >
+                                        <MapIcon className="h-4 w-4 text-[#1C96C5] shrink-0" />
+                                        <span>Ver paradas en mapa</span>
+                                      </button>
 
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => abrirGestionarEstado(a)}
-                              className="h-8 px-2 text-xs text-slate-700 border-slate-300 hover:bg-slate-50 gap-1 rounded"
-                              title="Gestionar estado y registrar odómetro final"
-                            >
-                              <Gauge className="h-3.5 w-3.5 text-slate-500" />
-                              <span>Control</span>
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          abrirGestionarEstado(a);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <Gauge className="h-4 w-4 text-slate-500 shrink-0" />
+                                        <span>Control de Odómetro</span>
+                                      </button>
+
+                                      {a.Estado === "Pendiente" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setMenuKebabId(null);
+                                            cambiarEstadoRapido(a, "En Ruta");
+                                          }}
+                                          className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-sky-50 text-[#1C96C5] font-bold cursor-pointer"
+                                        >
+                                          <PlayCircle className="h-4 w-4 text-[#1C96C5] shrink-0" />
+                                          <span>Marcar como En Ruta</span>
+                                        </button>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMenuKebabId(null);
+                                          cambiarVista("cierre", {
+                                            idChofer: a.IdUsuarioRepartidor,
+                                            nombreChofer: a.NombreRepartidor,
+                                            asignacion: a
+                                          });
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                                      >
+                                        <Clock className="h-4 w-4 text-slate-500 shrink-0" />
+                                        <span>Cierre de Jornada</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1453,6 +1676,8 @@ export default function TablaAsignaciones({ usuario = null, vistaInicial = "desp
             asignacion={asignacionParaExpediente}
             fecha={fecha}
             usuario={usuario}
+            tabInicial={tabInicialExpediente}
+            focoId={focoIdExpediente}
             alActualizar={() => {
               cargarAsignaciones(true);
             }}

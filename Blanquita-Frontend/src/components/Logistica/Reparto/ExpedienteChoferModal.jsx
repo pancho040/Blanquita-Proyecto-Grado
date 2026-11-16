@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,18 +34,21 @@ import {
   CreditCard,
   Banknote,
   Building2,
-  ListOrdered
+  ListOrdered,
+  CheckCheck
 } from "lucide-react";
 import { ObtenerInventarioChofer } from "@/services/Logistica/InventarioComercialService";
-import { ObtenerNotasVenta, ObtenerNotaVentaDetalle } from "@/services/Contabilidad/cuentasCobrarService";
 import {
   ObtenerRutaDetalle,
   ResolverSolicitudCarga,
   RevisarOperacionRuta,
   FinalizarRutaAdmin,
   ObtenerAsignaciones,
-  ListarSolicitudesCarga
+  ListarSolicitudesCarga,
+  ObtenerOperacionesAsignacion,
+  AprobarTodasOperacionesAsignacion
 } from "@/services/Logistica/RutaService";
+import { useLogisticaEventos } from "@/services/Logistica/LogisticaSSEClient";
 
 export default function ExpedienteChoferModal({
   abierto,
@@ -55,14 +58,30 @@ export default function ExpedienteChoferModal({
   fecha = null,
   usuario = null,
   alActualizar = null,
-  onAbrirEditorParadas = null
+  onAbrirEditorParadas = null,
+  tabInicial = "carga",
+  focoId = null,
 }) {
   const hoyStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const fechaEfectiva = fecha || hoyStr;
 
-  // Pestañas integradas del Expediente
-  // 1: Carga e Inventario | 2: Paradas y Pedidos | 3: Aprobación 1 a 1 | 4: Cierre y Liquidación
-  const [tabActivo, setTabActivo] = useState("carga");
+  const normalizarTab = useCallback((t) => {
+    if (!t) return "carga";
+    const s = String(t).toLowerCase();
+    if (s.includes("cobro") || s.includes("entrega") || s.includes("aprob")) return "aprobaciones";
+    if (s.includes("parada")) return "paradas";
+    if (s.includes("cierre") || s.includes("rendicion")) return "cierre";
+    return "carga";
+  }, []);
+
+  // Pestañas integradas del Expediente: 'carga' | 'paradas' | 'aprobaciones' | 'cierre'
+  const [tabActivo, setTabActivo] = useState(() => normalizarTab(tabInicial));
+
+  useEffect(() => {
+    if (abierto && tabInicial) {
+      setTabActivo(normalizarTab(tabInicial));
+    }
+  }, [abierto, tabInicial, normalizarTab]);
 
   // Identificación del Chofer y Asignación
   const idChofer =
@@ -89,7 +108,7 @@ export default function ExpedienteChoferModal({
     asignacion?.IdRutaDistribucion ||
     asignacion?.id_ruta;
 
-  // Estados Tab 1: Carga e Inventario
+  // Estados Tab 1: Carga y Stock
   const [inventarioCamion, setInventarioCamion] = useState([]);
   const [cargandoInventario, setCargandoInventario] = useState(false);
   const [solicitudCarga, setSolicitudCarga] = useState(null);
@@ -99,26 +118,29 @@ export default function ExpedienteChoferModal({
   const [motivoAccionCarga, setMotivoAccionCarga] = useState("");
   const [obsCarga, setObsCarga] = useState("Verificado conforme por Supervisor");
 
-  // Estados Tab 2: Paradas y Pedidos Programados
+  // Estados Tab 2: Paradas y Pedidos
   const [paradasRuta, setParadasRuta] = useState([]);
   const [cargandoParadas, setCargandoParadas] = useState(false);
 
-  // Estados Tab 3: Entregas y Cobros (Aprobación 1 a 1)
+  // Estados Tab 3: Entregas y Cobros
   const [operaciones, setOperaciones] = useState([]);
   const [cargandoOperaciones, setCargandoOperaciones] = useState(false);
+  const [aprobandoTodo, setAprobandoTodo] = useState(false);
   const [modalObsOp, setModalObsOp] = useState(false);
   const [opSeleccionada, setOpSeleccionada] = useState(null);
   const [textoObsOp, setTextoObsOp] = useState("");
   const [modalRechazarOp, setModalRechazarOp] = useState(false);
   const [textoRechazarOp, setTextoRechazarOp] = useState("");
 
-  // Estados Tab 4: Cierre y Liquidación
+  const focoElementRef = useRef(null);
+
+  // Estados Tab 4: Cierre de jornada
   const [finalizandoRuta, setFinalizandoRuta] = useState(false);
   const [obsCierre, setObsCierre] = useState("");
   const [rutaFinalizadaExitosa, setRutaFinalizadaExitosa] = useState(false);
 
   // -------------------------------------------------------------------------
-  // 1. Cargar Datos del Chofer al abrir o cambiar de pestaña
+  // 1. Cargar Datos del Chofer y Asignación
   // -------------------------------------------------------------------------
   const cargarInventarioYCarga = useCallback(async () => {
     if (!idChofer) return;
@@ -131,7 +153,6 @@ export default function ExpedienteChoferModal({
 
       setInventarioCamion(Array.isArray(inv) ? inv : []);
 
-      // Buscar si este chofer tiene solicitud pendiente
       const listaSols = Array.isArray(solicitudes) ? solicitudes : solicitudes?.items || [];
       const solMatch = listaSols.find((s) => {
         const cId = s.id_chofer || s.chofer_id || s.IdUsuarioRepartidor;
@@ -175,14 +196,12 @@ export default function ExpedienteChoferModal({
         puntos = detalle?.PuntosVenta || [];
       }
 
-      // Obtener configuración de pedidos programados y frecuencias desde localStorage
       let paradasConfig = {};
       try {
         const guardado = localStorage.getItem("blanquita_paradas_config");
         if (guardado) paradasConfig = JSON.parse(guardado);
       } catch {}
 
-      // Mapear con estados de visita reales
       const paradasMapeadas = puntos.map((p, idx) => {
         const pvId = p.IdPuntoVenta || p.id_punto_venta;
         const cfg = paradasConfig[pvId] || {};
@@ -207,25 +226,24 @@ export default function ExpedienteChoferModal({
   }, [idRuta, asignacion]);
 
   const cargarOperacionesChofer = useCallback(async () => {
-    if (!idChofer) return;
+    if (!idAsignacion) {
+      setOperaciones([]);
+      return;
+    }
     try {
       setCargandoOperaciones(true);
-      const notas = await ObtenerNotasVenta({ fecha: fechaEfectiva }).catch(() => []);
-      const lista = Array.isArray(notas) ? notas : [];
-      // Filtrar por este chofer
-      const delChofer = lista.filter((n) => {
-        const cId = n.IdChofer || n.id_chofer || n.IdUsuarioRepartidor;
-        if (Number(cId) === Number(idChofer)) return true;
-        const nombreN = (n.Chofer || n.NombreRepartidor || "").toLowerCase();
-        return nombreN && nombreChofer && nombreN.includes(nombreChofer.toLowerCase());
-      });
-      setOperaciones(delChofer);
+      const res = await ObtenerOperacionesAsignacion(idAsignacion).catch(() => null);
+      if (res && Array.isArray(res.operaciones)) {
+        setOperaciones(res.operaciones);
+      } else {
+        setOperaciones([]);
+      }
     } catch {
-      // Sincronización silenciosa
+      setOperaciones([]);
     } finally {
       setCargandoOperaciones(false);
     }
-  }, [idChofer, fechaEfectiva, nombreChofer]);
+  }, [idAsignacion]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -234,12 +252,40 @@ export default function ExpedienteChoferModal({
     cargarOperacionesChofer();
   }, [abierto, cargarInventarioYCarga, cargarParadasYPedidos, cargarOperacionesChofer]);
 
+  // Suscripción SSE reactiva en tiempo real sin perder foco ni scroll
+  useLogisticaEventos({
+    tipos: [
+      "operacion_ruta_registrada",
+      "ENTREGA_REGISTRADA",
+      "COBRO_REGISTRADO",
+      "SOLICITUD_CARGA",
+      "solicitud_carga_recibida",
+      "carga_camion_aprobada",
+      "CARGA_APROBADA"
+    ],
+    onEvento: (datos) => {
+      if (!abierto) return;
+      const asigEvt = datos?.id_asignacion || datos?.asignacion_id || datos?.id_asignacion_ruta;
+      if (asigEvt && idAsignacion && Number(asigEvt) === Number(idAsignacion)) {
+        cargarOperacionesChofer();
+        cargarInventarioYCarga();
+      }
+    }
+  });
+
+  // Scroll automático y suave hacia el elemento de foco si se solicitó
+  useEffect(() => {
+    if (tabActivo === "aprobaciones" && focoId && focoElementRef.current) {
+      focoElementRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [tabActivo, focoId, operaciones]);
+
   // -------------------------------------------------------------------------
   // Métricas y Contadores Clave
   // -------------------------------------------------------------------------
   const operacionesPendientes = useMemo(() => {
     return operaciones.filter((op) => {
-      const rev = (op.EstadoRevision || op.estado_revision || op.estado_revision_web || "PENDIENTE").toUpperCase();
+      const rev = (op.estado_revision_web || op.EstadoRevision || "PENDIENTE").toUpperCase();
       return rev === "PENDIENTE";
     });
   }, [operaciones]);
@@ -249,31 +295,34 @@ export default function ExpedienteChoferModal({
   const arqueo = useMemo(() => {
     let ef = 0;
     let qr = 0;
-    let cr = 0;
-    let total = 0;
+    let totalCobrado = 0;
+    let totalEntregado = 0;
     for (const op of operaciones) {
-      const monto = Number(op.TotalNeto ?? op.ImporteNeto ?? op.TotalVentaBruto ?? 0);
-      const efVal = Number(op.MontoEfectivo || 0);
-      const qrVal = Number(op.MontoQR || 0);
-      const crVal = Number(op.MontoCredito ?? op.SaldoPendiente ?? 0);
-
-      total += monto;
-      ef += efVal;
-      qr += qrVal;
-      cr += crVal;
-
-      if (efVal === 0 && qrVal === 0 && crVal === 0 && monto > 0) {
-        const m = (op.MetodoPago || "").toLowerCase();
-        if (m.includes("efectivo")) ef += monto;
-        else if (m.includes("qr") || m.includes("transferencia")) qr += monto;
-        else if (m.includes("credito") || m.includes("crédito")) cr += monto;
+      const monto = Number(op.monto ?? 0);
+      const tipo = String(op.tipo_operacion || "").toUpperCase();
+      if (tipo === "COBRO") {
+        totalCobrado += monto;
+        const met = String(op.metodo_pago || "").toLowerCase();
+        if (met.includes("qr") || met.includes("transferencia")) {
+          qr += monto;
+        } else {
+          ef += monto;
+        }
+      } else if (tipo === "ENTREGA") {
+        totalEntregado += monto;
       }
     }
-    return { total, ef, qr, cr };
+    return {
+      ef,
+      qr,
+      totalCobrado,
+      totalEntregado,
+      saldoPendiente: Math.max(0, totalEntregado - totalCobrado)
+    };
   }, [operaciones]);
 
   // -------------------------------------------------------------------------
-  // Handlers Tab 1: Carga e Inventario
+  // Handlers Tab 1: Carga y Stock
   // -------------------------------------------------------------------------
   const handleAprobarCarga = async () => {
     const asigId = idAsignacion || solicitudCarga?.id_asignacion || solicitudCarga?.id_asignacion_ruta;
@@ -300,9 +349,6 @@ export default function ExpedienteChoferModal({
       setSolicitudCarga(null);
       await cargarInventarioYCarga();
 
-      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
-        detail: { tipo: "carga_camion_aprobada", idAsignacion: asigId }
-      }));
       window.dispatchEvent(new CustomEvent("blanquita:carga-actualizada", {
         detail: { idAsignacion: asigId, decision: "APROBADA" }
       }));
@@ -336,9 +382,6 @@ export default function ExpedienteChoferModal({
       setSolicitudCarga(null);
       await cargarInventarioYCarga();
 
-      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
-        detail: { tipo: tipoAccion === "OBSERVADA" ? "carga_camion_observada" : "carga_camion_rechazada", idAsignacion: asigId }
-      }));
       if (alActualizar) alActualizar();
     } catch (err) {
       toast.error(err.message || "Error al procesar solicitud");
@@ -360,17 +403,33 @@ export default function ExpedienteChoferModal({
   };
 
   // -------------------------------------------------------------------------
-  // Handlers Tab 3: Aprobación 1 a 1 de Operaciones
+  // Handlers Tab 3: Entregas y Cobros
   // -------------------------------------------------------------------------
   const handleAprobarOp = async (op) => {
-    const id = op.IdNotaVenta || op.id_nota_venta || op.id || op.IdOperacion;
+    const id = op.id_operacion || op.IdPagoPedido || op.IdPedido;
+    const tipo = String(op.tipo_operacion || "entrega").toLowerCase();
     try {
-      await RevisarOperacionRuta(id, "APROBADO", "Aprobado por supervisor en Detalle de Ruta");
-      toast.success(`Operación ${op.NumeroNota || id} aprobada`);
+      await RevisarOperacionRuta(id, "APROBADO", "Aprobado por supervisor en Detalle de Ruta", tipo);
+      toast.success(`Operación ${op.numero_pedido || id} aprobada exitosamente`);
       await cargarOperacionesChofer();
       if (alActualizar) alActualizar();
     } catch (err) {
       toast.error(err.message || "Error al aprobar operación");
+    }
+  };
+
+  const handleAprobarTodo = async () => {
+    if (!idAsignacion) return;
+    try {
+      setAprobandoTodo(true);
+      const res = await AprobarTodasOperacionesAsignacion(idAsignacion);
+      toast.success(res?.mensaje || "Operaciones pendientes aprobadas con éxito");
+      await cargarOperacionesChofer();
+      if (alActualizar) alActualizar();
+    } catch (err) {
+      toast.error(err.message || "Error al aprobar operaciones masivamente");
+    } finally {
+      setAprobandoTodo(false);
     }
   };
 
@@ -379,10 +438,11 @@ export default function ExpedienteChoferModal({
       toast.error("Ingresa el motivo de la observación");
       return;
     }
-    const id = opSeleccionada.IdNotaVenta || opSeleccionada.id_nota_venta || opSeleccionada.id;
+    const id = opSeleccionada.id_operacion || opSeleccionada.IdPagoPedido || opSeleccionada.IdPedido;
+    const tipo = String(opSeleccionada.tipo_operacion || "entrega").toLowerCase();
     try {
-      await RevisarOperacionRuta(id, "OBSERVADO", textoObsOp.trim());
-      toast.info(`Operación ${opSeleccionada.NumeroNota || id} marcada como OBSERVADA`);
+      await RevisarOperacionRuta(id, "OBSERVADO", textoObsOp.trim(), tipo);
+      toast.info(`Operación ${opSeleccionada.numero_pedido || id} marcada como OBSERVADA`);
       setModalObsOp(false);
       setTextoObsOp("");
       await cargarOperacionesChofer();
@@ -397,10 +457,11 @@ export default function ExpedienteChoferModal({
       toast.error("Ingresa el motivo del rechazo");
       return;
     }
-    const id = opSeleccionada.IdNotaVenta || opSeleccionada.id_nota_venta || opSeleccionada.id;
+    const id = opSeleccionada.id_operacion || opSeleccionada.IdPagoPedido || opSeleccionada.IdPedido;
+    const tipo = String(opSeleccionada.tipo_operacion || "entrega").toLowerCase();
     try {
-      await RevisarOperacionRuta(id, "RECHAZADO", textoRechazarOp.trim());
-      toast.error(`Operación ${opSeleccionada.NumeroNota || id} RECHAZADA`);
+      await RevisarOperacionRuta(id, "RECHAZADO", textoRechazarOp.trim(), tipo);
+      toast.error(`Operación ${opSeleccionada.numero_pedido || id} RECHAZADA`);
       setModalRechazarOp(false);
       setTextoRechazarOp("");
       await cargarOperacionesChofer();
@@ -411,11 +472,11 @@ export default function ExpedienteChoferModal({
   };
 
   // -------------------------------------------------------------------------
-  // Handlers Tab 4: Finalizar Ruta del Chofer
+  // Handlers Tab 4: Cierre de jornada
   // -------------------------------------------------------------------------
   const handleFinalizarRutaChofer = async () => {
     if (operacionesPendientesCount > 0) {
-      toast.error(`Prohibido finalizar: quedan ${operacionesPendientesCount} operaciones pendientes de auditoría en la pestaña 3`);
+      toast.error(`No es posible finalizar: quedan ${operacionesPendientesCount} operaciones pendientes por aprobar`);
       return;
     }
     if (!idAsignacion) {
@@ -430,12 +491,8 @@ export default function ExpedienteChoferModal({
         obsCierre || `Ruta de ${nombreChofer} finalizada y conciliada conforme por supervisor`,
         "APROBADA"
       );
-      toast.success(`¡Ruta del chofer ${nombreChofer} finalizada con éxito!`);
+      toast.success(`Ruta de ${nombreChofer} finalizada con éxito`);
       setRutaFinalizadaExitosa(true);
-
-      window.dispatchEvent(new CustomEvent("blanquita:ws-event", {
-        detail: { tipo: "ruta_finalizada_admin", idAsignacion }
-      }));
 
       if (alActualizar) alActualizar();
     } catch (err) {
@@ -447,74 +504,97 @@ export default function ExpedienteChoferModal({
 
   return (
     <Dialog open={abierto} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-w-4xl w-full max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white shadow-2xl">
-        {/* Cabecera Impecable del Expediente */}
-        <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 bg-slate-900 text-white">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="p-2.5 bg-[#1C96C5] rounded-xl text-white shrink-0 mt-0.5">
-              <Truck className="h-6 w-6 shrink-0" />
+      <DialogContent showCloseButton={false} className="max-w-5xl w-[92vw] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white shadow-2xl rounded-2xl border border-slate-200">
+        {/* Cabecera Limpia en Modo Claro */}
+        <div className="shrink-0 border-b border-slate-200 px-6 py-4 bg-white text-slate-900">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl text-[#1C96C5] shrink-0 mt-0.5 shadow-2xs">
+                <Truck className="h-6 w-6 shrink-0" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-lg font-bold leading-tight text-slate-900">
+                    Detalle de Ruta y Despacho
+                  </DialogTitle>
+                  <Badge variant="outline" className="bg-sky-50 text-[#1C96C5] border-sky-300 text-xs px-2.5 py-0.5 font-bold">
+                    {nombreChofer}
+                  </Badge>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-xs px-2.5 py-0.5 font-mono">
+                    {nombreRuta}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-1">
+                  <span className="font-mono flex items-center gap-1 text-slate-600">
+                    <Calendar className="h-3.5 w-3.5 text-[#1C96C5]" />
+                    {fechaEfectiva}
+                  </span>
+                  <span>•</span>
+                  <span>Estado: <strong className={asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa ? "text-emerald-600" : "text-amber-600 font-bold"}>
+                    {rutaFinalizadaExitosa ? "Finalizada" : asignacion?.Estado || "En Reparto"}
+                  </strong></span>
+                </div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <DialogTitle className="text-base font-bold leading-tight text-white">
-                  Detalle de Ruta y Gestión del Chofer
-                </DialogTitle>
-                <Badge className="bg-[#1C96C5]/20 text-sky-300 border border-sky-400/40 text-[11px] px-2 py-0.5 font-mono">
-                  {nombreChofer}
+
+            <div className="flex items-center gap-2 shrink-0">
+              {operacionesPendientesCount > 0 ? (
+                <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50 text-xs px-3 py-1 font-semibold flex items-center gap-1.5 shadow-2xs">
+                  <Clock className="h-3.5 w-3.5 animate-pulse text-amber-600" />
+                  <span>{operacionesPendientesCount} por aprobar</span>
                 </Badge>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-300 mt-1">
-                <span className="font-semibold text-white">{nombreRuta}</span>
-                <span>•</span>
-                <span className="font-mono text-slate-300 flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5 text-sky-400" />
-                  {fechaEfectiva}
-                </span>
-                <span>•</span>
-                <span>Estado: <strong className={asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa ? "text-emerald-400" : "text-amber-300"}>
-                  {rutaFinalizadaExitosa ? "Finalizada" : asignacion?.Estado || "En Reparto"}
-                </strong></span>
-              </div>
+              ) : (
+                <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50 text-xs px-3 py-1 font-semibold flex items-center gap-1.5 shadow-2xs">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Verificación al día</span>
+                </Badge>
+              )}
+
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors ml-2 cursor-pointer"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-5 w-5 shrink-0" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {operacionesPendientesCount > 0 ? (
-              <Badge variant="outline" className="border-amber-400 text-amber-300 bg-amber-950/40 text-xs px-2.5 py-1 font-semibold flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 animate-pulse text-amber-400" />
-                <span>{operacionesPendientesCount} op. por auditar</span>
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="border-emerald-400 text-emerald-300 bg-emerald-950/40 text-xs px-2.5 py-1 font-semibold flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Verificación al día (0 pend.)</span>
-              </Badge>
-            )}
-
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2"
-              aria-label="Cerrar modal"
-            >
-              <X className="h-5 w-5 shrink-0" />
-            </button>
+          {/* Franja Superior de Resumen de KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3 pt-3 border-t border-slate-100">
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl px-3 py-2 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-slate-500">Total entregado</span>
+              <span className="text-sm font-bold text-slate-900 font-mono">Bs. {arqueo.totalEntregado.toFixed(2)}</span>
+            </div>
+            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl px-3 py-2 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-emerald-800">Efectivo cobrado</span>
+              <span className="text-sm font-bold text-emerald-700 font-mono">Bs. {arqueo.ef.toFixed(2)}</span>
+            </div>
+            <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl px-3 py-2 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-sky-800">QR / Transferencia</span>
+              <span className="text-sm font-bold text-sky-700 font-mono">Bs. {arqueo.qr.toFixed(2)}</span>
+            </div>
+            <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl px-3 py-2 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-amber-800">Diferencia vs esperado</span>
+              <span className="text-sm font-bold text-amber-700 font-mono">Bs. {arqueo.saldoPendiente.toFixed(2)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Barra de 4 Pestañas Principales */}
-        <div className="shrink-0 flex items-center border-b border-slate-200 bg-slate-50 px-6 py-2 gap-2 overflow-x-auto">
+        {/* Barra de Pestañas Limpias (Sin Numeraciones ni Nombres Arcaicos) */}
+        <div className="shrink-0 flex items-center border-b border-slate-200 bg-slate-50/70 px-6 py-2 gap-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setTabActivo("carga")}
-            className={`px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "carga"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
             <Boxes className="h-4 w-4" />
-            <span>1. Carga e Inventario</span>
+            <span>Carga y stock</span>
             {solicitudCarga && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             )}
@@ -523,14 +603,14 @@ export default function ExpedienteChoferModal({
           <button
             type="button"
             onClick={() => setTabActivo("paradas")}
-            className={`px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "paradas"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
             <Route className="h-4 w-4" />
-            <span>2. Paradas & Pedidos</span>
+            <span>Paradas</span>
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${tabActivo === "paradas" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
               {paradasRuta.length}
             </span>
@@ -539,17 +619,21 @@ export default function ExpedienteChoferModal({
           <button
             type="button"
             onClick={() => setTabActivo("aprobaciones")}
-            className={`px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "aprobaciones"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
             <Receipt className="h-4 w-4" />
-            <span>3. Entregas y Cobros (1 a 1)</span>
-            {operacionesPendientesCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500 text-white">
-                {operacionesPendientesCount}
+            <span>Entregas y cobros</span>
+            {operacionesPendientesCount > 0 ? (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500 text-white shadow-2xs">
+                {operacionesPendientesCount} por aprobar
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                Al día
               </span>
             )}
           </button>
@@ -557,76 +641,80 @@ export default function ExpedienteChoferModal({
           <button
             type="button"
             onClick={() => setTabActivo("cierre")}
-            className={`px-3 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
               tabActivo === "cierre"
                 ? "bg-[#1C96C5] text-white shadow-xs"
                 : "text-slate-600 hover:bg-slate-200/70"
             }`}
           >
-            <Clock className="h-4 w-4" />
-            <span>4. Cierre y Liquidación</span>
-            {asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa ? (
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-600 text-white">
-                Cerrada
-              </span>
-            ) : null}
+            <ShieldCheck className="h-4 w-4" />
+            <span>Cierre de jornada</span>
+            {(asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa) && (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            )}
           </button>
         </div>
 
-        {/* Cuerpo del Modal con Contenido de la Pestaña Activa */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+        {/* Cuerpo Scrollable con Contenido de las Pestañas */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           {/* ========================================================================= */}
-          {/* PESTAÑA 1: CARGA E INVENTARIO EN SU CAMIÓN */}
+          {/* PESTAÑA 1: CARGA Y STOCK */}
           {/* ========================================================================= */}
           {tabActivo === "carga" && (
-            <div className="space-y-4">
-              {/* Sección de Solicitud de Carga Pendiente si existe */}
+            <div className="space-y-6">
               {solicitudCarga ? (
-                <div className="p-4 rounded-xl border-2 border-amber-300 bg-amber-50/70 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
-                      <PackageCheck className="h-5 w-5 text-amber-600" />
-                      <span>Solicitud de Carga Pendiente para Reparto</span>
+                <div className="bg-amber-50/70 border-2 border-amber-300 rounded-2xl p-5 shadow-xs space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5">
+                        <Boxes className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                          <span>Solicitud de Carga Pendiente de Aprobación</span>
+                          <Badge className="bg-amber-200 text-amber-900 border-amber-400 text-[10px]">
+                            {solicitudCarga.estado || "PENDIENTE"}
+                          </Badge>
+                        </h3>
+                        <p className="text-xs text-amber-800 mt-0.5">
+                          El chofer solicitó stock adicional para atender la demanda de la jornada.
+                        </p>
+                      </div>
                     </div>
-                    <Badge className="bg-amber-500 text-white text-xs">
-                      Requiere Resolución
-                    </Badge>
                   </div>
 
-                  <p className="text-xs text-amber-800">
-                    El chofer solicita cargar los siguientes paquetes para la ruta de hoy. El campo <strong>Cant. a Aprobar</strong> está prellenado con lo solicitado; puedes editarlo antes de aprobar:
-                  </p>
-
-                  <div className="border border-amber-200 rounded-lg overflow-hidden bg-white">
+                  <div className="overflow-x-auto bg-white rounded-xl border border-amber-200 shadow-2xs">
                     <table className="w-full text-xs text-left">
-                      <thead className="bg-amber-100/60 text-amber-900 font-semibold">
+                      <thead className="bg-amber-100/60 text-amber-900 font-semibold border-b border-amber-200">
                         <tr>
-                          <th className="py-2 px-3">Producto</th>
-                          <th className="py-2 px-3 text-right">Solicitado</th>
-                          <th className="py-2 px-3 text-center w-36">Cant. a Aprobar</th>
+                          <th className="py-2.5 px-3">Producto / Presentación</th>
+                          <th className="py-2.5 px-3 text-right">Solicitado</th>
+                          <th className="py-2.5 px-3 text-right">Aprobar</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-amber-100 text-slate-800">
-                        {itemsCargaAprobar.map((item, idx) => (
-                          <tr key={idx}>
-                            <td className="py-2 px-3 font-medium">{item.nombre_producto}</td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-600">
-                              {item.cantidad_solicitada} {item.unidad}
+                      <tbody className="divide-y divide-amber-100">
+                        {itemsCargaAprobar.map((it, idx) => (
+                          <tr key={idx} className="hover:bg-amber-50/40">
+                            <td className="py-2 px-3 font-medium text-slate-800">
+                              {it.nombre_producto}
                             </td>
-                            <td className="py-2 px-3 text-center">
+                            <td className="py-2 px-3 text-right font-mono font-semibold text-slate-700">
+                              {it.cantidad_solicitada} {it.unidad}
+                            </td>
+                            <td className="py-2 px-3 text-right">
                               <Input
                                 type="number"
                                 min="0"
-                                value={item.cantidad_aprobada}
+                                value={it.cantidad_aprobada}
                                 onChange={(e) => {
-                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                  const val = Number(e.target.value);
                                   setItemsCargaAprobar((prev) => {
                                     const c = [...prev];
-                                    c[idx] = { ...c[idx], cantidad_aprobada: val };
+                                    c[idx].cantidad_aprobada = val;
                                     return c;
                                   });
                                 }}
-                                className="h-7 w-20 mx-auto text-center font-bold text-xs bg-white border-amber-300 text-[#1C96C5]"
+                                className="h-7 w-20 text-right font-mono text-xs ml-auto border-amber-300"
                               />
                             </td>
                           </tr>
@@ -636,115 +724,117 @@ export default function ExpedienteChoferModal({
                   </div>
 
                   {modoAccionCarga && (
-                    <div className="p-3 bg-white border border-amber-300 rounded-lg space-y-2">
-                      <label className="text-xs font-bold text-slate-700">
-                        {modoAccionCarga === "OBSERVAR" ? "Motivo de Observación para el Chofer:" : "Motivo de Rechazo de Carga:"}
+                    <div className="space-y-1.5 p-3 bg-white rounded-xl border border-amber-200">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Motivo para {modoAccionCarga === "OBSERVAR" ? "observar" : "rechazar"} la carga:
                       </label>
                       <Input
-                        type="text"
-                        autoFocus
                         value={motivoAccionCarga}
                         onChange={(e) => setMotivoAccionCarga(e.target.value)}
-                        placeholder="Escribe el detalle aquí..."
-                        className="h-8 text-xs bg-white"
+                        placeholder={`Indica el motivo de la acción...`}
+                        className="h-8 text-xs"
                       />
-                      <div className="flex justify-end gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setModoAccionCarga(null)}
-                          className="h-7 text-xs"
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={resolviendoCarga}
-                          onClick={() => handleAccionCarga(modoAccionCarga)}
-                          className={`h-7 text-xs text-white ${modoAccionCarga === "OBSERVAR" ? "bg-amber-600 hover:bg-amber-700" : "bg-rose-600 hover:bg-rose-700"}`}
-                        >
-                          Confirmar {modoAccionCarga === "OBSERVAR" ? "Observación" : "Rechazo"}
-                        </Button>
-                      </div>
                     </div>
                   )}
 
-                  {!modoAccionCarga && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setModoAccionCarga("RECHAZAR")}
-                          className="h-8 px-3 text-xs text-rose-700 border-rose-300 hover:bg-rose-50"
-                        >
-                          Rechazar Carga
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setModoAccionCarga("OBSERVAR")}
-                          className="h-8 px-3 text-xs text-amber-800 border-amber-300 hover:bg-amber-50"
-                        >
-                          Observar Carga
-                        </Button>
-                      </div>
-
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <div className="flex items-center gap-2">
                       <Button
-                        type="button"
                         size="sm"
-                        disabled={resolviendoCarga}
                         onClick={handleAprobarCarga}
-                        className="h-8 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-none"
+                        disabled={resolviendoCarga}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-4 gap-1.5 cursor-pointer"
                       >
                         <CheckCircle2 className="h-4 w-4" />
                         <span>Aprobar Carga de Camión</span>
                       </Button>
+
+                      {!modoAccionCarga ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setModoAccionCarga("OBSERVAR")}
+                            className="border-amber-400 text-amber-800 hover:bg-amber-100 text-xs h-8 cursor-pointer"
+                          >
+                            Observar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setModoAccionCarga("RECHAZAR")}
+                            className="border-rose-400 text-rose-800 hover:bg-rose-100 text-xs h-8 cursor-pointer"
+                          >
+                            Rechazar
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAccionCarga(modoAccionCarga === "OBSERVAR" ? "OBSERVADA" : "RECHAZADA")}
+                            disabled={resolviendoCarga}
+                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8 cursor-pointer"
+                          >
+                            Confirmar {modoAccionCarga}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setModoAccionCarga(null);
+                              setMotivoAccionCarga("");
+                            }}
+                            className="text-xs h-8 cursor-pointer"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               ) : (
-                <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/60 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-emerald-900 font-medium">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                    <span>Sin solicitudes de carga pendientes. Carga del camión autorizada y al día.</span>
+                <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-900">
+                        Carga y Stock Verificados
+                      </h4>
+                      <p className="text-[11px] text-emerald-700">
+                        No hay solicitudes de carga pendientes para este viaje. El inventario a bordo está cuadrado.
+                      </p>
+                    </div>
                   </div>
-                  <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-white text-[11px]">
-                    Activo en Ruta
-                  </Badge>
                 </div>
               )}
 
-              {/* Inventario Físico Real a Bordo del Camión */}
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+              {/* Stock a Bordo del Camión */}
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                    <Truck className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Stock en Camión (Saldo Actual)</span>
-                  </div>
+                  <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Boxes className="h-4 w-4 text-[#1C96C5]" />
+                    <span>Stock a Bordo del Camión</span>
+                  </h3>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={cargarInventarioYCarga}
-                    className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900"
+                    disabled={cargandoInventario}
+                    className="h-7 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
                   >
-                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                    Refrescar
+                    <RotateCcw className={`h-3 w-3 mr-1 ${cargandoInventario ? "animate-spin" : ""}`} />
+                    Actualizar
                   </Button>
                 </div>
 
-                {cargandoInventario ? (
-                  <div className="py-6 text-center text-xs text-slate-400">
-                    Cargando stock en camión...
-                  </div>
-                ) : inventarioCamion.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
-                    No se registran existencias cargadas en el camión de este chofer.
+                {inventarioCamion.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-white">
+                    El chofer no tiene stock registrado a bordo del camión en este momento.
                   </div>
                 ) : (
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-2xs">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                         <tr>
@@ -785,7 +875,7 @@ export default function ExpedienteChoferModal({
           )}
 
           {/* ========================================================================= */}
-          {/* PESTAÑA 2: PARADAS DE LA RUTA 1..N Y PEDIDOS PROGRAMADOS */}
+          {/* PESTAÑA 2: PARADAS */}
           {/* ========================================================================= */}
           {tabActivo === "paradas" && (
             <div className="space-y-4">
@@ -793,10 +883,10 @@ export default function ExpedienteChoferModal({
                 <div>
                   <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <ListOrdered className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Secuencia Vial de Reparto (1..{paradasRuta.length})</span>
+                    <span>Paradas Programadas de la Ruta</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Lista de comercios programados para visitar hoy con sus pedidos habituales y estado de entrega.
+                    Lista de comercios programados con sus pedidos habituales y estado de entrega.
                   </p>
                 </div>
 
@@ -805,7 +895,7 @@ export default function ExpedienteChoferModal({
                     size="sm"
                     variant="outline"
                     onClick={() => onAbrirEditorParadas(asignacion)}
-                    className="h-8 text-xs border-sky-300 text-sky-800 hover:bg-sky-50 gap-1.5"
+                    className="h-8 text-xs border-sky-300 text-sky-800 hover:bg-sky-50 gap-1.5 cursor-pointer"
                   >
                     <Route className="h-3.5 w-3.5 text-[#1C96C5]" />
                     <span>Abrir Editor de Paradas</span>
@@ -827,12 +917,6 @@ export default function ExpedienteChoferModal({
                     const badgeColor =
                       parada.estadoVisita === "Entregado"
                         ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                        : parada.estadoVisita === "Pidio Más"
-                        ? "bg-sky-50 text-sky-700 border-sky-300"
-                        : parada.estadoVisita === "Pidio Menos"
-                        ? "bg-amber-50 text-amber-700 border-amber-300"
-                        : parada.estadoVisita === "Atrasado" || parada.estadoVisita === "No Estaba"
-                        ? "bg-purple-50 text-purple-700 border-purple-300"
                         : parada.estadoVisita === "Rechazado"
                         ? "bg-rose-50 text-rose-700 border-rose-300"
                         : "bg-slate-100 text-slate-700 border-slate-200";
@@ -852,40 +936,38 @@ export default function ExpedienteChoferModal({
                                 {parada.NombreCliente}
                               </span>
                               {parada.NombrePuntoVenta && (
-                                <span className="text-[11px] text-slate-500 truncate">
-                                  • {parada.NombrePuntoVenta}
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  ({parada.NombrePuntoVenta})
                                 </span>
                               )}
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-300 text-slate-600 bg-slate-50">
-                                Frec: {parada.frecuencia}
+                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 border ${badgeColor}`}>
+                                {parada.estadoVisita}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1 truncate">
                               <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{parada.Direccion || "Sin dirección exacta"}</span>
-                            </div>
-                            <div className="text-[11px] text-[#1C96C5] font-medium pt-0.5">
-                              Pedido Programado: <span className="text-slate-700">{parada.productosHabituales}</span>
+                              <span>{parada.Direccion || "Sin dirección física registrada"}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Selector de Estado de Visita */}
-                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                          <span className="text-[11px] text-slate-500 font-medium">Estado:</span>
-                          <select
-                            value={parada.estadoVisita}
-                            onChange={(e) => cambiarEstadoParada(idx, e.target.value)}
-                            className={`h-7 text-xs font-semibold rounded border px-2 focus:outline-none ${badgeColor}`}
+                        <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => cambiarEstadoParada(idx, "Entregado")}
+                            className="h-7 text-xs text-emerald-700 hover:bg-emerald-50 px-2 cursor-pointer"
                           >
-                            <option value="Pendiente">Pendiente</option>
-                            <option value="Entregado">Entregado</option>
-                            <option value="Pidio Más">Pidió Más</option>
-                            <option value="Pidio Menos">Pidió Menos</option>
-                            <option value="Atrasado">Atrasado</option>
-                            <option value="No Estaba">No Estaba</option>
-                            <option value="Rechazado">Rechazado</option>
-                          </select>
+                            Entregado
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => cambiarEstadoParada(idx, "Rechazado")}
+                            className="h-7 text-xs text-rose-700 hover:bg-rose-50 px-2 cursor-pointer"
+                          >
+                            Rechazado
+                          </Button>
                         </div>
                       </div>
                     );
@@ -896,7 +978,7 @@ export default function ExpedienteChoferModal({
           )}
 
           {/* ========================================================================= */}
-          {/* PESTAÑA 3: ENTREGAS Y COBROS REALIZADOS HOY (APROBACIÓN 1 A 1) */}
+          {/* PESTAÑA 3: ENTREGAS Y COBROS */}
           {/* ========================================================================= */}
           {tabActivo === "aprobaciones" && (
             <div className="space-y-4">
@@ -904,37 +986,64 @@ export default function ExpedienteChoferModal({
                 <div>
                   <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Receipt className="h-4 w-4 text-[#1C96C5]" />
-                    <span>Auditoría de Entregas y Notas de Venta Emitidas Hoy (1 a 1)</span>
+                    <span>Auditoría de Entregas y Cobros en Ruta</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Inspecciona y aprueba individualmente cada entrega, cobranza o comprobante QR antes de cerrar la jornada.
+                    Inspecciona y aprueba individual o masivamente cada cobro y entrega registrada por el chofer.
                   </p>
                 </div>
-                <Badge variant="outline" className="border-sky-300 text-sky-800 bg-sky-50 text-xs font-semibold px-2.5 py-1">
-                  {operaciones.length} operaciones registradas
-                </Badge>
+
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="border-sky-300 text-sky-800 bg-sky-50 text-xs font-semibold px-2.5 py-1">
+                    {operaciones.length} registradas
+                  </Badge>
+
+                  {operacionesPendientesCount > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={handleAprobarTodo}
+                      disabled={aprobandoTodo}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <CheckCheck className="h-4 w-4" />
+                      <span>Aprobar todo ({operacionesPendientesCount})</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {cargandoOperaciones ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  Cargando operaciones del chofer...
+                <div className="py-10 text-center text-xs text-slate-400">
+                  Cargando entregas y cobros de la asignación...
                 </div>
               ) : operaciones.length === 0 ? (
-                <div className="py-10 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-white">
-                  El chofer aún no ha emitido Notas de Venta ni cobros en esta jornada.
+                <div className="py-12 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-white">
+                  No hay operaciones registradas para esta asignación en la jornada seleccionada.
                 </div>
               ) : (
                 <div className="space-y-2.5">
                   {operaciones.map((op, idx) => {
-                    const rev = (op.EstadoRevision || op.estado_revision || op.estado_revision_web || "PENDIENTE").toUpperCase();
-                    const monto = Number(op.TotalNeto ?? op.ImporteNeto ?? op.TotalVentaBruto ?? 0);
-                    const metodo = op.MetodoPago || "Efectivo";
+                    const rev = (op.estado_revision_web || op.EstadoRevision || "PENDIENTE").toUpperCase();
+                    const monto = Number(op.monto ?? op.TotalNeto ?? 0);
+                    const metodo = op.metodo_pago || op.MetodoPago || (op.tipo_operacion === "COBRO" ? "Efectivo" : "Entrega");
+                    const cliente = op.cliente || op.Cliente || "Cliente Final";
+                    const esFoco = focoId && (
+                      String(op.id_operacion) === String(focoId) ||
+                      String(op.id_pago) === String(focoId) ||
+                      String(op.id_pedido) === String(focoId)
+                    );
+                    const esCobro = String(op.tipo_operacion).toUpperCase() === "COBRO";
 
                     return (
                       <div
                         key={idx}
+                        id={`operacion-${op.id_pago || op.id_operacion}`}
+                        data-foco={esFoco ? "true" : undefined}
+                        ref={esFoco ? focoElementRef : null}
                         className={`bg-white border rounded-xl p-3.5 transition-all shadow-2xs ${
-                          rev === "PENDIENTE"
+                          esFoco
+                            ? "ring-2 ring-[#20A7DB] border-[#20A7DB] bg-sky-50/50 shadow-md"
+                            : rev === "PENDIENTE"
                             ? "border-amber-300 bg-amber-50/20"
                             : rev === "APROBADO"
                             ? "border-emerald-200"
@@ -946,44 +1055,61 @@ export default function ExpedienteChoferModal({
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-extrabold px-1.5 py-0 border ${
+                                  esCobro
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-sky-50 text-sky-800 border-sky-300"
+                                }`}
+                              >
+                                {esCobro ? "COBRO" : "ENTREGA"}
+                              </Badge>
+
                               <span className="font-bold text-xs text-slate-900">
-                                {op.NumeroNota || op.NumeroNotaVenta || `Nota #${op.IdNotaVenta || idx + 1}`}
+                                {op.numero_pedido || `Operación #${op.id_operacion || idx + 1}`}
                               </span>
+
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-300 text-slate-700 bg-white">
                                 {metodo}
                               </Badge>
+
                               <span className="text-[11px] text-slate-500 font-mono">
-                                {op.FechaHoraEmision ? new Date(op.FechaHoraEmision).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Hoy"}
+                                {op.fecha_hora ? new Date(op.fecha_hora).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Hoy"}
                               </span>
+
+                              {esFoco && (
+                                <Badge className="bg-[#20A7DB] text-white text-[9px] font-bold">
+                                  Notificación
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="text-xs text-slate-700 font-medium truncate">
-                              Cliente: <strong className="text-slate-900">{op.Cliente || op.RazonSocial || "Cliente Final"}</strong>
+                              Cliente: <strong className="text-slate-900">{cliente}</strong>
+                              {op.punto_venta && (
+                                <span className="text-slate-500 ml-1">({op.punto_venta})</span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                              <span>Monto: <strong className="text-emerald-700 font-mono text-xs">{monto.toFixed(2)} Bs</strong></span>
-                              {op.FirmaDigitalUrl && (
-                                <span className="text-sky-600 flex items-center gap-0.5">
-                                  <CheckCircle2 className="h-3 w-3" /> Con firma
-                                </span>
-                              )}
-                              {op.UrlComprobante && (
-                                <span className="text-purple-600 flex items-center gap-0.5">
-                                  <QrCode className="h-3 w-3" /> Con foto QR
+                              <span>Monto: <strong className="text-emerald-700 font-mono text-xs">Bs. {monto.toFixed(2)}</strong></span>
+                              {op.numero_referencia && (
+                                <span className="text-slate-400 font-mono text-[10px]">
+                                  Ref: {op.numero_referencia}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Estado y Botones de Aprobación 1 a 1 */}
+                          {/* Botones de Aprobación Individual */}
                           <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                             {rev === "PENDIENTE" ? (
                               <div className="flex items-center gap-1.5">
                                 <Button
                                   size="sm"
                                   onClick={() => handleAprobarOp(op)}
-                                  className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-none"
+                                  className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-none cursor-pointer"
                                 >
                                   Aprobar
                                 </Button>
@@ -994,7 +1120,7 @@ export default function ExpedienteChoferModal({
                                     setOpSeleccionada(op);
                                     setModalObsOp(true);
                                   }}
-                                  className="h-7 px-2.5 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 rounded"
+                                  className="h-7 px-2.5 text-xs text-amber-800 border-amber-300 hover:bg-amber-50 rounded cursor-pointer"
                                 >
                                   Observar
                                 </Button>
@@ -1005,7 +1131,7 @@ export default function ExpedienteChoferModal({
                                     setOpSeleccionada(op);
                                     setModalRechazarOp(true);
                                   }}
-                                  className="h-7 px-2.5 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 rounded"
+                                  className="h-7 px-2.5 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 rounded cursor-pointer"
                                 >
                                   Rechazar
                                 </Button>
@@ -1023,12 +1149,11 @@ export default function ExpedienteChoferModal({
                                 >
                                   {rev}
                                 </Badge>
-                                {/* Permitir rectificar si fuera necesario */}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleAprobarOp(op)}
-                                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800"
+                                  className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
                                   title="Re-aprobar operación"
                                 >
                                   Rectificar
@@ -1046,118 +1171,64 @@ export default function ExpedienteChoferModal({
           )}
 
           {/* ========================================================================= */}
-          {/* PESTAÑA 4: CIERRE Y LIQUIDACIÓN DE RUTA */}
+          {/* PESTAÑA 4: CIERRE DE JORNADA */}
           {/* ========================================================================= */}
           {tabActivo === "cierre" && (
-            <div className="space-y-4">
-              {/* Tarjetas de Arqueo y Conciliación Financiera */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Total Ventas</span>
-                  <span className="text-base font-extrabold text-slate-900 font-mono mt-0.5 block">
-                    {arqueo.total.toFixed(2)} Bs
-                  </span>
-                  <span className="text-[10px] text-slate-400">{operaciones.length} comprobantes</span>
-                </div>
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-[#1C96C5]" />
+                  <span>Resumen de Cierre y Conciliación del Chofer</span>
+                </h3>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                  <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">Cobro Efectivo</span>
-                  <span className="text-base font-extrabold text-emerald-700 font-mono mt-0.5 block">
-                    {arqueo.ef.toFixed(2)} Bs
-                  </span>
-                  <span className="text-[10px] text-slate-400">A entregar en caja</span>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                  <span className="text-[11px] font-semibold text-sky-700 uppercase tracking-wider block">Cobro QR / Transf.</span>
-                  <span className="text-base font-extrabold text-sky-700 font-mono mt-0.5 block">
-                    {arqueo.qr.toFixed(2)} Bs
-                  </span>
-                  <span className="text-[10px] text-slate-400">En cuenta bancaria</span>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                  <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">Ventas a Crédito</span>
-                  <span className="text-base font-extrabold text-amber-700 font-mono mt-0.5 block">
-                    {arqueo.cr.toFixed(2)} Bs
-                  </span>
-                  <span className="text-[10px] text-slate-400">Registrado en CxC</span>
-                </div>
-              </div>
-
-              {/* Verificación de Integridad de Auditoría Pre-Cierre */}
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
-                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-[#1C96C5]" />
-                  <span>Control de Auditoría para Finiquito y Cierre de Jornada</span>
-                </h4>
-
-                {operacionesPendientesCount > 0 ? (
-                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-900 space-y-1">
-                    <div className="font-bold flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <span>Atención: Prohibido finalizar con operaciones pendientes</span>
-                    </div>
-                    <p>
-                      Existen <strong>{operacionesPendientesCount} entregas/cobros</strong> en estado PENDIENTE de revisión en la Pestaña 3. Debes aprobar, observar o rechazar cada una antes de liquidar la ruta.
-                    </p>
-                    <Button
-                      size="sm"
-                      onClick={() => setTabActivo("aprobaciones")}
-                      className="mt-2 h-7 bg-amber-600 hover:bg-amber-700 text-white text-xs"
-                    >
-                      Ir a Revisar Operaciones
-                    </Button>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[11px] font-semibold text-slate-500">Total ventas y entregas</span>
+                    <p className="text-base font-bold text-slate-900 font-mono mt-0.5">Bs. {arqueo.totalEntregado.toFixed(2)}</p>
                   </div>
-                ) : (
-                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-900 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Auditoría 1 a 1 concluida con éxito (0 pendientes). La ruta está lista para liquidación y cierre final.
-                    </span>
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <span className="text-[11px] font-semibold text-emerald-800">Total cobrado rendido</span>
+                    <p className="text-base font-bold text-emerald-700 font-mono mt-0.5">Bs. {arqueo.totalCobrado.toFixed(2)}</p>
                   </div>
-                )}
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <span className="text-[11px] font-semibold text-amber-800">Diferencia pendiente</span>
+                    <p className="text-base font-bold text-amber-700 font-mono mt-0.5">Bs. {arqueo.saldoPendiente.toFixed(2)}</p>
+                  </div>
+                </div>
 
-                <div className="space-y-1.5 pt-2">
-                  <label className="text-xs font-bold text-slate-700 block">
-                    Observaciones Generales de Liquidación y Cierre:
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Observaciones finales de cierre (opcional):
                   </label>
                   <Input
-                    type="text"
                     value={obsCierre}
                     onChange={(e) => setObsCierre(e.target.value)}
-                    placeholder="Ej: Rendición conforme, efectivo entregado en caja fuerte y odómetro verificado..."
-                    className="h-9 text-xs bg-white text-slate-800"
+                    placeholder="Escribe comentarios sobre la jornada, rendición o novedades..."
+                    className="h-9 text-xs"
                   />
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="text-[11px] text-slate-500">
-                    {asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa
-                      ? "Esta ruta ya se encuentra FINALIZADA en el sistema."
-                      : "Al finalizar, se congela el itinerario del día y se habilita la rendición contable."}
-                  </div>
+                <div className="pt-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">
+                    {operacionesPendientesCount > 0 ? (
+                      <span className="text-amber-700 font-semibold">
+                        Debes aprobar las {operacionesPendientesCount} operaciones antes de cerrar la jornada.
+                      </span>
+                    ) : (
+                      <span className="text-emerald-700 font-semibold">
+                        Todas las operaciones están aprobadas. Puedes proceder al cierre.
+                      </span>
+                    )}
+                  </span>
 
                   <Button
-                    type="button"
                     size="sm"
-                    disabled={
-                      operacionesPendientesCount > 0 ||
-                      finalizandoRuta ||
-                      asignacion?.Estado === "Finalizada" ||
-                      rutaFinalizadaExitosa
-                    }
                     onClick={handleFinalizarRutaChofer}
-                    className="h-9 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={finalizandoRuta || operacionesPendientesCount > 0 || asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa}
+                    className="bg-[#1C96C5] hover:bg-[#157A9E] text-white font-bold text-xs h-9 px-5 gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    <span>
-                      {finalizandoRuta
-                        ? "Finalizando..."
-                        : asignacion?.Estado === "Finalizada" || rutaFinalizadaExitosa
-                        ? "Ruta Finalizada"
-                        : "Finalizar Ruta del Chofer"}
-                    </span>
+                    <span>Finalizar y Liberar Chofer</span>
                   </Button>
                 </div>
               </div>
@@ -1165,83 +1236,62 @@ export default function ExpedienteChoferModal({
           )}
         </div>
 
-        {/* Footer Impecable */}
-        <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
-          <div className="text-[11px] text-slate-500 font-medium">
-            Despachos y Rutas
-          </div>
+        {/* Modal de Motivo de Observación */}
+        {modalObsOp && (
+          <Dialog open={modalObsOp} onOpenChange={setModalObsOp}>
+            <DialogContent className="max-w-md bg-white p-5 rounded-2xl">
+              <DialogTitle className="text-sm font-bold text-slate-900">
+                Observar Operación
+              </DialogTitle>
+              <p className="text-xs text-slate-500 mt-1">
+                Ingresa el motivo por el cual esta operación queda observada:
+              </p>
+              <Input
+                value={textoObsOp}
+                onChange={(e) => setTextoObsOp(e.target.value)}
+                placeholder="Motivo de la observación..."
+                className="mt-3 text-xs"
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setModalObsOp(false)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={confirmarObservarOp} className="bg-amber-600 hover:bg-amber-700 text-white text-xs">
+                  Guardar Observación
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            className="h-8 text-xs text-slate-600 hover:text-slate-900 border-slate-300"
-          >
-            Cerrar Detalle
-          </Button>
-        </div>
+        {/* Modal de Motivo de Rechazo (Obligatorio) */}
+        {modalRechazarOp && (
+          <Dialog open={modalRechazarOp} onOpenChange={setModalRechazarOp}>
+            <DialogContent className="max-w-md bg-white p-5 rounded-2xl">
+              <DialogTitle className="text-sm font-bold text-rose-900">
+                Rechazar Operación
+              </DialogTitle>
+              <p className="text-xs text-slate-500 mt-1">
+                Ingresa obligatoriamente el motivo del rechazo para que el chofer sea notificado:
+              </p>
+              <Input
+                value={textoRechazarOp}
+                onChange={(e) => setTextoRechazarOp(e.target.value)}
+                placeholder="Motivo del rechazo (obligatorio)..."
+                className="mt-3 text-xs"
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setModalRechazarOp(false)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={confirmarRechazarOp} className="bg-rose-600 hover:bg-rose-700 text-white text-xs">
+                  Confirmar Rechazo
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
-
-      {/* Sub-Modal Observar Operación */}
-      {modalObsOp && (
-        <Dialog open={modalObsOp} onOpenChange={setModalObsOp}>
-          <DialogContent className="max-w-md p-5 space-y-3">
-            <DialogTitle className="text-sm font-bold text-slate-800">
-              Observar Operación {opSeleccionada?.NumeroNota}
-            </DialogTitle>
-            <p className="text-xs text-slate-500">
-              Ingresa el motivo específico por el cual se observa esta entrega o cobro:
-            </p>
-            <Input
-              type="text"
-              autoFocus
-              value={textoObsOp}
-              onChange={(e) => setTextoObsOp(e.target.value)}
-              placeholder="Ej: Comprobante QR ilegible, monto no coincide..."
-              className="h-9 text-xs"
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button size="sm" variant="ghost" onClick={() => setModalObsOp(false)} className="text-xs">
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={confirmarObservarOp} className="text-xs bg-amber-600 hover:bg-amber-700 text-white">
-                Confirmar Observación
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Sub-Modal Rechazar Operación */}
-      {modalRechazarOp && (
-        <Dialog open={modalRechazarOp} onOpenChange={setModalRechazarOp}>
-          <DialogContent className="max-w-md p-5 space-y-3">
-            <DialogTitle className="text-sm font-bold text-rose-800">
-              Rechazar Operación {opSeleccionada?.NumeroNota}
-            </DialogTitle>
-            <p className="text-xs text-slate-500">
-              Indica la causa por la cual esta nota no puede ser admitida en la rendición:
-            </p>
-            <Input
-              type="text"
-              autoFocus
-              value={textoRechazarOp}
-              onChange={(e) => setTextoRechazarOp(e.target.value)}
-              placeholder="Ej: Entrega no autorizada, cliente desconoce pedido..."
-              className="h-9 text-xs"
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button size="sm" variant="ghost" onClick={() => setModalRechazarOp(false)} className="text-xs">
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={confirmarRechazarOp} className="text-xs bg-rose-600 hover:bg-rose-700 text-white">
-                Confirmar Rechazo
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </Dialog>
   );
 }

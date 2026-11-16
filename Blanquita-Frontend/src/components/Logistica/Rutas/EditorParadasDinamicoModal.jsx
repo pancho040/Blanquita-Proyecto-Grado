@@ -361,10 +361,10 @@ export default function EditorParadasDinamicoModal({
               </div>
               <div className="min-w-0">
                 <DialogTitle className="text-base font-bold text-slate-800 leading-tight">
-                  Editor Dinámico de Paradas (1..{paradas.length})
+                  Editor de Paradas
                 </DialogTitle>
                 <p className="text-xs text-slate-500 mt-0.5 truncate">
-                  Secuencia vial para: <span className="font-semibold text-slate-700">{nombreRutaDisplay}</span>
+                  Orden de paradas para: <span className="font-semibold text-slate-700">{nombreRutaDisplay}</span>
                 </p>
               </div>
             </div>
