@@ -22,7 +22,9 @@ from app.Models.RRHH.RRHHModel import (
     DetallePlanillaActualizar,
     PlanillaAprobarRequest,
     FiniquitoCalcularRequest,
-    RegistrarNoVentaRequest
+    RegistrarNoVentaRequest,
+    RegistroHorasExtrasBatch,
+    RegistroDescuentosBatch
 )
 
 RRHHRouter = APIRouter(
@@ -259,7 +261,11 @@ def ObtenerPlanilla(
     db: Session = Depends(get_db),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
-    id_suc = alcance.validar_recurso(id_sucursal) if id_sucursal else alcance.sucursal_efectiva
+    if id_sucursal:
+        alcance.validar_recurso(id_sucursal, nombre_recurso="planilla")
+        id_suc = id_sucursal
+    else:
+        id_suc = alcance.sucursal_efectiva
     service = RRHHService(db)
     pl = service.ObtenerPlanillaPeriodo(id_periodo, tipo_planilla, id_suc)
     if not pl:
@@ -273,6 +279,11 @@ def GenerarPlanilla(
     db: Session = Depends(get_db),
     alcance: AlcanceUsuario = Depends(DependenciaAlcanceSucursal)
 ):
+    if not datos.IdPeriodoNomina:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="IdPeriodoNomina es obligatorio para generar la planilla"
+        )
     datos.IdSucursal = alcance.validar_escritura(datos.IdSucursal, nombre_recurso="sucursal_planilla")
     service = RRHHService(db)
     return service.GenerarPlanilla(
@@ -326,6 +337,41 @@ def ObtenerBoletaPagoDoble(
         emp = service.repository.ObtenerEmpleadoPorId(boleta["IdUsuario"])
         alcance.validar_recurso(emp.get("IdSucursal") if emp else None, nombre_recurso="boleta_pago", responder_404=True)
     return boleta
+
+@RRHHRouter.get("/planillas/{id_planilla}/boletas")
+def ObtenerTodasLasBoletasPlanilla(
+    id_planilla: int,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.GenerarBoletasPlanilla(id_planilla)
+
+@RRHHRouter.get("/planillas/{id_planilla}/resumen-bancos")
+def ObtenerResumenBancosPlanilla(
+    id_planilla: int,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ObtenerResumenBancario(id_planilla)
+
+@RRHHRouter.post("/planillas/{id_planilla}/horas-extras-lote")
+def ActualizarHorasExtrasLote(
+    id_planilla: int,
+    datos: RegistroHorasExtrasBatch,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ActualizarHorasExtrasBatch(id_planilla, [item.dict() for item in datos.Items])
+
+@RRHHRouter.post("/planillas/{id_planilla}/descuentos-lote")
+def ActualizarDescuentosLote(
+    id_planilla: int,
+    datos: RegistroDescuentosBatch,
+    db: Session = Depends(get_db)
+):
+    service = RRHHService(db)
+    return service.ActualizarDescuentosBatch(id_planilla, [item.dict() for item in datos.Items])
+
 
 
 # =============================================================================

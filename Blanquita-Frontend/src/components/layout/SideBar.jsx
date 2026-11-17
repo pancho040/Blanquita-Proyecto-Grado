@@ -320,7 +320,18 @@ export default function SideBar({
   const basePath = esAdmin ? "admin" : enReportes ? `${prefijo}/reportes` : prefijo;
 
   const rutas = useMemo(() => {
-    if (esAdmin) return RutasAdmin;
+    if (esAdmin) {
+      if (idRol !== Roles.GerenteGeneral) {
+        return RutasAdmin.filter((item) => item.ruta !== "gerencia/inicio").map((item) => {
+          if (item.subrutas && item.ruta === "admin") {
+            const subrutasFiltradas = item.subrutas.filter((sub) => sub.ruta !== "roles");
+            return { ...item, subrutas: subrutasFiltradas };
+          }
+          return item;
+        });
+      }
+      return RutasAdmin;
+    }
     if (enReportes) return RutasReportes;
     if (idRol === Roles.Supervisor) return RutasSupervisor;
     if (idRol === Roles.Contador) return RutasContador;

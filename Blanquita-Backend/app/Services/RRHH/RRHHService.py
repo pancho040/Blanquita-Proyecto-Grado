@@ -375,6 +375,10 @@ class RRHHService:
                 liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 valor_hora = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
+                nro_cuenta_of = emp.get("CuentaBancaria") or ""
+                banco_of = emp.get("Banco") or "Banco Unión"
+                metodo_pago_of = "BANCO" if nro_cuenta_of and nro_cuenta_of.lower() != "sin registrar" else "EFECTIVO"
+
                 detalles_a_crear.append({
                     "IdPlanilla": id_planilla,
                     "IdUsuario": id_u,
@@ -392,12 +396,31 @@ class RRHHService:
                     "TotalGanado": total_ganado,
                     "TotalDescuento": total_descuento,
                     "LiquidoPagable": liquido_pagable,
+                    "DiasTrabajados": 30,
+                    "HorasExtrasTotal": Decimal("0.00"),
+                    "DiasFalta": 0,
+                    "HorasAtraso": Decimal("0.00"),
+                    "Anticipos": Decimal("0.00"),
+                    "FaltantesVentas": Decimal("0.00"),
+                    "AporteNacionalSolidario": Decimal("0.00"),
+                    "RCIVA": Decimal("0.00"),
+                    "MetodoPago": metodo_pago_of,
+                    "Banco": banco_of,
+                    "NroCuenta": nro_cuenta_of,
+                    "EsAsegurado": True,
+                    "DetalleHorasJson": None,
                     "Observacion": "Planilla Oficial Ministerial Gestora 12.71%"
                 })
             self.repository.CrearDetallesPlanillaBatch(detalles_a_crear)
         else:
-            # Planilla Interna de Planta: computable completo (sueldo + extras - faltas - permisos - No Venta - anticipos)
+            # Planilla Interna de Planta / Asegurados / Externos: computable completo
             empleados = self.repository.ListarEmpleados(activo=True, id_sucursal=id_sucursal)
+
+            tipo_upper = tipo.upper() if tipo else "INTERNA"
+            if tipo_upper in ["ASEGURADO", "ASEGURADOS"]:
+                empleados = [e for e in empleados if e.get("EsAsegurado", True)]
+            elif tipo_upper in ["EXTERNO", "EXTERNOS"]:
+                empleados = [e for e in empleados if not e.get("EsAsegurado", True)]
             
             # Pre-carga en batch antes del bucle de empleados para eliminar N+1
             asistencias_todas = self.repository.ListarAsistencias(f_ini, f_fin)
@@ -422,26 +445,29 @@ class RRHHService:
             for emp in empleados:
                 id_u = emp["IdUsuario"]
                 sueldo_basico = Decimal(str(emp.get("SueldoBasico", 2500.00)))
+                es_asegurado = bool(emp.get("EsAsegurado", True))
 
                 asistencias_emp = asistencias_por_usuario.get(id_u, [])
-                total_hrs_extra = sum([Decimal(str(a.get("HorasExtraTrabajadas") or 0)) for a in asistencias_emp])
+                total_hrs_extra = sum([Decimal(str(a.get("HorasExtraTrabajadas") or 0)) for a in asistencias_emp], Decimal("0.00"))
                 total_min_atraso = sum([int(a.get("MinutosAtraso") or 0) for a in asistencias_emp])
                 dias_falta = sum([1 for a in asistencias_emp if a.get("EsFalta") and not a.get("FaltaJustificada")])
 
-                # Fórmulas de cálculo de Blanquita
+                # Fórmulas de cálculo de Blanquita (PLANILLA OCTUBRE 2026):
+                # Valor Hora = Sueldo / 240
                 valor_hora_normal = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
                 valor_hora_extra = valor_hora_normal * factor_he
 
                 monto_horas_extra = (total_hrs_extra * valor_hora_extra).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                descuento_atrasos = ((Decimal(str(total_min_atraso)) / Decimal("60")) * valor_hora_normal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                horas_atraso = (Decimal(str(total_min_atraso)) / Decimal("60")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                descuento_atrasos = (horas_atraso * valor_hora_normal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
                 # Descuento de faltas: (Sueldo / 30) * Días de falta
-                valor_dia = sueldo_basico / Decimal("30")
+                valor_dia = (sueldo_basico / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 descuento_faltas = (Decimal(str(dias_falta)) * valor_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
                 # Deducciones pendientes de No Venta imputadas
                 cuotas_no_venta = cuotas_por_usuario.get(id_u, [])
-                descuento_no_venta = sum([Decimal(str(c["cuota_descuento"])) for c in cuotas_no_venta]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                descuento_no_venta = sum([Decimal(str(c["cuota_descuento"])) for c in cuotas_no_venta], Decimal("0.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 if cuotas_no_venta:
                     cuotas_aplicadas_ids.extend([c["id"] for c in cuotas_no_venta])
 
@@ -465,12 +491,23 @@ class RRHHService:
                     if ant_uid == id_u or (nom_emp and (nom_emp in solicitante or nom_emp in desc)):
                         total_anticipos += Decimal(str(ant.get("Monto") or 0))
 
-                otras_deducciones = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                anticipos = total_anticipos.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                otras_deducciones = Decimal("0.00")
 
                 total_ganado = (sueldo_basico + monto_horas_extra + monto_comisiones + total_bonos).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                aporte_afp = (total_ganado * (porcentaje_afp / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                total_descuento = (descuento_atrasos + descuento_faltas + aporte_afp + otras_deducciones + descuento_no_venta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                
+                # REGLA FUNDAMENTAL: Personal externo NO tiene retención de AFP (0%)
+                if es_asegurado:
+                    aporte_afp = (total_ganado * (porcentaje_afp / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                else:
+                    aporte_afp = Decimal("0.00")
+
+                total_descuento = (descuento_atrasos + descuento_faltas + aporte_afp + anticipos + otras_deducciones + descuento_no_venta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 liquido_pagable = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                banco = emp.get("Banco") or "Banco Unión"
+                nro_cuenta = emp.get("CuentaBancaria") or ""
+                metodo_pago = "BANCO" if nro_cuenta and nro_cuenta.lower() != "sin registrar" else "EFECTIVO"
 
                 detalles_a_crear.append({
                     "IdPlanilla": id_planilla,
@@ -489,7 +526,20 @@ class RRHHService:
                     "TotalGanado": total_ganado,
                     "TotalDescuento": total_descuento,
                     "LiquidoPagable": liquido_pagable,
-                    "Observacion": f"{total_hrs_extra}h extras, {total_min_atraso}m atraso, {dias_falta} faltas, NoVenta Bs. {descuento_no_venta}"
+                    "DiasTrabajados": 30,
+                    "HorasExtrasTotal": total_hrs_extra,
+                    "DiasFalta": dias_falta,
+                    "HorasAtraso": horas_atraso,
+                    "Anticipos": anticipos,
+                    "FaltantesVentas": Decimal("0.00"),
+                    "AporteNacionalSolidario": Decimal("0.00"),
+                    "RCIVA": Decimal("0.00"),
+                    "MetodoPago": metodo_pago,
+                    "Banco": banco,
+                    "NroCuenta": nro_cuenta,
+                    "EsAsegurado": es_asegurado,
+                    "DetalleHorasJson": None,
+                    "Observacion": f"{'Asegurado' if es_asegurado else 'Externo'}: {total_hrs_extra}h extras, {total_min_atraso}m atraso, {dias_falta} faltas"
                 })
 
             if cuotas_aplicadas_ids:
@@ -507,33 +557,83 @@ class RRHHService:
         if det.get("Aprobada"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se puede modificar una planilla aprobada")
 
-        sueldo_basico = Decimal(str(datos.get("SueldoBasico", det["SueldoBasico"])))
-        monto_he = Decimal(str(datos.get("MontoHorasExtra", det["MontoHorasExtra"])))
+        sueldo_basico = Decimal(str(datos.get("SueldoBasico", datos.get("HaberBasico", det["SueldoBasico"]))))
+        valor_hora = (sueldo_basico / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        monto_he = Decimal(str(datos.get("MontoHorasExtra", datos.get("HorasExtrasMonto", det["MontoHorasExtra"]))))
         monto_com = Decimal(str(datos.get("MontoComisiones", det["MontoComisiones"])))
-        bonos = Decimal(str(datos.get("TotalBonos", det["TotalBonos"])))
+        
+        if "BonoAntiguedad" in datos or "OtrosBonos" in datos:
+            bonos = Decimal(str(datos.get("BonoAntiguedad", 0))) + Decimal(str(datos.get("OtrosBonos", 0)))
+        else:
+            bonos = Decimal(str(datos.get("TotalBonos", det["TotalBonos"])))
+
         desc_atrasos = Decimal(str(datos.get("DescuentoAtrasos", det["DescuentoAtrasos"])))
         desc_faltas = Decimal(str(datos.get("DescuentoFaltas", det["DescuentoFaltas"])))
-        afp = Decimal(str(datos.get("AporteAFP", det["AporteAFP"])))
-        otras_ded = Decimal(str(datos.get("OtrasDeducciones", det["OtrasDeducciones"])))
-
+        
+        es_aseg = bool(datos.get("EsAsegurado", det.get("EsAsegurado", True)))
+        
         total_ganado = (sueldo_basico + monto_he + monto_com + bonos).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        total_descuento = (desc_atrasos + desc_faltas + afp + otras_ded).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if "TotalGanado" in datos and datos["TotalGanado"] is not None:
+            total_ganado = Decimal(str(datos["TotalGanado"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        afp_val = datos.get("AporteAFP", datos.get("DescuentoAFP"))
+        if afp_val is not None:
+            afp = Decimal(str(afp_val))
+        elif es_aseg:
+            afp = (total_ganado * Decimal("0.1271")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            afp = Decimal("0.00")
+
+        anticipos = Decimal(str(datos.get("Anticipos", det.get("Anticipos", 0.00))))
+        faltantes = Decimal(str(datos.get("FaltantesVentas", det.get("FaltantesVentas", 0.00))))
+        otras_ded = Decimal(str(datos.get("OtrasDeducciones", datos.get("OtrosDescuentos", det.get("OtrasDeducciones", 0.00)))))
+        desc_no_venta = Decimal(str(datos.get("DescuentoNoVenta", det.get("DescuentoNoVenta", 0.00))))
+
+        total_descuento = (desc_atrasos + desc_faltas + afp + anticipos + faltantes + otras_ded + desc_no_venta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if "TotalDescuento" in datos and datos["TotalDescuento"] is not None:
+            total_descuento = Decimal(str(datos["TotalDescuento"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        elif "TotalDescuentos" in datos and datos["TotalDescuentos"] is not None:
+            total_descuento = Decimal(str(datos["TotalDescuentos"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
         liquido = (total_ganado - total_descuento).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if "LiquidoPagable" in datos and datos["LiquidoPagable"] is not None:
+            liquido = Decimal(str(datos["LiquidoPagable"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         updates = {
             "SueldoBasico": sueldo_basico,
+            "ValorHora": valor_hora,
             "MontoHorasExtra": monto_he,
             "MontoComisiones": monto_com,
             "TotalBonos": bonos,
             "DescuentoAtrasos": desc_atrasos,
             "DescuentoFaltas": desc_faltas,
+            "DescuentoNoVenta": desc_no_venta,
             "AporteAFP": afp,
+            "Anticipos": anticipos,
+            "FaltantesVentas": faltantes,
             "OtrasDeducciones": otras_ded,
             "TotalGanado": total_ganado,
             "TotalDescuento": total_descuento,
             "LiquidoPagable": liquido,
-            "Observacion": datos.get("Observacion", det.get("Observacion"))
+            "EsAsegurado": es_aseg,
+            "Observacion": datos.get("Observacion", datos.get("Observaciones", det.get("Observacion")))
         }
+
+        for opc in [
+            "DiasTrabajados", "HorasExtrasTotal", "DiasFalta", "HorasAtraso",
+            "AporteNacionalSolidario", "RCIVA", "MetodoPago", "Banco", "NroCuenta", "DetalleHorasJson"
+        ]:
+            if opc in datos and datos[opc] is not None:
+                updates[opc] = datos[opc]
+
+        # Sincronizar sueldo básico y estado asegurado en ficha DatosLaboralesEmpleado
+        try:
+            self.repository.caller.LlamarFuncion(
+                'UPDATE "DatosLaboralesEmpleado" SET "SueldoBasico" = :sb, "EsAsegurado" = :ea WHERE "IdUsuario" = :uid;',
+                {"sb": sueldo_basico, "ea": es_aseg, "uid": det["IdUsuario"]}
+            )
+        except Exception:
+            pass
 
         res = self.repository.ActualizarDetallePlanilla(id_detalle, updates)
         self.repository.RecalcularTotalesPlanilla(det["IdPlanilla"])
@@ -555,14 +655,54 @@ class RRHHService:
 
         liquido = Decimal(str(det["LiquidoPagable"]))
         literal = numero_a_palabras_bob(liquido)
+        es_aseg = bool(det.get("EsAsegurado", True))
+
+        # Haberes
+        haberes = [
+            {"Concepto": "Haber Básico", "Monto": det["SueldoBasico"]},
+        ]
+        if Decimal(str(det.get("MontoHorasExtra") or 0)) > 0:
+            hrs_he = det.get("HorasExtrasTotal") or Decimal("0.00")
+            haberes.append({"Concepto": f"Horas Extraordinarias ({hrs_he} hrs)", "Monto": det["MontoHorasExtra"]})
+        if Decimal(str(det.get("MontoComisiones") or 0)) > 0:
+            haberes.append({"Concepto": "Comisiones de Reparto / Ventas", "Monto": det["MontoComisiones"]})
+        if Decimal(str(det.get("TotalBonos") or 0)) > 0:
+            haberes.append({"Concepto": "Bono de Antigüedad / Otros Bonos", "Monto": det["TotalBonos"]})
+
+        # Descuentos
+        descuentos = []
+        if es_aseg:
+            afp_monto = det.get("AporteAFP") or Decimal("0.00")
+            descuentos.append({"Concepto": "Aporte Laboral Gestora / AFP (12.71%)", "Monto": afp_monto})
+        else:
+            descuentos.append({"Concepto": "Aporte Gestora / AFP (0% - Personal Externo)", "Monto": Decimal("0.00")})
+
+        if Decimal(str(det.get("DescuentoFaltas") or 0)) > 0:
+            dias_f = det.get("DiasFalta") or 0
+            descuentos.append({"Concepto": f"Descuento por Faltas ({dias_f} días)", "Monto": det["DescuentoFaltas"]})
+        if Decimal(str(det.get("DescuentoAtrasos") or 0)) > 0:
+            hrs_atr = det.get("HorasAtraso") or Decimal("0.00")
+            descuentos.append({"Concepto": f"Descuento Horas no trabajadas / Atrasos ({hrs_atr} hrs)", "Monto": det["DescuentoAtrasos"]})
+        if Decimal(str(det.get("Anticipos") or 0)) > 0:
+            descuentos.append({"Concepto": "Anticipos / Adelantos de Sueldo", "Monto": det["Anticipos"]})
+        if Decimal(str(det.get("FaltantesVentas") or 0)) > 0:
+            descuentos.append({"Concepto": "Faltantes en Cobranzas / Ventas", "Monto": det["FaltantesVentas"]})
+        if Decimal(str(det.get("DescuentoNoVenta") or 0)) > 0:
+            descuentos.append({"Concepto": "Deducción por No Venta / Incidentes", "Monto": det["DescuentoNoVenta"]})
+        if Decimal(str(det.get("RCIVA") or 0)) > 0:
+            descuentos.append({"Concepto": "Retención Impositiva RC-IVA", "Monto": det["RCIVA"]})
+        if Decimal(str(det.get("OtrasDeducciones") or 0)) > 0 and Decimal(str(det.get("Anticipos") or 0)) == 0:
+            descuentos.append({"Concepto": "Otras Deducciones del Mes", "Monto": det["OtrasDeducciones"]})
 
         return {
             "Empresa": {
-                "RazonSocial": "EMPRESA DE PAPEL BLANQUITA (SHEMA ASOCIADOS S.R.L.)",
-                "Nit": "1028495024",
-                "Direccion": "Calle Regimiento Charcas (16 de Infantería) N° 37",
+                "RazonSocial": "SHEMA ASOCIADOS S.R.L.",
+                "De": "OSVALDO TÉLLEZ UGARTE",
+                "Nit": "335142029",
+                "NroPatronal": "060-210-348",
+                "Direccion": "Zona Lajastambo, Barrio Villa Tunari S/N",
                 "Ciudad": "Sucre - Bolivia",
-                "Telefono": "(4) 64-51234 / 71234567"
+                "Telefono": "64-55355"
             },
             "Periodo": {
                 "IdPeriodoNomina": det["IdPeriodoNomina"],
@@ -578,22 +718,15 @@ class RRHHService:
                 "Ci": det["Ci"],
                 "Cargo": det["Cargo"],
                 "Area": det["Area"],
-                "FechaIngreso": det["FechaIngreso"],
-                "Banco": det["Banco"],
-                "CuentaBancaria": det["CuentaBancaria"]
+                "FechaIngreso": det.get("FechaIngreso"),
+                "Banco": det.get("Banco") or "Banco Unión",
+                "CuentaBancaria": det.get("NroCuenta") or det.get("CuentaBancaria") or "Efectivo",
+                "DiasTrabajados": det.get("DiasTrabajados", 30),
+                "EsAsegurado": es_aseg,
+                "TipoPersonal": "ASEGURADO" if es_aseg else "EXTERNO"
             },
-            "Haberes": [
-                {"Concepto": "Sueldo Básico Mensual", "Monto": det["SueldoBasico"]},
-                {"Concepto": "Horas Extraordinarias (100% Recargo)", "Monto": det["MontoHorasExtra"]},
-                {"Concepto": "Comisiones de Reparto / Ventas", "Monto": det["MontoComisiones"]},
-                {"Concepto": "Bonos de Producción y Puntualidad", "Monto": det["TotalBonos"]},
-            ],
-            "Descuentos": [
-                {"Concepto": "Aporte Laboral Gestora / AFP (12.71%)", "Monto": det["AporteAFP"]},
-                {"Concepto": "Descuento por Minutos de Atraso", "Monto": det["DescuentoAtrasos"]},
-                {"Concepto": "Descuento por Faltas Injustificadas", "Monto": det["DescuentoFaltas"]},
-                {"Concepto": "Anticipos y Otras Deducciones", "Monto": det["OtrasDeducciones"]},
-            ],
+            "Haberes": haberes,
+            "Descuentos": descuentos,
             "Totales": {
                 "TotalGanado": det["TotalGanado"],
                 "TotalDescuento": det["TotalDescuento"],
@@ -608,6 +741,125 @@ class RRHHService:
                 "Observacion": det["Observacion"]
             }
         }
+
+    def GenerarBoletasPlanilla(self, id_planilla: int) -> list[dict]:
+        detalles = self.repository.ListarDetallesPlanilla(id_planilla)
+        boletas = []
+        for d in detalles:
+            b = self.GenerarBoletaPago(d["IdDetallePlanilla"])
+            boletas.append(b)
+        return boletas
+
+    def ObtenerResumenBancario(self, id_planilla: int) -> dict:
+        items = self.repository.ObtenerResumenBancario(id_planilla)
+        totales_por_banco = {}
+        total_asegurados = Decimal("0.00")
+        total_externos = Decimal("0.00")
+        total_general = Decimal("0.00")
+
+        for item in items:
+            banco = item.get("Banco") or "Banco Unión"
+            liq = Decimal(str(item.get("LiquidoPagable") or 0))
+            totales_por_banco[banco] = (totales_por_banco.get(banco, Decimal("0.00")) + liq).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            total_general += liq
+            if item.get("EsAsegurado"):
+                total_asegurados += liq
+            else:
+                total_externos += liq
+
+        return {
+            "IdPlanilla": id_planilla,
+            "TotalAsegurados": total_asegurados,
+            "TotalExternos": total_externos,
+            "TotalGeneral": total_general,
+            "TotalesPorBanco": totales_por_banco,
+            "Detalles": items
+        }
+
+    def ActualizarHorasExtrasBatch(self, id_planilla: int, items: list[dict]) -> dict:
+        for it in items:
+            uid = it.get("IdUsuario")
+            hrs_extra = Decimal(str(it.get("HorasExtrasTotal") or 0))
+            hrs_atraso = Decimal(str(it.get("HorasAtraso") or 0))
+            detalle_dias = it.get("DetalleDias")
+
+            sql = 'SELECT "IdDetallePlanilla", "SueldoBasico", "MontoComisiones", "TotalBonos", "DescuentoFaltas", "Anticipos", "FaltantesVentas", "DescuentoNoVenta", "OtrasDeducciones", "EsAsegurado" FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p AND "IdUsuario" = :id_u;'
+            row = self.repository.caller.LlamarUnRegistro(sql, {"id_p": id_planilla, "id_u": uid})
+            if row:
+                id_det = row["IdDetallePlanilla"]
+                sueldo = Decimal(str(row["SueldoBasico"]))
+                es_aseg = bool(row.get("EsAsegurado", True))
+                v_hora = (sueldo / Decimal("240")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                monto_he = (hrs_extra * v_hora).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                monto_atraso = (hrs_atraso * v_hora).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                com = Decimal(str(row.get("MontoComisiones") or 0))
+                bono = Decimal(str(row.get("TotalBonos") or 0))
+                tot_gan = (sueldo + monto_he + com + bono).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                afp = (tot_gan * Decimal("0.1271")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if es_aseg else Decimal("0.00")
+                d_faltas = Decimal(str(row.get("DescuentoFaltas") or 0))
+                anticipos = Decimal(str(row.get("Anticipos") or 0))
+                faltantes = Decimal(str(row.get("FaltantesVentas") or 0))
+                no_vta = Decimal(str(row.get("DescuentoNoVenta") or 0))
+                otras = Decimal(str(row.get("OtrasDeducciones") or 0))
+
+                tot_desc = (monto_atraso + d_faltas + afp + anticipos + faltantes + no_vta + otras).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                liq = (tot_gan - tot_desc).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                datos_upd = {
+                    "HorasExtrasTotal": hrs_extra,
+                    "MontoHorasExtra": monto_he,
+                    "HorasAtraso": hrs_atraso,
+                    "DescuentoAtrasos": monto_atraso,
+                    "AporteAFP": afp,
+                    "TotalGanado": tot_gan,
+                    "TotalDescuento": tot_desc,
+                    "LiquidoPagable": liq,
+                    "DetalleHorasJson": detalle_dias
+                }
+                self.repository.ActualizarDetallePlanilla(id_det, datos_upd)
+
+        self.repository.RecalcularTotalesPlanilla(id_planilla)
+        return {"mensaje": "Horas extras actualizadas correctamente", "actualizados": len(items)}
+
+    def ActualizarDescuentosBatch(self, id_planilla: int, items: list[dict]) -> dict:
+        for it in items:
+            uid = it.get("IdUsuario")
+            dias_falta = int(it.get("DiasFalta") or 0)
+            anticipos = Decimal(str(it.get("Anticipos") or 0))
+            faltantes = Decimal(str(it.get("FaltantesVentas") or 0))
+            otras = Decimal(str(it.get("OtrasDeducciones") or 0))
+
+            sql = 'SELECT "IdDetallePlanilla", "SueldoBasico", "TotalGanado", "DescuentoAtrasos", "DescuentoNoVenta", "AporteAFP", "EsAsegurado" FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p AND "IdUsuario" = :id_u;'
+            row = self.repository.caller.LlamarUnRegistro(sql, {"id_p": id_planilla, "id_u": uid})
+            if row:
+                id_det = row["IdDetallePlanilla"]
+                sueldo = Decimal(str(row["SueldoBasico"]))
+                v_dia = (sueldo / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                monto_faltas = (Decimal(str(dias_falta)) * v_dia).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                tot_gan = Decimal(str(row["TotalGanado"]))
+                desc_atraso = Decimal(str(row.get("DescuentoAtrasos") or 0))
+                afp = Decimal(str(row.get("AporteAFP") or 0))
+                no_vta = Decimal(str(row.get("DescuentoNoVenta") or 0))
+
+                tot_desc = (desc_atraso + monto_faltas + afp + anticipos + faltantes + no_vta + otras).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                liq = (tot_gan - tot_desc).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                datos_upd = {
+                    "DiasFalta": dias_falta,
+                    "DescuentoFaltas": monto_faltas,
+                    "Anticipos": anticipos,
+                    "FaltantesVentas": faltantes,
+                    "OtrasDeducciones": otras,
+                    "TotalDescuento": tot_desc,
+                    "LiquidoPagable": liq
+                }
+                self.repository.ActualizarDetallePlanilla(id_det, datos_upd)
+
+        self.repository.RecalcularTotalesPlanilla(id_planilla)
+        return {"mensaje": "Descuentos actualizados correctamente", "actualizados": len(items)}
 
     # =========================================================================
     # 7. RESUMEN / KPIS

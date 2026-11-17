@@ -1,19 +1,33 @@
-# Credenciales y Datos Operativos de Prueba - Sedes Sucre y Potosí
+# Credenciales Oficiales de Prueba - Sistema ERP Papelera Blanquita
 
-**Sistema ERP Papelera Blanquita**  
-Documento generado conforme al sembrado integral ejecutado mediante el script `Blanquita-Backend/app/cli/seed_operativo_sucre_potosi_completo.py`.
+> [!NOTE]
+> Este documento ha sido actualizado y expandido formalmente con todos los módulos y perfiles de prueba en [CREDENCIALES_PRUEBA_SISTEMA.md](file:///C:/Users/franz/Desktop/Blanquita/Blanquita-Proyecto-Grado/docs/CREDENCIALES_PRUEBA_SISTEMA.md).
+> Ambos archivos se mantienen sincronizados.
+> Contraseña unificada para todos los usuarios de prueba: `BlanquitaOperativo2026!`
 
 ---
 
-## 1. Tabla Oficial de Credenciales de Prueba
+## 1. Tabla Oficial de Credenciales de Prueba por Módulo
 
-| Nombre Completo | CI | Correo Interno | Contraseña | Rol | Sucursal Asignada | Tipo de Acceso | Datos Adicionales (ID Usuario, Asignación, Ruta, Stock) |
-| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **René Carlos Torres Alba** | `8001001` | `8001001@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`IdRol = 5`) | **Sucre** (`IdSucursal = 1`) | **Web** | `IdUsuario: 21`<br>• `puede_ver_todas: false`<br>• `puede_escribir: true`<br>• Alcance: Exclusivo Sucursal Sucre |
-| **Gonzalo Hugo Flores Peñaranda** | `8002001` | `8002001@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`IdRol = 5`) | **Potosí** (`IdSucursal = 2`) | **Web** | `IdUsuario: 22`<br>• `puede_ver_todas: false`<br>• `puede_escribir: true`<br>• Alcance: Exclusivo Sucursal Potosí |
-| **Ramiro Luis Gutiérrez Sosa** | `8001002` | `8001002@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`IdRol = 6`) | **Sucre** (`IdSucursal = 1`) | **Móvil** | `IdUsuario: 23`<br>• `IdAsignacionRuta: 183`<br>• Ruta: 101 - Supermercados Centro (ID 1)<br>• Estado: `En Ruta` (`APROBADA_EN_RUTA`)<br>• Stock camión: 70 Pres. 10 (Bs 35.00), 40 Pres. 11 (Bs 25.00), 30 Pres. 13 (Bs 4.50)<br>• GPS en vivo: `-19.0435, -65.2598` |
-| **Jaime Alberto Villegas Copa** | `8002002` | `8002002@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`IdRol = 6`) | **Potosí** (`IdSucursal = 2`) | **Móvil** | `IdUsuario: 24`<br>• `IdAsignacionRuta: 184`<br>• Ruta: 201 - Casco Central Potosí (ID 57)<br>• Estado: `En Ruta` (`APROBADA_EN_RUTA`)<br>• Stock camión: 60 Pres. 10 (Bs 37.80), 40 Pres. 11 (Bs 27.00), 25 Pres. 13 (Bs 4.86)<br>• GPS en vivo: `-19.5880, -65.7535`<br>• Pedidos vinculados: `PED-POT-201-001`, `PED-POT-201-002` |
-| **Milton Roxana Choque Quispe** | `8002003` | `8002003@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`IdRol = 6`) | **Potosí** (`IdSucursal = 2`) | **Móvil** | `IdUsuario: 25`<br>• `IdAsignacionRuta: 185`<br>• Ruta: 202 - Mercado Uyuni y Feria Popular (ID 58)<br>• Estado: `En Ruta` (`APROBADA_EN_RUTA`)<br>• Stock camión: 55 Pres. 10 (Bs 37.80), 30 Pres. 11 (Bs 27.00), 25 Pres. 14 (Bs 3.24)<br>• GPS en vivo: `-19.5780, -65.7595`<br>• Pedidos vinculados: `PED-POT-202-001`, `PED-POT-202-002` |
+| Módulo / Categoría | Nombre Completo | CI | Correo Interno | Contraseña | Rol | Sucursal Asignada | Alcance Territorial | Tipo de Acceso |
+| :--- | :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Gerencia General** | Don Osvaldo Téllez | `10369746` | `10369746@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Gerente General (`3`) | Central Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
+| **Contabilidad (Sucre)** | Lic. Mateo Alejandro Morales Ramos | `8001010` | `8001010@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Contador (`4`) | **Sucre** (`1`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Contabilidad (Potosí)** | Lic. Carmen Elena Vaca Guzmán | `8002010` | `8002010@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Contador (`4`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Contabilidad (Multisede)**| Lic. Roberto Carlos Flores Terán | `8003010` | `8003010@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Contador (`4`) | Base Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
+| **Logística (Sucre)** | René Carlos Torres Alba | `8001001` | `8001001@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`5`) | **Sucre** (`1`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Logística (Potosí)** | Gonzalo Hugo Flores Peñaranda | `8002001` | `8002001@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`5`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Logística (Multisede)** | Ing. Sergio Marcelo Ramos Calvimontes | `8003020` | `8003020@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`5`) | Base Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
+| **Reparto Móvil (Sucre)** | Ramiro Luis Gutiérrez Sosa | `8001002` | `8001002@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`6`) | **Sucre** (`1`) | **Mono-sede** (`puede_ver_todas: false`) | Móvil |
+| **Reparto Móvil (Potosí 1)**| Jaime Alberto Villegas Copa | `8002002` | `8002002@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`6`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Móvil |
+| **Reparto Móvil (Potosí 2)**| Milton Roxana Choque Quispe | `8002003` | `8002003@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Agente de Reparto (`6`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Móvil |
+| **RRHH (Sucre)** | Lic. Patricia Eugenia Morales Soliz | `8001030` | `8001030@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor / Admin (`5`) | **Sucre** (`1`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **RRHH (Potosí)** | Lic. Javier Fernando Paredes Cruz | `8002030` | `8002030@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor / Admin (`5`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **RRHH (Multisede)** | Lic. Valeria Andrea Mercado Paz | `8003030` | `8003030@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor / Admin (`5`) | Base Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
+| **Híbrido Web 1 (Sucre)** | Andrea Sofía Durán Méndez | `8001040` | `8001040@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor (`5`) | **Sucre** (`1`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Híbrido Web 2 (Potosí)** | Mauricio José Alarcón Pinto | `8002040` | `8002040@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor / Admin (`5`) | **Potosí** (`2`) | **Mono-sede** (`puede_ver_todas: false`) | Web |
+| **Híbrido Web 3 (Multisede)**| Lic. Álvaro Esteban Campero Daza | `8003040` | `8003040@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Supervisor / Admin (`5`) | Base Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
+| **Híbrido Web 4 (Multisede)**| Lic. Gabriela Beatriz Salinas Rios | `8003050` | `8003050@papelblanquita.invalid` | `BlanquitaOperativo2026!` | Contador / Admin (`4`) | Base Sucre (`1`) | **Multisede** (`puede_ver_todas: true`) | Web |
 
 ---
 

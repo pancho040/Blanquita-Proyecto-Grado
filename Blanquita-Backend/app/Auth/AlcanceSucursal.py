@@ -79,7 +79,12 @@ class AlcanceUsuario:
                 detail="Acceso denegado: el envío no involucra a su sucursal autorizada como origen ni como destino."
             )
 
-    def validar_escritura(self, id_sucursal_operacion: Optional[Union[int, str]] = None) -> int:
+    def validar_escritura(
+        self,
+        id_sucursal_operacion: Optional[Union[int, str]] = None,
+        nombre_recurso: str = "operación",
+        **kwargs
+    ) -> int:
         """
         Regla de Oro para Escrituras (Fase 2):
         Con alcance consolidado (sucursal_efectiva is None), toda escritura debe exigir
@@ -101,12 +106,12 @@ class AlcanceUsuario:
             if sid_operacion is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="En modo consolidado/multisede debe especificar explícitamente la sucursal para realizar esta operación."
+                    detail=f"En modo consolidado/multisede debe especificar explícitamente la sucursal para realizar esta {nombre_recurso}."
                 )
             if not self.tiene_acceso_a_sucursal(sid_operacion):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"No tiene autorización para registrar operaciones en la sucursal {sid_operacion}."
+                    detail=f"No tiene autorización para registrar {nombre_recurso} en la sucursal {sid_operacion}."
                 )
             return sid_operacion
         else:
@@ -115,7 +120,7 @@ class AlcanceUsuario:
             if sid_operacion is not None and sid_operacion != sede_fija:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"No puede registrar operaciones en la sucursal {sid_operacion}. Su sede autorizada es la {sede_fija}."
+                    detail=f"No puede registrar {nombre_recurso} en la sucursal {sid_operacion}. Su sede autorizada es la {sede_fija}."
                 )
             return sede_fija
 

@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from datetime import date, time, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Any
 
 # =============================================================================
 # MODELOS EMPLEADOS Y DATOS LABORALES
@@ -154,26 +154,83 @@ class PeriodoNominaResponse(BaseModel):
     NombrePeriodo: str
 
 class PlanillaGenerarRequest(BaseModel):
-    IdPeriodoNomina: int
-    TipoPlanilla: str = Field("INTERNA", description="'OFICIAL' o 'INTERNA'")
-    IdSucursal: Optional[int] = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    IdPeriodoNomina: Optional[int] = Field(None, alias="id_periodo_nomina")
+    TipoPlanilla: str = Field("INTERNA", alias="tipo_planilla", description="'OFICIAL' o 'INTERNA'")
+    IdSucursal: Optional[int] = Field(None, alias="id_sucursal")
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolver_campos(cls, data: Any):
+        if isinstance(data, dict):
+            if "IdPeriodoNomina" not in data and "id_periodo_nomina" not in data:
+                if "id_periodo" in data:
+                    data["IdPeriodoNomina"] = data["id_periodo"]
+                elif "IdPeriodo" in data:
+                    data["IdPeriodoNomina"] = data["IdPeriodo"]
+            if "IdSucursal" not in data and "id_sucursal" not in data:
+                if "sucursal" in data:
+                    data["IdSucursal"] = data["sucursal"]
+        return data
 
 class DetallePlanillaActualizar(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     SueldoBasico: Optional[Decimal] = None
+    HaberBasico: Optional[Decimal] = None
     MontoHorasExtra: Optional[Decimal] = None
+    HorasExtrasMonto: Optional[Decimal] = None
+    HorasExtrasTotal: Optional[Decimal] = None
     MontoComisiones: Optional[Decimal] = None
     TotalBonos: Optional[Decimal] = None
+    BonoAntiguedad: Optional[Decimal] = None
+    OtrosBonos: Optional[Decimal] = None
     DescuentoAtrasos: Optional[Decimal] = None
+    HorasAtraso: Optional[Decimal] = None
     DescuentoFaltas: Optional[Decimal] = None
+    DiasFalta: Optional[int] = None
+    DiasTrabajados: Optional[int] = None
     DescuentoNoVenta: Optional[Decimal] = None
     HorasTrabajadasAJ: Optional[Decimal] = None
     ValorHora: Optional[Decimal] = None
     AporteAFP: Optional[Decimal] = None
+    DescuentoAFP: Optional[Decimal] = None
+    Anticipos: Optional[Decimal] = None
+    FaltantesVentas: Optional[Decimal] = None
     OtrasDeducciones: Optional[Decimal] = None
+    OtrosDescuentos: Optional[Decimal] = None
+    AporteNacionalSolidario: Optional[Decimal] = None
+    RCIVA: Optional[Decimal] = None
     TotalGanado: Optional[Decimal] = None
     TotalDescuento: Optional[Decimal] = None
+    TotalDescuentos: Optional[Decimal] = None
     LiquidoPagable: Optional[Decimal] = None
     Observacion: Optional[str] = None
+    Observaciones: Optional[str] = None
+    MetodoPago: Optional[str] = None
+    Banco: Optional[str] = None
+    NroCuenta: Optional[str] = None
+    EsAsegurado: Optional[bool] = None
+    DetalleHorasJson: Optional[dict] = None
+
+class RegistroHorasExtrasItem(BaseModel):
+    IdUsuario: int
+    HorasExtrasTotal: Decimal = Decimal("0.00")
+    HorasAtraso: Optional[Decimal] = Decimal("0.00")
+    DetalleDias: Optional[dict] = None
+
+class RegistroHorasExtrasBatch(BaseModel):
+    Items: List[RegistroHorasExtrasItem]
+
+class RegistroDescuentosItem(BaseModel):
+    IdUsuario: int
+    DiasFalta: Optional[int] = 0
+    Anticipos: Optional[Decimal] = Decimal("0.00")
+    FaltantesVentas: Optional[Decimal] = Decimal("0.00")
+    OtrasDeducciones: Optional[Decimal] = Decimal("0.00")
+
+class RegistroDescuentosBatch(BaseModel):
+    Items: List[RegistroDescuentosItem]
 
 class PlanillaAprobarRequest(BaseModel):
     Observacion: Optional[str] = None

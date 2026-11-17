@@ -89,6 +89,10 @@ RUTAS_EXCEPCION_CATEGORIA_B = {
     "/rrhh/biometrico/marcas",
     "/rrhh/planillas/detalle/{id_detalle}",
     "/rrhh/planillas/{id_planilla}/aprobar",
+    "/rrhh/planillas/{id_planilla}/boletas",
+    "/rrhh/planillas/{id_planilla}/resumen-bancos",
+    "/rrhh/planillas/{id_planilla}/horas-extras-lote",
+    "/rrhh/planillas/{id_planilla}/descuentos-lote",
     # Reportes y Gerencia: Planta monoplanta Sucre, bancos y firmas
     "/reportes/contabilidad/cuentas-pagar",
     "/gerencia/firmar-documento",

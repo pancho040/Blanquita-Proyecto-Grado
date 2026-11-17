@@ -4,7 +4,10 @@ import {
   CrearPeriodoNomina, 
   ObtenerPlanilla, 
   GenerarPlanilla, 
-  AprobarPlanilla 
+  GenerarPlanillaDual,
+  AprobarPlanilla,
+  ObtenerResumenBancos,
+  ObtenerTodasLasBoletas
 } from "@/services/RRHH/RRHHService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +30,11 @@ import {
   ShieldCheck,
   TrendingDown,
   Users,
-  Search
+  Search,
+  Building2,
+  Landmark,
+  Layers,
+  ChevronDown
 } from "lucide-react";
 import ModalEditarDetallePlanilla from "./ModalEditarDetallePlanilla";
 import BoletaPagoModal from "./BoletaPagoModal";
@@ -35,13 +42,16 @@ import { usePaginacion } from "@/hooks/usePaginacion";
 import PaginacionTabla from "@/components/common/PaginacionTabla";
 import { cache } from "@/lib/cacheService";
 
-export default function GestionPlanillas() {
+export default function GestionPlanillas({ sucursal = null, sucursalesPermitidas = [] }) {
   const [periodos, setPeriodos] = useState([]);
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState(null);
   const [planillaData, setPlanillaData] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroRegimen, setFiltroRegimen] = useState("TODOS"); // "TODOS" | "ASEGURADO" | "EXTERNO" | "RESUMEN"
+  const [resumenBancos, setResumenBancos] = useState(null);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
 
   // Modales
   const [modalNuevoPeriodo, setModalNuevoPeriodo] = useState(false);
@@ -57,6 +67,7 @@ export default function GestionPlanillas() {
 
   const [idBoletaSeleccionada, setIdBoletaSeleccionada] = useState(null);
   const [modalBoletaAbierto, setModalBoletaAbierto] = useState(false);
+  const [modalBoletasMasivasAbierto, setModalBoletasMasivasAbierto] = useState(false);
 
   // Inicializar fechas al abrir modal nuevo periodo
   useEffect(() => {
@@ -116,17 +127,46 @@ export default function GestionPlanillas() {
     }
   }, [periodoSeleccionado]);
 
-  // Generar o Recalcular la Planilla
-  const handleGenerarPlanilla = async () => {
+  // Cargar resumen de bancos si la pestaña está activa
+  const cargarResumenBancos = async (idPlanilla) => {
+    if (!idPlanilla) return;
+    try {
+      setCargandoResumen(true);
+      const data = await ObtenerResumenBancos(idPlanilla);
+      setResumenBancos(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cargar el resumen bancario");
+    } finally {
+      setCargandoResumen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (filtroRegimen === "RESUMEN" && planillaData?.Planilla?.IdPlanilla) {
+      cargarResumenBancos(planillaData.Planilla.IdPlanilla);
+    }
+  }, [filtroRegimen, planillaData]);
+
+  // Generar o Recalcular la Planilla (permite régimen específico o completo)
+  const handleGenerarPlanilla = async (tipo = "INTERNA") => {
     if (!periodoSeleccionado) return;
     try {
       setGenerando(true);
-      const res = await GenerarPlanilla(periodoSeleccionado.IdPeriodoNomina);
+      const sid = (sucursal && sucursal !== "todas") ? Number(sucursal) : 1;
+      const res = await GenerarPlanillaDual({ 
+        idPeriodo: periodoSeleccionado.IdPeriodoNomina, 
+        tipoPlanilla: tipo,
+        idSucursal: sid
+      });
       if (res && (res.Planilla || res.Detalles)) {
         setPlanillaData(res);
       }
-      toast.success(res?.mensaje || "Planilla calculada y consolidada con éxito");
+      toast.success(res?.mensaje || `Planilla (${tipo}) calculada con éxito`);
       await cargarPlanillaPeriodo(periodoSeleccionado.IdPeriodoNomina);
+      if (filtroRegimen === "RESUMEN" && (res?.Planilla?.IdPlanilla || planillaData?.Planilla?.IdPlanilla)) {
+        await cargarResumenBancos(res?.Planilla?.IdPlanilla || planillaData?.Planilla?.IdPlanilla);
+      }
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Error al generar la planilla");
@@ -173,19 +213,36 @@ export default function GestionPlanillas() {
     }
   };
 
-  // Filtro de búsqueda en la tabla de nómina
+  // Conteos de personal por régimen
+  const conteosRegimen = useMemo(() => {
+    const todos = planillaData?.Detalles || [];
+    const asegurados = todos.filter(d => Boolean(d.EsAsegurado)).length;
+    const externos = todos.filter(d => !Boolean(d.EsAsegurado)).length;
+    return { todos: todos.length, asegurados, externos };
+  }, [planillaData]);
+
+  // Filtro de búsqueda y régimen en la tabla de nómina
   const detallesFiltrados = useMemo(() => {
     if (!planillaData?.Detalles) return [];
-    if (!busqueda.trim()) return planillaData.Detalles;
+    let lista = planillaData.Detalles;
+
+    if (filtroRegimen === "ASEGURADO") {
+      lista = lista.filter(d => Boolean(d.EsAsegurado));
+    } else if (filtroRegimen === "EXTERNO") {
+      lista = lista.filter(d => !Boolean(d.EsAsegurado));
+    }
+
+    if (!busqueda.trim()) return lista;
 
     const q = busqueda.toLowerCase();
-    return planillaData.Detalles.filter(d => {
+    return lista.filter(d => {
       const nom = `${d.PrimerNombre || ""} ${d.ApellidoPaterno || ""} ${d.ApellidoMaterno || ""}`.toLowerCase();
-      const ci = String(d.CI || "").toLowerCase();
+      const ci = String(d.CI || d.Ci || "").toLowerCase();
       const cargo = String(d.Cargo || "").toLowerCase();
-      return nom.includes(q) || ci.includes(q) || cargo.includes(q);
+      const banco = String(d.Banco || "").toLowerCase();
+      return nom.includes(q) || ci.includes(q) || cargo.includes(q) || banco.includes(q);
     });
-  }, [planillaData, busqueda]);
+  }, [planillaData, busqueda, filtroRegimen]);
 
   // Paginación optimizada de la nómina
   const paginacion = usePaginacion(detallesFiltrados, 10);
@@ -198,29 +255,30 @@ export default function GestionPlanillas() {
     }
 
     const encabezados = [
-      "CI", "Empleado", "Cargo", "Area", "Dias", 
-      "Haber Basico", "Bono Antiguedad", "Horas Extras Bs", "Otros Bonos", "Total Ganado",
-      "AFP 12.71%", "Atrasos Bs", "Faltas Bs", "Anticipos", "Otros Desc", "Total Descuentos", "Liquido Pagable"
+      "CI", "Empleado", "Cargo", "Area", "Regimen", "Dias", 
+      "Haber Basico", "Bono Antiguedad", "Horas Extras Bs", "Total Ganado",
+      "AFP 12.71%", "Atrasos Bs", "Faltas Bs", "Anticipos", "Total Descuentos", "Liquido Pagable", "Banco", "Cuenta"
     ];
 
     const filas = planillaData.Detalles.map(d => [
-      d.CI || "",
+      d.CI || d.Ci || "",
       `"${d.PrimerNombre || ""} ${d.ApellidoPaterno || ""}"`,
       `"${d.Cargo || ""}"`,
       `"${d.Area || ""}"`,
+      d.EsAsegurado ? "Asegurado" : "Externo",
       d.DiasTrabajados ?? 30,
       Number(d.HaberBasico || 0).toFixed(2),
       Number(d.BonoAntiguedad || 0).toFixed(2),
       Number(d.HorasExtrasMonto || 0).toFixed(2),
-      Number(d.OtrosBonos || 0).toFixed(2),
       Number(d.TotalGanado || 0).toFixed(2),
       Number(d.DescuentoAFP || 0).toFixed(2),
       Number(d.DescuentoAtrasos || 0).toFixed(2),
       Number(d.DescuentoFaltas || 0).toFixed(2),
       Number(d.Anticipos || 0).toFixed(2),
-      Number(d.OtrosDescuentos || 0).toFixed(2),
       Number(d.TotalDescuentos || 0).toFixed(2),
-      Number(d.LiquidoPagable || 0).toFixed(2)
+      Number(d.LiquidoPagable || 0).toFixed(2),
+      `"${d.Banco || "Banco Unión"}"`,
+      `"${d.CuentaBancaria || d.NroCuenta || ""}"`
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [encabezados.join(","), ...filas.map(e => e.join(","))].join("\n");
@@ -228,6 +286,35 @@ export default function GestionPlanillas() {
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
     link.setAttribute("download", `planilla_${periodoSeleccionado?.Mes}_${periodoSeleccionado?.Anio}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Exportar Resumen de Bancos a CSV
+  const handleExportarResumenBancosCSV = () => {
+    if (!resumenBancos?.Detalles?.length) {
+      toast.info("No hay datos de resumen bancario");
+      return;
+    }
+
+    const encabezados = ["N°", "Empleado", "CI", "Cargo", "Banco", "Cuenta Bancaria", "Regimen", "Liquido Pagable Bs."];
+    const filas = resumenBancos.Detalles.map((d, idx) => [
+      idx + 1,
+      `"${d.NombreEmpleado}"`,
+      d.CI || "",
+      `"${d.Cargo}"`,
+      `"${d.Banco}"`,
+      `"${d.CuentaBancaria}"`,
+      d.TipoPersonal,
+      Number(d.LiquidoPagable || 0).toFixed(2)
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [encabezados.join(","), ...filas.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `resumen_bancos_${periodoSeleccionado?.Mes}_${periodoSeleccionado?.Anio}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -283,6 +370,18 @@ export default function GestionPlanillas() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setModalBoletasMasivasAbierto(true)}
+            disabled={!planillaData?.Detalles?.length}
+            className="text-xs font-semibold text-blue-700 border-blue-300 hover:bg-blue-50 flex items-center gap-1.5 shadow-xs"
+            title="Generar e imprimir todas las boletas oficiales del mes"
+          >
+            <Printer className="h-3.5 w-3.5 text-blue-600" />
+            Imprimir Boletas Masivas
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => window.print()}
             disabled={!planillaData?.Detalles?.length}
             className="text-xs font-medium text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50"
@@ -291,24 +390,38 @@ export default function GestionPlanillas() {
             Imprimir Planilla
           </Button>
 
-          <Button
-            size="sm"
-            onClick={handleGenerarPlanilla}
-            disabled={generando || !periodoSeleccionado}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 flex items-center gap-2 shadow-xs"
-          >
-            {generando ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                Calculando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-3.5 w-3.5" />
-                {planillaData?.Planilla ? "Recalcular Planilla" : "Generar Planilla del Mes"}
-              </>
-            )}
-          </Button>
+          {/* Generador con selector de régimen salarial */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200">
+            <Button
+              size="sm"
+              onClick={() => handleGenerarPlanilla("INTERNA")}
+              disabled={generando || !periodoSeleccionado}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 flex items-center gap-1.5 shadow-xs"
+            >
+              <RefreshCw className={`h-3 w-3 ${generando ? "animate-spin" : ""}`} />
+              {planillaData?.Planilla ? "Recalcular Completa" : "Generar Planilla"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleGenerarPlanilla("ASEGURADO")}
+              disabled={generando || !periodoSeleccionado}
+              className="text-[11px] h-7 px-2 text-slate-700 hover:bg-white"
+              title="Calcular solo personal en planilla legal (12.71% AFP)"
+            >
+              Solo Asegurados
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleGenerarPlanilla("EXTERNO")}
+              disabled={generando || !periodoSeleccionado}
+              className="text-[11px] h-7 px-2 text-slate-700 hover:bg-white"
+              title="Calcular solo personal externo (0% AFP)"
+            >
+              Solo Externos
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -406,8 +519,179 @@ export default function GestionPlanillas() {
         </div>
       )}
 
-      {/* Tabla Detallada de Nómina */}
-      {!planillaData?.Planilla ? (
+      {/* Pestañas de Vista y Régimen Salarial */}
+      {planillaData?.Planilla && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFiltroRegimen("TODOS")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                filtroRegimen === "TODOS"
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Todos los Empleados ({conteosRegimen.todos})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFiltroRegimen("ASEGURADO")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                filtroRegimen === "ASEGURADO"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+              }`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              P. Asegurado ({conteosRegimen.asegurados})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFiltroRegimen("EXTERNO")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                filtroRegimen === "EXTERNO"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              P. Externo ({conteosRegimen.externos})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFiltroRegimen("RESUMEN")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                filtroRegimen === "RESUMEN"
+                  ? "bg-emerald-700 text-white shadow-xs"
+                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              }`}
+            >
+              <Landmark className="h-3.5 w-3.5" />
+              Resumen Bancario (RESUMEN)
+            </button>
+          </div>
+
+          {filtroRegimen === "RESUMEN" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportarResumenBancosCSV}
+              className="text-xs text-slate-700 border-slate-300"
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Descargar Resumen Bancos CSV
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Vista de Resumen Bancario o Vista de Planilla Detallada */}
+      {filtroRegimen === "RESUMEN" ? (
+        <div className="space-y-4">
+          {cargandoResumen ? (
+            <div className="bg-white rounded border border-slate-200 p-12 text-center text-slate-400">
+              <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-600" />
+              <span className="text-xs font-medium">Consolidando transferencias y cuentas bancarias...</span>
+            </div>
+          ) : (
+            <>
+              {/* Tarjetas de Totales por Banco */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {Object.entries(resumenBancos?.TotalesPorBanco || {}).map(([banco, total]) => (
+                  <div key={banco} className="bg-white p-3 rounded border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      {banco}
+                    </span>
+                    <span className="text-lg font-bold font-mono tabular-nums text-slate-900 block mt-1">
+                      Bs. {Number(total).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bloque de Conciliación General */}
+              <div className="bg-emerald-50 p-4 rounded border border-emerald-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                    Conciliación Matemática de Desembolso de Haberes
+                  </h4>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    Total Asegurados: Bs. {Number(resumenBancos?.TotalAsegurados || 0).toFixed(2)} &nbsp;|&nbsp; 
+                    Total Externos: Bs. {Number(resumenBancos?.TotalExternos || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-emerald-800 font-semibold block uppercase">
+                    Total General a Desembolsar:
+                  </span>
+                  <span className="text-xl font-black font-mono text-emerald-950">
+                    Bs. {Number(resumenBancos?.TotalGeneral || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabla de Cuentas y Desembolsos */}
+              <div className="bg-white rounded border border-slate-200 overflow-hidden">
+                <div className="p-3 border-b border-slate-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-800">
+                    Nómina de Transferencias Bancarias ({resumenBancos?.Detalles?.length || 0} personas)
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 text-[11px] font-semibold uppercase">
+                        <th className="py-2.5 px-3">N°</th>
+                        <th className="py-2.5 px-3">Empleado</th>
+                        <th className="py-2.5 px-3">CI</th>
+                        <th className="py-2.5 px-3">Cargo</th>
+                        <th className="py-2.5 px-3">Banco</th>
+                        <th className="py-2.5 px-3">N° Cuenta Bancaria</th>
+                        <th className="py-2.5 px-3 text-center">Régimen</th>
+                        <th className="py-2.5 px-3 text-right">Líquido Pagable</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {resumenBancos?.Detalles?.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/60">
+                          <td className="py-2 px-3 text-slate-500 font-mono">{idx + 1}</td>
+                          <td className="py-2 px-3 font-semibold text-slate-900">{it.NombreEmpleado}</td>
+                          <td className="py-2 px-3 text-slate-600 font-mono">{it.CI}</td>
+                          <td className="py-2 px-3 text-slate-600">{it.Cargo}</td>
+                          <td className="py-2 px-3 font-medium text-slate-800">{it.Banco}</td>
+                          <td className="py-2 px-3 font-mono text-slate-700">{it.CuentaBancaria}</td>
+                          <td className="py-2 px-3 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              it.EsAsegurado ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-amber-50 text-amber-700 border border-amber-200"
+                            }`}>
+                              {it.TipoPersonal}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right font-bold font-mono text-slate-900">
+                            Bs. {Number(it.LiquidoPagable || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                      {(!resumenBancos?.Detalles || resumenBancos.Detalles.length === 0) && (
+                        <tr>
+                          <td colSpan="8" className="py-6 text-center text-slate-400 italic">
+                            No hay datos para mostrar en este periodo.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      ) : !planillaData?.Planilla ? (
         <div className="bg-white rounded border border-slate-200 p-10 text-center space-y-3">
           <FileSpreadsheet className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto" />
           <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">
@@ -417,7 +701,7 @@ export default function GestionPlanillas() {
             Haz clic en el botón inferior para procesar de forma automática los sueldos básicos, turnos, atrasos registrados por el biométrico y deducciones de ley.
           </p>
           <Button
-            onClick={handleGenerarPlanilla}
+            onClick={() => handleGenerarPlanilla("INTERNA")}
             disabled={generando || !periodoSeleccionado}
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-5 mt-2"
           >
@@ -432,14 +716,14 @@ export default function GestionPlanillas() {
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Detalle Individual de Sueldos y Retenciones
+                Detalle Individual de Sueldos y Retenciones {filtroRegimen !== "TODOS" && `(${filtroRegimen === "ASEGURADO" ? "Personal Asegurado" : "Personal Externo"})`}
               </h2>
             </div>
 
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
               <Input
-                placeholder="Filtrar por nombre o CI..."
+                placeholder="Filtrar por nombre, CI o banco..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="pl-8 h-8 text-xs"
@@ -454,6 +738,7 @@ export default function GestionPlanillas() {
                   <th className="py-3 px-3 font-semibold">CI</th>
                   <th className="py-3 px-3 font-semibold">Empleado</th>
                   <th className="py-3 px-3 font-semibold">Área & Cargo</th>
+                  <th className="py-3 px-3 font-semibold text-center">Régimen</th>
                   <th className="py-3 px-3 font-semibold text-center">Días</th>
                   <th className="py-3 px-3 font-semibold text-right">Básico (Bs.)</th>
                   <th className="py-3 px-3 font-semibold text-right">Antigüedad</th>
@@ -473,7 +758,7 @@ export default function GestionPlanillas() {
                     className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
                   >
                     <td className="py-2.5 px-3 font-medium text-slate-600 dark:text-slate-300">
-                      {d.CI}
+                      {d.CI || d.Ci}
                     </td>
 
                     <td className="py-2.5 px-3 font-sans font-semibold text-slate-800 dark:text-slate-100">
@@ -483,6 +768,14 @@ export default function GestionPlanillas() {
                     <td className="py-2.5 px-3 font-sans text-slate-600 dark:text-slate-300">
                       <span className="block">{d.Area}</span>
                       <span className="text-[10px] text-slate-400">{d.Cargo}</span>
+                    </td>
+
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        d.EsAsegurado ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}>
+                        {d.EsAsegurado ? "Asegurado" : "Externo"}
+                      </span>
                     </td>
 
                     <td className="py-2.5 px-3 text-center font-mono tabular-nums">
@@ -506,7 +799,7 @@ export default function GestionPlanillas() {
                     </td>
 
                     <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800 font-mono tabular-nums text-red-700">
-                      {Number(d.DescuentoAFP || 0).toFixed(2)}
+                      {d.EsAsegurado ? Number(d.DescuentoAFP || 0).toFixed(2) : <span className="text-slate-400 text-[10px]">0.00 (Exento)</span>}
                     </td>
 
                     <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800 font-mono tabular-nums text-red-700">
@@ -785,7 +1078,7 @@ export default function GestionPlanillas() {
         />
       )}
 
-      {/* Modal Boleta de Pago */}
+      {/* Modal Boleta de Pago Individual */}
       {modalBoletaAbierto && (
         <BoletaPagoModal
           idDetallePlanilla={idBoletaSeleccionada}
@@ -794,6 +1087,16 @@ export default function GestionPlanillas() {
             setModalBoletaAbierto(false);
             setIdBoletaSeleccionada(null);
           }}
+        />
+      )}
+
+      {/* Modal Boletas de Pago Masivas (Todas las del periodo) */}
+      {modalBoletasMasivasAbierto && (
+        <BoletaPagoModal
+          idPlanilla={planillaData?.Planilla?.IdPlanilla}
+          modoBatch={true}
+          abierto={modalBoletasMasivasAbierto}
+          onCerrar={() => setModalBoletasMasivasAbierto(false)}
         />
       )}
     </div>

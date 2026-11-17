@@ -274,6 +274,40 @@ export async function ObtenerBoletaPago(idDetalle) {
   return await response.json();
 }
 
+export async function ObtenerTodasLasBoletas(idPlanilla) {
+  const response = await fetchConCache(`/api/rrhh/planillas/${idPlanilla}/boletas`, {}, 30000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function ObtenerResumenBancos(idPlanilla) {
+  const response = await fetchConCache(`/api/rrhh/planillas/${idPlanilla}/resumen-bancos`, {}, 30000);
+  if (!response.ok) await manejarErrorBackend(response);
+  return await response.json();
+}
+
+export async function ActualizarHorasExtrasLote(idPlanilla, items) {
+  const response = await fetch(`/api/rrhh/planillas/${idPlanilla}/horas-extras-lote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Items: items }),
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}
+
+export async function ActualizarDescuentosLote(idPlanilla, items) {
+  const response = await fetch(`/api/rrhh/planillas/${idPlanilla}/descuentos-lote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Items: items }),
+  });
+  if (!response.ok) await manejarErrorBackend(response);
+  invalidarCache("/api/rrhh");
+  return await response.json();
+}
+
 // ==========================================
 // FASE 3: PLANILLAS DUALES, ASISTENCIA Y FINIQUITOS (SUBAGENTE D)
 // ==========================================

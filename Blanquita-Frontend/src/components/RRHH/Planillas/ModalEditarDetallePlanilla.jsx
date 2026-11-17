@@ -19,6 +19,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     DiasTrabajados: 30,
+    EsAsegurado: true,
     HaberBasico: 0,
     BonoAntiguedad: 0,
     HorasExtrasMonto: 0,
@@ -27,22 +28,26 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
     DescuentoAtrasos: 0,
     DescuentoFaltas: 0,
     Anticipos: 0,
+    FaltantesVentas: 0,
     OtrosDescuentos: 0,
     Observaciones: ""
   });
 
   useEffect(() => {
     if (detalle) {
+      const esAseg = detalle.EsAsegurado ?? true;
       setFormData({
         DiasTrabajados: detalle.DiasTrabajados ?? 30,
+        EsAsegurado: esAseg,
         HaberBasico: Number(detalle.HaberBasico) || 0,
         BonoAntiguedad: Number(detalle.BonoAntiguedad) || 0,
         HorasExtrasMonto: Number(detalle.HorasExtrasMonto) || 0,
         OtrosBonos: Number(detalle.OtrosBonos) || 0,
-        DescuentoAFP: Number(detalle.DescuentoAFP) || 0,
+        DescuentoAFP: esAseg ? (Number(detalle.DescuentoAFP) || 0) : 0,
         DescuentoAtrasos: Number(detalle.DescuentoAtrasos) || 0,
         DescuentoFaltas: Number(detalle.DescuentoFaltas) || 0,
         Anticipos: Number(detalle.Anticipos) || 0,
+        FaltantesVentas: Number(detalle.FaltantesVentas) || 0,
         OtrosDescuentos: Number(detalle.OtrosDescuentos) || 0,
         Observaciones: detalle.Observaciones || ""
       });
@@ -50,11 +55,23 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
   }, [detalle]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === "Observaciones" ? value : Number(value)
-    }));
+    const { name, value, type, checked } = e.target;
+    if (type === "checkbox") {
+      setFormData(prev => {
+        const nextEsAseg = checked;
+        const subtotalGanado = Number(prev.HaberBasico || 0) + Number(prev.BonoAntiguedad || 0) + Number(prev.HorasExtrasMonto || 0) + Number(prev.OtrosBonos || 0);
+        return {
+          ...prev,
+          EsAsegurado: nextEsAseg,
+          DescuentoAFP: nextEsAseg ? Number((subtotalGanado * 0.1271).toFixed(2)) : 0
+        };
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: name === "Observaciones" ? value : Number(value)
+      }));
+    }
   };
 
   // Cálculo en tiempo real de subtotales
@@ -67,6 +84,7 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                           Number(formData.DescuentoAtrasos || 0) + 
                           Number(formData.DescuentoFaltas || 0) + 
                           Number(formData.Anticipos || 0) + 
+                          Number(formData.FaltantesVentas || 0) + 
                           Number(formData.OtrosDescuentos || 0);
 
   const liquidoPagable = totalGanado - totalDescuentos;
@@ -80,16 +98,23 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
       await EditarDetallePlanilla(detalle.IdDetallePlanilla, {
         ...formData,
         DiasTrabajados: Number(formData.DiasTrabajados),
+        EsAsegurado: Boolean(formData.EsAsegurado),
         HaberBasico: Number(formData.HaberBasico),
+        SueldoBasico: Number(formData.HaberBasico),
         BonoAntiguedad: Number(formData.BonoAntiguedad),
         HorasExtrasMonto: Number(formData.HorasExtrasMonto),
+        MontoHorasExtra: Number(formData.HorasExtrasMonto),
         OtrosBonos: Number(formData.OtrosBonos),
         DescuentoAFP: Number(formData.DescuentoAFP),
+        AporteAFP: Number(formData.DescuentoAFP),
         DescuentoAtrasos: Number(formData.DescuentoAtrasos),
         DescuentoFaltas: Number(formData.DescuentoFaltas),
         Anticipos: Number(formData.Anticipos),
+        FaltantesVentas: Number(formData.FaltantesVentas),
         OtrosDescuentos: Number(formData.OtrosDescuentos),
+        OtrasDeducciones: Number(formData.OtrosDescuentos),
         TotalGanado: totalGanado,
+        TotalDescuento: totalDescuentos,
         TotalDescuentos: totalDescuentos,
         LiquidoPagable: liquidoPagable
       });
@@ -120,27 +145,47 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                 Edición de Haberes y Descuentos
               </DialogTitle>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {detalle.PrimerNombre} {detalle.ApellidoPaterno} — CI: {detalle.CI} ({detalle.Cargo})
+                {detalle.NombreEmpleado || detalle.NombreCompleto || `${detalle.PrimerNombre || ''} ${detalle.ApellidoPaterno || ''}`} — CI: {detalle.CI || detalle.Ci} ({detalle.Cargo || 'Operador'})
               </p>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {/* Días trabajados */}
-          <div className="w-1/2">
-            <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Días Trabajados en el Mes
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              max="31"
-              name="DiasTrabajados"
-              value={formData.DiasTrabajados}
-              onChange={handleChange}
-              className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
-            />
+          {/* Días trabajados y Régimen Salarial */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded border border-slate-200">
+            <div>
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Días Trabajados en el Mes
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                max="31"
+                name="DiasTrabajados"
+                value={formData.DiasTrabajados}
+                onChange={handleChange}
+                className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
+              />
+            </div>
+
+            <div className="flex flex-col justify-center">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Régimen Laboral
+              </Label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer font-medium text-slate-800">
+                <input
+                  type="checkbox"
+                  name="EsAsegurado"
+                  checked={formData.EsAsegurado}
+                  onChange={handleChange}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span>
+                  {formData.EsAsegurado ? "Personal Asegurado (Aplica Gestora 12.71%)" : "Personal Externo (0% Gestora / AFP)"}
+                </span>
+              </label>
+            </div>
           </div>
 
           {/* Dos columnas: Haberes vs Descuentos */}
@@ -255,6 +300,18 @@ export default function ModalEditarDetallePlanilla({ detalle, abierto, onCerrar,
                   step="0.01"
                   name="Anticipos"
                   value={formData.Anticipos}
+                  onChange={handleChange}
+                  className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Faltantes en Ventas / Cobranzas (Bs.)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  name="FaltantesVentas"
+                  value={formData.FaltantesVentas}
                   onChange={handleChange}
                   className="mt-1 h-8 text-xs bg-white border-slate-300 rounded font-mono tabular-nums text-right"
                 />

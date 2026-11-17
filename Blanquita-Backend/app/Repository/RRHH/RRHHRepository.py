@@ -654,13 +654,19 @@ class RRHHRepository:
                 "MontoComisiones", "TotalBonos", "DescuentoAtrasos", "DescuentoFaltas",
                 "DescuentoNoVenta", "HorasTrabajadasAJ", "ValorHora",
                 "AporteAFP", "OtrasDeducciones", "TotalGanado", "TotalDescuento",
-                "LiquidoPagable", "Observacion"
+                "LiquidoPagable", "Observacion",
+                "DiasTrabajados", "HorasExtrasTotal", "DiasFalta", "HorasAtraso",
+                "Anticipos", "FaltantesVentas", "AporteNacionalSolidario", "RCIVA",
+                "MetodoPago", "Banco", "NroCuenta", "EsAsegurado", "DetalleHorasJson"
             ) VALUES (
                 :IdPlanilla, :IdUsuario, :SueldoBasico, :MontoHorasExtra,
                 :MontoComisiones, :TotalBonos, :DescuentoAtrasos, :DescuentoFaltas,
                 :DescuentoNoVenta, :HorasTrabajadasAJ, :ValorHora,
                 :AporteAFP, :OtrasDeducciones, :TotalGanado, :TotalDescuento,
-                :LiquidoPagable, :Observacion
+                :LiquidoPagable, :Observacion,
+                COALESCE(:DiasTrabajados, 30), COALESCE(:HorasExtrasTotal, 0.00), COALESCE(:DiasFalta, 0), COALESCE(:HorasAtraso, 0.00),
+                COALESCE(:Anticipos, 0.00), COALESCE(:FaltantesVentas, 0.00), COALESCE(:AporteNacionalSolidario, 0.00), COALESCE(:RCIVA, 0.00),
+                COALESCE(:MetodoPago, 'BANCO'), :Banco, :NroCuenta, COALESCE(:EsAsegurado, true), :DetalleHorasJson
             ) RETURNING "IdDetallePlanilla";
         """
         return self.caller.LlamarUnRegistro(sql, datos)
@@ -674,13 +680,19 @@ class RRHHRepository:
                 "MontoComisiones", "TotalBonos", "DescuentoAtrasos", "DescuentoFaltas",
                 "DescuentoNoVenta", "HorasTrabajadasAJ", "ValorHora",
                 "AporteAFP", "OtrasDeducciones", "TotalGanado", "TotalDescuento",
-                "LiquidoPagable", "Observacion"
+                "LiquidoPagable", "Observacion",
+                "DiasTrabajados", "HorasExtrasTotal", "DiasFalta", "HorasAtraso",
+                "Anticipos", "FaltantesVentas", "AporteNacionalSolidario", "RCIVA",
+                "MetodoPago", "Banco", "NroCuenta", "EsAsegurado", "DetalleHorasJson"
             ) VALUES (
                 :IdPlanilla, :IdUsuario, :SueldoBasico, :MontoHorasExtra,
                 :MontoComisiones, :TotalBonos, :DescuentoAtrasos, :DescuentoFaltas,
                 :DescuentoNoVenta, :HorasTrabajadasAJ, :ValorHora,
                 :AporteAFP, :OtrasDeducciones, :TotalGanado, :TotalDescuento,
-                :LiquidoPagable, :Observacion
+                :LiquidoPagable, :Observacion,
+                COALESCE(:DiasTrabajados, 30), COALESCE(:HorasExtrasTotal, 0.00), COALESCE(:DiasFalta, 0), COALESCE(:HorasAtraso, 0.00),
+                COALESCE(:Anticipos, 0.00), COALESCE(:FaltantesVentas, 0.00), COALESCE(:AporteNacionalSolidario, 0.00), COALESCE(:RCIVA, 0.00),
+                COALESCE(:MetodoPago, 'BANCO'), :Banco, :NroCuenta, COALESCE(:EsAsegurado, true), :DetalleHorasJson
             );
         """
         self.caller.db.execute(text(sql), lista_datos)
@@ -703,14 +715,23 @@ class RRHHRepository:
                 dp."MontoHorasExtra" as "HorasExtrasMonto",
                 dp."TotalBonos" as "BonoAntiguedad",
                 dp."AporteAFP" as "DescuentoAFP",
-                dp."OtrasDeducciones" as "Anticipos",
-                30 as "DiasTrabajados",
+                COALESCE(dp."Anticipos", dp."OtrasDeducciones", 0.00) as "Anticipos",
+                COALESCE(dp."DiasTrabajados", 30) as "DiasTrabajados",
+                COALESCE(dp."HorasExtrasTotal", 0.00) as "HorasExtrasTotal",
+                COALESCE(dp."DiasFalta", 0) as "DiasFalta",
+                COALESCE(dp."HorasAtraso", 0.00) as "HorasAtraso",
+                COALESCE(dp."FaltantesVentas", 0.00) as "FaltantesVentas",
+                COALESCE(dp."AporteNacionalSolidario", 0.00) as "AporteNacionalSolidario",
+                COALESCE(dp."RCIVA", 0.00) as "RCIVA",
+                COALESCE(dp."MetodoPago", 'BANCO') as "MetodoPago",
+                COALESCE(dp."Banco", d."Banco", 'Banco Unión') as "Banco",
+                COALESCE(dp."NroCuenta", d."CuentaBancaria", '') as "NroCuenta",
+                COALESCE(dp."EsAsegurado", d."EsAsegurado", true) as "EsAsegurado",
+                dp."DetalleHorasJson",
                 u."Ci",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
                 COALESCE(d."Area", 'Rebobinado') as "Area",
-                COALESCE(d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
-                COALESCE(d."Banco", 'Banco Unión') as "Banco",
-                COALESCE(d."EsAsegurado", true) as "EsAsegurado",
+                COALESCE(dp."NroCuenta", d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
                 dp."SueldoBasico",
                 dp."MontoHorasExtra",
                 dp."MontoComisiones",
@@ -730,9 +751,8 @@ class RRHHRepository:
             JOIN "Usuario" u ON dp."IdUsuario" = u."IdUsuario"
             LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
             WHERE dp."IdPlanilla" = :id_planilla
-            ORDER BY d."Area" ASC, u."PrimerNombre" ASC;
+            ORDER BY COALESCE(dp."EsAsegurado", d."EsAsegurado", true) DESC, d."Area" ASC, u."PrimerNombre" ASC;
         """
-        return self.caller.LlamarFuncion(sql, {"id_planilla": id_planilla})
         return self.caller.LlamarFuncion(sql, {"id_planilla": id_planilla})
 
     def ObtenerDetallePlanillaPorId(self, id_detalle: int) -> dict | None:
@@ -758,20 +778,33 @@ class RRHHRepository:
                 dp."MontoHorasExtra" as "HorasExtrasMonto",
                 dp."TotalBonos" as "BonoAntiguedad",
                 dp."AporteAFP" as "DescuentoAFP",
-                dp."OtrasDeducciones" as "Anticipos",
-                30 as "DiasTrabajados",
+                COALESCE(dp."Anticipos", dp."OtrasDeducciones", 0.00) as "Anticipos",
+                COALESCE(dp."DiasTrabajados", 30) as "DiasTrabajados",
+                COALESCE(dp."HorasExtrasTotal", 0.00) as "HorasExtrasTotal",
+                COALESCE(dp."DiasFalta", 0) as "DiasFalta",
+                COALESCE(dp."HorasAtraso", 0.00) as "HorasAtraso",
+                COALESCE(dp."FaltantesVentas", 0.00) as "FaltantesVentas",
+                COALESCE(dp."AporteNacionalSolidario", 0.00) as "AporteNacionalSolidario",
+                COALESCE(dp."RCIVA", 0.00) as "RCIVA",
+                COALESCE(dp."MetodoPago", 'BANCO') as "MetodoPago",
+                COALESCE(dp."Banco", d."Banco", 'Banco Unión') as "Banco",
+                COALESCE(dp."NroCuenta", d."CuentaBancaria", '') as "NroCuenta",
+                COALESCE(dp."EsAsegurado", d."EsAsegurado", true) as "EsAsegurado",
+                dp."DetalleHorasJson",
                 u."Ci",
                 d."FechaIngreso",
                 COALESCE(d."Cargo", 'Operador') as "Cargo",
                 COALESCE(d."Area", 'Rebobinado') as "Area",
-                COALESCE(d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
-                COALESCE(d."Banco", 'Banco Unión') as "Banco",
+                COALESCE(dp."NroCuenta", d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
                 dp."SueldoBasico",
                 dp."MontoHorasExtra",
                 dp."MontoComisiones",
                 dp."TotalBonos",
                 dp."DescuentoAtrasos",
                 dp."DescuentoFaltas",
+                COALESCE(dp."DescuentoNoVenta", 0.00) as "DescuentoNoVenta",
+                COALESCE(dp."HorasTrabajadasAJ", 0.00) as "HorasTrabajadasAJ",
+                COALESCE(dp."ValorHora", 0.0000) as "ValorHora",
                 dp."AporteAFP",
                 dp."OtrasDeducciones",
                 dp."TotalGanado",
@@ -815,11 +848,41 @@ class RRHHRepository:
             SET 
                 "TotalSueldoBruto" = COALESCE((SELECT SUM("TotalGanado") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0),
                 "TotalDeducciones" = COALESCE((SELECT SUM("TotalDescuento") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0),
-                "TotalLiquido" = COALESCE((SELECT SUM("LiquidoPagable") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0)
+                "TotalLiquido" = COALESCE((SELECT SUM("LiquidoPagable") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0),
+                "TotalAsegurados" = COALESCE((SELECT SUM("LiquidoPagable") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p AND COALESCE("EsAsegurado", true) = true), 0),
+                "TotalExternos" = COALESCE((SELECT SUM("LiquidoPagable") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p AND COALESCE("EsAsegurado", true) = false), 0),
+                "TotalHorasExtras" = COALESCE((SELECT SUM("MontoHorasExtra") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0),
+                "TotalDescuentos" = COALESCE((SELECT SUM("TotalDescuento") FROM "DetallePlanilla" WHERE "IdPlanilla" = :id_p), 0)
             WHERE pl."IdPlanilla" = :id_p
-            RETURNING "IdPlanilla", "TotalSueldoBruto", "TotalDeducciones", "TotalLiquido";
+            RETURNING "IdPlanilla", "TotalSueldoBruto", "TotalDeducciones", "TotalLiquido", "TotalAsegurados", "TotalExternos", "TotalHorasExtras", "TotalDescuentos";
         """
         return self.caller.LlamarUnRegistro(sql, {"id_p": id_planilla})
+
+    def ObtenerResumenBancario(self, id_planilla: int) -> list[dict]:
+        sql = """
+            SELECT 
+                dp."IdDetallePlanilla",
+                dp."IdPlanilla",
+                dp."IdUsuario",
+                CONCAT(u."PrimerNombre", ' ', u."ApellidoPaterno", ' ', COALESCE(u."ApellidoMaterno", '')) as "NombreEmpleado",
+                u."Ci" as "CI",
+                COALESCE(d."Cargo", 'Operador') as "Cargo",
+                COALESCE(dp."Banco", d."Banco", 'Banco Unión') as "Banco",
+                COALESCE(dp."NroCuenta", d."CuentaBancaria", 'Sin registrar') as "CuentaBancaria",
+                COALESCE(dp."MetodoPago", 'BANCO') as "MetodoPago",
+                COALESCE(dp."EsAsegurado", d."EsAsegurado", true) as "EsAsegurado",
+                CASE WHEN COALESCE(dp."EsAsegurado", d."EsAsegurado", true) THEN 'ASEGURADO' ELSE 'EXTERNO' END as "TipoPersonal",
+                dp."SueldoBasico",
+                dp."TotalGanado",
+                dp."TotalDescuento",
+                dp."LiquidoPagable"
+            FROM "DetallePlanilla" dp
+            JOIN "Usuario" u ON dp."IdUsuario" = u."IdUsuario"
+            LEFT JOIN "DatosLaboralesEmpleado" d ON u."IdUsuario" = d."IdUsuario"
+            WHERE dp."IdPlanilla" = :id_planilla
+            ORDER BY COALESCE(dp."Banco", d."Banco", 'Banco Unión') ASC, u."PrimerNombre" ASC;
+        """
+        return self.caller.LlamarFuncion(sql, {"id_planilla": id_planilla})
 
     def AprobarPlanilla(self, id_planilla: int, id_usuario_aprueba: int, observacion: str = "") -> dict:
         sql = """
